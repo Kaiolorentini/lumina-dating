@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "Lumina Dating",
+    "slug": "lumina-dating",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0D0D0D"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.lumina.dating",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "O Lumina precisa acessar sua câmera para tirar fotos de perfil.",
+        "NSPhotoLibraryUsageDescription": "O Lumina precisa acessar sua galeria para escolher fotos de perfil.",
+        "NSPhotoLibraryAddUsageDescription": "O Lumina precisa salvar fotos na sua galeria.",
+        "NSUserNotificationsUsageDescription": "O Lumina envia notificações sobre novas conexões e mensagens."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D0D0D"
+      },
+      "package": "com.lumina.dating",
+      "versionCode": 1,
+      "permissions": [
+      
+  "android.permission.CAMERA",
+  "android.permission.READ_EXTERNAL_STORAGE",
+  "android.permission.WRITE_EXTERNAL_STORAGE",
+  "android.permission.RECEIVE_BOOT_COMPLETED",
+  "android.permission.VIBRATE",
+  "android.permission.POST_NOTIFICATIONS",
+  "android.permission.RECORD_AUDIO"
+]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#D4AF37",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O Lumina precisa acessar sua galeria para fotos de perfil.",
+          "cameraPermission": "O Lumina precisa acessar sua câmera para tirar fotos."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "fd856acc-f01e-41c3-9cb9-99d12a395d95"
+      }
+    },
+    "owner": "kaioshin01",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fd856acc-f01e-41c3-9cb9-99d12a395d95"
+    }
+  }
+}
