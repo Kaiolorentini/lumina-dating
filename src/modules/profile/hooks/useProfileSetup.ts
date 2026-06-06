@@ -52,26 +52,29 @@ export function useProfileSetup(
   const [isEditing, setIsEditing] = useState(false);
 
   // Só carrega dados se editMode=true
-  useEffect(() => {
+ useEffect(() => {
     async function loadExisting() {
-      if (!user || !editMode) return;
+      if (!user) return;
       const existing = await getProfile(user.uid);
       if (existing && existing.name) {
         setIsEditing(true);
-        setName(existing.name || '');
-        setAge(existing.age ? String(existing.age) : '');
-        setCity(existing.city || '');
-        setState(existing.state || '');
-        setBio(existing.bio || '');
-        setGender(existing.gender || null);
-        setPreferences(existing.preferences || []);
-        if (existing.photoURL) {
-          setPhotoURI(existing.photoURL);
+        if (editMode) {
+          // Só carrega dados no formulário se for edição
+          setName(existing.name || '');
+          setAge(existing.age ? String(existing.age) : '');
+          setCity(existing.city || '');
+          setState(existing.state || '');
+          setBio(existing.bio || '');
+          setGender(existing.gender || null);
+          setPreferences(existing.preferences || []);
+          if (existing.photoURL) {
+            setPhotoURI(existing.photoURL);
+          }
         }
       }
     }
     loadExisting();
-  }, [user, editMode]);
+  }, [user]);
 
   function togglePreference(pref: Preference) {
     setPreferences(prev =>

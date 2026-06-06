@@ -1,23 +1,33 @@
-import { adicionarNotificacao } from './notificationsService';
-import { addCoins } from './coinsService';
+import { createNotification } from '../modules/notifications/services/notificationService';
+import { doc, setDoc, increment } from 'firebase/firestore';
+import { db } from '../core/firebase';
+import { COLLECTIONS, COINS } from '../core/constants';
 import { registrarVisita } from './visitsService';
-import { registerVisit } from '../utils/dynamicSintonia';
+import { registerVisit } from '../modules/ai/services/sintoniaService';
 import { dispararMensagemAutomatica } from './autoMessageService';
 import { AI_MODELS } from '../utils/aiModels';
 
 // ============================================
 // SERVIÇO DE ENGAJAMENTO CENTRAL
-//
-// Orquestra todas as funcionalidades:
-// Sintonia + Visitas + Notificações + Chat + Moedas
-//
-// FLUXO COMPLETO:
-// 1. Usuário abre app → notificações geradas
-// 2. Visita perfil → Sintonia aumenta + visita registrada
-// 3. IA envia mensagem automática → notificação
-// 4. Usuário responde → Sintonia aumenta + moedas ganhas
-// 5. Desbloqueia conteúdo → moedas gastas
 // ============================================
+
+// Adiciona moedas criando carteira se não existir
+async function safeAddCoins(
+  userId: string,
+  amount: number,
+  description: string
+): Promise<void> {
+  try {
+    const walletRef = doc(db, COLLECTIONS.WALLETS, userId);
+    await setDoc(walletRef, {
+      coins: increment(amount),
+      totalEarned: increment(amount),
+      totalSpent: increment(0),
+    }, { merge: true });
+  } catch (error) {
+    console.error('Erro ao adicionar moedas:', error);
+  }
+}
 
 // PASSO 1 — Executado quando usuário abre o app
 export async function onAppOpen(userId: string): Promise<void> {
@@ -25,8 +35,10 @@ export async function onAppOpen(userId: string): Promise<void> {
     // Gera notificações de IAs online
     const onlineModels = AI_MODELS.filter(m => m.status === 'online');
     if (onlineModels.length > 0) {
-      const randomModel = onlineModels[Math.floor(Math.random() * onlineModels.length)];
-      await adicionarNotificacao(
+      const randomModel = onlineModels[
+        Math.floor(Math.random() * onlineModels.length)
+      ];
+      await createNotification(
         userId,
         'online',
         `${randomModel.name} está online agora e pode responder você ✨`
@@ -34,14 +46,14 @@ export async function onAppOpen(userId: string): Promise<void> {
     }
 
     // Notificação de Sintonia disponível
-    await adicionarNotificacao(
+    await createNotification(
       userId,
       'sintonia',
       'Nova Sintonia disponível! Confira perfis compatíveis ✦'
     );
 
-    // Bônus diário de moedas (apenas uma vez por sessão)
-    await addCoins(userId, 5, '🎁 Bônus diário de login');
+    // Bônus diário de moedas
+    await safeAddCoins(userId, COINS.DAILY_LOGIN, '🎁 Bônus diário de login');
 
     console.log('✅ App aberto — engajamento iniciado');
   } catch (error) {
@@ -56,27 +68,25 @@ export async function onProfileVisit(
   aiModelName: string
 ): Promise<void> {
   try {
-    // Registra visita no sistema de visitas
     await registrarVisita(userId, aiModelId);
-
-    // Registra visita no sistema de Sintonia dinâmica
     await registerVisit(userId, aiModelId);
 
-    // Notifica o usuário que a IA viu a visita
-    await adicionarNotificacao(
+    await createNotification(
       userId,
       'visita',
       `${aiModelName} viu que você visitou o perfil dela 👀`
     );
 
-    // Dispara mensagem automática da IA
     const model = AI_MODELS.find(m => m.id === aiModelId);
     if (model) {
       await dispararMensagemAutomatica(userId, model);
     }
 
-    // Ganha moedas por visitar perfil
-    await addCoins(userId, 2, `✦ Visitou perfil de ${aiModelName}`);
+    await safeAddCoins(
+      userId,
+      COINS.VISIT_PROFILE,
+      `✦ Visitou perfil de ${aiModelName}`
+    );
 
     console.log(`✅ Visita ao perfil ${aiModelName} registrada`);
   } catch (error) {
@@ -91,12 +101,14 @@ export async function onMessageSent(
   aiModelName: string
 ): Promise<void> {
   try {
-    // Ganha moedas por interagir
-    await addCoins(userId, 1, `💬 Mensagem para ${aiModelName}`);
+    await safeAddCoins(
+      userId,
+      COINS.SEND_MESSAGE,
+      `💬 Mensagem para ${aiModelName}`
+    );
 
-    // Notificação de resposta da IA
     setTimeout(async () => {
-      await adicionarNotificacao(
+      await createNotification(
         userId,
         'mensagem',
         `${aiModelName} respondeu sua mensagem 💬`
@@ -116,7 +128,7 @@ export async function onContentUnlocked(
   level: number
 ): Promise<void> {
   try {
-    await adicionarNotificacao(
+    await createNotification(
       userId,
       'desbloqueio',
       `🔓 Você desbloqueou conteúdo nível ${level} de ${aiModelName}!`
@@ -135,28 +147,27 @@ export async function onSintoniaIncrease(
   newScore: number
 ): Promise<void> {
   try {
-    // Notifica marcos importantes
     if (newScore >= 95) {
-      await adicionarNotificacao(
+      await createNotification(
         userId,
         'sintonia',
         `✦ Sintonia Perfeita com ${aiModelName}! Vocês são almas gêmeas!`
       );
-      await addCoins(userId, 50, '✦ Sintonia Perfeita alcançada!');
+      await safeAddCoins(userId, COINS.PERFECT_SINTONIA, '✦ Sintonia Perfeita!');
     } else if (newScore >= 80) {
-      await adicionarNotificacao(
+      await createNotification(
         userId,
         'sintonia',
         `🔥 Sua Sintonia com ${aiModelName} chegou a ${newScore.toFixed(0)}%!`
       );
-      await addCoins(userId, 20, '🔥 Alta Sintonia alcançada!');
+      await safeAddCoins(userId, COINS.HIGH_SINTONIA, '🔥 Alta Sintonia!');
     } else if (newScore >= 65) {
-      await adicionarNotificacao(
+      await createNotification(
         userId,
         'sintonia',
         `⚡ Boa Sintonia com ${aiModelName}: ${newScore.toFixed(0)}%`
       );
-      await addCoins(userId, 10, '⚡ Boa Sintonia alcançada!');
+      await safeAddCoins(userId, COINS.HIGH_SINTONIA, '⚡ Boa Sintonia!');
     }
 
     console.log(`✅ Sintonia ${newScore} com ${aiModelName} registrada`);

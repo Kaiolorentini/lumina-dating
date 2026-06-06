@@ -4,29 +4,28 @@ import {
   query,
   orderBy,
   onSnapshot,
-  serverTimestamp,
   doc,
   setDoc,
+  where,
+  getDocs,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../../core/firebase';
 import { COLLECTIONS } from '../../../core/constants';
 import { ChatMessage } from '../../../shared/types';
 import { generateAIChatId, generateChatId } from '../../../shared/utils';
 
-// ============================================
-// MESSAGE SERVICE — MÓDULO CHAT
-// ============================================
-
 export { generateAIChatId, generateChatId };
 
-// Envia mensagem
 export async function sendMessage(
   chatId: string,
   text: string,
   senderId: string,
   senderName: string,
   isAI: boolean = false,
-  recipientId?: string
+  recipientId?: string,
+  audioUrl?: string,
+  audioDuration?: number
 ): Promise<void> {
   const messagesRef = collection(
     db,
@@ -35,40 +34,109 @@ export async function sendMessage(
     COLLECTIONS.MESSAGES
   );
 
-  await addDoc(messagesRef, {
+  const now = new Date();
+
+  const messageData: any = {
     text,
     senderId,
     senderName,
     isAI,
-    timestamp: serverTimestamp(),
-  });
+    timestamp: now,
+    delivered: false,
+    read: false,
+  };
 
-  // Atualiza resumo do chat
+  if (audioUrl) {
+    messageData.audioUrl = audioUrl;
+    messageData.audioDuration = audioDuration || 0;
+  }
+
+  await addDoc(messagesRef, messageData);
+
   const chatRef = doc(db, COLLECTIONS.CHATS, chatId);
   await setDoc(chatRef, {
-    lastMessage: text,
-    lastMessageTime: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    lastMessage: audioUrl ? '🎤 Audio' : text,
+    lastMessageTime: now,
+    updatedAt: now,
+    participants: recipientId ? [senderId, recipientId] : [senderId],
   }, { merge: true });
 
-  // Push para destinatário (apenas chat entre usuários reais)
   if (recipientId && !isAI) {
     try {
+      await markAsDelivered(chatId, senderId);
       const { sendPushToUser } = await import(
         '../../notifications/services/pushService'
       );
       await sendPushToUser(
         recipientId,
-        `💬 ${senderName}`,
-        text.length > 50 ? text.slice(0, 50) + '...' : text
+        senderName,
+        audioUrl
+          ? '🎤 Mensagem de audio'
+          : text.length > 50
+          ? text.slice(0, 50) + '...'
+          : text,
+        { type: 'message', chatId, senderId, senderName }
       );
     } catch (error) {
-      console.error('Erro ao enviar push de mensagem:', error);
+      console.error('Erro ao enviar push:', error);
     }
   }
 }
 
-// Escuta mensagens em tempo real
+export async function markAsDelivered(
+  chatId: string,
+  excludeSenderId: string
+): Promise<void> {
+  try {
+    const messagesRef = collection(
+      db,
+      COLLECTIONS.CHATS,
+      chatId,
+      COLLECTIONS.MESSAGES
+    );
+    const q = query(
+      messagesRef,
+      where('delivered', '==', false),
+      where('senderId', '!=', excludeSenderId)
+    );
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => {
+      batch.update(d.ref, { delivered: true });
+    });
+    await batch.commit();
+  } catch (e) {
+    console.warn('Erro ao marcar como entregue:', e);
+  }
+}
+
+export async function markAsRead(
+  chatId: string,
+  currentUserId: string
+): Promise<void> {
+  try {
+    const messagesRef = collection(
+      db,
+      COLLECTIONS.CHATS,
+      chatId,
+      COLLECTIONS.MESSAGES
+    );
+    const q = query(
+      messagesRef,
+      where('read', '==', false),
+      where('senderId', '!=', currentUserId)
+    );
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => {
+      batch.update(d.ref, { delivered: true, read: true });
+    });
+    await batch.commit();
+  } catch (e) {
+    console.warn('Erro ao marcar como lido:', e);
+  }
+}
+
 export function listenToMessages(
   chatId: string,
   onMessages: (messages: ChatMessage[]) => void
@@ -84,12 +152,17 @@ export function listenToMessages(
   return onSnapshot(q, snapshot => {
     const messages: ChatMessage[] = snapshot.docs.map(doc => ({
       id: doc.id,
-      text: doc.data().text,
+      text: doc.data().text || '',
       senderId: doc.data().senderId,
       senderName: doc.data().senderName,
       timestamp: doc.data().timestamp?.toDate() || new Date(),
       isAI: doc.data().isAI,
+      delivered: doc.data().delivered ?? false,
+      read: doc.data().read ?? false,
+      audioUrl: doc.data().audioUrl,
+      audioDuration: doc.data().audioDuration,
+      reactions: doc.data().reactions || {},
     }));
     onMessages(messages);
   });
-}
+  }

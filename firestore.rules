@@ -1,0 +1,530 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // FUNÇÕES AUXILIARES
+    // ============================================
+
+    // Verifica se está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Verifica se é o dono do recurso
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Busca role do usuário autenticado (uma leitura)
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    // Verifica se não está bloqueado
+    function isNotBlocked() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBlocked != true;
+    }
+
+    // Roles
+    function isUser() {
+      return isAuthenticated() && isNotBlocked();
+    }
+
+    function isCreator() {
+      return isAuthenticated() && isNotBlocked() &&
+        getRole() in ['creator', 'admin', 'superadmin'];
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && isNotBlocked() &&
+        getRole() in ['admin', 'superadmin'];
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && isNotBlocked() &&
+        getRole() == 'superadmin';
+    }
+
+    // Verifica purchase ativa
+    function hasActivePurchase(productId) {
+      let purchaseId = request.auth.uid + '_' + productId;
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/purchases/$(purchaseId)) &&
+        get(/databases/$(database)/documents/purchases/$(purchaseId)).data.status == 'active' &&
+        get(/databases/$(database)/documents/purchases/$(purchaseId)).data.isRevoked != true;
+    }
+
+    // Verifica se marketplace está habilitado
+    function isMarketplaceEnabled() {
+      return get(/databases/$(database)/documents/appSettings/config).data.marketplaceEnabled == true &&
+        get(/databases/$(database)/documents/appSettings/config).data.maintenanceMode != true;
+    }
+
+    // Campos administrativos protegidos — nunca alteráveis pelo cliente
+    function hasNoProtectedFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'role',
+        'isBlocked',
+        'blockedReason',
+        'blockedAt',
+        'blockedBy',
+        'screenshotWarnings',
+        'screenshotWarningStatus',
+        'adminFlags',
+        'creatorStatus',
+      ]);
+    }
+
+    // ============================================
+    // USERS
+    // ============================================
+    match /users/{userId} {
+
+      // Leitura pública limitada — campos básicos para feed
+      allow get: if isAuthenticated();
+      allow list: if isAuthenticated();
+
+      // Criação do próprio perfil
+      allow create: if isOwner(userId) &&
+        request.resource.data.role == 'user' &&
+        request.resource.data.isBlocked == false;
+
+      // Edição do próprio perfil — sem campos protegidos
+      allow update: if isOwner(userId) && hasNoProtectedFields();
+
+      // Admin pode atualizar qualquer usuário via Cloud Function
+      // (Firestore Admin SDK ignora estas rules)
+      allow delete: if false;
+
+      // Subcoleção de transações de moedas — intocável pelo marketplace
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId);
+        allow write: if false; // apenas Admin SDK
+      }
+    }
+
+    // ============================================
+    // SISTEMA DE MOEDAS — INTOCÁVEL
+    // ============================================
+    match /wallets/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if false; // apenas Admin SDK
+    }
+
+    // ============================================
+    // CHATS E MENSAGENS
+    // ============================================
+    match /chats/{chatId} {
+      allow read, write: if isAuthenticated() &&
+        request.auth.uid in resource.data.participants;
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isNotBlocked();
+        allow update: if isAuthenticated() &&
+          resource.data.senderId == request.auth.uid;
+        allow delete: if false;
+      }
+    }
+
+    // ============================================
+    // NOTIFICAÇÕES
+    // ============================================
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['read']);
+      allow delete: if false;
+    }
+
+    // ============================================
+    // SOLICITAÇÕES DE CONEXÃO
+    // ============================================
+    match /connectionRequests/{requestId} {
+      allow read: if isAuthenticated() && (
+        resource.data.fromUserId == request.auth.uid ||
+        resource.data.toUserId == request.auth.uid
+      );
+      allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.fromUserId == request.auth.uid;
+      allow update: if isAuthenticated() &&
+        resource.data.toUserId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status']);
+      allow delete: if false;
+    }
+
+    // ============================================
+    // BLOQUEIOS
+    // ============================================
+    match /blocks/{blockId} {
+      allow read: if isAuthenticated() && (
+        resource.data.blockerId == request.auth.uid ||
+        resource.data.blockedId == request.auth.uid
+      );
+      allow create: if isAuthenticated() &&
+        request.resource.data.blockerId == request.auth.uid;
+      allow delete: if isAuthenticated() &&
+        resource.data.blockerId == request.auth.uid;
+      allow update: if false;
+    }
+
+    // ============================================
+    // VISITAS DE PERFIL
+    // ============================================
+    match /profile_visits/{visitId} {
+      allow read: if isAuthenticated() && (
+        resource.data.visitorId == request.auth.uid ||
+        resource.data.visitedId == request.auth.uid
+      );
+      allow create: if isAuthenticated() && isNotBlocked();
+      allow update, delete: if false;
+    }
+
+    match /profile_visit_counts/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Admin SDK apenas
+    }
+
+    // ============================================
+    // MEDIA ITEMS
+    // ============================================
+    match /mediaItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.uploadedBy == request.auth.uid;
+      allow update: if isAuthenticated() &&
+        resource.data.uploadedBy == request.auth.uid;
+      allow delete: if isAuthenticated() && (
+        resource.data.uploadedBy == request.auth.uid || isAdmin()
+      );
+    }
+
+    // ============================================
+    // UNLOCKED CONTENT
+    // ============================================
+    match /unlockedContent/{contentId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Admin SDK apenas
+    }
+
+    // ============================================
+    // AUTO MESSAGES
+    // ============================================
+    match /autoMessages/{messageId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Admin SDK apenas
+    }
+
+    // ============================================
+    // CONNECTIONS
+    // ============================================
+    match /connections/{connectionId} {
+      allow read: if isAuthenticated() && (
+        resource.data.user1 == request.auth.uid ||
+        resource.data.user2 == request.auth.uid
+      );
+      allow write: if false; // Admin SDK apenas
+    }
+
+    // ============================================
+    // MARKETPLACE — PRODUCTS
+    // ============================================
+    match /products/{productId} {
+
+      // Leitura pública para produtos aprovados
+      allow get: if resource.data.status == 'approved' &&
+        resource.data.isDeleted != true;
+
+      // Leitura autenticada para criador dono ou admin
+      allow get: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid || isAdmin()
+      );
+
+      // Listagem pública de produtos aprovados
+      allow list: if resource.data.status == 'approved' &&
+        resource.data.isDeleted != true;
+
+      // Listagem para criador dos próprios produtos
+      allow list: if isCreator() &&
+        request.query.filters['ownerId'] == request.auth.uid;
+
+      // Criador pode criar produto
+      allow create: if isCreator() && isMarketplaceEnabled() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.status == 'draft' &&
+        request.resource.data.isFeatured == false;
+
+      // Criador pode editar produto próprio em draft ou rejected
+      allow update: if isCreator() &&
+        resource.data.ownerId == request.auth.uid &&
+        resource.data.status in ['draft', 'rejected'] &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'status', 'isFeatured', 'ownerId',
+          'averageRating', 'reviewsCount',
+        ]);
+
+      // Deleção proibida diretamente — usar soft delete via Cloud Function
+      allow delete: if false;
+
+      // Subcoleção de shards de analytics
+      match /shards/{shardId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isNotBlocked();
+      }
+    }
+
+    // ============================================
+    // MARKETPLACE — CREATOR REQUESTS
+    // ============================================
+    match /creatorRequests/{requestId} {
+
+      // Leitura pelo próprio usuário ou admin
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+
+      // Criação apenas pelo próprio usuário
+      allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+
+      // Atualização e exclusão proibidas pelo cliente
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — SALES
+    // ============================================
+    match /sales/{saleId} {
+
+      // Comprador lê próprias compras
+      allow get: if isAuthenticated() &&
+        resource.data.buyerId == request.auth.uid;
+
+      // Vendedor lê próprias vendas
+      allow get: if isAuthenticated() &&
+        resource.data.sellerId == request.auth.uid;
+
+      // Admin lê todas
+      allow get, list: if isAdmin();
+
+      // Criação, atualização e exclusão — apenas Cloud Function
+      allow create, update, delete: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — PURCHASES
+    // ============================================
+    match /purchases/{purchaseId} {
+
+      // Apenas o comprador ou admin pode ler
+      allow get: if isAuthenticated() && (
+        resource.data.buyerId == request.auth.uid || isAdmin()
+      );
+      allow list: if isAdmin();
+
+      // Criação, atualização e exclusão — apenas Cloud Function
+      allow create, update, delete: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — CREATOR WALLETS
+    // ============================================
+    match /creatorWallets/{userId} {
+
+      // Apenas o próprio criador ou admin
+      allow read: if isAuthenticated() && (
+        isOwner(userId) || isAdmin()
+      );
+
+      // Tudo via Cloud Function
+      allow create, update, delete: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — CREATOR TRANSACTIONS
+    // ============================================
+    match /creatorTransactions/{transactionId} {
+
+      // Apenas o dono ou admin
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+
+      // Apenas Cloud Function
+      allow create, update, delete: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — WITHDRAWALS
+    // ============================================
+    match /withdrawals/{withdrawalId} {
+
+      // Criador lê próprios saques
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+
+      // Criador pode criar solicitação de saque
+      allow create: if isCreator() && isNotBlocked() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.amount > 0;
+
+      // Atualização e exclusão — apenas Cloud Function
+      allow update, delete: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — REVIEWS
+    // ============================================
+    match /productReviews/{reviewId} {
+
+      // Leitura pública de reviews não ocultas
+      allow read: if isAuthenticated() &&
+        resource.data.isHidden != true;
+
+      // Admin pode ler todas
+      allow read: if isAdmin();
+
+      // Criação apenas se tem purchase ativa
+      allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.userId == request.auth.uid &&
+        hasActivePurchase(request.resource.data.productId);
+
+      // Edição apenas da própria review — campos limitados
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['rating', 'comment', 'isEdited', 'updatedAt']);
+
+      // Exclusão proibida — admin oculta via isHidden
+      allow delete: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — FAVORITES
+    // ============================================
+    match /favorites/{favoriteId} {
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — DOWNLOADS (log de acesso)
+    // ============================================
+    match /downloads/{downloadId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      // Criação via cliente apenas se tem purchase ativa
+      allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.userId == request.auth.uid &&
+        hasActivePurchase(request.resource.data.productId);
+      allow update, delete: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — REFUND REQUESTS
+    // ============================================
+    match /refundRequests/{requestId} {
+
+      // Comprador lê próprias solicitações
+      allow read: if isAuthenticated() && (
+        resource.data.buyerId == request.auth.uid || isAdmin()
+      );
+
+      // Comprador cria solicitação própria
+      allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.buyerId == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.sellerId != request.auth.uid;
+
+      // Atualização e exclusão — apenas Cloud Function
+      allow update, delete: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — FRAUD FLAGS
+    // ============================================
+    match /fraudFlags/{flagId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // apenas Cloud Function
+    }
+
+    // ============================================
+    // MARKETPLACE — AUDIT LOGS
+    // ============================================
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // apenas Cloud Function
+    }
+
+    // ============================================
+    // MARKETPLACE — SCREENSHOT EVENTS (DRM)
+    // ============================================
+    match /screenshotEvents/{eventId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // apenas Cloud Function
+    }
+
+    // ============================================
+    // MARKETPLACE — COUPONS
+    // ============================================
+    match /coupons/{couponId} {
+      allow read: if isAuthenticated() &&
+        resource.data.isActive == true;
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /couponUses/{useId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ============================================
+    // MARKETPLACE — ADMIN METRICS
+    // ============================================
+    match /adminMetrics/{docId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // apenas Cloud Function
+    }
+
+    // ============================================
+    // MARKETPLACE — APP SETTINGS
+    // ============================================
+    match /appSettings/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if false; // apenas Cloud Function
+    }
+
+    // ============================================
+    // MARKETPLACE — PRODUCT ANALYTICS
+    // ============================================
+    match /productAnalytics/{productId} {
+      allow read: if isAuthenticated();
+
+      match /shards/{shardId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() && isNotBlocked();
+        allow delete: if false;
+      }
+    }
+  }
+}

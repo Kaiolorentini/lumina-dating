@@ -11,35 +11,29 @@ import {
 import * as Updates from 'expo-updates';
 import { colors, fonts, spacing, borderRadius } from '../theme';
 
-// ============================================
-// UPDATE CHECKER
-//
-// Verifica se há atualização disponível
-// e pergunta ao usuário se quer atualizar.
-// ============================================
-
 export default function UpdateChecker() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    // Só verifica em produção (não no Expo Go / dev)
-    if (Platform.OS === 'web' || __DEV__) return;
-    checkForUpdate();
+    if (Platform.OS === 'web') return;
+
+    const timer = setTimeout(() => {
+      checkForUpdate();
+    }, 5000);
+
+    return () => clearTimeout(timer);
   }, []);
 
   async function checkForUpdate() {
     try {
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
-        console.log('🆕 Atualização disponível!');
+        console.log('Atualizacao disponivel!');
         setUpdateAvailable(true);
       }
     } catch (e) {
-      console.log('⚠️ Erro ao verificar update:', e);
-    } finally {
-      setChecked(true);
+      console.log('Erro ao verificar update:', e);
     }
   }
 
@@ -49,7 +43,7 @@ export default function UpdateChecker() {
       await Updates.fetchUpdateAsync();
       await Updates.reloadAsync();
     } catch (e) {
-      console.log('⚠️ Erro ao baixar update:', e);
+      console.log('Erro ao baixar update:', e);
       setDownloading(false);
       setUpdateAvailable(false);
     }
@@ -57,8 +51,11 @@ export default function UpdateChecker() {
 
   function handleSkip() {
     setUpdateAvailable(false);
+    // Verifica novamente após 5 minutos
+    setTimeout(() => {
+      checkForUpdate();
+    }, 5 * 60 * 1000);
   }
-
   if (!updateAvailable) return null;
 
   return (
@@ -70,23 +67,17 @@ export default function UpdateChecker() {
     >
       <View style={styles.overlay}>
         <View style={styles.modal}>
-          {/* Ícone */}
           <Text style={styles.icon}>✦</Text>
-
-          {/* Título */}
-          <Text style={styles.title}>Nova versão disponível!</Text>
-
-          {/* Descrição */}
+          <Text style={styles.title}>Nova versao disponivel!</Text>
           <Text style={styles.description}>
-            Uma nova atualização do Lumina está disponível com melhorias e correções.
+            Uma nova atualizacao do Lumina esta disponivel com melhorias e correcoes.
             Deseja atualizar agora?
           </Text>
 
-          {/* Botões */}
           {downloading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator color={colors.gold} size="large" />
-              <Text style={styles.loadingText}>Baixando atualização...</Text>
+              <Text style={styles.loadingText}>Baixando atualizacao...</Text>
             </View>
           ) : (
             <View style={styles.buttons}>
@@ -98,14 +89,11 @@ export default function UpdateChecker() {
                   Atualizar agora ✦
                 </Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.skipButton}
                 onPress={handleSkip}
               >
-                <Text style={styles.skipButtonText}>
-                  Mais tarde
-                </Text>
+                <Text style={styles.skipButtonText}>Mais tarde</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -133,10 +121,7 @@ const styles = StyleSheet.create({
     borderColor: colors.gold + '44',
     gap: spacing.md,
   },
-  icon: {
-    fontSize: 48,
-    color: colors.gold,
-  },
+  icon: { fontSize: 48, color: colors.gold },
   title: {
     color: colors.white,
     fontSize: fonts.sizes.xl,

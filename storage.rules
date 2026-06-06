@@ -1,0 +1,116 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ============================================
+    // FUNÇÕES AUXILIARES
+    // ============================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
+          in ['admin', 'superadmin'];
+    }
+
+    function isNotBlocked() {
+      return isAuthenticated() &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.isBlocked != true;
+    }
+
+    function isCreator() {
+      return isAuthenticated() && isNotBlocked() &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
+          in ['creator', 'admin', 'superadmin'];
+    }
+
+    function isProductOwner(productId) {
+      return isAuthenticated() && isNotBlocked() &&
+        firestore.get(/databases/(default)/documents/products/$(productId)).data.ownerId
+          == request.auth.uid;
+    }
+
+    function isValidImage() {
+      return request.resource.contentType.matches('image/.*') &&
+        request.resource.size < 10 * 1024 * 1024; // 10MB
+    }
+
+    function isValidFile() {
+      return request.resource.size < 500 * 1024 * 1024; // 500MB
+    }
+
+    // ============================================
+    // FOTOS DE PERFIL
+    // ============================================
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) && isValidImage();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // ============================================
+    // MARKETPLACE — CAPA DO PRODUTO (pública)
+    // ============================================
+    match /marketplace/products/{productId}/cover/{fileName} {
+      allow read: if true; // pública — necessário para exibir no app
+      allow write: if isProductOwner(productId) &&
+        isCreator() && isValidImage();
+      allow delete: if isProductOwner(productId) || isAdmin();
+    }
+
+    // ============================================
+    // MARKETPLACE — PRÉVIAS PÚBLICAS
+    // ============================================
+    match /marketplace/products/{productId}/previews/{fileName} {
+      allow read: if true; // pública — necessário para preview
+      allow write: if isProductOwner(productId) &&
+        isCreator() && isValidImage();
+      allow delete: if isProductOwner(productId) || isAdmin();
+    }
+
+    // ============================================
+    // MARKETPLACE — ARQUIVOS DE PRÉVIA PÚBLICOS
+    // ============================================
+    match /marketplace/products/{productId}/previewFiles/{fileName} {
+      allow read: if true; // pública — preview gratuito
+      allow write: if isProductOwner(productId) &&
+        isCreator() && isValidFile();
+      allow delete: if isProductOwner(productId) || isAdmin();
+    }
+
+    // ============================================
+    // MARKETPLACE — ARQUIVOS PAGOS
+    //
+    // ⚠️ CRÍTICO — BLOQUEIO TOTAL
+    // Nenhum cliente acessa diretamente.
+    // Acesso EXCLUSIVO via Cloud Function (Signed URL).
+    //
+    // API_TODO #11:
+    // Cloud Function getSignedUrl (FASE 9):
+    // → verifica purchase ativa
+    // → verifica isBlocked
+    // → gera Signed URL temporária (15 min)
+    // → usando Admin SDK (ignora estas rules)
+    // ============================================
+    match /marketplace/products/{productId}/files/{fileName} {
+      allow read: if false;  // BLOQUEIO TOTAL — sem exceções
+      allow write: if isProductOwner(productId) &&
+        isCreator() && isValidFile();
+      allow delete: if isProductOwner(productId) || isAdmin();
+    }
+
+    // ============================================
+    // TUDO MAIS — BLOQUEADO
+    // ============================================
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

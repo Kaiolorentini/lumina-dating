@@ -280,7 +280,7 @@ export default function HomeScreen({ navigation }: Props) {
                 {activeTab === 'ia' ? '🤖' : '👤'}
               </Text>
               <Text style={styles.emptyTitle}>
-                {activeTab === 'ia' ? 'Carregando IAs...' : 'Nenhum perfil encontrado'}
+                {activeTab === 'ia' ? 'Carregando IAs.....' : 'Nenhum perfil encontrado'}
               </Text>
               <Text style={styles.emptySubtitle}>
                 {activeTab === 'perfis' && 'Seja o primeiro a se cadastrar na sua região!'}

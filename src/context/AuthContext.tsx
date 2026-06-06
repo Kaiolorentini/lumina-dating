@@ -13,14 +13,33 @@ import {
   onAuthStateChanged,
   User,
 } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../services/firebase';
 import { getProfile } from '../services/profileService';
+
+const HAS_PROFILE_KEY = '@lumina:hasProfile';
+const USER_UID_KEY = '@lumina:userUid';
+
+export function translateAuthError(code: string): string {
+  const errors: Record<string, string> = {
+    'auth/user-not-found': 'E-mail ou senha incorretos',
+    'auth/wrong-password': 'E-mail ou senha incorretos',
+    'auth/invalid-credential': 'E-mail ou senha incorretos',
+    'auth/invalid-login-credentials': 'E-mail ou senha incorretos',
+    'auth/invalid-email': 'E-mail invalido',
+    'auth/email-already-in-use': 'Este e-mail ja esta em uso. Faca login.',
+    'auth/weak-password': 'Senha fraca. Use pelo menos 6 caracteres',
+    'auth/too-many-requests': 'Muitas tentativas. Tente mais tarde',
+    'auth/network-request-failed': 'Sem conexao. Verifique sua internet',
+    'auth/operation-not-allowed': 'Operacao nao permitida',
+  };
+  return errors[code] || `Erro: ${code}`;
+}
 
 interface AuthContextData {
   user: User | null;
   loading: boolean;
   hasProfile: boolean;
-  profileKey: number;
   setHasProfile: (value: boolean) => void;
   refreshProfile: () => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
@@ -34,41 +53,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasProfile, setHasProfileState] = useState(false);
-  const [profileKey, setProfileKey] = useState(0);
   const userRef = useRef<User | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async firebaseUser => {
-      console.log('🔥 Firebase user:', firebaseUser ? 'Logado' : 'Não logado');
+      console.log('Firebase:', firebaseUser ? 'Logado' : 'Nao logado');
       setUser(firebaseUser);
       userRef.current = firebaseUser;
 
       if (firebaseUser) {
-        try {
-          let profile = null;
-          let attempts = 0;
+        await AsyncStorage.setItem(USER_UID_KEY, firebaseUser.uid);
 
-          while (!profile && attempts < 5) {
-            attempts++;
-            console.log(`🔍 Tentativa ${attempts}...`);
-            try {
-              profile = await getProfile(firebaseUser.uid);
-            } catch (e) {
-              console.warn(`⚠️ Erro tentativa ${attempts}:`, e);
-            }
-            if (!profile && attempts < 5) {
-              await new Promise(r => setTimeout(r, 800 * attempts));
-            }
-          }
+        // Verifica cache primeiro
+        const cached = await AsyncStorage.getItem(
+          `${HAS_PROFILE_KEY}:${firebaseUser.uid}`
+        );
 
-          const found = !!(profile && profile.name);
-          console.log('👤 hasProfile:', found, profile?.name);
-          setHasProfileState(found);
-          setProfileKey(prev => prev + 1);
-        } catch (error) {
-          console.error('❌ Erro auth:', error);
-          setHasProfileState(false);
+        if (cached === 'true') {
+          console.log('Perfil no cache!');
+          setHasProfileState(true);
+          setLoading(false);
+
+          // Verifica Firestore em background SEM remover cache se falhar
+          getProfile(firebaseUser.uid).then(profile => {
+            if (profile?.name) {
+              // Perfil confirmado — garante cache atualizado
+              AsyncStorage.setItem(
+                `${HAS_PROFILE_KEY}:${firebaseUser.uid}`,
+                'true'
+              ).catch(console.error);
+            }
+            // Se não encontrar, NÃO remove o cache — pode ser erro de rede
+          }).catch(() => {
+            // Erro de rede — mantém cache, não redireciona
+            console.log('Erro ao verificar perfil em background — mantendo cache');
+          });
+          return;
         }
+
+        // Cache não existe — busca no Firestore com retry
+        let profile = null;
+        for (let i = 1; i <= 3; i++) {
+          console.log(`Buscando perfil tentativa ${i}...`);
+          try {
+            profile = await getProfile(firebaseUser.uid);
+            if (profile?.name) break;
+          } catch (e) {
+            console.warn(`Erro tentativa ${i}:`, e);
+          }
+          if (i < 3) await new Promise(r => setTimeout(r, 1000));
+        }
+
+        const found = !!(profile?.name);
+        console.log('hasProfile:', found);
+
+        if (found) {
+          await AsyncStorage.setItem(
+            `${HAS_PROFILE_KEY}:${firebaseUser.uid}`,
+            'true'
+          );
+        }
+
+        setHasProfileState(found);
       } else {
         setHasProfileState(false);
       }
@@ -77,23 +123,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     return unsubscribe;
   }, []);
+
   const setHasProfile = useCallback((value: boolean) => {
-    console.log('🔄 setHasProfile:', value);
+    console.log('setHasProfile:', value);
     setHasProfileState(value);
-    // Incrementa key para forçar re-render do navigator
-    setProfileKey(prev => prev + 1);
+    if (userRef.current) {
+      AsyncStorage.setItem(
+        `${HAS_PROFILE_KEY}:${userRef.current.uid}`,
+        value ? 'true' : 'false'
+      ).catch(console.error);
+    }
   }, []);
 
   async function refreshProfile() {
-    const currentUser = userRef.current;
-    if (!currentUser) return;
-    try {
-      const profile = await getProfile(currentUser.uid);
-      console.log('✅ refreshProfile:', !!profile);
-      setHasProfileState(!!profile);
-      setProfileKey(prev => prev + 1);
-    } catch (error) {
-      console.error('❌ refreshProfile error:', error);
+    const u = userRef.current;
+    if (!u) return;
+    const profile = await getProfile(u.uid);
+    const found = !!(profile?.name);
+    setHasProfileState(found);
+    if (found) {
+      await AsyncStorage.setItem(
+        `${HAS_PROFILE_KEY}:${u.uid}`,
+        'true'
+      );
     }
   }
 
@@ -106,20 +158,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
+    if (userRef.current) {
+      await AsyncStorage.removeItem(`${HAS_PROFILE_KEY}:${userRef.current.uid}`);
+      await AsyncStorage.removeItem(USER_UID_KEY);
+    }
     await signOut(auth);
   }
 
   return (
     <AuthContext.Provider value={{
-      user,
-      loading,
-      hasProfile,
-      profileKey,
-      setHasProfile,
-      refreshProfile,
-      signUp,
-      signIn,
-      logout,
+      user, loading, hasProfile,
+      setHasProfile, refreshProfile,
+      signUp, signIn, logout,
     }}>
       {children}
     </AuthContext.Provider>

@@ -46,3 +46,31 @@ export const COLLECTIONS = {
   UNLOCKED_CONTENT: 'unlockedContent',
   MEDIA_ITEMS: 'mediaItems',
 };
+// ============================================
+// MARKETPLACE COLLECTIONS
+//
+// Collections exclusivas do marketplace.
+// NÃO confundir com COLLECTIONS (sistema de moedas e chat).
+// WALLETS = moedas | CREATOR_WALLETS = marketplace
+// TRANSACTIONS = moedas | CREATOR_TRANSACTIONS = marketplace
+// ============================================
+export const MARKETPLACE_COLLECTIONS = {
+  PRODUCTS: 'products',
+  SALES: 'sales',
+  PURCHASES: 'purchases',
+  CREATOR_WALLETS: 'creatorWallets',
+  CREATOR_TRANSACTIONS: 'creatorTransactions',
+  WITHDRAWALS: 'withdrawals',
+  REVIEWS: 'productReviews',
+  FAVORITES: 'favorites',
+  DOWNLOADS: 'downloads',
+  FRAUD_FLAGS: 'fraudFlags',
+  AUDIT_LOGS: 'auditLogs',
+  CREATOR_REQUESTS: 'creatorRequests',
+  PRODUCT_ANALYTICS: 'productAnalytics',
+  COUPONS: 'coupons',
+  COUPON_USES: 'couponUses',
+  ADMIN_METRICS: 'adminMetrics',
+  APP_SETTINGS: 'appSettings',
+  REFUND_REQUESTS: 'refundRequests',    // ← ADICIONAR
+} as const;

@@ -13,13 +13,6 @@ import { db } from '../../../core/firebase';
 import { COLLECTIONS } from '../../../core/constants';
 import { createNotification } from '../../notifications/services/notificationService';
 
-// ============================================
-// REQUESTS SERVICE — MÓDULO PROFILE
-//
-// Responsabilidade única:
-// Gerenciar solicitações de conexão entre usuários.
-// ============================================
-
 export type RequestStatus = 'pending' | 'accepted' | 'rejected';
 
 export interface ConnectionRequest {
@@ -38,13 +31,12 @@ function mapRequest(d: any): ConnectionRequest {
     fromUserId: d.data().fromUserId,
     toUserId: d.data().toUserId,
     fromUserName: d.data().fromUserName,
-    fromUserPhoto: d.data().fromUserPhoto,
+    fromUserPhoto: d.data().fromUserPhoto || '',
     status: d.data().status,
     timestamp: d.data().timestamp?.toDate() || new Date(),
   };
 }
 
-// Busca solicitação entre dois usuários
 export async function getSolicitacaoEntre(
   userId1: string,
   userId2: string
@@ -63,11 +55,10 @@ export async function getSolicitacaoEntre(
   }
 }
 
-// Envia solicitação
 export async function enviarSolicitacao(
   fromUserId: string,
   fromUserName: string,
-  fromUserPhoto: string,
+  fromUserPhoto: string | null | undefined,
   toUserId: string,
   toUserName: string
 ): Promise<boolean> {
@@ -78,27 +69,27 @@ export async function enviarSolicitacao(
     await addDoc(collection(db, COLLECTIONS.CONNECTION_REQUESTS), {
       fromUserId,
       toUserId,
-      fromUserName,
-      fromUserPhoto,
+      fromUserName: fromUserName || '',
+      fromUserPhoto: fromUserPhoto || '',
       status: 'pending',
       timestamp: serverTimestamp(),
     });
 
-    // Notificação interna
     await createNotification(
       toUserId,
       'sintonia',
-      `${fromUserName} quer se conectar com você! ✦`
+      `${fromUserName} quer se conectar com voce!`
     );
 
-    // Push notification
     const { sendPushToUser } = await import(
       '../../notifications/services/pushService'
     );
+    // Passa data com type=request para redirecionamento
     await sendPushToUser(
       toUserId,
-      '✦ Nova solicitação',
-      `${fromUserName} quer se conectar com você!`
+      'Nova solicitacao',
+      `${fromUserName} quer se conectar com voce!`,
+      { type: 'request' }
     );
 
     return true;
@@ -108,7 +99,6 @@ export async function enviarSolicitacao(
   }
 }
 
-// Aceita solicitação
 export async function aceitarSolicitacao(
   requestId: string,
   toUserName: string,
@@ -117,30 +107,27 @@ export async function aceitarSolicitacao(
   const ref = doc(db, COLLECTIONS.CONNECTION_REQUESTS, requestId);
   await updateDoc(ref, { status: 'accepted' });
 
-  // Notificação interna
   await createNotification(
     fromUserId,
     'sintonia',
-    `${toUserName} aceitou sua solicitação! Vocês agora podem conversar 💬`
+    `${toUserName} aceitou sua solicitacao! Voces agora podem conversar`
   );
 
-  // Push notification
   const { sendPushToUser } = await import(
     '../../notifications/services/pushService'
   );
   await sendPushToUser(
     fromUserId,
-    '💬 Solicitação aceita!',
-    `${toUserName} aceitou sua solicitação! Comece a conversar agora.`
+    'Solicitacao aceita!',
+    `${toUserName} aceitou sua solicitacao! Comece a conversar agora.`
   );
 }
-// Rejeita solicitação
+
 export async function rejeitarSolicitacao(requestId: string): Promise<void> {
   const ref = doc(db, COLLECTIONS.CONNECTION_REQUESTS, requestId);
   await updateDoc(ref, { status: 'rejected' });
 }
 
-// Escuta solicitações pendentes em tempo real
 export function listenToRequests(
   userId: string,
   onRequests: (requests: ConnectionRequest[]) => void
@@ -156,7 +143,6 @@ export function listenToRequests(
   });
 }
 
-// Verifica se dois usuários estão conectados
 export async function estaoConectados(
   userId1: string,
   userId2: string
@@ -184,7 +170,6 @@ export async function estaoConectados(
   }
 }
 
-// Busca conexões aceitas
 export async function getConexoesAceitas(
   userId: string
 ): Promise<ConnectionRequest[]> {

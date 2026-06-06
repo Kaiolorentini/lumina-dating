@@ -14,11 +14,7 @@ import {
 import { ChatMessage } from '../../../shared/types';
 import { AIModel } from '../../../utils/aiModels';
 
-// ============================================
-// useChat — Hook para chat com IA
-// ============================================
-
-interface UseChatReturn {
+interface UseAIChatReturn {
   messages: ChatMessage[];
   inputText: string;
   setInputText: (text: string) => void;
@@ -28,7 +24,7 @@ interface UseChatReturn {
   sendUserMessage: () => Promise<void>;
 }
 
-export function useAIChat(aiModel: AIModel): UseChatReturn {
+export function useAIChat(aiModel: AIModel): UseAIChatReturn {
   const { user } = useAuth();
   const chatId = user ? generateAIChatId(user.uid, aiModel.id) : '';
 
@@ -64,15 +60,11 @@ export function useAIChat(aiModel: AIModel): UseChatReturn {
 
   async function sendUserMessage() {
     if (!inputText.trim() || !user || !chatId) return;
-
     const text = inputText.trim();
     setInputText('');
-
-    await sendMessage(chatId, text, user.uid, user.email || 'Você', false);
-
+    await sendMessage(chatId, text, user.uid, user.email || 'Voce', false);
     setIsTyping(true);
     const delay = getTypingDelay(text);
-
     setTimeout(async () => {
       const response = generateAIResponse(text, aiModel.name);
       setIsTyping(false);
@@ -91,10 +83,6 @@ export function useAIChat(aiModel: AIModel): UseChatReturn {
   };
 }
 
-// ============================================
-// useUserChat — Hook para chat entre usuários
-// ============================================
-
 interface UseUserChatReturn {
   messages: ChatMessage[];
   inputText: string;
@@ -102,6 +90,7 @@ interface UseUserChatReturn {
   loading: boolean;
   flatListRef: React.MutableRefObject<FlatList<ChatMessage> | null>;
   sendUserMessage: () => Promise<void>;
+  sendAudioMessage: (audioUrl: string, duration: number) => Promise<void>;
 }
 
 export function useUserChat(targetUserId: string): UseUserChatReturn {
@@ -132,11 +121,30 @@ export function useUserChat(targetUserId: string): UseUserChatReturn {
 
   async function sendUserMessage() {
     if (!inputText.trim() || !user || !chatId) return;
-
     const text = inputText.trim();
     setInputText('');
+    await sendMessage(
+      chatId,
+      text,
+      user.uid,
+      user.email || 'Voce',
+      false,
+      targetUserId
+    );
+  }
 
-    await sendMessage(chatId, text, user.uid, user.email || 'Você', false);
+  async function sendAudioMessage(audioUrl: string, duration: number) {
+    if (!user || !chatId) return;
+    await sendMessage(
+      chatId,
+      '',
+      user.uid,
+      user.email || 'Voce',
+      false,
+      targetUserId,
+      audioUrl,
+      duration
+    );
   }
 
   return {
@@ -146,5 +154,6 @@ export function useUserChat(targetUserId: string): UseUserChatReturn {
     loading,
     flatListRef,
     sendUserMessage,
+    sendAudioMessage,
   };
 }

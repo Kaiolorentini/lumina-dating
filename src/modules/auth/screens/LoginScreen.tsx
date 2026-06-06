@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,26 +10,23 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { RootStackParamList } from '../../../navigation/types';
 import { useLoginForm } from '../hooks/useAuthForm';
 
-// ============================================
-// LOGIN SCREEN — MÓDULO AUTH
-//
-// Screen limpa: apenas renderiza UI.
-// Toda lógica está no useLoginForm.
-// ============================================
-
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
 };
 
+const LAST_EMAIL_KEY = '@lumina:lastEmail';
+const LAST_PASSWORD_KEY = '@lumina:lastPassword';
+
 const PHRASES = [
-  'Existem perfis com alta Sintonia esperando por você',
-  'Descubra conexões únicas',
-  'Seu próximo grande encontro começa aqui',
+  'Existem perfis com alta Sintonia esperando por voce',
+  'Descubra conexoes unicas',
+  'Seu proximo grande encontro comeca aqui',
 ];
 
 export default function LoginScreen({ navigation }: Props) {
@@ -40,25 +37,39 @@ export default function LoginScreen({ navigation }: Props) {
     submit,
   } = useLoginForm();
 
+  // Carrega ultimo email e senha ao abrir
+  useEffect(() => {
+    async function loadSaved() {
+      const savedEmail = await AsyncStorage.getItem(LAST_EMAIL_KEY);
+      const savedPassword = await AsyncStorage.getItem(LAST_PASSWORD_KEY);
+      if (savedEmail) setEmail(savedEmail);
+      if (savedPassword) setPassword(savedPassword);
+    }
+    loadSaved();
+  }, []);
+
+  async function handleSubmit() {
+    if (email) await AsyncStorage.setItem(LAST_EMAIL_KEY, email);
+    if (password) await AsyncStorage.setItem(LAST_PASSWORD_KEY, password);
+    submit();
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Logo */}
         <View style={styles.logoContainer}>
           <Text style={styles.logo}>✦</Text>
           <Text style={styles.title}>Lumina</Text>
           <Text style={styles.subtitle}>AI Dating</Text>
         </View>
 
-        {/* Frase */}
         <View style={styles.phraseContainer}>
           <Text style={styles.phrase}>"{PHRASES[0]}"</Text>
         </View>
 
-        {/* Formulário */}
         <View style={styles.form}>
           <Text style={styles.label}>E-mail</Text>
           <TextInput
@@ -86,7 +97,7 @@ export default function LoginScreen({ navigation }: Props) {
 
           <TouchableOpacity
             style={styles.button}
-            onPress={submit}
+            onPress={handleSubmit}
             disabled={loading}
           >
             {loading ? (
@@ -101,7 +112,7 @@ export default function LoginScreen({ navigation }: Props) {
             onPress={() => navigation.navigate('Register')}
           >
             <Text style={styles.linkText}>
-              Não tem conta?{' '}
+              Nao tem conta?{' '}
               <Text style={styles.linkTextBold}>Criar conta</Text>
             </Text>
           </TouchableOpacity>
@@ -112,10 +123,7 @@ export default function LoginScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
   scroll: {
     flexGrow: 1,
     alignItems: 'center',
@@ -126,10 +134,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xl,
   },
-  logo: {
-    fontSize: 48,
-    color: colors.gold,
-  },
+  logo: { fontSize: 48, color: colors.gold },
   title: {
     fontSize: fonts.sizes.xxxl,
     color: colors.white,
@@ -153,9 +158,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 22,
   },
-  form: {
-    width: '100%',
-  },
+  form: { width: '100%' },
   label: {
     color: colors.grayLight,
     fontSize: fonts.sizes.sm,

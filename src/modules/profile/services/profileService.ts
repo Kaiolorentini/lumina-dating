@@ -17,8 +17,14 @@ export async function saveProfile(
   data: Partial<UserProfile>
 ): Promise<void> {
   const profileRef = doc(db, COLLECTIONS.USERS, uid);
+
+  // Verifica se é criação ou atualização
+  const existing = await getDoc(profileRef);
+
   await setDoc(profileRef, {
     ...data,
+    // Campos de segurança apenas na criação — nunca sobrescreve
+    ...(!existing.exists() && { role: 'user', isBlocked: false }),
     updatedAt: new Date(),
   }, { merge: true });
 }

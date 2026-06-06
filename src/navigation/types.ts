@@ -13,12 +13,42 @@ export type RootStackParamList = {
   UserChat: { userId: string; userName: string; userPhoto: string };
   Requests: undefined;
   Blocked: undefined;
+  PaymentSetup: undefined;
+  // Marketplace
+  MarketplaceHome: undefined;
+  ProductDetail: { productId: string };
+  MyPurchases: undefined;
+  MyProducts: undefined;
+  CreateProduct: undefined;
+  EditProduct: { productId: string };
+  MyFavorites: undefined;
+  MyEarnings: undefined;
+  Withdrawal: undefined;
+  CreatorRequest: undefined;
+  ContentViewer: { productId: string; purchaseId: string };
+  Checkout: { saleId: string; checkoutUrl?: string };
+  // Admin
+  AdminPanel: undefined;
+  AdminDashboard: undefined;
+  AdminCreatorRequests: undefined;
+  AdminProductsModeration: undefined;
+  AdminSales: undefined;
+  AdminRefundRequests: undefined;
+  AdminWithdrawals: undefined;
+  AdminFraudFlags: undefined;
+  AdminUserSearch: undefined;
+  AdminUserDetail: { userId: string };
+  AdminCoupons: undefined;
+  AdminReports: undefined;
 };
 
 export type TabParamList = {
   Home: undefined;
   Media: undefined;
+  Conversas: undefined;
   Sintonias: undefined;
   Store: undefined;
   Profile: undefined;
+  Marketplace: undefined;
+  Admin: undefined; 
 };

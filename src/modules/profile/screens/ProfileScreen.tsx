@@ -81,27 +81,7 @@ export default function ProfileScreen() {
     }
   }
 
- async function handleLogout() {
-    Alert.alert(
-      'Sair',
-      'Tem certeza que deseja sair?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sair',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await logout();
-            } catch (error) {
-              console.error('Erro ao sair:', error);
-              Alert.alert('Erro', 'Não foi possível sair. Tente novamente.');
-            }
-          },
-        },
-      ]
-    );
-  }
+
 
   function getSintoniaLevel(): string {
     const coins = wallet?.coins || 0;
@@ -219,6 +199,26 @@ export default function ProfileScreen() {
         >
           <Text style={styles.menuItemIcon}>🔔</Text>
           <Text style={styles.menuItemText}>Notificações</Text>
+          <Text style={styles.menuItemArrow}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={async () => {
+            const { registerForPushNotifications } = await import(
+              '../../notifications/services/pushService'
+            );
+            if (user) {
+              const token = await registerForPushNotifications(user.uid);
+              Alert.alert(
+                token ? 'Notificacoes ativadas!' : 'Erro',
+                token ? `Token: ${token.slice(0, 20)}...` : 'Nao foi possivel ativar'
+              );
+            }
+          }}
+        >
+          <Text style={styles.menuItemIcon}>🔔</Text>
+          <Text style={styles.menuItemText}>Ativar notificacoes push</Text>
           <Text style={styles.menuItemArrow}>›</Text>
         </TouchableOpacity>
 

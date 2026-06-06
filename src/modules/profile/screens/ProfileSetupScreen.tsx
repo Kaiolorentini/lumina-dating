@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,8 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
-import * as Updates from 'expo-updates';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
@@ -25,7 +23,7 @@ const GENDER_OPTIONS: { label: string; value: Gender }[] = [
   { label: 'Masculino', value: 'masculino' },
   { label: 'Feminino', value: 'feminino' },
   { label: 'Trans', value: 'trans' },
-  { label: 'Não-binário', value: 'nao-binario' },
+  { label: 'Nao-binario', value: 'nao-binario' },
 ];
 
 const PREFERENCE_OPTIONS: { label: string; value: Preference }[] = [
@@ -40,6 +38,7 @@ export default function ProfileSetupScreen() {
   const route = useRoute<any>();
   const { setHasProfile } = useAuth();
   const [saved, setSaved] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const editMode = route.params?.editMode === true;
 
   const {
@@ -55,6 +54,21 @@ export default function ProfileSetupScreen() {
     save,
   } = useProfileSetup({ editMode });
 
+  useEffect(() => {
+    if (isEditing && !editMode) {
+      console.log('Perfil ja existe, redirecionando...');
+      setHasProfile(true);
+      setTimeout(() => {
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'MainTabs' }],
+          })
+        );
+      }, 100);
+    }
+  }, [isEditing]);
+
   async function handleSave() {
     const success = await save();
     if (success) {
@@ -66,38 +80,44 @@ export default function ProfileSetupScreen() {
     }
   }
 
-  async function handleContinue() {
+  function handleContinue() {
+    if (continuing) return;
+    setContinuing(true);
     setHasProfile(true);
-    if (Platform.OS !== 'web' && !__DEV__) {
-      try {
-        await Updates.reloadAsync();
-      } catch (e) {
-        console.log('⚠️ reload falhou:', e);
-      }
-    }
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      })
+    );
   }
 
   if (saved) {
     return (
       <View style={styles.successContainer}>
-        <Text style={styles.successStar}>✦</Text>
+        <Text style={styles.successStar}>*</Text>
         <Text style={styles.successTitle}>Perfil criado!</Text>
         <Text style={styles.successSubtitle}>
-          Sua jornada começa agora. Descubra conexões únicas e encontre sua Sintonia perfeita.
+          Sua jornada comeca agora. Descubra conexoes unicas e encontre sua Sintonia perfeita.
         </Text>
         <TouchableOpacity
-          style={styles.continueButton}
+          style={[styles.continueButton, continuing && { opacity: 0.7 }]}
           onPress={handleContinue}
+          disabled={continuing}
         >
-          <Text style={styles.continueButtonText}>
-            Descobrir conexões ✦
-          </Text>
+          {continuing ? (
+            <ActivityIndicator color={colors.background} />
+          ) : (
+            <Text style={styles.continueButtonText}>
+              Descobrir conexoes
+            </Text>
+          )}
         </TouchableOpacity>
         <View style={styles.successFeatures}>
-          <Text style={styles.successFeature}>🤖 10 Modelos IA esperando por você</Text>
-          <Text style={styles.successFeature}>✦ Sistema de Sintonia exclusivo</Text>
-          <Text style={styles.successFeature}>💬 Chat em tempo real</Text>
-          <Text style={styles.successFeature}>🔥 Perfis compatíveis com você</Text>
+          <Text style={styles.successFeature}>10 Modelos IA esperando por voce</Text>
+          <Text style={styles.successFeature}>Sistema de Sintonia exclusivo</Text>
+          <Text style={styles.successFeature}>Chat em tempo real</Text>
+          <Text style={styles.successFeature}>Perfis compativeis com voce</Text>
         </View>
       </View>
     );
@@ -106,12 +126,12 @@ export default function ProfileSetupScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
       <View style={styles.header}>
-        <Text style={styles.logo}>✦</Text>
+        <Text style={styles.logo}>*</Text>
         <Text style={styles.title}>
           {isEditing ? 'Editar Perfil' : 'Seu Perfil'}
         </Text>
         <Text style={styles.subtitle}>
-          Essas informações geram sua Sintonia
+          Essas informacoes geram sua Sintonia
         </Text>
       </View>
 
@@ -120,7 +140,7 @@ export default function ProfileSetupScreen() {
           <Image source={{ uri: photoURI }} style={styles.photo} />
         ) : (
           <View style={styles.photoPlaceholder}>
-            <Text style={styles.photoIcon}>📷</Text>
+            <Text style={styles.photoIcon}>+</Text>
             <Text style={styles.photoText}>Adicionar foto</Text>
           </View>
         )}
@@ -169,7 +189,7 @@ export default function ProfileSetupScreen() {
       <Text style={styles.label}>Bio</Text>
       <TextInput
         style={[styles.input, styles.bioInput]}
-        placeholder="Fale um pouco sobre você..."
+        placeholder="Fale um pouco sobre voce..."
         placeholderTextColor={colors.gray}
         value={bio}
         onChangeText={setBio}
@@ -177,7 +197,7 @@ export default function ProfileSetupScreen() {
         maxLength={300}
       />
 
-      <Text style={styles.label}>Gênero *</Text>
+      <Text style={styles.label}>Genero *</Text>
       <View style={styles.optionsRow}>
         {GENDER_OPTIONS.map(option => (
           <TouchableOpacity
@@ -230,7 +250,7 @@ export default function ProfileSetupScreen() {
           <ActivityIndicator color={colors.background} />
         ) : (
           <Text style={styles.buttonText}>
-            {isEditing ? 'Salvar alterações ✦' : 'Salvar e continuar ✦'}
+            {isEditing ? 'Salvar alteracoes' : 'Salvar e continuar'}
           </Text>
         )}
       </TouchableOpacity>

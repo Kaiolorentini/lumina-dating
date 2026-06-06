@@ -8,3 +8,6 @@ export {
   generateAutoNotifications as gerarNotificacoesAutomaticas,
   getNotificationIcon,
 } from '../modules/notifications/services/notificationService';
+
+// Tipos — compatibilidade com imports antigos
+export type { AppNotification as Notification } from '../shared/types';

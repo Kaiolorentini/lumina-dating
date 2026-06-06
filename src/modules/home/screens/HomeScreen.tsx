@@ -5,6 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
@@ -15,12 +17,12 @@ import ProfileCard from '../../../components/ProfileCard';
 import VisitedProfileCard from '../../../components/VisitedProfileCard';
 import VisitsBanner from '../../../components/VisitsBanner';
 import { useHomeData, HomeTab } from '../hooks/useHomeData';
-
-// ============================================
-// HOME SCREEN — MÓDULO HOME
-// Screen limpa: apenas renderiza UI.
-// Toda lógica está no useHomeData.
-// ============================================
+import { useAuth } from '../../../context/AuthContext';
+import { getConexoesAceitas } from '../../profile/services/requestsService';
+import { generateChatId } from '../../chat/services/messageService';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '../../../services/firebase';
+import { COLLECTIONS } from '../../../core/constants';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
@@ -32,6 +34,112 @@ const TABS: { key: HomeTab; label: string; icon: string }[] = [
   { key: 'visitados', label: 'Mais visitados', icon: '🔥' },
   { key: 'conversas', label: 'Conversas', icon: '💬' },
 ];
+
+interface ChatPreview {
+  userId: string;
+  userName: string;
+  userPhoto: string;
+  lastMessage: string;
+}
+
+function ConversasTab({ navigation }: { navigation: any }) {
+  const { user } = useAuth();
+  const [chats, setChats] = useState<ChatPreview[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadChats();
+  }, []);
+
+  async function loadChats() {
+    if (!user) return;
+    try {
+      const conexoes = await getConexoesAceitas(user.uid);
+      const previews: ChatPreview[] = [];
+
+      for (const conexao of conexoes) {
+        const otherUserId = conexao.fromUserId === user.uid
+          ? conexao.toUserId
+          : conexao.fromUserId;
+
+        const chatId = generateChatId(user.uid, otherUserId);
+        const chatSnap = await getDoc(doc(db, COLLECTIONS.CHATS, chatId));
+        const userSnap = await getDoc(doc(db, COLLECTIONS.USERS, otherUserId));
+        const otherUser = userSnap.data();
+
+        if (otherUser) {
+          previews.push({
+            userId: otherUserId,
+            userName: otherUser.name || 'Usuario',
+            userPhoto: otherUser.photoURL || '',
+            lastMessage: chatSnap.exists()
+              ? chatSnap.data()?.lastMessage || 'Iniciar conversa'
+              : 'Iniciar conversa',
+          });
+        }
+      }
+      setChats(previews);
+    } catch (e) {
+      console.error('Erro ao carregar chats:', e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.emptyContainer}>
+        <ActivityIndicator color={colors.gold} size="large" />
+      </View>
+    );
+  }
+
+  if (chats.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyIcon}>💬</Text>
+        <Text style={styles.emptyTitle}>Nenhuma conversa ainda</Text>
+        <Text style={styles.emptySubtitle}>
+          Conecte-se com outros usuarios para comecar a conversar!
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      {chats.map(chat => (
+        <TouchableOpacity
+          key={chat.userId}
+          style={styles.chatItem}
+          onPress={() => navigation.navigate('UserChat', {
+            userId: chat.userId,
+            userName: chat.userName,
+            userPhoto: chat.userPhoto,
+          })}
+          activeOpacity={0.8}
+        >
+          {chat.userPhoto ? (
+            <Image source={{ uri: chat.userPhoto }} style={styles.chatAvatar} />
+          ) : (
+            <View style={styles.chatAvatarPlaceholder}>
+              <Text style={styles.chatAvatarLetter}>
+                {chat.userName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View style={styles.chatInfo}>
+            <Text style={styles.chatName}>{chat.userName}</Text>
+            <Text style={styles.chatLastMessage} numberOfLines={1}>
+              {chat.lastMessage}
+            </Text>
+          </View>
+          <Text style={styles.chatArrow}>›</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
 
 export default function HomeScreen({ navigation }: Props) {
   const [activeTab, setActiveTab] = useState<HomeTab>('ia');
@@ -48,7 +156,6 @@ export default function HomeScreen({ navigation }: Props) {
     loadMostVisited,
   } = useHomeData();
 
-  // Carrega mais visitados quando aba é selecionada
   useEffect(() => {
     if (activeTab === 'visitados' && mostVisited.length === 0) {
       loadMostVisited();
@@ -66,9 +173,7 @@ export default function HomeScreen({ navigation }: Props) {
   function handleCardPress(profile: ProfileCardData) {
     if (profile.isAI) {
       const aiModel = AI_MODELS.find(m => m.id === profile.id);
-      if (aiModel) {
-        navigation.navigate('AIProfile', { model: aiModel });
-      }
+      if (aiModel) navigation.navigate('AIProfile', { model: aiModel });
     } else {
       navigation.navigate('RealProfile', { userId: profile.id });
     }
@@ -76,11 +181,9 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.logo}>✦ Lumina</Text>
         <View style={styles.headerRight}>
-          {/* Moedas */}
           <TouchableOpacity
             style={styles.coinsButton}
             onPress={() => navigation.navigate('MainTabs')}
@@ -88,8 +191,6 @@ export default function HomeScreen({ navigation }: Props) {
             <Text style={styles.coinsIcon}>💰</Text>
             <Text style={styles.coinsText}>{coins}</Text>
           </TouchableOpacity>
-
-          {/* Sino */}
           <TouchableOpacity
             style={styles.bellButton}
             onPress={() => navigation.navigate('Notifications')}
@@ -110,7 +211,6 @@ export default function HomeScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[1]}
       >
-        {/* Banner de visitas */}
         <View style={styles.notifications}>
           <VisitsBanner
             visitasHoje={visitasHoje}
@@ -118,7 +218,6 @@ export default function HomeScreen({ navigation }: Props) {
           />
         </View>
 
-        {/* Abas */}
         <View style={styles.tabsWrapper}>
           <ScrollView
             horizontal
@@ -146,23 +245,15 @@ export default function HomeScreen({ navigation }: Props) {
           </ScrollView>
         </View>
 
-        {/* Aba Conversas */}
         {activeTab === 'conversas' && (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>💬</Text>
-            <Text style={styles.emptyTitle}>Visite perfis das IAs</Text>
-            <Text style={styles.emptySubtitle}>
-              Ao visitar um perfil a IA entrará em contato automaticamente!
-            </Text>
-          </View>
+          <ConversasTab navigation={navigation} />
         )}
 
-        {/* Aba Mais Visitados */}
         {activeTab === 'visitados' && (
           loadingVisited ? (
             <View style={styles.loadingContainer}>
               <Text style={styles.loadingText}>
-                🔥 Carregando perfis em alta...
+                Carregando perfis em alta...
               </Text>
             </View>
           ) : mostVisited.length === 0 ? (
@@ -170,14 +261,14 @@ export default function HomeScreen({ navigation }: Props) {
               <Text style={styles.emptyIcon}>🔥</Text>
               <Text style={styles.emptyTitle}>Nenhum perfil ainda</Text>
               <Text style={styles.emptySubtitle}>
-                Visite perfis para que apareçam aqui!
+                Visite perfis para que aparecam aqui!
               </Text>
             </View>
           ) : (
             <View>
               <View style={styles.mostVisitedBanner}>
                 <Text style={styles.mostVisitedBannerText}>
-                  🔥 Perfis mais visitados agora
+                  Perfis mais visitados agora
                 </Text>
               </View>
               <View style={styles.grid}>
@@ -195,7 +286,6 @@ export default function HomeScreen({ navigation }: Props) {
           )
         )}
 
-        {/* Abas IA e Perfis */}
         {(activeTab === 'ia' || activeTab === 'perfis') && (
           getDataForTab().length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -209,7 +299,7 @@ export default function HomeScreen({ navigation }: Props) {
               </Text>
               {activeTab === 'perfis' && (
                 <Text style={styles.emptySubtitle}>
-                  Seja o primeiro a se cadastrar na sua região!
+                  Seja o primeiro a se cadastrar na sua regiao!
                 </Text>
               )}
             </View>
@@ -233,10 +323,7 @@ export default function HomeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -389,5 +476,51 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.md,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  chatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.grayDark,
+    gap: spacing.md,
+  },
+  chatAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: colors.gold,
+  },
+  chatAvatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatAvatarLetter: {
+    color: colors.gold,
+    fontSize: fonts.sizes.lg,
+    fontWeight: 'bold',
+  },
+  chatInfo: { flex: 1 },
+  chatName: {
+    color: colors.white,
+    fontSize: fonts.sizes.md,
+    fontWeight: 'bold',
+  },
+  chatLastMessage: {
+    color: colors.gray,
+    fontSize: fonts.sizes.sm,
+    marginTop: 2,
+  },
+  chatArrow: {
+    color: colors.gray,
+    fontSize: fonts.sizes.xl,
   },
 });

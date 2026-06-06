@@ -68,7 +68,6 @@ export interface AppNotification {
   icon: string;
 }
 
-// Mensagem de chat
 export interface ChatMessage {
   id: string;
   text: string;
@@ -76,8 +75,12 @@ export interface ChatMessage {
   senderName: string;
   timestamp: Date;
   isAI: boolean;
+  delivered?: boolean;
+  read?: boolean;
+  audioUrl?: string;
+  audioDuration?: number;
+  reactions?: Record<string, string>;
 }
-
 // Carteira de moedas
 export interface Wallet {
   coins: number;

@@ -26,29 +26,34 @@ export async function registerForPushNotifications(
   userId: string
 ): Promise<string | null> {
   try {
-    // No web não suporta push notifications nativas
     if (Platform.OS === 'web') {
-      console.log('⚠️ Push notifications não suportadas no web');
+      console.log('Push nao suportado no web');
       return null;
     }
 
+    console.log('Device.isDevice:', Device.isDevice);
+    console.log('Platform.OS:', Platform.OS);
+
     if (!Device.isDevice) {
-      console.log('⚠️ Push notifications só funcionam em dispositivos físicos');
+      console.log('Push so funciona em dispositivos fisicos');
       return null;
     }
 
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
+    
+    console.log('Status permissao atual:', existingStatus);
 
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
+      console.log('Novo status permissao:', finalStatus);
     }
 
     if (finalStatus !== 'granted') {
-      console.log('⚠️ Permissão de notificação negada');
+      console.log('Permissao negada!');
       return null;
     }
 
@@ -65,22 +70,22 @@ export async function registerForPushNotifications(
       Constants.expoConfig?.extra?.eas?.projectId ??
       Constants.easConfig?.projectId;
 
+    console.log('ProjectId:', projectId);
+
     if (!projectId) {
-      console.warn('⚠️ projectId não configurado no app.json');
+      console.warn('projectId nao configurado no app.json');
       return null;
     }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    });
-
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
-    console.log('✅ Push Token obtido:', token);
+    console.log('Push Token obtido:', token);
 
     await savePushToken(userId, token);
+    console.log('Push Token salvo no Firestore!');
     return token;
   } catch (error) {
-    console.error('Erro ao registrar push notifications:', error);
+    console.error('Erro ao registrar push:', error);
     return null;
   }
 }
