@@ -196,7 +196,7 @@
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
-    {
+   {
       "collectionGroup": "withdrawals",
       "queryScope": "COLLECTION",
       "fields": [

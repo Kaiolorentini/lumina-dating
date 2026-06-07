@@ -6,11 +6,13 @@
 // NÃO modifica UserProfile.
 // NÃO modifica AuthContext.
 //
-// HARDENING FASE 3.4:
+// HARDENING:
 // - currentUidRef previne stale data entre usuários
 // - capturedUid valida closure no callback
 // - mountedRef previne setState após unmount
 // - uid nunca vazio quando recebido válido
+// - whitelist de roles válidas
+// - fail-safe em erro de rede
 // ============================================
 
 import { useState, useEffect, useRef } from 'react';
@@ -18,6 +20,16 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../core/firebase';
 import { COLLECTIONS } from '../core/constants';
 import { UserPermissions, UserRole } from '../shared/types/marketplace';
+
+// Whitelist de roles válidas — proteção contra valores inválidos no Firestore
+const VALID_ROLES: UserRole[] = ['user', 'creator', 'admin', 'superadmin'];
+
+function sanitizeRole(raw: unknown): UserRole {
+  if (typeof raw === 'string' && VALID_ROLES.includes(raw as UserRole)) {
+    return raw as UserRole;
+  }
+  return 'user';
+}
 
 interface UseUserPermissionsReturn {
   permissions: UserPermissions | null;
@@ -37,13 +49,14 @@ export function useUserPermissions(
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
-
-  // HARDENING: rastreia uid atual — detecta mudança entre ciclos
   const currentUidRef = useRef<string | undefined>(uid);
 
   useEffect(() => {
     mountedRef.current = true;
-    currentUidRef.current = uid; // atualiza síncronamente antes de qualquer async
+    currentUidRef.current = uid;
+
+    // CORREÇÃO 3: reseta loading ao trocar usuário
+    setLoading(true);
 
     if (!uid) {
       setPermissions(null);
@@ -54,21 +67,16 @@ export function useUserPermissions(
       };
     }
 
-    // Captura uid neste closure — imutável para este effect
     const capturedUid = uid;
-
     const ref = doc(db, COLLECTIONS.USERS, capturedUid);
 
     const unsubscribe = onSnapshot(
       ref,
       snap => {
         if (!mountedRef.current) return;
-
-        // HARDENING: rejeita callback se uid mudou desde criação do listener
         if (currentUidRef.current !== capturedUid) return;
 
         if (!snap.exists()) {
-          // uid real — nunca string vazia
           setPermissions({
             uid: capturedUid,
             role: 'user',
@@ -82,12 +90,15 @@ export function useUserPermissions(
 
         setPermissions({
           uid: capturedUid,
-          role: (data.role as UserRole) ?? 'user',
-          isBlocked: data.isBlocked ?? false,
-          blockedReason: data.blockedReason,
+          // CORREÇÃO 1: whitelist de roles válidas
+          role: sanitizeRole(data.role),
+          isBlocked: data.isBlocked === true,
+          blockedReason: typeof data.blockedReason === 'string' ? data.blockedReason : undefined,
           blockedAt: data.blockedAt?.toDate(),
-          blockedBy: data.blockedBy,
-          acceptedMarketplaceTermsVersion: data.acceptedMarketplaceTermsVersion,
+          blockedBy: typeof data.blockedBy === 'string' ? data.blockedBy : undefined,
+          acceptedMarketplaceTermsVersion: typeof data.acceptedMarketplaceTermsVersion === 'string'
+            ? data.acceptedMarketplaceTermsVersion
+            : undefined,
           acceptedMarketplaceTermsAt: data.acceptedMarketplaceTermsAt?.toDate(),
         });
 
@@ -99,27 +110,23 @@ export function useUserPermissions(
 
         console.warn('[useUserPermissions] Erro no listener:', error);
 
-        // Fallback com uid real — nunca vazio
-        setPermissions({
-          uid: capturedUid,
-          role: 'user',
-          isBlocked: false,
-        });
+        // CORREÇÃO 5: fail-safe — sem permissões liberadas por falha de rede
+        setPermissions(null);
         setLoading(false);
       }
     );
 
     return () => {
       mountedRef.current = false;
-      currentUidRef.current = undefined;
+      // CORREÇÃO 4: unsubscribe antes de limpar ref
       unsubscribe();
+      currentUidRef.current = undefined;
     };
   }, [uid]);
 
   const role = permissions?.role ?? 'user';
-  const isBlocked = permissions?.isBlocked ?? false;
+  const isBlocked = permissions?.isBlocked === true;
 
-  // TYPE SAFETY FASE 3.3: cast explícito para UserRole[]
   const creatorRoles: UserRole[] = ['creator', 'admin', 'superadmin'];
   const adminRoles: UserRole[] = ['admin', 'superadmin'];
 

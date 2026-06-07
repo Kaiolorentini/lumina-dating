@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getCreatorRequests } from '../../services/marketplace/adminService';
 import app from '../../core/firebase';
 import { CreatorRequest } from '../../services/marketplace/creatorService';
+import { useAdminGuard } from '../../hooks/useAdminGuard';
 
 const STATUS_TABS = ['pending', 'approved', 'rejected'] as const;
 type StatusTab = typeof STATUS_TABS[number];
@@ -17,6 +18,7 @@ type StatusTab = typeof STATUS_TABS[number];
 export default function AdminCreatorRequestsScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
+  const { blocked, loading: guardLoading } = useAdminGuard();
   const [activeTab, setActiveTab] = useState<StatusTab>('pending');
   const [requests, setRequests] = useState<CreatorRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,8 +36,10 @@ export default function AdminCreatorRequestsScreen() {
 
   React.useEffect(() => { loadRequests(); }, [activeTab]);
 
+  if (guardLoading || blocked) return null;
+
   async function handleApprove(request: CreatorRequest) {
-    Alert.alert('Aprovar criador?', `Confirmar aprovação?`, [
+    Alert.alert('Aprovar criador?', 'Confirmar aprovação?', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Aprovar', onPress: async () => {

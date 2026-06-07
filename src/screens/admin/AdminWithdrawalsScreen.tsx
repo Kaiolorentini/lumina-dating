@@ -9,6 +9,7 @@ import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { getWithdrawals } from '../../services/marketplace/adminService';
 import app from '../../core/firebase';
 import { Withdrawal } from '../../shared/types/marketplace';
+import { useSuperAdminGuard } from '../../hooks/useAdminGuard';
 
 const STATUS_TABS = ['pending', 'approved', 'paid', 'rejected'] as const;
 type StatusTab = typeof STATUS_TABS[number];
@@ -19,6 +20,7 @@ const STATUS_LABELS: Record<StatusTab, string> = {
 
 export default function AdminWithdrawalsScreen() {
   const navigation = useNavigation();
+  const { blocked, loading: guardLoading } = useSuperAdminGuard();
   const [activeTab, setActiveTab] = useState<StatusTab>('pending');
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,8 @@ export default function AdminWithdrawalsScreen() {
   }, [activeTab]);
 
   React.useEffect(() => { loadWithdrawals(); }, [activeTab]);
+
+  if (guardLoading || blocked) return null;
 
   async function callFunction(fnName: string, params: object, successMsg: string) {
     try {
@@ -126,9 +130,7 @@ export default function AdminWithdrawalsScreen() {
                 <Text style={styles.amount}>R$ {item.amount.toFixed(2)}</Text>
                 <Text style={styles.date}>{item.createdAt.toLocaleDateString('pt-BR')}</Text>
               </View>
-              <Text style={styles.pixInfo}>
-                {item.pixType?.toUpperCase()}: {item.pixKey}
-              </Text>
+              <Text style={styles.pixInfo}>{item.pixType?.toUpperCase()}: {item.pixKey}</Text>
               <Text style={styles.userId}>UID: {item.userId.slice(0, 16)}...</Text>
 
               {processing === item.id ? (

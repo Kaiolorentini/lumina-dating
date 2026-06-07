@@ -7,6 +7,7 @@
 // Estratégia anti-race-condition:
 // - mounted flag evita setState após unmount
 // - requestVersion: listener sempre vence cache (> não >=)
+// - timeout de 10s garante loading nunca fica infinito
 // ============================================
 
 import { useState, useEffect, useRef } from 'react';
@@ -37,12 +38,16 @@ export function useAppSettings(): UseAppSettingsReturn {
 
     const thisCacheVersion = ++cacheVersionRef.current;
 
+    // CORREÇÃO 6: timeout de proteção — loading nunca fica infinito
+    const timeout = setTimeout(() => {
+      if (!mountedRef.current) return;
+      setLoading(false);
+    }, 10000);
+
     // 1. Carrega cache imediatamente
     getAppSettings()
       .then(cached => {
         if (!mountedRef.current) return;
-
-        // CORREÇÃO FASE 3.4: > garante listener sempre vence cache
         if (thisCacheVersion > listenerVersionRef.current) {
           setSettings(cached);
           setLoading(false);
@@ -63,6 +68,7 @@ export function useAppSettings(): UseAppSettingsReturn {
 
     return () => {
       mountedRef.current = false;
+      clearTimeout(timeout);
       unsubscribe();
     };
   }, []);

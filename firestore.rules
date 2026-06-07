@@ -6,28 +6,26 @@ service cloud.firestore {
     // FUNÇÕES AUXILIARES
     // ============================================
 
-    // Verifica se está autenticado
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Verifica se é o dono do recurso
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Busca role do usuário autenticado (uma leitura)
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function getRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      return getUserData().role;
     }
 
-    // Verifica se não está bloqueado
     function isNotBlocked() {
-      return isAuthenticated() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBlocked != true;
+      return isAuthenticated() && getUserData().isBlocked != true;
     }
 
-    // Roles
     function isUser() {
       return isAuthenticated() && isNotBlocked();
     }
@@ -47,7 +45,6 @@ service cloud.firestore {
         getRole() == 'superadmin';
     }
 
-    // Verifica purchase ativa
     function hasActivePurchase(productId) {
       let purchaseId = request.auth.uid + '_' + productId;
       return isAuthenticated() &&
@@ -56,24 +53,15 @@ service cloud.firestore {
         get(/databases/$(database)/documents/purchases/$(purchaseId)).data.isRevoked != true;
     }
 
-    // Verifica se marketplace está habilitado
     function isMarketplaceEnabled() {
       return get(/databases/$(database)/documents/appSettings/config).data.marketplaceEnabled == true &&
         get(/databases/$(database)/documents/appSettings/config).data.maintenanceMode != true;
     }
 
-    // Campos administrativos protegidos — nunca alteráveis pelo cliente
     function hasNoProtectedFields() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'role',
-        'isBlocked',
-        'blockedReason',
-        'blockedAt',
-        'blockedBy',
-        'screenshotWarnings',
-        'screenshotWarningStatus',
-        'adminFlags',
-        'creatorStatus',
+        'role', 'isBlocked', 'blockedReason', 'blockedAt', 'blockedBy',
+        'screenshotWarnings', 'screenshotWarningStatus', 'adminFlags', 'creatorStatus',
       ]);
     }
 
@@ -81,54 +69,46 @@ service cloud.firestore {
     // USERS
     // ============================================
     match /users/{userId} {
-
-      // Leitura pública limitada — campos básicos para feed
       allow get: if isAuthenticated();
       allow list: if isAuthenticated();
-
-      // Criação do próprio perfil
       allow create: if isOwner(userId) &&
         request.resource.data.role == 'user' &&
         request.resource.data.isBlocked == false;
-
-      // Edição do próprio perfil — sem campos protegidos
       allow update: if isOwner(userId) && hasNoProtectedFields();
-
-      // Admin pode atualizar qualquer usuário via Cloud Function
-      // (Firestore Admin SDK ignora estas rules)
       allow delete: if false;
 
-      // Subcoleção de transações de moedas — intocável pelo marketplace
       match /transactions/{transactionId} {
         allow read: if isOwner(userId);
-        allow write: if false; // apenas Admin SDK
+        allow write: if false;
       }
     }
 
     // ============================================
-    // SISTEMA DE MOEDAS — INTOCÁVEL
+    // SISTEMA DE MOEDAS
     // ============================================
     match /wallets/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow write: if false; // apenas Admin SDK
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId);
     }
 
     // ============================================
-    // CHATS E MENSAGENS
+    // CHATS E MENSAGENS — CORRIGIDO
     // ============================================
     match /chats/{chatId} {
-      allow read, write: if isAuthenticated() &&
-        request.auth.uid in resource.data.participants;
+  allow read, write: if isAuthenticated();
 
-      match /messages/{messageId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated() && isNotBlocked();
-        allow update: if isAuthenticated() &&
-          resource.data.senderId == request.auth.uid;
-        allow delete: if false;
-      }
-    }
+  match /messages/{messageId} {
+    allow read: if isAuthenticated();
+    allow create: if isAuthenticated();
+    allow update: if isAuthenticated() &&
+      resource.data.senderId == request.auth.uid;
+    allow delete: if false;
+  }
 
+  match /typing/{userId} {
+    allow read, write: if isAuthenticated();
+  }
+}
     // ============================================
     // NOTIFICAÇÕES
     // ============================================
@@ -138,8 +118,7 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() &&
         resource.data.userId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['read']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow delete: if false;
     }
 
@@ -155,8 +134,7 @@ service cloud.firestore {
         request.resource.data.fromUserId == request.auth.uid;
       allow update: if isAuthenticated() &&
         resource.data.toUserId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
       allow delete: if false;
     }
 
@@ -179,17 +157,12 @@ service cloud.firestore {
     // VISITAS DE PERFIL
     // ============================================
     match /profile_visits/{visitId} {
-      allow read: if isAuthenticated() && (
-        resource.data.visitorId == request.auth.uid ||
-        resource.data.visitedId == request.auth.uid
-      );
-      allow create: if isAuthenticated() && isNotBlocked();
-      allow update, delete: if false;
+      allow read, write: if isAuthenticated();
     }
 
-    match /profile_visit_counts/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if false; // Admin SDK apenas
+    match /profile_visit_counts/{profileId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
 
     // ============================================
@@ -211,7 +184,7 @@ service cloud.firestore {
     // ============================================
     match /unlockedContent/{contentId} {
       allow read: if isAuthenticated();
-      allow write: if false; // Admin SDK apenas
+      allow write: if false;
     }
 
     // ============================================
@@ -219,61 +192,41 @@ service cloud.firestore {
     // ============================================
     match /autoMessages/{messageId} {
       allow read: if isAuthenticated();
-      allow write: if false; // Admin SDK apenas
+      allow write: if false;
     }
 
     // ============================================
     // CONNECTIONS
     // ============================================
     match /connections/{connectionId} {
-      allow read: if isAuthenticated() && (
-        resource.data.user1 == request.auth.uid ||
-        resource.data.user2 == request.auth.uid
-      );
-      allow write: if false; // Admin SDK apenas
+      allow read: if isAuthenticated();
+      allow write: if false;
     }
 
     // ============================================
     // MARKETPLACE — PRODUCTS
     // ============================================
     match /products/{productId} {
-
-      // Leitura pública para produtos aprovados
       allow get: if resource.data.status == 'approved' &&
         resource.data.isDeleted != true;
-
-      // Leitura autenticada para criador dono ou admin
       allow get: if isAuthenticated() && (
         resource.data.ownerId == request.auth.uid || isAdmin()
       );
-
-      // Listagem pública de produtos aprovados
       allow list: if resource.data.status == 'approved' &&
         resource.data.isDeleted != true;
-
-      // Listagem para criador dos próprios produtos
-      allow list: if isCreator() &&
-        request.query.filters['ownerId'] == request.auth.uid;
-
-      // Criador pode criar produto
+      allow list: if isAdmin();
       allow create: if isCreator() && isMarketplaceEnabled() &&
         request.resource.data.ownerId == request.auth.uid &&
         request.resource.data.status == 'draft' &&
         request.resource.data.isFeatured == false;
-
-      // Criador pode editar produto próprio em draft ou rejected
       allow update: if isCreator() &&
         resource.data.ownerId == request.auth.uid &&
         resource.data.status in ['draft', 'rejected'] &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'status', 'isFeatured', 'ownerId',
-          'averageRating', 'reviewsCount',
+          'status', 'isFeatured', 'ownerId', 'averageRating', 'reviewsCount',
         ]);
-
-      // Deleção proibida diretamente — usar soft delete via Cloud Function
       allow delete: if false;
 
-      // Subcoleção de shards de analytics
       match /shards/{shardId} {
         allow read: if isAuthenticated();
         allow write: if isAuthenticated() && isNotBlocked();
@@ -284,18 +237,12 @@ service cloud.firestore {
     // MARKETPLACE — CREATOR REQUESTS
     // ============================================
     match /creatorRequests/{requestId} {
-
-      // Leitura pelo próprio usuário ou admin
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-
-      // Criação apenas pelo próprio usuário
       allow create: if isAuthenticated() && isNotBlocked() &&
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.status == 'pending';
-
-      // Atualização e exclusão proibidas pelo cliente
       allow update: if false;
       allow delete: if false;
     }
@@ -304,19 +251,11 @@ service cloud.firestore {
     // MARKETPLACE — SALES
     // ============================================
     match /sales/{saleId} {
-
-      // Comprador lê próprias compras
       allow get: if isAuthenticated() &&
         resource.data.buyerId == request.auth.uid;
-
-      // Vendedor lê próprias vendas
       allow get: if isAuthenticated() &&
         resource.data.sellerId == request.auth.uid;
-
-      // Admin lê todas
       allow get, list: if isAdmin();
-
-      // Criação, atualização e exclusão — apenas Cloud Function
       allow create, update, delete: if false;
     }
 
@@ -324,14 +263,10 @@ service cloud.firestore {
     // MARKETPLACE — PURCHASES
     // ============================================
     match /purchases/{purchaseId} {
-
-      // Apenas o comprador ou admin pode ler
       allow get: if isAuthenticated() && (
         resource.data.buyerId == request.auth.uid || isAdmin()
       );
       allow list: if isAdmin();
-
-      // Criação, atualização e exclusão — apenas Cloud Function
       allow create, update, delete: if false;
     }
 
@@ -339,13 +274,9 @@ service cloud.firestore {
     // MARKETPLACE — CREATOR WALLETS
     // ============================================
     match /creatorWallets/{userId} {
-
-      // Apenas o próprio criador ou admin
       allow read: if isAuthenticated() && (
         isOwner(userId) || isAdmin()
       );
-
-      // Tudo via Cloud Function
       allow create, update, delete: if false;
     }
 
@@ -353,13 +284,9 @@ service cloud.firestore {
     // MARKETPLACE — CREATOR TRANSACTIONS
     // ============================================
     match /creatorTransactions/{transactionId} {
-
-      // Apenas o dono ou admin
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-
-      // Apenas Cloud Function
       allow create, update, delete: if false;
     }
 
@@ -367,19 +294,13 @@ service cloud.firestore {
     // MARKETPLACE — WITHDRAWALS
     // ============================================
     match /withdrawals/{withdrawalId} {
-
-      // Criador lê próprios saques
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-
-      // Criador pode criar solicitação de saque
       allow create: if isCreator() && isNotBlocked() &&
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.status == 'pending' &&
         request.resource.data.amount > 0;
-
-      // Atualização e exclusão — apenas Cloud Function
       allow update, delete: if false;
     }
 
@@ -387,26 +308,15 @@ service cloud.firestore {
     // MARKETPLACE — REVIEWS
     // ============================================
     match /productReviews/{reviewId} {
-
-      // Leitura pública de reviews não ocultas
-      allow read: if isAuthenticated() &&
-        resource.data.isHidden != true;
-
-      // Admin pode ler todas
+      allow read: if isAuthenticated() && resource.data.isHidden != true;
       allow read: if isAdmin();
-
-      // Criação apenas se tem purchase ativa
       allow create: if isAuthenticated() && isNotBlocked() &&
         request.resource.data.userId == request.auth.uid &&
         hasActivePurchase(request.resource.data.productId);
-
-      // Edição apenas da própria review — campos limitados
       allow update: if isAuthenticated() &&
         resource.data.userId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['rating', 'comment', 'isEdited', 'updatedAt']);
-
-      // Exclusão proibida — admin oculta via isHidden
       allow delete: if false;
     }
 
@@ -424,13 +334,12 @@ service cloud.firestore {
     }
 
     // ============================================
-    // MARKETPLACE — DOWNLOADS (log de acesso)
+    // MARKETPLACE — DOWNLOADS
     // ============================================
     match /downloads/{downloadId} {
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-      // Criação via cliente apenas se tem purchase ativa
       allow create: if isAuthenticated() && isNotBlocked() &&
         request.resource.data.userId == request.auth.uid &&
         hasActivePurchase(request.resource.data.productId);
@@ -441,19 +350,13 @@ service cloud.firestore {
     // MARKETPLACE — REFUND REQUESTS
     // ============================================
     match /refundRequests/{requestId} {
-
-      // Comprador lê próprias solicitações
       allow read: if isAuthenticated() && (
         resource.data.buyerId == request.auth.uid || isAdmin()
       );
-
-      // Comprador cria solicitação própria
       allow create: if isAuthenticated() && isNotBlocked() &&
         request.resource.data.buyerId == request.auth.uid &&
         request.resource.data.status == 'pending' &&
         request.resource.data.sellerId != request.auth.uid;
-
-      // Atualização e exclusão — apenas Cloud Function
       allow update, delete: if false;
     }
 
@@ -462,7 +365,7 @@ service cloud.firestore {
     // ============================================
     match /fraudFlags/{flagId} {
       allow read: if isAdmin();
-      allow create, update, delete: if false; // apenas Cloud Function
+      allow create, update, delete: if false;
     }
 
     // ============================================
@@ -470,23 +373,22 @@ service cloud.firestore {
     // ============================================
     match /auditLogs/{logId} {
       allow read: if isAdmin();
-      allow create, update, delete: if false; // apenas Cloud Function
+      allow create, update, delete: if false;
     }
 
     // ============================================
-    // MARKETPLACE — SCREENSHOT EVENTS (DRM)
+    // MARKETPLACE — SCREENSHOT EVENTS
     // ============================================
     match /screenshotEvents/{eventId} {
       allow read: if isAdmin();
-      allow create, update, delete: if false; // apenas Cloud Function
+      allow create, update, delete: if false;
     }
 
     // ============================================
     // MARKETPLACE — COUPONS
     // ============================================
     match /coupons/{couponId} {
-      allow read: if isAuthenticated() &&
-        resource.data.isActive == true;
+      allow read: if isAuthenticated() && resource.data.isActive == true;
       allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
@@ -503,7 +405,7 @@ service cloud.firestore {
     // ============================================
     match /adminMetrics/{docId} {
       allow read: if isAdmin();
-      allow create, update, delete: if false; // apenas Cloud Function
+      allow create, update, delete: if false;
     }
 
     // ============================================
@@ -511,7 +413,7 @@ service cloud.firestore {
     // ============================================
     match /appSettings/{docId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if false; // apenas Cloud Function
+      allow create, update, delete: if false;
     }
 
     // ============================================

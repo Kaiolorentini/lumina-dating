@@ -11,6 +11,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useUserPermissions } from '../../hooks/useUserPermissions';
 import { listenToAdminMetrics } from '../../services/marketplace/adminService';
 import { AdminMetrics } from '../../shared/types/marketplace';
+import AdminLoadingScreen from './AdminLoadingScreen';
+import { useAdminGuard } from '../../hooks/useAdminGuard';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -41,12 +43,16 @@ function MetricCard({ icon, label, value, onPress, highlight, superAdminOnly, is
   );
 }
 
+let _adminSessionReady = false;
+
 export default function AdminDashboardScreen() {
   const navigation = useNavigation<NavProp>();
   const { user } = useAuth();
-  const { isSuperAdmin, role } = useUserPermissions(user?.uid);
+  const { isSuperAdmin } = useUserPermissions(user?.uid);
+  const { blocked, loading: guardLoading } = useAdminGuard();
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [adminReady, setAdminReady] = useState(_adminSessionReady);
 
   useEffect(() => {
     const unsub = listenToAdminMetrics(setMetrics);
@@ -56,6 +62,23 @@ export default function AdminDashboardScreen() {
   async function handleRefresh() {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 1000);
+  }
+
+  function handleAdminReady() {
+    _adminSessionReady = true;
+    setAdminReady(true);
+  }
+
+  if (guardLoading || blocked) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
+      </View>
+    );
+  }
+
+  if (!adminReady) {
+    return <AdminLoadingScreen onFinish={handleAdminReady} />;
   }
 
   return (
@@ -78,7 +101,6 @@ export default function AdminDashboardScreen() {
         }
         contentContainerStyle={styles.content}
       >
-        {/* Menu principal */}
         <Text style={styles.sectionTitle}>Moderação</Text>
         <View style={styles.menuGrid}>
           <TouchableOpacity style={styles.menuCard} onPress={() => navigation.navigate('AdminCreatorRequests')}>
@@ -131,7 +153,6 @@ export default function AdminDashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Métricas */}
         {metrics && (
           <>
             <Text style={styles.sectionTitle}>Métricas</Text>
@@ -179,7 +200,11 @@ const styles = StyleSheet.create({
   },
   roleBadgeText: { color: colors.gold, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
   content: { padding: spacing.md },
-  sectionTitle: { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold', marginTop: spacing.md, marginBottom: spacing.sm, textTransform: 'uppercase', letterSpacing: 1 },
+  sectionTitle: {
+    color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold',
+    marginTop: spacing.md, marginBottom: spacing.sm,
+    textTransform: 'uppercase', letterSpacing: 1,
+  },
   menuGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   menuCard: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,

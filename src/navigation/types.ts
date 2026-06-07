@@ -45,10 +45,10 @@ export type RootStackParamList = {
 export type TabParamList = {
   Home: undefined;
   Media: undefined;
-  Conversas: undefined;
+  // Conversas removida — tab órfã sem Tab.Screen correspondente
   Sintonias: undefined;
   Store: undefined;
   Profile: undefined;
   Marketplace: undefined;
-  Admin: undefined; 
+  Admin: undefined;
 };

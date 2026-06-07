@@ -1,17 +1,26 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Animated,
-  TouchableOpacity,
+  View, Text, StyleSheet, Animated, TouchableOpacity,
 } from 'react-native';
 import { colors, fonts, spacing, borderRadius } from '../theme';
+
+// ✅ Tipos expandidos com marketplace
+type NotificationType =
+  | 'message'
+  | 'request'
+  | 'default'
+  | 'sale_completed'
+  | 'purchase_confirmed'
+  | 'creator_approved'
+  | 'product_approved'
+  | 'refund_processed'
+  | 'withdrawal_paid'
+  | 'withdrawal_rejected';
 
 interface InAppNotificationProps {
   title: string;
   message: string;
-  type: 'message' | 'request' | 'default';
+  type: NotificationType;
   onPress?: () => void;
   onDismiss: () => void;
 }
@@ -27,7 +36,6 @@ export default function InAppNotification({
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Entra
     Animated.parallel([
       Animated.spring(translateY, {
         toValue: 0,
@@ -42,7 +50,6 @@ export default function InAppNotification({
       }),
     ]).start();
 
-    // Sai após 3 segundos
     const timer = setTimeout(() => {
       dismiss();
     }, 3000);
@@ -65,17 +72,42 @@ export default function InAppNotification({
     ]).start(() => onDismiss());
   }
 
-  function getIcon() {
-    if (type === 'message') return '💬';
-    if (type === 'request') return '✦';
-    return '🔔';
+  function getIcon(): string {
+    switch (type) {
+      case 'message':           return '💬';
+      case 'request':           return '✦';
+      case 'sale_completed':    return '💰';
+      case 'purchase_confirmed':return '📦';
+      case 'creator_approved':  return '🎨';
+      case 'product_approved':  return '✅';
+      case 'refund_processed':  return '↩️';
+      case 'withdrawal_paid':   return '💸';
+      case 'withdrawal_rejected':return '❌';
+      default:                  return '🔔';
+    }
+  }
+
+  function getBorderColor(): string {
+    switch (type) {
+      case 'sale_completed':
+      case 'withdrawal_paid':
+      case 'creator_approved':
+      case 'product_approved':
+        return colors.success + '88';
+      case 'withdrawal_rejected':
+        return colors.error + '88';
+      case 'refund_processed':
+        return colors.gray + '88';
+      default:
+        return colors.gold + '66';
+    }
   }
 
   return (
     <Animated.View
       style={[
         styles.container,
-        { transform: [{ translateY }], opacity },
+        { transform: [{ translateY }], opacity, borderColor: getBorderColor() },
       ]}
     >
       <TouchableOpacity
@@ -98,7 +130,7 @@ export default function InAppNotification({
         </TouchableOpacity>
       </TouchableOpacity>
       <View style={styles.progressBar}>
-        <Animated.View style={[styles.progressFill]} />
+        <Animated.View style={styles.progressFill} />
       </View>
     </Animated.View>
   );
@@ -150,20 +182,8 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.sm,
     marginTop: 2,
   },
-  closeButton: {
-    padding: spacing.xs,
-  },
-  closeText: {
-    color: colors.gray,
-    fontSize: fonts.sizes.sm,
-  },
-  progressBar: {
-    height: 2,
-    backgroundColor: colors.grayDark,
-  },
-  progressFill: {
-    height: 2,
-    backgroundColor: colors.gold,
-    width: '100%',
-  },
+  closeButton: { padding: spacing.xs },
+  closeText: { color: colors.gray, fontSize: fonts.sizes.sm },
+  progressBar: { height: 2, backgroundColor: colors.grayDark },
+  progressFill: { height: 2, backgroundColor: colors.gold, width: '100%' },
 });

@@ -27,16 +27,10 @@ export async function sendMessage(
   audioUrl?: string,
   audioDuration?: number
 ): Promise<void> {
-  const messagesRef = collection(
-    db,
-    COLLECTIONS.CHATS,
-    chatId,
-    COLLECTIONS.MESSAGES
-  );
-
+  const messagesRef = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
   const now = new Date();
 
-  const messageData: any = {
+  const messageData: Record<string, unknown> = {
     text,
     senderId,
     senderName,
@@ -64,9 +58,7 @@ export async function sendMessage(
   if (recipientId && !isAI) {
     try {
       await markAsDelivered(chatId, senderId);
-      const { sendPushToUser } = await import(
-        '../../notifications/services/pushService'
-      );
+      const { sendPushToUser } = await import('../../notifications/services/pushService');
       await sendPushToUser(
         recipientId,
         senderName,
@@ -88,12 +80,7 @@ export async function markAsDelivered(
   excludeSenderId: string
 ): Promise<void> {
   try {
-    const messagesRef = collection(
-      db,
-      COLLECTIONS.CHATS,
-      chatId,
-      COLLECTIONS.MESSAGES
-    );
+    const messagesRef = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
     const q = query(
       messagesRef,
       where('delivered', '==', false),
@@ -101,9 +88,7 @@ export async function markAsDelivered(
     );
     const snap = await getDocs(q);
     const batch = writeBatch(db);
-    snap.docs.forEach(d => {
-      batch.update(d.ref, { delivered: true });
-    });
+    snap.docs.forEach(d => batch.update(d.ref, { delivered: true }));
     await batch.commit();
   } catch (e) {
     console.warn('Erro ao marcar como entregue:', e);
@@ -115,12 +100,7 @@ export async function markAsRead(
   currentUserId: string
 ): Promise<void> {
   try {
-    const messagesRef = collection(
-      db,
-      COLLECTIONS.CHATS,
-      chatId,
-      COLLECTIONS.MESSAGES
-    );
+    const messagesRef = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
     const q = query(
       messagesRef,
       where('read', '==', false),
@@ -128,9 +108,7 @@ export async function markAsRead(
     );
     const snap = await getDocs(q);
     const batch = writeBatch(db);
-    snap.docs.forEach(d => {
-      batch.update(d.ref, { delivered: true, read: true });
-    });
+    snap.docs.forEach(d => batch.update(d.ref, { delivered: true, read: true }));
     await batch.commit();
   } catch (e) {
     console.warn('Erro ao marcar como lido:', e);
@@ -139,30 +117,42 @@ export async function markAsRead(
 
 export function listenToMessages(
   chatId: string,
-  onMessages: (messages: ChatMessage[]) => void
+  onMessages: (messages: ChatMessage[]) => void,
+  onError?: (error: { code: string; message: string }) => void
 ): () => void {
-  const messagesRef = collection(
-    db,
-    COLLECTIONS.CHATS,
-    chatId,
-    COLLECTIONS.MESSAGES
-  );
+  const messagesRef = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
+
+ 
   const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
-  return onSnapshot(q, snapshot => {
-    const messages: ChatMessage[] = snapshot.docs.map(doc => ({
-      id: doc.id,
-      text: doc.data().text || '',
-      senderId: doc.data().senderId,
-      senderName: doc.data().senderName,
-      timestamp: doc.data().timestamp?.toDate() || new Date(),
-      isAI: doc.data().isAI,
-      delivered: doc.data().delivered ?? false,
-      read: doc.data().read ?? false,
-      audioUrl: doc.data().audioUrl,
-      audioDuration: doc.data().audioDuration,
-      reactions: doc.data().reactions || {},
-    }));
-    onMessages(messages);
-  });
-  }
+  return onSnapshot(
+    q,
+    snapshot => {
+      
+
+      const messages: ChatMessage[] = snapshot.docs.map(d => {
+        const data = d.data();
+       
+        return {
+          id: d.id,
+          text: data.text || '',
+          senderId: data.senderId,
+          senderName: data.senderName,
+          timestamp: data.timestamp?.toDate?.() || new Date(),
+          isAI: data.isAI,
+          delivered: data.delivered ?? false,
+          read: data.read ?? false,
+          audioUrl: data.audioUrl,
+          audioDuration: data.audioDuration,
+          reactions: data.reactions,
+        };
+      });
+
+      onMessages(messages);
+    },
+    (error: { code: string; message: string }) => {
+      console.error('[CHAT_ERROR] onSnapshot:', error.code, error.message);
+      if (onError) onError(error);
+    }
+  );
+}

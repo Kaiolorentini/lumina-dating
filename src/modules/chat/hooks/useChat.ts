@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FlatList } from 'react-native';
+import { Alert, FlatList } from 'react-native';
 import { useAuth } from '../../../context/AuthContext';
 import {
   sendMessage,
@@ -27,7 +27,6 @@ interface UseAIChatReturn {
 export function useAIChat(aiModel: AIModel): UseAIChatReturn {
   const { user } = useAuth();
   const chatId = user ? generateAIChatId(user.uid, aiModel.id) : '';
-
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -45,9 +44,7 @@ export function useAIChat(aiModel: AIModel): UseAIChatReturn {
 
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [messages]);
 
@@ -62,7 +59,7 @@ export function useAIChat(aiModel: AIModel): UseAIChatReturn {
     if (!inputText.trim() || !user || !chatId) return;
     const text = inputText.trim();
     setInputText('');
-    await sendMessage(chatId, text, user.uid, user.email || 'Voce', false);
+    await sendMessage(chatId, text, user.uid, user.displayName || user.email || 'Você', false);
     setIsTyping(true);
     const delay = getTypingDelay(text);
     setTimeout(async () => {
@@ -72,15 +69,7 @@ export function useAIChat(aiModel: AIModel): UseAIChatReturn {
     }, delay);
   }
 
-  return {
-    messages,
-    inputText,
-    setInputText,
-    isTyping,
-    loading,
-    flatListRef,
-    sendUserMessage,
-  };
+  return { messages, inputText, setInputText, isTyping, loading, flatListRef, sendUserMessage };
 }
 
 interface UseUserChatReturn {
@@ -96,26 +85,41 @@ interface UseUserChatReturn {
 export function useUserChat(targetUserId: string): UseUserChatReturn {
   const { user } = useAuth();
   const chatId = user ? generateChatId(user.uid, targetUserId) : '';
-
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
   const flatListRef = useRef<FlatList<ChatMessage> | null>(null);
 
   useEffect(() => {
-    if (!chatId) return;
-    const unsubscribe = listenToMessages(chatId, msgs => {
-      setMessages(msgs);
+   
+
+    if (!chatId) {
+      
       setLoading(false);
-    });
+      return;
+    }
+
+    const unsubscribe = listenToMessages(
+      chatId,
+      msgs => {
+        
+        setMessages(msgs);
+        setLoading(false);
+      },
+      (error: { code: string; message: string }) => {
+        console.error('[CHAT_ERROR]', error.code, error.message);
+        Alert.alert('Erro no chat', `${error.code}: ${error.message}`);
+        setLoading(false);
+      }
+    );
+
     return unsubscribe;
   }, [chatId]);
 
   useEffect(() => {
+
     if (messages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [messages]);
 
@@ -123,37 +127,13 @@ export function useUserChat(targetUserId: string): UseUserChatReturn {
     if (!inputText.trim() || !user || !chatId) return;
     const text = inputText.trim();
     setInputText('');
-    await sendMessage(
-      chatId,
-      text,
-      user.uid,
-      user.email || 'Voce',
-      false,
-      targetUserId
-    );
+    await sendMessage(chatId, text, user.uid, user.displayName || user.email || 'Você', false, targetUserId);
   }
 
   async function sendAudioMessage(audioUrl: string, duration: number) {
     if (!user || !chatId) return;
-    await sendMessage(
-      chatId,
-      '',
-      user.uid,
-      user.email || 'Voce',
-      false,
-      targetUserId,
-      audioUrl,
-      duration
-    );
+    await sendMessage(chatId, '', user.uid, user.displayName || user.email || 'Você', false, targetUserId, audioUrl, duration);
   }
 
-  return {
-    messages,
-    inputText,
-    setInputText,
-    loading,
-    flatListRef,
-    sendUserMessage,
-    sendAudioMessage,
-  };
+  return { messages, inputText, setInputText, loading, flatListRef, sendUserMessage, sendAudioMessage };
 }

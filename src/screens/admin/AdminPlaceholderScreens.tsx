@@ -1,10 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors, fonts, spacing } from '../../theme';
+import { useAdminGuard } from '../../hooks/useAdminGuard';
 
 function AdminPlaceholder({ title, icon }: { title: string; icon: string }) {
   const navigation = useNavigation();
+  const { blocked, loading: guardLoading } = useAdminGuard();
+
+  if (guardLoading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color={colors.gold} />
+      </View>
+    );
+  }
+
+  if (blocked) return null;
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>

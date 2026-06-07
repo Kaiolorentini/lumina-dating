@@ -227,7 +227,7 @@ export default function UserChatScreen() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
- function renderMessage({ item }: { item: ChatMessage }) {
+  function renderMessage({ item }: { item: ChatMessage }) {
     const isMe = item.senderId === user?.uid;
     const isPlaying = playingId === item.id;
     const myReaction = item.reactions?.[user?.uid || ''];
@@ -242,7 +242,6 @@ export default function UserChatScreen() {
         <View style={styles.bubbleWrapper}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
 
-            {/* Botão de reação — lado esquerdo para minhas mensagens */}
             {isMe && (
               <TouchableOpacity
                 onPress={() => setShowReactions(showReactions === item.id ? null : item.id)}
@@ -257,7 +256,7 @@ export default function UserChatScreen() {
             <TouchableOpacity
               onLongPress={() => setShowReactions(showReactions === item.id ? null : item.id)}
               activeOpacity={0.9}
-              style={{ flex: 1 }}
+              style={{ flexShrink: 1 }}
             >
               <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
                 {item.audioUrl ? (
@@ -290,7 +289,6 @@ export default function UserChatScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* Botão de reação — lado direito para mensagens do outro */}
             {!isMe && (
               <TouchableOpacity
                 onPress={() => setShowReactions(showReactions === item.id ? null : item.id)}
@@ -303,7 +301,6 @@ export default function UserChatScreen() {
             )}
           </View>
 
-          {/* Picker de reações */}
           {showReactions === item.id && (
             <View style={[styles.reactionPicker, isMe ? styles.reactionPickerMe : styles.reactionPickerOther]}>
               {['❤️', '😍', '😂', '😮', '👏', '🔥'].map(emoji => (
@@ -318,7 +315,6 @@ export default function UserChatScreen() {
             </View>
           )}
 
-          {/* Reações existentes */}
           {hasReactions && (
             <View style={[styles.reactionsRow, isMe ? styles.reactionsRowMe : styles.reactionsRowOther]}>
               {Object.values(item.reactions!).map((emoji, i) => (
@@ -344,6 +340,7 @@ export default function UserChatScreen() {
       </View>
     );
   }
+
   if (blocked) {
     return (
       <View style={styles.container}>
@@ -472,11 +469,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     alignItems: 'flex-end',
     gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
-  rowMe: { justifyContent: 'flex-end' },
-  rowOther: { justifyContent: 'flex-start' },
+  rowMe: { justifyContent: 'flex-end', flexDirection: 'row' },
+  rowOther: { justifyContent: 'flex-start', flexDirection: 'row' },
   avatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.gold },
-  bubbleWrapper: { maxWidth: '75%', alignItems: 'flex-end' },
+  bubbleWrapper: {
+    maxWidth: '75%',
+    flexShrink: 1,
+  },
   bubble: { borderRadius: borderRadius.md, padding: spacing.md },
   bubbleMe: { backgroundColor: colors.gold, borderBottomRightRadius: 4 },
   bubbleOther: {
@@ -502,11 +503,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     gap: spacing.sm,
   },
-  typingText: {
-    color: colors.gray,
-    fontSize: fonts.sizes.xs,
-    fontStyle: 'italic',
-  },
+  typingText: { color: colors.gray, fontSize: fonts.sizes.xs, fontStyle: 'italic' },
   reactionPicker: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
@@ -522,12 +519,7 @@ const styles = StyleSheet.create({
   reactionOption: { padding: 4, borderRadius: 8 },
   reactionOptionActive: { backgroundColor: colors.gold + '33' },
   reactionEmoji: { fontSize: 20 },
-  reactionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginTop: 2,
-  },
+  reactionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 },
   reactionsRowMe: { justifyContent: 'flex-end' },
   reactionsRowOther: { justifyContent: 'flex-start' },
   reactionBadge: {
@@ -606,7 +598,7 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 60 },
   emptyTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', textAlign: 'center' },
   emptySubtitle: { color: colors.gray, fontSize: fonts.sizes.md },
-reactionTrigger: {
+  reactionTrigger: {
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -617,7 +609,5 @@ reactionTrigger: {
     borderColor: colors.grayDark,
     marginBottom: 4,
   },
-  reactionTriggerText: {
-    fontSize: 14,
-  },
+  reactionTriggerText: { fontSize: 14 },
 });

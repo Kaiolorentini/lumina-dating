@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, FlatList,
-  TouchableOpacity, ActivityIndicator, Alert,
+  TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -9,20 +9,23 @@ import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
 import { getUserById, searchUsers } from '../../services/marketplace/adminService';
 import { UserProfile } from '../../shared/types';
+import { useSuperAdminGuard } from '../../hooks/useAdminGuard';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function AdminUserSearchScreen() {
   const navigation = useNavigation<NavProp>();
+  const { blocked, loading: guardLoading } = useSuperAdminGuard();
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
+
+  if (guardLoading || blocked) return null;
 
   async function handleSearch() {
     if (!search.trim()) return;
     setLoading(true);
     try {
-      // Busca por UID exato primeiro
       if (search.trim().length > 20) {
         const user = await getUserById(search.trim());
         setResults(user ? [user] : []);
@@ -57,7 +60,10 @@ export default function AdminUserSearchScreen() {
           autoCapitalize="none"
         />
         <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={loading}>
-          {loading ? <ActivityIndicator color={colors.background} size="small" /> : <Text style={styles.searchBtnText}>🔍</Text>}
+          {loading
+            ? <ActivityIndicator color={colors.background} size="small" />
+            : <Text style={styles.searchBtnText}>🔍</Text>
+          }
         </TouchableOpacity>
       </View>
 

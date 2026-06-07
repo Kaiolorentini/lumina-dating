@@ -12,6 +12,7 @@ import { useUserPermissions } from '../../hooks/useUserPermissions';
 import { getUserById, getScreenshotEvents } from '../../services/marketplace/adminService';
 import app from '../../core/firebase';
 import { UserProfile } from '../../shared/types';
+import { useSuperAdminGuard } from '../../hooks/useAdminGuard';
 
 type RouteProps = RouteProp<RootStackParamList, 'AdminUserDetail'>;
 
@@ -21,6 +22,7 @@ export default function AdminUserDetailScreen() {
   const { userId } = route.params;
   const { user } = useAuth();
   const { isSuperAdmin } = useUserPermissions(user?.uid);
+  const { blocked, loading: guardLoading } = useSuperAdminGuard();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [screenshots, setScreenshots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +31,8 @@ export default function AdminUserDetailScreen() {
   useEffect(() => {
     loadData();
   }, [userId]);
+
+  if (guardLoading || blocked) return null;
 
   async function loadData() {
     setLoading(true);
@@ -84,7 +88,13 @@ export default function AdminUserDetailScreen() {
     ]);
   }
 
-  if (loading) return <ActivityIndicator color={colors.gold} style={{ flex: 1, backgroundColor: colors.background }} />;
+  if (loading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color={colors.gold} />
+      </View>
+    );
+  }
 
   const isBlocked = (profile as any)?.isBlocked;
 
@@ -99,7 +109,6 @@ export default function AdminUserDetailScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Perfil */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>👤 Perfil</Text>
           <Text style={styles.field}>Nome: <Text style={styles.value}>{profile?.name ?? '—'}</Text></Text>
@@ -114,7 +123,6 @@ export default function AdminUserDetailScreen() {
           )}
         </View>
 
-        {/* Screenshots */}
         {screenshots.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>📸 Eventos de Screenshot ({screenshots.length})</Text>
@@ -126,7 +134,6 @@ export default function AdminUserDetailScreen() {
           </View>
         )}
 
-        {/* Ações — apenas SuperAdmin */}
         {isSuperAdmin && (
           <View style={styles.actionsCard}>
             <Text style={styles.cardTitle}>⚡ Ações</Text>

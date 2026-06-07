@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { Alert, Text, View, StyleSheet } from 'react-native';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, StyleSheet } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -55,6 +55,7 @@ import AdminCreatorRequestsScreen from '../screens/admin/AdminCreatorRequestsScr
 import AdminWithdrawalsScreen from '../screens/admin/AdminWithdrawalsScreen';
 import AdminUserSearchScreen from '../screens/admin/AdminUserSearchScreen';
 import AdminUserDetailScreen from '../screens/admin/AdminUserDetailScreen';
+import AdminLoadingScreen from '../screens/admin/AdminLoadingScreen';
 import {
   AdminProductsModerationScreen,
   AdminSalesScreen,
@@ -64,21 +65,24 @@ import {
   AdminReportsScreen,
 } from '../screens/admin/AdminPlaceholderScreens';
 
-
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
-const navigationRef = React.createRef<any>();
 
+// ✅ navigationRef tipado corretamente
+const navigationRef = React.createRef<NavigationContainerRef<RootStackParamList>>();
+
+// ============================================
+// TAB NAVIGATOR
+// ============================================
 function TabNavigator() {
   const { user } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
   const unsubscribersRef = useRef<(() => void)[]>([]);
-
-  // ← ADICIONADO: hooks do marketplace
   const { marketplaceEnabled } = useAppSettings();
- const { isBlocked, isAdmin } = useUserPermissions(user?.uid);
+  const { isBlocked, isAdmin, isSuperAdmin } = useUserPermissions(user?.uid);
+  const canAccessAdminPanel = isSuperAdmin;
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -150,69 +154,56 @@ function TabNavigator() {
         },
       }}
     >
-
       <Tab.Screen name="Home" component={HomeScreen}
-  options={{
-    tabBarLabel: 'Descobrir',
-    tabBarIcon: ({ color }) => (
-      <View>
-        <Text style={{ fontSize: 20, color }}>✦</Text>
-        {unreadNotifs > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>
-              {unreadNotifs > 9 ? '9+' : unreadNotifs}
-            </Text>
-          </View>
-        )}
-      </View>
-    ),
-  }}
-/>
+        options={{
+          tabBarLabel: 'Descobrir',
+          tabBarIcon: ({ color }) => (
+            <View>
+              <Text style={{ fontSize: 20, color }}>✦</Text>
+              {unreadNotifs > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</Text>
+                </View>
+              )}
+            </View>
+          ),
+        }}
+      />
       <Tab.Screen name="Media" component={MediaScreen}
         options={{
-          tabBarLabel: 'Midia',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>📸</Text>
-          ),
+          tabBarLabel: 'Mídia',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📸</Text>,
         }}
       />
       <Tab.Screen name="Sintonias" component={SintoniasScreen}
-  options={{
-    tabBarLabel: 'Sintonias',
-    tabBarIcon: ({ color }) => (
-      <View>
-        <Text style={{ fontSize: 20, color }}>✨</Text>
-        {unreadMessages > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>
-              {unreadMessages > 9 ? '9+' : unreadMessages}
-            </Text>
-          </View>
-        )}
-      </View>
-    ),
-  }}
-/>
-      <Tab.Screen name="Store" component={StoreScreen}
         options={{
-          tabBarLabel: 'Moedas',
+          tabBarLabel: 'Sintonias',
           tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>💰</Text>
+            <View>
+              <Text style={{ fontSize: 20, color }}>✨</Text>
+              {unreadMessages > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadMessages > 9 ? '9+' : unreadMessages}</Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />
-      {/* ← ADICIONADO: tab Marketplace — visível apenas se habilitado e não bloqueado */}
-      {marketplaceEnabled && !isBlocked && (
-        <Tab.Screen name="Marketplace" component={MarketplaceHomeScreen}
-          options={{
-            tabBarLabel: 'Marketplace',
-            tabBarIcon: ({ color }) => (
-              <Text style={{ fontSize: 20, color }}>🛍️</Text>
-            ),
-          }}
-        />
-      )}
-      
+      <Tab.Screen name="Store" component={StoreScreen}
+        options={{
+          tabBarLabel: 'Moedas',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>💰</Text>,
+        }}
+      />
+      <Tab.Screen name="Marketplace" component={MarketplaceHomeScreen}
+        options={{
+          tabBarLabel: 'Marketplace',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🛍️</Text>,
+          tabBarButton: (marketplaceEnabled && !isBlocked) ? undefined : () => null,
+          tabBarItemStyle: (marketplaceEnabled && !isBlocked) ? {} : { width: 0, height: 0 },
+        }}
+      />
       <Tab.Screen name="Profile" component={ProfileScreen}
         options={{
           tabBarLabel: 'Perfil',
@@ -221,31 +212,30 @@ function TabNavigator() {
               <Text style={{ fontSize: 20, color }}>👤</Text>
               {totalProfileBadge > 0 && (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {totalProfileBadge > 9 ? '9+' : totalProfileBadge}
-                  </Text>
+                  <Text style={styles.badgeText}>{totalProfileBadge > 9 ? '9+' : totalProfileBadge}</Text>
                 </View>
               )}
             </View>
           ),
         }}
       />
-      {/* ← ADICIONADO: tab Admin — visível apenas para admin/superadmin */}
-      // DEPOIS (correto):
-{isAdmin && (
-  <Tab.Screen name="Admin" component={AdminDashboardScreen}
-    options={{
-      tabBarLabel: 'Admin',
-      tabBarIcon: ({ color }) => (
-        <Text style={{ fontSize: 20, color }}>👑</Text>
-      ),
-    }}
-  />
-)}
+      {/* ✅ Admin tab — visível apenas para superadmin */}
+      <Tab.Screen name="Admin" component={AdminDashboardScreen}
+        options={{
+          tabBarLabel: 'Admin',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>👑</Text>,
+          tabBarButton: canAccessAdminPanel ? undefined : () => null,
+          // ✅ tabBarItemStyle corrigido — baseado em canAccessAdminPanel, não marketplaceEnabled
+          tabBarItemStyle: canAccessAdminPanel ? {} : { width: 0, height: 0 },
+        }}
+      />
     </Tab.Navigator>
   );
 }
 
+// ============================================
+// STACKS
+// ============================================
 function AuthStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -277,7 +267,6 @@ function MainStack() {
       <Stack.Screen name="Requests" component={RequestsScreen} />
       <Stack.Screen name="Blocked" component={BlockedScreen} />
       <Stack.Screen name="PaymentSetup" component={PaymentSetupScreen} />
-      {/* ← ADICIONADO: telas do marketplace */}
       <Stack.Screen name="MarketplaceHome" component={MarketplaceHomeScreen} />
       <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
       <Stack.Screen name="MyPurchases" component={MyPurchasesScreen} />
@@ -290,79 +279,170 @@ function MainStack() {
       <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
       <Stack.Screen name="CreatorRequest" component={CreatorRequestScreen} />
       <Stack.Screen name="Checkout" component={CheckoutScreen} />
-      {/* Admin — protegido por role no hook */}
-<Stack.Screen name="AdminPanel" component={AdminDashboardScreen} />
-<Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
-<Stack.Screen name="AdminCreatorRequests" component={AdminCreatorRequestsScreen} />
-<Stack.Screen name="AdminProductsModeration" component={AdminProductsModerationScreen} />
-<Stack.Screen name="AdminSales" component={AdminSalesScreen} />
-<Stack.Screen name="AdminRefundRequests" component={AdminRefundRequestsScreen} />
-<Stack.Screen name="AdminWithdrawals" component={AdminWithdrawalsScreen} />
-<Stack.Screen name="AdminFraudFlags" component={AdminFraudFlagsScreen} />
-<Stack.Screen name="AdminUserSearch" component={AdminUserSearchScreen} />
-<Stack.Screen name="AdminUserDetail" component={AdminUserDetailScreen} />
-<Stack.Screen name="AdminCoupons" component={AdminCouponsScreen} />
-<Stack.Screen name="AdminReports" component={AdminReportsScreen} />
+      <Stack.Screen name="AdminPanel" component={AdminDashboardScreen} />
+      <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+      <Stack.Screen name="AdminCreatorRequests" component={AdminCreatorRequestsScreen} />
+      <Stack.Screen name="AdminProductsModeration" component={AdminProductsModerationScreen} />
+      <Stack.Screen name="AdminSales" component={AdminSalesScreen} />
+      <Stack.Screen name="AdminRefundRequests" component={AdminRefundRequestsScreen} />
+      <Stack.Screen name="AdminWithdrawals" component={AdminWithdrawalsScreen} />
+      <Stack.Screen name="AdminFraudFlags" component={AdminFraudFlagsScreen} />
+      <Stack.Screen name="AdminUserSearch" component={AdminUserSearchScreen} />
+      <Stack.Screen name="AdminUserDetail" component={AdminUserDetailScreen} />
+      <Stack.Screen name="AdminCoupons" component={AdminCouponsScreen} />
+      <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
     </Stack.Navigator>
   );
 }
 
+// ============================================
+// APP CONTENT — controle de estado de auth
+// ============================================
+interface InAppNotifState {
+  title: string;
+  message: string;
+  type: string;
+  onPress?: () => void;
+}
+
+// Persiste entre navegações — AdminLoadingScreen aparece uma vez por sessão
+let _adminBootDone = false;
+
 function AppContent() {
-  const { user, loading, hasProfile } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { isSuperAdmin, loading: permLoading } = useUserPermissions(user?.uid);
+  const canAccessAdminPanel = isSuperAdmin;
+  const [adminBootReady, setAdminBootReady] = useState(_adminBootDone);
+  const [inAppNotif, setInAppNotif] = useState<InAppNotifState | null>(null);
 
-  const [showSplash, setShowSplash] = useState(true);
-  const [showLoading, setShowLoading] = useState(false);
-  const lastNotifId = useRef<string>('');
+  usePushNotifications();
 
-  useEffect(() => {
-    const splashTimer = setTimeout(() => {
-      setShowSplash(false);
-    }, 3000);
-    return () => clearTimeout(splashTimer);
-  }, []);
+  // ============================================
+  // Navegação por tipo de notificação
+  // ============================================
+  function handleNotificationNavigation(data: Record<string, any>) {
+    if (!navigationRef.current) return;
+    const type = data?.type as string;
 
-  useEffect(() => {
-    if (!showSplash && user) {
-      setShowLoading(true);
-      const loadingTimer = setTimeout(() => {
-        setShowLoading(false);
-      }, 7000);
-      return () => clearTimeout(loadingTimer);
-    }
-  }, [showSplash, user]);
-
-  useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data as any;
-      const id = response.notification.request.identifier;
-      if (id === lastNotifId.current) return;
-      lastNotifId.current = id;
-
-      if (!navigationRef.current) return;
-
-      if (data?.type === 'message') {
-        navigationRef.current.navigate('UserChat', {
-          userId: data.senderId,
-          userName: data.senderName,
-          userPhoto: data.userPhoto || '',
-        });
-      } else if (data?.type === 'request') {
+    switch (type) {
+      case 'message':
+        if (data.senderId && data.senderName && data.senderPhoto) {
+          navigationRef.current.navigate('UserChat', {
+            userId: data.senderId,
+            userName: data.senderName,
+            userPhoto: data.senderPhoto,
+          });
+        }
+        break;
+      case 'request':
         navigationRef.current.navigate('Requests');
+        break;
+      case 'sale_completed':
+      case 'withdrawal_paid':
+      case 'withdrawal_rejected':
+        navigationRef.current.navigate('MyEarnings');
+        break;
+      case 'purchase_confirmed':
+      case 'refund_processed':
+        navigationRef.current.navigate('MyPurchases');
+        break;
+      case 'creator_approved':
+      case 'product_approved':
+        navigationRef.current.navigate('MyProducts');
+        break;
+      case 'screenshot_warning':
+        Alert.alert('⚠️ Aviso', data?.message ?? 'Ação proibida detectada em conteúdo protegido.');
+        break;
+      case 'screenshot_warning_ban':
+        Alert.alert('🚫 Conta suspensa', data?.message ?? 'Sua conta foi suspensa por violação de política.');
+        break;
+      default:
+        break;
+    }
+  }
+
+  // ============================================
+  // Listeners de notificação
+  // ============================================
+  useEffect(() => {
+    // Toque em notificação (app em background/fechado)
+    const tapSub = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as Record<string, any>;
+      handleNotificationNavigation(data);
+    });
+
+    // Notificação recebida com app aberto → InAppNotification
+    const receiveSub = Notifications.addNotificationReceivedListener(notification => {
+      if (!user) return;
+      const data = notification.request.content.data as Record<string, any>;
+      const type = data?.type as string;
+      const body = notification.request.content.body ?? '';
+
+      const typeMap: Record<string, { title: string; onPress: () => void }> = {
+        message: {
+          title: notification.request.content.title ?? 'Nova mensagem',
+          onPress: () => {
+            if (data.senderId && data.senderName && data.senderPhoto) {
+              navigationRef.current?.navigate('UserChat', {
+                userId: data.senderId,
+                userName: data.senderName,
+                userPhoto: data.senderPhoto,
+              });
+            }
+          },
+        },
+        request: {
+          title: 'Nova solicitação',
+          onPress: () => navigationRef.current?.navigate('Requests'),
+        },
+        sale_completed: {
+          title: '💰 Venda realizada!',
+          onPress: () => navigationRef.current?.navigate('MyEarnings'),
+        },
+        purchase_confirmed: {
+          title: '📦 Compra confirmada!',
+          onPress: () => navigationRef.current?.navigate('MyPurchases'),
+        },
+        creator_approved: {
+          title: '🎨 Você é um Criador!',
+          onPress: () => navigationRef.current?.navigate('MyProducts'),
+        },
+        product_approved: {
+          title: '✅ Produto aprovado!',
+          onPress: () => navigationRef.current?.navigate('MyProducts'),
+        },
+        refund_processed: {
+          title: '↩️ Reembolso processado',
+          onPress: () => navigationRef.current?.navigate('MyPurchases'),
+        },
+        withdrawal_paid: {
+          title: '💸 Saque pago!',
+          onPress: () => navigationRef.current?.navigate('MyEarnings'),
+        },
+        withdrawal_rejected: {
+          title: '❌ Saque rejeitado',
+          onPress: () => navigationRef.current?.navigate('MyEarnings'),
+        },
+      };
+
+      const config = typeMap[type];
+      if (config) {
+        setInAppNotif({ title: config.title, message: body, type, onPress: config.onPress });
       }
     });
 
-    return () => sub.remove();
-  }, []);
+    return () => {
+      tapSub.remove();
+      receiveSub.remove();
+    };
+  }, [user]);
 
-  if (showSplash) {
-    return (
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Splash" component={SplashScreen} />
-      </Stack.Navigator>
-    );
-  }
+  // ============================================
+  // Máquina de estados de autenticação
+  // ============================================
 
-  if (showLoading || loading) {
+  // Auth carregando
+  if (authLoading) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Splash" component={AppLoadingScreen} />
@@ -370,48 +450,65 @@ function AppContent() {
     );
   }
 
-  if (!user) return <AuthStack />;
-  if (!hasProfile) return <SetupStack />;
-  return <MainStack />;
-}
+  // Não autenticado
+  if (!user) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Splash" component={SplashScreen} />
+      </Stack.Navigator>
+    );
+  }
 
-function InAppNotificationHandler() {
-  const { inAppNotif, dismissInAppNotif } = usePushNotifications();
+  // Permissões carregando
+  if (permLoading) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Splash" component={AppLoadingScreen} />
+      </Stack.Navigator>
+    );
+  }
 
-  if (!inAppNotif) return null;
+  // Admin boot screen — uma vez por sessão para superadmin
+  if (canAccessAdminPanel && !adminBootReady) {
+    return (
+      <AdminLoadingScreen
+        onFinish={() => {
+          _adminBootDone = true;
+          setAdminBootReady(true);
+        }}
+      />
+    );
+  }
 
+  // App principal
   return (
-    <InAppNotification
-      title={inAppNotif.title}
-      message={inAppNotif.message}
-      type={inAppNotif.type}
-      onDismiss={dismissInAppNotif}
-      onPress={() => {
-        if (!navigationRef.current) return;
-        if (inAppNotif.type === 'message') {
-          navigationRef.current.navigate('UserChat', {
-            userId: inAppNotif.data?.senderId,
-            userName: inAppNotif.data?.senderName,
-            userPhoto: inAppNotif.data?.userPhoto || '',
-          });
-        } else if (inAppNotif.type === 'request') {
-          navigationRef.current.navigate('Requests');
-        }
-      }}
-    />
+    <>
+      <EngagementInitializer />
+      <UpdateChecker />
+      <PushInitializer />
+      <MainStack />
+      {inAppNotif && (
+        <InAppNotification
+          title={inAppNotif.title}
+          message={inAppNotif.message}
+          type={inAppNotif.type as any}
+          onPress={inAppNotif.onPress}
+          onDismiss={() => setInAppNotif(null)}
+        />
+      )}
+    </>
   );
 }
 
+// ============================================
+// ROOT
+// ============================================
 export default function AppNavigator() {
   return (
     <AuthProvider>
       <CoinsProvider>
         <NavigationContainer ref={navigationRef}>
-          <EngagementInitializer />
-          <PushInitializer />
-          <UpdateChecker />
           <AppContent />
-          <InAppNotificationHandler />
         </NavigationContainer>
       </CoinsProvider>
     </AuthProvider>
@@ -423,16 +520,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -8,
-    backgroundColor: colors.error,
-    borderRadius: 10,
+    backgroundColor: colors.gold,
+    borderRadius: 8,
     minWidth: 16,
     height: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
+    paddingHorizontal: 2,
   },
   badgeText: {
-    color: colors.white,
+    color: colors.background,
     fontSize: 9,
     fontWeight: 'bold',
   },
