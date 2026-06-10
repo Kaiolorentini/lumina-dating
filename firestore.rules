@@ -371,10 +371,10 @@ service cloud.firestore {
     // ============================================
     // MARKETPLACE — AUDIT LOGS
     // ============================================
-    match /auditLogs/{logId} {
-      allow read: if isAdmin();
-      allow create, update, delete: if false;
-    }
+   match /auditLogs/{logId} {
+  allow read: if isSuperAdmin();  // ← apenas superadmin lê
+  allow create, update, delete: if false;
+}
 
     // ============================================
     // MARKETPLACE — SCREENSHOT EVENTS
@@ -416,7 +416,7 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // ============================================
+   // ============================================
     // MARKETPLACE — PRODUCT ANALYTICS
     // ============================================
     match /productAnalytics/{productId} {
@@ -428,5 +428,21 @@ service cloud.firestore {
         allow delete: if false;
       }
     }
+
+    // ============================================
+    // CONTENT ACCESS LOGS — rate limit
+    // ============================================
+    match /contentAccessLogs/{userId} {
+      allow read, write: if false;
+
+      match /counts/{countId} {
+        allow read, write: if false;
+      }
+
+      match /minutes/{minuteId} {
+        allow read, write: if false;
+      }
+    }
+
   }
 }

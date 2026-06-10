@@ -38,7 +38,7 @@ import { useAuth } from '../../context/AuthContext';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
 import {
-  verifyWalletId,
+  verifyAsaasWalletViaApi,  // ← NOVO
   saveWalletId,
   markWalletVerified,
   markWalletError,
@@ -337,7 +337,7 @@ function Step4({
   );
 }
 // Adicionar ANTES de "function Step5("
-type VerifyStatus = 'validating' | 'saving' | 'success' | 'error';
+type VerifyStatus = 'validating' | 'success' | 'error';
 
 function Step5({
   walletId,
@@ -350,18 +350,20 @@ function Step5({
 }) {
   const [status, setStatus] = useState<VerifyStatus>('validating');
   const [errorMsg, setErrorMsg] = useState('');
-  const { user } = useAuth();
+  const [accountName, setAccountName] = useState<string | null>(null);
+  const [isCached, setIsCached] = useState(false);
 
   React.useEffect(() => {
     runVerification();
   }, []);
 
   async function runVerification() {
-    if (!user) return;
     setStatus('validating');
+    setErrorMsg('');
+    setAccountName(null);
 
-    // Passo 1: valida formato
-    const result = await verifyWalletId(walletId);
+    // Chama Cloud Function (valida formato + Asaas + cache 24h)
+    const result = await verifyAsaasWalletViaApi(walletId);
 
     if (!result.valid) {
       setStatus('error');
@@ -370,23 +372,11 @@ function Step5({
       return;
     }
 
-    // Passo 2: salva no Firestore
-    setStatus('saving');
-    try {
-      // ⚠️ API_TODO #7:
-      // Quando API Key estiver disponível:
-      // - Chamar verifyWalletWithAsaas(walletId)
-      // - Se válido: chamar markWalletVerified(user.uid, walletId)
-      // - Se inválido: chamar markWalletError(user.uid) e mostrar erro
-      // Por enquanto salva como 'pending' (formato válido apenas)
-      await saveWalletId(user.uid, walletId);
-      setStatus('success');
-      setTimeout(onSuccess, 1500);
-    } catch {
-      setStatus('error');
-      setErrorMsg('Erro ao salvar. Tente novamente.');
-      onError('Erro ao salvar. Tente novamente.');
-    }
+    // Sucesso — Cloud Function já salvou no Firestore
+    setAccountName(result.accountName ?? null);
+    setIsCached(result.cached ?? false);
+    setStatus('success');
+    setTimeout(onSuccess, 2000);
   }
 
   return (
@@ -397,18 +387,28 @@ function Step5({
         {status === 'validating' && (
           <>
             <ActivityIndicator color={colors.gold} size="large" />
-            <Text style={styles.verifyingText}>🔍 Verificando formato...</Text>
+            <Text style={styles.verifyingText}>🔍 Verificando com o Asaas...</Text>
+            <Text style={[styles.verifyingText, { fontSize: fonts.sizes.xs, marginTop: spacing.xs }]}>
+              Isso pode levar alguns segundos
+            </Text>
           </>
         )}
-        {status === 'saving' && (
-          <>
-            <ActivityIndicator color={colors.gold} size="large" />
-            <Text style={styles.verifyingText}>💾 Salvando configuração...</Text>
-          </>
-        )}
+
         {status === 'success' && (
-          <Text style={styles.verifyingSuccess}>✅ Tudo certo!</Text>
+          <View style={{ alignItems: 'center', gap: spacing.md }}>
+            <Text style={styles.verifyingSuccess}>✅ Conta verificada!</Text>
+            {accountName ? (
+              <View style={styles.accountNameBox}>
+                <Text style={styles.accountNameLabel}>Conta encontrada:</Text>
+                <Text style={styles.accountNameValue}>{accountName}</Text>
+              </View>
+            ) : null}
+            {isCached && (
+              <Text style={styles.cachedText}>Verificação em cache (24h)</Text>
+            )}
+          </View>
         )}
+
         {status === 'error' && (
           <>
             <Text style={styles.verifyingError}>❌ {errorMsg}</Text>
@@ -419,11 +419,6 @@ function Step5({
           </>
         )}
       </View>
-
-      {/* ⚠️ API_TODO #8:
-          Quando API Key estiver disponível, exibir aqui:
-          "Conta encontrada: {accountName}"
-          onde accountName vem da resposta da API Asaas */}
     </View>
   );
 }
@@ -545,11 +540,8 @@ export default function PaymentSetupScreen() {
   }
 
   function handleFinish() {
-    // ⚠️ API_TODO #9:
-    // Navegar para MyEarningsScreen quando estiver implementada
-    // navigation.navigate('MyEarnings');
-    navigation.goBack();
-  }
+  navigation.navigate('MyEarnings'); // ← era goBack()
+}
 
   function handleVerifyError(msg: string) {
     setVerifyError(msg);
@@ -909,4 +901,27 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     lineHeight: 20,
   },
+  accountNameBox: {
+  backgroundColor: colors.gold + '11',
+  borderRadius: borderRadius.md,
+  borderWidth: 1,
+  borderColor: colors.gold + '33',
+  padding: spacing.md,
+  alignItems: 'center',
+  gap: spacing.xs,
+},
+accountNameLabel: {
+  color: colors.gray,
+  fontSize: fonts.sizes.sm,
+},
+accountNameValue: {
+  color: colors.white,
+  fontSize: fonts.sizes.md,
+  fontWeight: 'bold',
+},
+cachedText: {
+  color: colors.gray,
+  fontSize: fonts.sizes.xs,
+  fontStyle: 'italic',
+},
 });

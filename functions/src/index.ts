@@ -34,8 +34,14 @@ export { blockUser } from "./users/blockUser";
 export { unblockUser } from "./users/unblockUser";
 
 // ============================================
-// FASE 6B — Com Asaas (aguardando API Key)
+// FASE 6B — Com Asaas
 // ============================================
 export { createAsaasPayment } from "./payments/createAsaasPayment";
-export { onAsaasWebhook } from "./payments/onAsaasWebhook";
 export { approveRefund } from "./payments/approveRefund";
+export { verifyAsaasWallet } from "./payments/verifyAsaasWallet";
+export { onAsaasWebhook } from "./payments/onAsaasWebhook";
+
+// ============================================
+// CONTEÚDO PROTEGIDO
+// ============================================
+export { getSignedUrl } from "./content/getSignedUrl";

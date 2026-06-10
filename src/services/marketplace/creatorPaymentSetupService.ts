@@ -1,94 +1,116 @@
 // ============================================
 // CREATOR PAYMENT SETUP SERVICE — MARKETPLACE
 //
-// Responsabilidades:
-// - Validar formato do Wallet ID
-// - Salvar Wallet ID no Firestore
-// - Verificar conta Asaas (MVP: formato apenas)
-//
-// ⚠️ API_TODO #1:
-// Quando tiver API Key do Asaas, substituir
-// validateWalletIdFormat() por chamada real:
-// GET https://sandbox.asaas.com/api/v3/accounts/{walletId}
-// Header: access_token: ASAAS_API_KEY
-// Se retornar 200 → conta existe e está ativa
-// Se retornar 404 → wallet não encontrado
+// verifyAsaasWalletViaApi → Cloud Function
+// (cache 24h, validação real Asaas)
 // ============================================
 
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../../core/firebase';
+import app from '../../core/firebase';
 import { COLLECTIONS } from '../../core/constants';
 import { AsaasAccountStatus } from '../../shared/types/marketplace';
 
-// Regex UUID v4 — formato esperado do Wallet ID Asaas
 const WALLET_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Valida apenas o formato do Wallet ID
 export function validateWalletIdFormat(walletId: string): boolean {
   return WALLET_ID_REGEX.test(walletId.trim());
 }
-
-// ============================================
-// ⚠️ API_TODO #2:
-// Substituir esta função quando tiver API Key:
-//
-// export async function verifyWalletWithAsaas(
-//   walletId: string
-// ): Promise<{ valid: boolean; accountName?: string }> {
-//   const response = await fetch(
-//     `https://sandbox.asaas.com/api/v3/accounts/${walletId}`,
-//     { headers: { access_token: ASAAS_API_KEY } }
-//   );
-//   if (response.ok) {
-//     const data = await response.json();
-//     return { valid: true, accountName: data.name };
-//   }
-//   return { valid: false };
-// }
-//
-// Em produção trocar URL para:
-// https://api.asaas.com/api/v3/accounts/{walletId}
-// ============================================
 
 export interface VerifyWalletResult {
   valid: boolean;
   error?: string;
   accountName?: string;
+  cached?: boolean;
 }
 
-// MVP: valida formato apenas — sem chamada real à API
-// FASE 6B: substituir pelo TODO #2 acima
+// ============================================
+// Verifica formato apenas (sem API)
+// Mantido para compatibilidade
+// ============================================
 export async function verifyWalletId(
   walletId: string
 ): Promise<VerifyWalletResult> {
   const trimmed = walletId.trim();
-
-  if (!trimmed) {
-    return { valid: false, error: 'Informe o Wallet ID' };
-  }
-
+  if (!trimmed) return { valid: false, error: 'Informe o Wallet ID' };
   if (!validateWalletIdFormat(trimmed)) {
     return {
       valid: false,
       error: 'Formato inválido. O Wallet ID deve ter o formato:\nxxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
     };
   }
-
-  // ⚠️ API_TODO #3:
-  // Aqui chamar verifyWalletWithAsaas(trimmed)
-  // e retornar { valid: false, error: 'Conta não encontrada' }
-  // se a API retornar 404
-
-  // MVP: formato válido = aceito como pending
   return { valid: true };
 }
 
-// Salva Wallet ID no Firestore com status pending
-export async function saveWalletId(
-  uid: string,
+// ============================================
+// Verifica via Cloud Function (Asaas real)
+// Cache de 24h na Cloud Function
+// ============================================
+export async function verifyAsaasWalletViaApi(
   walletId: string
-): Promise<void> {
+): Promise<VerifyWalletResult> {
+  // Validar formato antes de chamar a API
+  const formatCheck = await verifyWalletId(walletId);
+  if (!formatCheck.valid) return formatCheck;
+
+  try {
+    const functions = getFunctions(app, 'us-central1');
+    const fn = httpsCallable(functions, 'verifyAsaasWallet');
+    const result = await fn({ walletId: walletId.trim() }) as {
+      data: {
+        valid: boolean;
+        accountName?: string;
+        cached?: boolean;
+        status: string;
+      };
+    };
+
+    return {
+      valid: result.data.valid,
+      accountName: result.data.accountName,
+      cached: result.data.cached,
+    };
+  } catch (error: any) {
+    const code: string = error?.code ?? '';
+
+    if (code === 'functions/not-found') {
+      return {
+        valid: false,
+        error: 'Wallet ID não encontrado no Asaas. Verifique se o ID está correto.',
+      };
+    }
+    if (code === 'functions/invalid-argument') {
+      return {
+        valid: false,
+        error: error.message ?? 'Wallet ID inválido.',
+      };
+    }
+    if (code === 'functions/permission-denied') {
+      return {
+        valid: false,
+        error: 'Conta bloqueada ou sem permissão.',
+      };
+    }
+    if (code === 'functions/unavailable' || code === 'functions/internal') {
+      return {
+        valid: false,
+        error: 'Serviço temporariamente indisponível. Tente novamente.',
+      };
+    }
+
+    return {
+      valid: false,
+      error: error.message ?? 'Erro ao verificar conta Asaas.',
+    };
+  }
+}
+
+// ============================================
+// Salva Wallet ID como pending (legado)
+// ============================================
+export async function saveWalletId(uid: string, walletId: string): Promise<void> {
   const userRef = doc(db, COLLECTIONS.USERS, uid);
   await updateDoc(userRef, {
     asaasWalletId: walletId.trim(),
@@ -98,14 +120,10 @@ export async function saveWalletId(
   });
 }
 
-// Marca conta como verificada após confirmação real da API
-// ⚠️ API_TODO #4:
-// Esta função será chamada após verifyWalletWithAsaas() retornar valid: true
-// Trocar asaasAccountStatus para 'verified' quando API confirmar
-export async function markWalletVerified(
-  uid: string,
-  walletId: string
-): Promise<void> {
+// ============================================
+// Marca como verificado (usado pela CF)
+// ============================================
+export async function markWalletVerified(uid: string, walletId: string): Promise<void> {
   const userRef = doc(db, COLLECTIONS.USERS, uid);
   await updateDoc(userRef, {
     asaasWalletId: walletId.trim(),
@@ -116,7 +134,6 @@ export async function markWalletVerified(
   });
 }
 
-// Marca erro na verificação
 export async function markWalletError(uid: string): Promise<void> {
   const userRef = doc(db, COLLECTIONS.USERS, uid);
   await updateDoc(userRef, {
@@ -125,10 +142,10 @@ export async function markWalletError(uid: string): Promise<void> {
   });
 }
 
-// Busca status atual da conta Asaas do criador
 export async function getAsaasStatus(uid: string): Promise<{
   status: AsaasAccountStatus;
   walletId?: string;
+  accountName?: string;
 }> {
   try {
     const snap = await getDoc(doc(db, COLLECTIONS.USERS, uid));
@@ -137,6 +154,7 @@ export async function getAsaasStatus(uid: string): Promise<{
     return {
       status: (data.asaasAccountStatus as AsaasAccountStatus) ?? 'not_configured',
       walletId: data.asaasWalletId,
+      accountName: data.asaasAccountName,
     };
   } catch {
     return { status: 'not_configured' };

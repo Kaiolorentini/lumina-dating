@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image,
   TouchableOpacity, ActivityIndicator, Alert, Dimensions,
@@ -33,7 +33,7 @@ export default function ProductDetailScreen() {
   const [currentImage, setCurrentImage] = useState(0);
 
   const { favoriteIds, toggleFavorite } = useFavorites(user?.uid);
-  const { reviews, loading: reviewsLoading } = useReviews(productId, user?.uid);
+  const { reviews } = useReviews(productId, user?.uid);
   const { checkAccess } = usePurchases(user?.uid);
   const { marketplaceEnabled } = useAppSettings();
   const { isBlocked } = useUserPermissions(user?.uid);
@@ -73,6 +73,7 @@ export default function ProductDetailScreen() {
       return;
     }
 
+    // Produto gratuito
     if (product?.isFree) {
       setBuying(true);
       try {
@@ -91,16 +92,42 @@ export default function ProductDetailScreen() {
       return;
     }
 
-    // ⚠️ API_TODO #13: Produto pago — chamar createAsaasPayment
-    // Quando ASAAS_API_KEY estiver configurada:
-    // const functions = getFunctions(app, 'us-central1');
-    // const createPayment = httpsCallable(functions, 'createAsaasPayment');
-    // const result = await createPayment({ productId, paymentMethod: 'pix' });
-    // navigation.navigate('Checkout', { saleId: result.data.saleId, checkoutUrl: result.data.checkoutUrl });
-    Alert.alert(
-      '⏳ Pagamentos em breve',
-      'A integração de pagamentos está sendo configurada. Em breve você poderá comprar produtos pagos!',
-    );
+    // Produto pago — createAsaasPayment
+    setBuying(true);
+    try {
+      const functions = getFunctions(app, 'us-central1');
+      const createPayment = httpsCallable(functions, 'createAsaasPayment');
+      const result = await createPayment({ productId, paymentMethod: 'pix' }) as any;
+
+      navigation.navigate('Checkout', {
+        saleId: result.data.saleId,
+        checkoutUrl: result.data.checkoutUrl,
+        pixQrCode: result.data.pixQrCode ?? undefined,
+        pixCopyPaste: result.data.pixCopyPaste ?? undefined,
+      });
+    } catch (error: any) {
+      const msg: string = error.message ?? '';
+
+      // Sale pendente já existe — ir para checkout sem QR (usuário deve usar checkoutUrl)
+      if (msg.includes('CheckoutUrl:')) {
+        Alert.alert(
+          '⚠️ Pagamento pendente',
+          'Você já possui um pagamento em andamento para este produto. Finalize-o antes de iniciar um novo.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      if (msg.includes('já possui')) {
+        setHasAccess(true);
+        Alert.alert('✅', 'Você já possui este produto!');
+        return;
+      }
+
+      Alert.alert('Erro ao iniciar pagamento', error.message ?? 'Tente novamente.');
+    } finally {
+      setBuying(false);
+    }
   }
 
   if (loading) {
@@ -119,7 +146,6 @@ export default function ProductDetailScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>‹</Text>
@@ -131,7 +157,6 @@ export default function ProductDetailScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Imagens */}
         <ScrollView
           horizontal
           pagingEnabled
@@ -147,7 +172,6 @@ export default function ProductDetailScreen() {
           ))}
         </ScrollView>
 
-        {/* Indicadores */}
         {images.length > 1 && (
           <View style={styles.dots}>
             {images.map((_, i) => (
@@ -157,7 +181,6 @@ export default function ProductDetailScreen() {
         )}
 
         <View style={styles.content}>
-          {/* Título e preço */}
           <View style={styles.titleRow}>
             <Text style={styles.title}>{product.title}</Text>
             <Text style={styles.price}>
@@ -165,7 +188,6 @@ export default function ProductDetailScreen() {
             </Text>
           </View>
 
-          {/* Avaliação */}
           {product.averageRating > 0 && (
             <View style={styles.ratingRow}>
               <Text style={styles.ratingText}>
@@ -174,7 +196,6 @@ export default function ProductDetailScreen() {
             </View>
           )}
 
-          {/* Categoria */}
           <View style={styles.chipRow}>
             <View style={styles.chip}>
               <Text style={styles.chipText}>{product.category}</Text>
@@ -186,11 +207,9 @@ export default function ProductDetailScreen() {
             ))}
           </View>
 
-          {/* Descrição */}
           <Text style={styles.sectionTitle}>Sobre este produto</Text>
           <Text style={styles.description}>{product.description}</Text>
 
-          {/* Conteúdo */}
           <Text style={styles.sectionTitle}>O que você recebe</Text>
           <View style={styles.filesInfo}>
             <Text style={styles.filesText}>
@@ -203,15 +222,12 @@ export default function ProductDetailScreen() {
             )}
           </View>
 
-          {/* Avaliações */}
           {reviews.length > 0 && (
             <>
               <Text style={styles.sectionTitle}>Avaliações</Text>
               {reviews.slice(0, 3).map((review, i) => (
                 <View key={i} style={styles.reviewCard}>
-                  <Text style={styles.reviewRating}>
-                    {'⭐'.repeat(review.rating)}
-                  </Text>
+                  <Text style={styles.reviewRating}>{'⭐'.repeat(review.rating)}</Text>
                   <Text style={styles.reviewComment}>{review.comment}</Text>
                 </View>
               ))}
@@ -220,7 +236,6 @@ export default function ProductDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Botão de ação */}
       <View style={styles.footer}>
         {isOwner ? (
           <TouchableOpacity
@@ -263,14 +278,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.gold + '44',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },
   headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', flex: 1, textAlign: 'center' },
@@ -287,12 +297,9 @@ const styles = StyleSheet.create({
   ratingText: { color: colors.gray, fontSize: fonts.sizes.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.md },
   chip: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderWidth: 1,
-    borderColor: colors.grayDark,
+    backgroundColor: colors.surface, borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2,
+    borderWidth: 1, borderColor: colors.grayDark,
   },
   chipText: { color: colors.gray, fontSize: fonts.sizes.xs },
   sectionTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', marginTop: spacing.md, marginBottom: spacing.sm },
@@ -300,35 +307,23 @@ const styles = StyleSheet.create({
   filesInfo: { gap: spacing.xs },
   filesText: { color: colors.gray, fontSize: fonts.sizes.md },
   reviewCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.grayDark,
+    backgroundColor: colors.surface, borderRadius: borderRadius.md,
+    padding: spacing.md, marginBottom: spacing.sm,
+    borderWidth: 1, borderColor: colors.grayDark,
   },
   reviewRating: { fontSize: 14, marginBottom: spacing.xs },
   reviewComment: { color: colors.gray, fontSize: fonts.sizes.sm },
-  footer: {
-    padding: spacing.md,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.grayDark,
-  },
+  footer: { padding: spacing.md, borderTopWidth: 0.5, borderTopColor: colors.grayDark },
   buyButton: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
+    backgroundColor: colors.gold, borderRadius: borderRadius.md,
+    padding: spacing.md, alignItems: 'center',
   },
   buyButtonDisabled: { opacity: 0.6 },
   buyButtonText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
   editButton: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.gold,
+    backgroundColor: colors.surface, borderRadius: borderRadius.md,
+    padding: spacing.md, alignItems: 'center',
+    borderWidth: 1, borderColor: colors.gold,
   },
   editButtonText: { color: colors.gold, fontWeight: 'bold', fontSize: fonts.sizes.md },
 });

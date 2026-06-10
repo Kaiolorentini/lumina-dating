@@ -1,13 +1,9 @@
 // ============================================
 // ASAAS WEBHOOK — FASE 6B
 //
-// ⚠️ API_TODO #4 — Ativar quando tiver:
-// - ASAAS_WEBHOOK_TOKEN configurado no Secret Manager
-// - ASAAS_API_KEY configurado no Secret Manager
-// - Webhook configurado no painel Asaas com a URL:
-//   https://us-central1-lumina-ff667.cloudfunctions.net/onAsaasWebhook
-//
-// Por enquanto retorna 200 sem processar.
+// Validação de token obrigatória.
+// Idempotente: verifica sale.status antes.
+// Salva lastWebhookEvent + lastWebhookAt.
 // ============================================
 
 import { onRequest } from "firebase-functions/v2/https";
@@ -17,30 +13,35 @@ import { incrementMetrics } from "../utils/incrementMetric";
 
 export const onAsaasWebhook = onRequest(
   {
-    // API_TODO #5: descomentar quando secrets estiverem configurados
-    // secrets: ["ASAAS_WEBHOOK_TOKEN"],
+    secrets: ["ASAAS_WEBHOOK_TOKEN"],
   },
   async (req, res) => {
+    // ============================================
+    // Validações de entrada
+    // ============================================
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
       return;
     }
 
-    // ============================================
-    // API_TODO #6 — Validar token do webhook
-    // Descomentar quando ASAAS_WEBHOOK_TOKEN estiver configurado:
-    //
-    // const token = req.headers["asaas-access-token"] as string;
-    // const expectedToken = process.env.ASAAS_WEBHOOK_TOKEN!;
-    // if (!token || token !== expectedToken) {
-    //   console.warn("[onAsaasWebhook] Token inválido");
-    //   res.status(401).send("Unauthorized");
-    //   return;
-    // }
-    // ============================================
+    const token = req.headers["asaas-access-token"] as string;
+    const expectedToken = process.env.ASAAS_WEBHOOK_TOKEN!;
+
+    if (!token) {
+      console.warn("[onAsaasWebhook] Token ausente");
+      res.status(401).send("Unauthorized");
+      return;
+    }
+
+    if (token !== expectedToken) {
+      console.warn("[onAsaasWebhook] Token inválido");
+      res.status(401).send("Unauthorized");
+      return;
+    }
 
     const event = req.body;
     const payment = event?.payment;
+    const eventType = event?.event as string;
 
     if (!payment?.externalReference) {
       res.status(200).send("OK — sem referência");
@@ -48,7 +49,6 @@ export const onAsaasWebhook = onRequest(
     }
 
     const saleId = payment.externalReference as string;
-    const eventType = event.event as string;
     const db = admin.firestore();
 
     try {
@@ -63,17 +63,22 @@ export const onAsaasWebhook = onRequest(
 
       const sale = saleSnap.data()!;
 
-      // IDEMPOTÊNCIA
-      if (sale.webhookProcessedAt) {
-        console.log(`[onAsaasWebhook] Sale ${saleId} já processada`);
+      // ============================================
+      // IDEMPOTÊNCIA — já processado
+      // ============================================
+      if (sale.status === "paid") {
+        console.log(`[onAsaasWebhook] Sale ${saleId} já processada — ignorando`);
         res.status(200).send("OK — já processado");
         return;
       }
 
+      // ============================================
+      // PAYMENT_RECEIVED | PAYMENT_CONFIRMED
+      // ============================================
       if (eventType === "PAYMENT_RECEIVED" || eventType === "PAYMENT_CONFIRMED") {
         await db.runTransaction(async (tx) => {
           const saleDoc = await tx.get(saleRef);
-          if (saleDoc.data()?.webhookProcessedAt) return; // double-check
+          if (saleDoc.data()?.status === "paid") return; // double-check
 
           const saleData = saleDoc.data()!;
           const purchaseId = saleData.purchaseId ?? `${saleData.buyerId}_${saleData.productId}`;
@@ -81,7 +86,6 @@ export const onAsaasWebhook = onRequest(
           const walletRef = db.collection("creatorWallets").doc(saleData.sellerId);
           const walletSnap = await tx.get(walletRef);
 
-          // Calcula janela de reembolso (24h)
           const refundWindowExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
           tx.update(saleRef, {
@@ -89,6 +93,8 @@ export const onAsaasWebhook = onRequest(
             paymentStatus: "received",
             paidAt: admin.firestore.FieldValue.serverTimestamp(),
             webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastWebhookEvent: eventType,
+            lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
             refundWindowExpiresAt: admin.firestore.Timestamp.fromDate(refundWindowExpires),
           });
 
@@ -147,32 +153,43 @@ export const onAsaasWebhook = onRequest(
           performedBy: "asaas-webhook",
           targetId: saleId,
           targetType: "sale",
-          metadata: { eventType, amount: sale.amount },
+          metadata: { eventType, amount: sale.amount, paymentId: payment.id },
           req,
         });
       }
 
+      // ============================================
+      // PAYMENT_OVERDUE
+      // ============================================
       if (eventType === "PAYMENT_OVERDUE") {
         await saleRef.update({
           paymentStatus: "overdue",
-          webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastWebhookEvent: eventType,
+          lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
 
+      // ============================================
+      // PAYMENT_CANCELLED
+      // ============================================
       if (eventType === "PAYMENT_CANCELLED") {
         await saleRef.update({
           status: "refunded",
           paymentStatus: "cancelled",
+          lastWebhookEvent: eventType,
+          lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
           webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
 
+      // ============================================
+      // CHARGEBACK_REQUESTED
+      // ============================================
       if (eventType === "CHARGEBACK_REQUESTED") {
         await db.runTransaction(async (tx) => {
           const saleDoc = await tx.get(saleRef);
           const saleData = saleDoc.data()!;
 
-          // Proteção contra chargeback duplo
           if (saleData.isChargebacked) return;
 
           const purchaseId = saleData.purchaseId ?? `${saleData.buyerId}_${saleData.productId}`;
@@ -185,6 +202,8 @@ export const onAsaasWebhook = onRequest(
             isChargebacked: true,
             chargebackedAt: admin.firestore.FieldValue.serverTimestamp(),
             paymentStatus: "refunded",
+            lastWebhookEvent: eventType,
+            lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
           tx.update(purchaseRef, {
@@ -194,7 +213,11 @@ export const onAsaasWebhook = onRequest(
 
           if (wallet) {
             const fromPending = Math.min(wallet.pendingBalance ?? 0, saleData.sellerAmount);
-            const fromAvailable = saleData.sellerAmount - fromPending;
+            const fromAvailable = Math.min(
+              wallet.availableBalance ?? 0,
+              saleData.sellerAmount - fromPending
+            );
+
             tx.update(walletRef, {
               hasChargebackPending: true,
               pendingBalance: admin.firestore.FieldValue.increment(-fromPending),
@@ -206,6 +229,25 @@ export const onAsaasWebhook = onRequest(
 
         await createAuditLog({
           action: "chargeback_received",
+          performedBy: "asaas-webhook",
+          targetId: saleId,
+          targetType: "sale",
+          metadata: { eventType, paymentId: payment.id },
+          req,
+        });
+      }
+
+      // ============================================
+      // CHARGEBACK_DISPUTE | CHARGEBACK_REVERSED
+      // ============================================
+      if (eventType === "CHARGEBACK_DISPUTE" || eventType === "CHARGEBACK_REVERSED") {
+        await saleRef.update({
+          lastWebhookEvent: eventType,
+          lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        await createAuditLog({
+          action: eventType.toLowerCase(),
           performedBy: "asaas-webhook",
           targetId: saleId,
           targetType: "sale",

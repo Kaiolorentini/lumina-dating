@@ -1,27 +1,9 @@
-// ============================================
-// useUserPermissions — HOOK
-//
-// Escuta role e isBlocked em tempo real via onSnapshot.
-// COMPLETAMENTE INDEPENDENTE do AuthContext.
-// NÃO modifica UserProfile.
-// NÃO modifica AuthContext.
-//
-// HARDENING:
-// - currentUidRef previne stale data entre usuários
-// - capturedUid valida closure no callback
-// - mountedRef previne setState após unmount
-// - uid nunca vazio quando recebido válido
-// - whitelist de roles válidas
-// - fail-safe em erro de rede
-// ============================================
-
 import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../core/firebase';
 import { COLLECTIONS } from '../core/constants';
 import { UserPermissions, UserRole } from '../shared/types/marketplace';
 
-// Whitelist de roles válidas — proteção contra valores inválidos no Firestore
 const VALID_ROLES: UserRole[] = ['user', 'creator', 'admin', 'superadmin'];
 
 function sanitizeRole(raw: unknown): UserRole {
@@ -54,8 +36,6 @@ export function useUserPermissions(
   useEffect(() => {
     mountedRef.current = true;
     currentUidRef.current = uid;
-
-    // CORREÇÃO 3: reseta loading ao trocar usuário
     setLoading(true);
 
     if (!uid) {
@@ -70,11 +50,23 @@ export function useUserPermissions(
     const capturedUid = uid;
     const ref = doc(db, COLLECTIONS.USERS, capturedUid);
 
+    // ✅ Timeout de segurança — 10s máximo
+    // Evita loading infinito se Firestore não responder
+    const timeoutId = setTimeout(() => {
+      if (!mountedRef.current) return;
+      if (currentUidRef.current !== capturedUid) return;
+      console.warn('[useUserPermissions] Timeout — liberando loading');
+      setPermissions(null);
+      setLoading(false);
+    }, 10000);
+
     const unsubscribe = onSnapshot(
       ref,
       snap => {
         if (!mountedRef.current) return;
         if (currentUidRef.current !== capturedUid) return;
+
+        clearTimeout(timeoutId); // ← cancela timeout ao receber dados
 
         if (!snap.exists()) {
           setPermissions({
@@ -90,7 +82,6 @@ export function useUserPermissions(
 
         setPermissions({
           uid: capturedUid,
-          // CORREÇÃO 1: whitelist de roles válidas
           role: sanitizeRole(data.role),
           isBlocked: data.isBlocked === true,
           blockedReason: typeof data.blockedReason === 'string' ? data.blockedReason : undefined,
@@ -108,9 +99,9 @@ export function useUserPermissions(
         if (!mountedRef.current) return;
         if (currentUidRef.current !== capturedUid) return;
 
-        console.warn('[useUserPermissions] Erro no listener:', error);
+        clearTimeout(timeoutId); // ← cancela timeout ao receber erro
 
-        // CORREÇÃO 5: fail-safe — sem permissões liberadas por falha de rede
+        console.warn('[useUserPermissions] Erro no listener:', error);
         setPermissions(null);
         setLoading(false);
       }
@@ -118,7 +109,7 @@ export function useUserPermissions(
 
     return () => {
       mountedRef.current = false;
-      // CORREÇÃO 4: unsubscribe antes de limpar ref
+      clearTimeout(timeoutId); // ← limpa timeout no unmount
       unsubscribe();
       currentUidRef.current = undefined;
     };

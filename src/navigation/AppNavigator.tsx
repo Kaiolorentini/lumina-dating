@@ -219,16 +219,15 @@ function TabNavigator() {
           ),
         }}
       />
-      {/* ✅ Admin tab — visível apenas para superadmin */}
-      <Tab.Screen name="Admin" component={AdminDashboardScreen}
-        options={{
-          tabBarLabel: 'Admin',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>👑</Text>,
-          tabBarButton: canAccessAdminPanel ? undefined : () => null,
-          // ✅ tabBarItemStyle corrigido — baseado em canAccessAdminPanel, não marketplaceEnabled
-          tabBarItemStyle: canAccessAdminPanel ? {} : { width: 0, height: 0 },
-        }}
-      />
+      {/* ✅ Admin tab — só renderiza para superadmin, sem espaço vazio */}
+      {canAccessAdminPanel && (
+        <Tab.Screen name="Admin" component={AdminDashboardScreen}
+          options={{
+            tabBarLabel: 'Admin',
+            tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>👑</Text>,
+          }}
+        />
+      )}
     </Tab.Navigator>
   );
 }

@@ -26,7 +26,7 @@ export type RootStackParamList = {
   Withdrawal: undefined;
   CreatorRequest: undefined;
   ContentViewer: { productId: string; purchaseId: string };
-  Checkout: { saleId: string; checkoutUrl?: string };
+  Checkout: { saleId: string; checkoutUrl?: string; pixQrCode?: string; pixCopyPaste?: string };
   // Admin
   AdminPanel: undefined;
   AdminDashboard: undefined;
