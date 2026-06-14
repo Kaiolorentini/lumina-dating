@@ -4,6 +4,7 @@ import { assertAuthenticated, assertSuperAdmin } from "../utils/adminGuard";
 import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { createAuditLog } from "../utils/auditLog";
 import { incrementMetric } from "../utils/incrementMetric";
+import { notifyUser } from "../utils/notifyUser";
 
 export const onApproveCreator = onCall(async (request) => {
   assertAuthenticated(request.auth?.uid);
@@ -53,6 +54,15 @@ export const onApproveCreator = onCall(async (request) => {
     targetType: "creator",
     metadata: { userId },
     req: request.rawRequest,
+  });
+
+  // ✅ Notifica o usuário aprovado — push + in-app
+  await notifyUser({
+    userId,
+    title: "🎨 Você é um Criador!",
+    body: "Sua solicitação foi aprovada. Comece a publicar produtos agora!",
+    type: "creator_approved",
+    data: { requestId },
   });
 
   return { success: true };

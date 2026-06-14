@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 15000);
 
     const unsubscribe = onAuthStateChanged(auth, async firebaseUser => {
-      clearTimeout(globalTimeout); // ← cancela timeout se auth resolver normal
+      clearTimeout(globalTimeout);
       console.log('Firebase:', firebaseUser ? 'Logado' : 'Nao logado');
 
       setUser(firebaseUser);
@@ -109,18 +109,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // Cache não existe — busca no Firestore com retry e timeout por tentativa
+        // ✅ Reduzido para 2 tentativas × 4s = 8s — cabe no globalTimeout de 15s
+        // Era 3 tentativas × 5s = 17s > 15s — causava setHasProfileState após loading liberado
         let profile = null;
-        for (let i = 1; i <= 3; i++) {
-          console.log(`Buscando perfil tentativa ${i}...`);
+        for (let i = 1; i <= 2; i++) {
+          console.log(`[AuthContext] Buscando perfil tentativa ${i}...`);
           try {
-            // ✅ Timeout de 5s por tentativa — nunca trava indefinidamente
-            profile = await withTimeout(getProfile(firebaseUser.uid), 5000);
+            profile = await withTimeout(getProfile(firebaseUser.uid), 4000);
             if (profile?.name) break;
           } catch (e) {
             console.warn(`[AuthContext] Erro tentativa ${i}:`, e);
           }
-          if (i < 3) await new Promise(r => setTimeout(r, 1000));
+          if (i < 2) await new Promise(r => setTimeout(r, 1000));
         }
 
         const found = !!(profile?.name);

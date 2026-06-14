@@ -21,10 +21,7 @@ export function generateChatId(userId1: string, userId2: string): string {
   return [userId1, userId2].sort().join('_');
 }
 
-// Gera ID de chat com IA
-export function generateAIChatId(userId: string, aiId: string): string {
-  return `${userId}_${aiId}`;
-}
+
 
 // Valida email
 export function isValidEmail(email: string): boolean {

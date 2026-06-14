@@ -5,13 +5,14 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { doc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { useCreatorWallet } from '../../hooks/useCreatorWallet';
 import { PixType } from '../../shared/types/marketplace';
+import { notifySuperAdmins } from '../../services/marketplace/pushAdminService';
 
 const PIX_TYPES: { label: string; value: PixType }[] = [
   { label: 'CPF', value: 'cpf' },
@@ -53,7 +54,7 @@ export default function WithdrawalScreen() {
 
     setSubmitting(true);
     try {
-      await addDoc(collection(db, MARKETPLACE_COLLECTIONS.WITHDRAWALS), {
+      const docRef = await addDoc(collection(db, MARKETPLACE_COLLECTIONS.WITHDRAWALS), {
         userId: user.uid,
         amount: parsedAmount,
         balanceAtRequest: wallet?.availableBalance ?? 0,
@@ -62,6 +63,18 @@ export default function WithdrawalScreen() {
         status: 'pending',
         createdAt: serverTimestamp(),
       });
+
+      // ✅ Notifica superadmins via push
+      await notifySuperAdmins(
+        '💸 Nova solicitação de saque',
+        `Criador solicitou saque de R$ ${parsedAmount.toFixed(2)} via Pix`,
+        {
+          type: 'withdrawal_new',
+          userId: user.uid,
+          withdrawalId: docRef.id,
+          amount: parsedAmount.toFixed(2),
+        },
+      );
 
       Alert.alert(
         '✅ Solicitação enviada!',
@@ -89,7 +102,6 @@ export default function WithdrawalScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Saldo disponível */}
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Disponível para saque</Text>
           <Text style={styles.balanceValue}>
@@ -97,7 +109,6 @@ export default function WithdrawalScreen() {
           </Text>
         </View>
 
-        {/* Valor */}
         <Text style={styles.label}>Valor do saque (mínimo R$ 50,00)</Text>
         <TextInput
           style={styles.input}
@@ -108,7 +119,6 @@ export default function WithdrawalScreen() {
           keyboardType="decimal-pad"
         />
 
-        {/* Tipo de chave Pix */}
         <Text style={styles.label}>Tipo de chave Pix</Text>
         <View style={styles.pixTypeGrid}>
           {PIX_TYPES.map(type => (
@@ -124,7 +134,6 @@ export default function WithdrawalScreen() {
           ))}
         </View>
 
-        {/* Chave Pix */}
         <Text style={styles.label}>Chave Pix</Text>
         <TextInput
           style={styles.input}

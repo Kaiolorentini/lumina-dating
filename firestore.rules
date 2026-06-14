@@ -26,10 +26,6 @@ service cloud.firestore {
       return isAuthenticated() && getUserData().isBlocked != true;
     }
 
-    function isUser() {
-      return isAuthenticated() && isNotBlocked();
-    }
-
     function isCreator() {
       return isAuthenticated() && isNotBlocked() &&
         getRole() in ['creator', 'admin', 'superadmin'];
@@ -92,23 +88,24 @@ service cloud.firestore {
     }
 
     // ============================================
-    // CHATS E MENSAGENS — CORRIGIDO
+    // CHATS E MENSAGENS
     // ============================================
     match /chats/{chatId} {
-  allow read, write: if isAuthenticated();
+      allow read, write: if isAuthenticated();
 
-  match /messages/{messageId} {
-    allow read: if isAuthenticated();
-    allow create: if isAuthenticated();
-    allow update: if isAuthenticated() &&
-      resource.data.senderId == request.auth.uid;
-    allow delete: if false;
-  }
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated() &&
+          resource.data.senderId == request.auth.uid;
+        allow delete: if false;
+      }
 
-  match /typing/{userId} {
-    allow read, write: if isAuthenticated();
-  }
-}
+      match /typing/{userId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
     // ============================================
     // NOTIFICAÇÕES
     // ============================================
@@ -234,18 +231,30 @@ service cloud.firestore {
     }
 
     // ============================================
-    // MARKETPLACE — CREATOR REQUESTS
-    // ============================================
-    match /creatorRequests/{requestId} {
-      allow read: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || isAdmin()
-      );
-      allow create: if isAuthenticated() && isNotBlocked() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.status == 'pending';
-      allow update: if false;
-      allow delete: if false;
-    }
+// MARKETPLACE — CREATOR REQUESTS
+// ============================================
+match /creatorRequests/{requestId} {
+  allow read: if isAuthenticated() && (
+    resource.data.userId == request.auth.uid || isAdmin()
+  );
+  allow create: if isAuthenticated() && isNotBlocked() &&
+    request.resource.data.userId == request.auth.uid &&
+    request.resource.data.status == 'pending';
+
+  // ✅ Dono cancela (pending → rejected) — apenas campos permitidos
+  // Admin pode atualizar qualquer campo
+  allow update: if isAuthenticated() && (
+    (
+      resource.data.userId == request.auth.uid &&
+      resource.data.status == 'pending' &&
+      request.resource.data.status == 'rejected' &&
+      request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['status', 'reviewedAt', 'rejectionReason'])
+    ) || isAdmin()
+  );
+
+  allow delete: if false;
+}
 
     // ============================================
     // MARKETPLACE — SALES
@@ -371,10 +380,10 @@ service cloud.firestore {
     // ============================================
     // MARKETPLACE — AUDIT LOGS
     // ============================================
-   match /auditLogs/{logId} {
-  allow read: if isSuperAdmin();  // ← apenas superadmin lê
-  allow create, update, delete: if false;
-}
+    match /auditLogs/{logId} {
+      allow read: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
 
     // ============================================
     // MARKETPLACE — SCREENSHOT EVENTS
@@ -409,14 +418,14 @@ service cloud.firestore {
     }
 
     // ============================================
-    // MARKETPLACE — APP SETTINGS
+    // APP SETTINGS
     // ============================================
     match /appSettings/{docId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if false;
     }
 
-   // ============================================
+    // ============================================
     // MARKETPLACE — PRODUCT ANALYTICS
     // ============================================
     match /productAnalytics/{productId} {

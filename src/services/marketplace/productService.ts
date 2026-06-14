@@ -45,6 +45,7 @@ import {
   ProductFileType,
 } from '../../shared/types/marketplace';
 import { createAuditLog } from './auditService';
+import { notifySuperAdmins } from './pushAdminService';
 
 // ============================================
 // UPLOAD TYPES
@@ -76,8 +77,6 @@ async function uriToBlob(uri: string): Promise<Blob> {
   return response.blob();
 }
 
-// Upload com cancelamento + retry exponencial (máx 3 tentativas)
-// fetchDownloadURL: true para arquivos públicos, false para pagos
 function createUploadHandle(
   storagePath: string,
   blob: Blob,
@@ -145,7 +144,6 @@ function createUploadHandle(
         if (attempt === MAX_ATTEMPTS) {
           throw new Error(`Upload falhou após ${MAX_ATTEMPTS} tentativas: ${error.message}`);
         }
-        // Retry exponencial: 1s, 2s
         await new Promise(r => setTimeout(r, attempt * 1000));
       }
     }
@@ -211,7 +209,6 @@ export async function uploadProductFile(
 ): Promise<UploadHandle> {
   const storagePath = `marketplace/products/${productId}/files/${fileName}`;
   const blob = await uriToBlob(uri);
-  // fetchDownloadURL = false — NUNCA expõe URL de arquivo pago
   return createUploadHandle(storagePath, blob, false, onProgress);
 }
 
@@ -358,9 +355,19 @@ export async function submitProductForReview(
     targetType: 'product',
     metadata: { title: snap.data().title },
   });
+
+  // ✅ Notifica superadmins via push
+  await notifySuperAdmins(
+    '📦 Novo produto para moderação',
+    `"${snap.data().title}" aguarda revisão`,
+    {
+      type: 'product_review_new',
+      productId,
+      ownerId,
+    },
+  );
 }
 
-// Soft delete + storage cleanup (arquivos órfãos evitados)
 export async function softDeleteProduct(
   productId: string,
   ownerId: string,
@@ -371,10 +378,8 @@ export async function softDeleteProduct(
   if (!snap.exists()) throw new Error('Produto não encontrado');
   if (snap.data().ownerId !== ownerId) throw new Error('Sem permissão');
 
-  // 1. Limpa Storage antes de marcar como deletado
   await deleteProductStorage(productId);
 
-  // 2. Soft delete no Firestore
   await updateDoc(productRef, {
     isDeleted: true,
     updatedAt: serverTimestamp(),
@@ -422,7 +427,7 @@ export async function getProducts(filters: {
   if (isFeatured !== undefined) constraints.push(where('isFeatured', '==', isFeatured));
 
   constraints.push(orderBy('createdAt', 'desc'));
-  constraints.push(limit(pageSize + 1)); // +1 para detectar hasMore
+  constraints.push(limit(pageSize + 1));
 
   if (lastDoc) constraints.push(startAfter(lastDoc));
 
@@ -440,7 +445,6 @@ export async function getProducts(filters: {
 
 // ============================================
 // DISTRIBUTED COUNTER — VIEWS (5 shards)
-// Evita limite de 1 write/s no documento principal
 // ============================================
 
 const SHARD_COUNT = 5;
@@ -458,7 +462,6 @@ export async function incrementProductViews(productId: string): Promise<void> {
     try {
       await updateDoc(shardRef, { views: increment(1) });
     } catch {
-      // Shard não existe ainda — inicializa
       await setDoc(shardRef, { views: 1, downloads: 0, favorites: 0 }, { merge: true });
     }
   } catch {

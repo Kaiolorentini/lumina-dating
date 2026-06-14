@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertAuthenticated, assertSuperAdmin } from "../utils/adminGuard";
 import { createAuditLog } from "../utils/auditLog";
+import { notifyUser } from "../utils/notifyUser";
 
 export const onApproveWithdrawal = onCall(async (request) => {
   assertAuthenticated(request.auth?.uid);
@@ -14,6 +15,9 @@ export const onApproveWithdrawal = onCall(async (request) => {
 
   const db = admin.firestore();
   const withdrawalRef = db.collection("withdrawals").doc(withdrawalId);
+
+  let userId = "";
+  let amount = 0;
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(withdrawalRef);
@@ -31,10 +35,12 @@ export const onApproveWithdrawal = onCall(async (request) => {
     if (!wallet || wallet.availableBalance < data.amount) {
       throw new HttpsError("failed-precondition", "Saldo insuficiente");
     }
-
     if (wallet.hasChargebackPending) {
       throw new HttpsError("failed-precondition", "Saque bloqueado por chargeback pendente");
     }
+
+    userId = data.userId;
+    amount = data.amount;
 
     tx.update(withdrawalRef, {
       status: "approved",
@@ -43,18 +49,25 @@ export const onApproveWithdrawal = onCall(async (request) => {
     });
   });
 
-  const snap = await withdrawalRef.get();
   await createAuditLog({
     action: "withdrawal_approved",
     performedBy: safeUid,
     targetId: withdrawalId,
     targetType: "withdrawal",
-    metadata: {
-      userId: snap.data()?.userId,
-      amount: snap.data()?.amount,
-    },
+    metadata: { userId, amount },
     req: request.rawRequest,
   });
+
+  // ✅ Notifica o criador — push + in-app
+  if (userId) {
+    await notifyUser({
+      userId,
+      title: "💸 Saque aprovado!",
+      body: `Seu saque de R$ ${amount.toFixed(2)} foi aprovado e será processado em breve.`,
+      type: "withdrawal_approved",
+      data: { withdrawalId },
+    });
+  }
 
   return { success: true };
 });

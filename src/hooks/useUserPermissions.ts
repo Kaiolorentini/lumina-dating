@@ -59,7 +59,7 @@ export function useUserPermissions(
       setPermissions(null);
       setLoading(false);
     }, 10000);
-
+      console.log('[PERMISSIONS] iniciando listener uid:', capturedUid, 'COLLECTIONS.USERS:', COLLECTIONS.USERS);
     const unsubscribe = onSnapshot(
       ref,
       snap => {
@@ -69,6 +69,7 @@ export function useUserPermissions(
         clearTimeout(timeoutId); // ← cancela timeout ao receber dados
 
         if (!snap.exists()) {
+          console.log('[PERMISSIONS] documento não existe para uid:', capturedUid);
           setPermissions({
             uid: capturedUid,
             role: 'user',
@@ -79,7 +80,7 @@ export function useUserPermissions(
         }
 
         const data = snap.data();
-
+          console.log('[PERMISSIONS] snapshot recebido, role:', data?.role, 'isBlocked:', data?.isBlocked);
         setPermissions({
           uid: capturedUid,
           role: sanitizeRole(data.role),

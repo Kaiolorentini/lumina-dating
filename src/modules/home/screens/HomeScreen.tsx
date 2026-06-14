@@ -12,7 +12,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { RootStackParamList } from '../../../navigation/types';
 import { ProfileCardData } from '../../../shared/types';
-import { AI_MODELS } from '../../ai/data/aiModels';
+
 import ProfileCard from '../../../components/ProfileCard';
 import VisitedProfileCard from '../../../components/VisitedProfileCard';
 import VisitsBanner from '../../../components/VisitsBanner';
@@ -28,10 +28,9 @@ type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
 };
 
-const TABS: { key: HomeTab; label: string; icon: string }[] = [
-  { key: 'ia', label: 'Modelos IA', icon: '🤖' },
+const TABS = [
   { key: 'perfis', label: 'Perfis', icon: '👤' },
-  { key: 'visitados', label: 'Mais visitados', icon: '🔥' },
+  { key: 'visitados', label: 'Em Alta', icon: '🔥' },
   { key: 'conversas', label: 'Conversas', icon: '💬' },
 ];
 
@@ -142,10 +141,10 @@ function ConversasTab({ navigation }: { navigation: any }) {
 }
 
 export default function HomeScreen({ navigation }: Props) {
-  const [activeTab, setActiveTab] = useState<HomeTab>('ia');
+ const [activeTab, setActiveTab] = useState<HomeTab>('perfis');
 
   const {
-    aiModels,
+
     realProfiles,
     mostVisited,
     visitCounts,
@@ -163,17 +162,13 @@ export default function HomeScreen({ navigation }: Props) {
   }, [activeTab]);
 
   function getDataForTab(): ProfileCardData[] {
-    switch (activeTab) {
-      case 'ia': return aiModels;
-      case 'perfis': return realProfiles;
-      default: return [];
-    }
-  }
+  return realProfiles;
+}
 
   function handleCardPress(profile: ProfileCardData) {
     if (profile.isAI) {
-      const aiModel = AI_MODELS.find(m => m.id === profile.id);
-      if (aiModel) navigation.navigate('AIProfile', { model: aiModel });
+  
+     
     } else {
       navigation.navigate('RealProfile', { userId: profile.id });
     }
@@ -290,7 +285,7 @@ export default function HomeScreen({ navigation }: Props) {
           getDataForTab().length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>
-                {activeTab === 'ia' ? '🤖' : '👤'}
+                
               </Text>
               <Text style={styles.emptyTitle}>
                 {activeTab === 'ia'

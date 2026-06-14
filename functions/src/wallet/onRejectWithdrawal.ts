@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertAuthenticated, assertSuperAdmin } from "../utils/adminGuard";
 import { createAuditLog } from "../utils/auditLog";
+import { notifyUser } from "../utils/notifyUser";
 
 export const onRejectWithdrawal = onCall(async (request) => {
   assertAuthenticated(request.auth?.uid);
@@ -24,6 +25,8 @@ export const onRejectWithdrawal = onCall(async (request) => {
     throw new HttpsError("failed-precondition", "Saque não pode ser rejeitado neste estado");
   }
 
+  const { userId, amount } = snap.data()!;
+
   await withdrawalRef.update({
     status: "rejected",
     rejectionReason: reason ?? "Rejeitado pelo administrador",
@@ -36,9 +39,22 @@ export const onRejectWithdrawal = onCall(async (request) => {
     performedBy: safeUid,
     targetId: withdrawalId,
     targetType: "withdrawal",
-    metadata: { reason, userId: snap.data()?.userId, amount: snap.data()?.amount },
+    metadata: { reason, userId, amount },
     req: request.rawRequest,
   });
+
+  // ✅ Notifica o criador — push + in-app
+  if (userId) {
+    await notifyUser({
+      userId,
+      title: "❌ Saque rejeitado",
+      body: reason
+        ? `Seu saque de R$ ${amount?.toFixed(2)} foi rejeitado. Motivo: ${reason}`
+        : `Seu saque de R$ ${amount?.toFixed(2)} foi rejeitado pelo administrador.`,
+      type: "withdrawal_rejected",
+      data: { withdrawalId },
+    });
+  }
 
   return { success: true };
 });

@@ -1,25 +1,11 @@
 // ============================================
 // TIPOS GLOBAIS COMPARTILHADOS
-//
-// Tipos usados em mais de um módulo ficam aqui.
-// Tipos específicos de módulo ficam dentro do módulo.
 // ============================================
 
-// Gêneros disponíveis
-export type Gender =
-  | 'masculino'
-  | 'feminino'
-  | 'trans'
-  | 'nao-binario';
+export type Gender = 'masculino' | 'feminino' | 'trans' | 'nao-binario';
 
-// Preferências de relacionamento
-export type Preference =
-  | 'homens'
-  | 'mulheres'
-  | 'trans'
-  | 'todos';
+export type Preference = 'homens' | 'mulheres' | 'trans' | 'todos';
 
-// Perfil completo do usuário
 export interface UserProfile {
   uid: string;
   email: string;
@@ -35,7 +21,6 @@ export interface UserProfile {
   updatedAt?: Date;
 }
 
-// Resultado de Sintonia
 export interface SintoniaResult {
   score: number;
   label: string;
@@ -48,16 +33,19 @@ export interface SintoniaResult {
   };
 }
 
-// Tipos de notificação
 export type NotificationType =
-  | 'online'
   | 'sintonia'
-  | 'visita'
   | 'mensagem'
-  | 'desbloqueio'
-  | 'promocao';
+  | 'promocao'
+  | 'creator_approved'
+  | 'creator_rejected'
+  | 'product_approved'
+  | 'product_rejected'
+  | 'withdrawal_approved'
+  | 'withdrawal_rejected'
+  | 'withdrawal_paid'
+  | 'refund_processed';
 
-// Notificação interna
 export interface AppNotification {
   id: string;
   userId: string;
@@ -74,21 +62,19 @@ export interface ChatMessage {
   senderId: string;
   senderName: string;
   timestamp: Date;
-  isAI: boolean;
   delivered?: boolean;
   read?: boolean;
   audioUrl?: string;
   audioDuration?: number;
   reactions?: Record<string, string>;
 }
-// Carteira de moedas
+
 export interface Wallet {
   coins: number;
   totalSpent: number;
   totalEarned: number;
 }
 
-// Transação de moedas
 export interface Transaction {
   id: string;
   type: 'earn' | 'spend';
@@ -97,10 +83,8 @@ export interface Transaction {
   timestamp: Date;
 }
 
-// Status de solicitação
 export type RequestStatus = 'pending' | 'accepted' | 'rejected';
 
-// Solicitação de conexão
 export interface ConnectionRequest {
   id: string;
   fromUserId: string;
@@ -111,7 +95,6 @@ export interface ConnectionRequest {
   timestamp: Date;
 }
 
-// Bloqueio de usuário
 export interface Block {
   id: string;
   blockerId: string;
@@ -121,7 +104,6 @@ export interface Block {
   timestamp: Date;
 }
 
-// Item de mídia
 export interface MediaItem {
   id: string;
   url: string;
@@ -134,14 +116,12 @@ export interface MediaItem {
   unlockedBy: string[];
 }
 
-// Acesso a conteúdo progressivo
 export interface ContentAccess {
   level1: boolean;
   level2: boolean;
   level3: boolean;
 }
 
-// Card de perfil para feed
 export interface ProfileCardData {
   id: string;
   name: string;
@@ -149,5 +129,4 @@ export interface ProfileCardData {
   location: string;
   sintonia: number;
   photoURL: string;
-  isAI?: boolean;
 }

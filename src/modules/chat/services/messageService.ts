@@ -13,16 +13,15 @@ import {
 import { db } from '../../../core/firebase';
 import { COLLECTIONS } from '../../../core/constants';
 import { ChatMessage } from '../../../shared/types';
-import { generateAIChatId, generateChatId } from '../../../shared/utils';
+import { generateChatId } from '../../../shared/utils';
 
-export { generateAIChatId, generateChatId };
+export { generateChatId };
 
 export async function sendMessage(
   chatId: string,
   text: string,
   senderId: string,
   senderName: string,
-  isAI: boolean = false,
   recipientId?: string,
   audioUrl?: string,
   audioDuration?: number
@@ -34,7 +33,6 @@ export async function sendMessage(
     text,
     senderId,
     senderName,
-    isAI,
     timestamp: now,
     delivered: false,
     read: false,
@@ -49,13 +47,13 @@ export async function sendMessage(
 
   const chatRef = doc(db, COLLECTIONS.CHATS, chatId);
   await setDoc(chatRef, {
-    lastMessage: audioUrl ? '🎤 Audio' : text,
+    lastMessage: audioUrl ? '🎤 Áudio' : text,
     lastMessageTime: now,
     updatedAt: now,
     participants: recipientId ? [senderId, recipientId] : [senderId],
   }, { merge: true });
 
-  if (recipientId && !isAI) {
+  if (recipientId) {
     try {
       await markAsDelivered(chatId, senderId);
       const { sendPushToUser } = await import('../../notifications/services/pushService');
@@ -63,7 +61,7 @@ export async function sendMessage(
         recipientId,
         senderName,
         audioUrl
-          ? '🎤 Mensagem de audio'
+          ? '🎤 Mensagem de áudio'
           : text.length > 50
           ? text.slice(0, 50) + '...'
           : text,
@@ -121,25 +119,19 @@ export function listenToMessages(
   onError?: (error: { code: string; message: string }) => void
 ): () => void {
   const messagesRef = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
-
- 
   const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
   return onSnapshot(
     q,
     snapshot => {
-      
-
       const messages: ChatMessage[] = snapshot.docs.map(d => {
         const data = d.data();
-       
         return {
           id: d.id,
           text: data.text || '',
           senderId: data.senderId,
           senderName: data.senderName,
           timestamp: data.timestamp?.toDate?.() || new Date(),
-          isAI: data.isAI,
           delivered: data.delivered ?? false,
           read: data.read ?? false,
           audioUrl: data.audioUrl,
@@ -147,7 +139,6 @@ export function listenToMessages(
           reactions: data.reactions,
         };
       });
-
       onMessages(messages);
     },
     (error: { code: string; message: string }) => {

@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { assertAuthenticated, assertSuperAdmin } from "../utils/adminGuard";
 import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { createAuditLog } from "../utils/auditLog";
+import { notifyUser } from "../utils/notifyUser";
 
 export const onRejectCreator = onCall(async (request) => {
   assertAuthenticated(request.auth?.uid);
@@ -46,6 +47,17 @@ export const onRejectCreator = onCall(async (request) => {
     targetType: "creator",
     metadata: { userId, reason },
     req: request.rawRequest,
+  });
+
+  // ✅ Notifica o usuário rejeitado — push + in-app
+  await notifyUser({
+    userId,
+    title: "❌ Solicitação rejeitada",
+    body: reason
+      ? `Sua solicitação foi rejeitada. Motivo: ${reason}`
+      : "Sua solicitação de criador foi rejeitada pelo administrador.",
+    type: "creator_rejected",
+    data: { requestId },
   });
 
   return { success: true };

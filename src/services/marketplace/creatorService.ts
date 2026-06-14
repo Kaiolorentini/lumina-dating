@@ -21,6 +21,7 @@ import {
 import { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
 import { createAuditLog } from './auditService';
+import { notifySuperAdmins } from './pushAdminService';
 
 export interface CreatorRequest {
   id: string;
@@ -32,7 +33,9 @@ export interface CreatorRequest {
   rejectionReason?: string;
 }
 
+// ============================================
 // Busca solicitação ativa do usuário
+// ============================================
 export async function getCreatorRequestByUserId(
   userId: string,
 ): Promise<CreatorRequest | null> {
@@ -53,7 +56,9 @@ export async function getCreatorRequestByUserId(
   } as CreatorRequest;
 }
 
-// Cria solicitação de criador
+// ============================================
+// Cria solicitação de criador + notifica superadmins
+// ============================================
 export async function createCreatorRequest(userId: string): Promise<string> {
   const existing = await getCreatorRequestByUserId(userId);
   if (existing && existing.status === 'pending') {
@@ -80,10 +85,23 @@ export async function createCreatorRequest(userId: string): Promise<string> {
     metadata: { userId },
   });
 
+  // ✅ Notifica superadmins via push
+  await notifySuperAdmins(
+    '🎨 Nova solicitação de criador',
+    `Usuário ${userId.slice(0, 8)}... quer se tornar criador`,
+    {
+      type: 'creator_request_new',
+      userId,
+      requestId: docRef.id,
+    },
+  );
+
   return docRef.id;
 }
 
+// ============================================
 // Cancela solicitação pendente
+// ============================================
 export async function cancelCreatorRequest(
   requestId: string,
   userId: string,
@@ -104,7 +122,9 @@ export async function cancelCreatorRequest(
   });
 }
 
+// ============================================
 // Listener em tempo real para solicitação do usuário
+// ============================================
 export function listenToCreatorRequest(
   userId: string,
   onUpdate: (request: CreatorRequest | null) => void,
@@ -116,20 +136,24 @@ export function listenToCreatorRequest(
     limit(1),
   );
 
-  return onSnapshot(q, snapshot => {
-    if (snapshot.empty) {
+  return onSnapshot(
+    q,
+    snapshot => {
+      if (snapshot.empty) {
+        onUpdate(null);
+        return;
+      }
+      const d = snapshot.docs[0];
+      onUpdate({
+        id: d.id,
+        ...d.data(),
+        createdAt: d.data().createdAt?.toDate() ?? new Date(),
+        reviewedAt: d.data().reviewedAt?.toDate(),
+      } as CreatorRequest);
+    },
+    error => {
+      console.warn('[creatorService] Erro no listener:', error);
       onUpdate(null);
-      return;
-    }
-    const d = snapshot.docs[0];
-    onUpdate({
-      id: d.id,
-      ...d.data(),
-      createdAt: d.data().createdAt?.toDate() ?? new Date(),
-      reviewedAt: d.data().reviewedAt?.toDate(),
-    } as CreatorRequest);
-  }, error => {
-    console.warn('[creatorService] Erro no listener:', error);
-    onUpdate(null);
-  });
+    },
+  );
 }

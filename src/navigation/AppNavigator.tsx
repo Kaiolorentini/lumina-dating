@@ -23,7 +23,7 @@ import { NotificationsScreen } from '../modules/notifications';
 import EngagementInitializer from '../components/EngagementInitializer';
 import UpdateChecker from '../components/UpdateChecker';
 import { RootStackParamList, TabParamList } from './types';
-import AIProfileScreen from '../screens/Home/AIProfileScreen';
+
 import MediaScreen from '../modules/media/screens/MediaScreen';
 import ProfileScreen from '../modules/profile/screens/ProfileScreen';
 import RealProfileScreen from '../screens/Profile/RealProfileScreen';
@@ -68,8 +68,17 @@ import {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
-// ✅ navigationRef tipado corretamente
 const navigationRef = React.createRef<NavigationContainerRef<RootStackParamList>>();
+
+// ✅ Contexto único para permissões — evita múltiplos listeners Firestore
+const NavigationPermissionsContext = React.createContext({
+  isBlocked: false,
+  isSuperAdmin: false,
+  marketplaceEnabled: false,
+});
+
+// ✅ Função estável para ocultar tab — evita re-renders por nova referência
+const hideTabButton = () => null;
 
 // ============================================
 // TAB NAVIGATOR
@@ -80,8 +89,9 @@ function TabNavigator() {
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
   const unsubscribersRef = useRef<(() => void)[]>([]);
-  const { marketplaceEnabled } = useAppSettings();
-  const { isBlocked, isAdmin, isSuperAdmin } = useUserPermissions(user?.uid);
+
+  // ✅ Consome do contexto — sem segundo listener Firestore
+  const { isBlocked, isSuperAdmin, marketplaceEnabled } = React.useContext(NavigationPermissionsContext);
   const canAccessAdminPanel = isSuperAdmin;
 
   useEffect(() => {
@@ -133,6 +143,8 @@ function TabNavigator() {
   }, [user?.uid]);
 
   const totalProfileBadge = pendingRequests;
+  // ✅ Variável estável — evita re-render por função inline
+  const showMarketplace = marketplaceEnabled && !isBlocked;
 
   return (
     <Tab.Navigator
@@ -200,8 +212,9 @@ function TabNavigator() {
         options={{
           tabBarLabel: 'Marketplace',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🛍️</Text>,
-          tabBarButton: (marketplaceEnabled && !isBlocked) ? undefined : () => null,
-          tabBarItemStyle: (marketplaceEnabled && !isBlocked) ? {} : { width: 0, height: 0 },
+          // ✅ Função estável — evita re-renders por nova referência a cada render
+          tabBarButton: showMarketplace ? undefined : hideTabButton,
+          tabBarItemStyle: showMarketplace ? {} : { width: 0, height: 0 },
         }}
       />
       <Tab.Screen name="Profile" component={ProfileScreen}
@@ -256,9 +269,9 @@ function MainStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={TabNavigator} />
-      <Stack.Screen name="AIProfile" component={AIProfileScreen} />
+     
       <Stack.Screen name="RealProfile" component={RealProfileScreen} />
-      <Stack.Screen name="Chat" component={ChatScreen} />
+      
       <Stack.Screen name="UserChat" component={UserChatScreen} />
       <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen}
         initialParams={{ editMode: true }} />
@@ -308,21 +321,18 @@ interface InAppNotifState {
 let _adminBootDone = false;
 
 function AppContent() {
-  const { user, loading: authLoading } = useAuth();
-  const { isSuperAdmin, loading: permLoading } = useUserPermissions(user?.uid);
+  const { user, loading: authLoading, hasProfile } = useAuth(); // ✅ hasProfile adicionado
+  const { isSuperAdmin, isBlocked, loading: permLoading } = useUserPermissions(user?.uid);
+  const { marketplaceEnabled } = useAppSettings();
   const canAccessAdminPanel = isSuperAdmin;
   const [adminBootReady, setAdminBootReady] = useState(_adminBootDone);
   const [inAppNotif, setInAppNotif] = useState<InAppNotifState | null>(null);
 
   usePushNotifications();
 
-  // ============================================
-  // Navegação por tipo de notificação
-  // ============================================
   function handleNotificationNavigation(data: Record<string, any>) {
     if (!navigationRef.current) return;
     const type = data?.type as string;
-
     switch (type) {
       case 'message':
         if (data.senderId && data.senderName && data.senderPhoto) {
@@ -360,17 +370,12 @@ function AppContent() {
     }
   }
 
-  // ============================================
-  // Listeners de notificação
-  // ============================================
   useEffect(() => {
-    // Toque em notificação (app em background/fechado)
     const tapSub = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data as Record<string, any>;
       handleNotificationNavigation(data);
     });
 
-    // Notificação recebida com app aberto → InAppNotification
     const receiveSub = Notifications.addNotificationReceivedListener(notification => {
       if (!user) return;
       const data = notification.request.content.data as Record<string, any>;
@@ -436,11 +441,17 @@ function AppContent() {
     };
   }, [user]);
 
-  // ============================================
-  // Máquina de estados de autenticação
-  // ============================================
+  // ✅ Log ANTES dos returns
+  console.log('[APP STATE]', {
+    authLoading,
+    permLoading,
+    user: !!user,
+    hasProfile,
+    canAccessAdminPanel,
+    adminBootReady,
+  });
 
-  // Auth carregando
+  // ✅ Estado 1 — Auth carregando
   if (authLoading) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -449,16 +460,26 @@ function AppContent() {
     );
   }
 
-  // Não autenticado
+  // ✅ Estado 2 — Não autenticado → Login/Register
   if (!user) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Splash" component={SplashScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
       </Stack.Navigator>
     );
   }
 
-  // Permissões carregando
+  // ✅ Estado 3 — Sem perfil → ProfileSetup
+  if (!hasProfile) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+      </Stack.Navigator>
+    );
+  }
+
+  // ✅ Estado 4 — Permissões carregando
   if (permLoading) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -467,7 +488,7 @@ function AppContent() {
     );
   }
 
-  // Admin boot screen — uma vez por sessão para superadmin
+  // ✅ Estado 5 — Admin boot screen
   if (canAccessAdminPanel && !adminBootReady) {
     return (
       <AdminLoadingScreen
@@ -479,9 +500,13 @@ function AppContent() {
     );
   }
 
-  // App principal
+  // ✅ Estado 6 — App principal
   return (
-    <>
+    <NavigationPermissionsContext.Provider value={{
+      isBlocked,
+      isSuperAdmin,
+      marketplaceEnabled: marketplaceEnabled ?? false,
+    }}>
       <EngagementInitializer />
       <UpdateChecker />
       <PushInitializer />
@@ -495,7 +520,7 @@ function AppContent() {
           onDismiss={() => setInAppNotif(null)}
         />
       )}
-    </>
+    </NavigationPermissionsContext.Provider>
   );
 }
 

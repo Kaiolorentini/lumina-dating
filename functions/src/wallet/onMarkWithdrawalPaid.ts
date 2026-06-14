@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { assertAuthenticated, assertSuperAdmin } from "../utils/adminGuard";
 import { createAuditLog } from "../utils/auditLog";
 import { incrementMetric } from "../utils/incrementMetric";
+import { notifyUser } from "../utils/notifyUser";
 
 export const onMarkWithdrawalPaid = onCall(async (request) => {
   assertAuthenticated(request.auth?.uid);
@@ -15,6 +16,9 @@ export const onMarkWithdrawalPaid = onCall(async (request) => {
 
   const db = admin.firestore();
   const withdrawalRef = db.collection("withdrawals").doc(withdrawalId);
+
+  let userId = "";
+  let amount = 0;
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(withdrawalRef);
@@ -33,6 +37,9 @@ export const onMarkWithdrawalPaid = onCall(async (request) => {
       throw new HttpsError("failed-precondition", "Saldo insuficiente para processar pagamento");
     }
 
+    userId = data.userId;
+    amount = data.amount;
+
     tx.update(walletRef, {
       availableBalance: admin.firestore.FieldValue.increment(-data.amount),
       totalWithdrawn: admin.firestore.FieldValue.increment(data.amount),
@@ -50,22 +57,32 @@ export const onMarkWithdrawalPaid = onCall(async (request) => {
       userId: data.userId,
       type: "withdrawal",
       amount: -data.amount,
-      description: `Saque pago via Pix`,
+      description: "Saque pago via Pix",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   });
 
-  const snap = await withdrawalRef.get();
-  await incrementMetric("totalWithdrawn", snap.data()?.amount ?? 0);
+  await incrementMetric("totalWithdrawn", amount);
 
   await createAuditLog({
     action: "withdrawal_paid",
     performedBy: safeUid,
     targetId: withdrawalId,
     targetType: "withdrawal",
-    metadata: { userId: snap.data()?.userId, amount: snap.data()?.amount },
+    metadata: { userId, amount },
     req: request.rawRequest,
   });
+
+  // ✅ Notifica o criador — push + in-app
+  if (userId) {
+    await notifyUser({
+      userId,
+      title: "💰 Saque pago!",
+      body: `R$ ${amount.toFixed(2)} foi transferido para sua chave Pix.`,
+      type: "withdrawal_paid",
+      data: { withdrawalId },
+    });
+  }
 
   return { success: true };
 });

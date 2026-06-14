@@ -19,7 +19,6 @@ export interface ProfileCardData {
   location: string;
   sintonia: number;
   photoURL: string;
-  isAI?: boolean;
 }
 
 interface Props {
@@ -30,27 +29,17 @@ interface Props {
 export default function ProfileCard({ data, onPress }: Props) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
-      {/* Foto */}
       <Image
         source={{ uri: data.photoURL }}
         style={styles.photo}
-        defaultSource={{ uri: 'https://randomuser.me/api/portraits/women/1.jpg' }}
+        defaultSource={{ uri: 'https://randomuser.me/api/portraits/lego/1.jpg' }}
       />
 
-      {/* Badge IA */}
-      {data.isAI && (
-        <View style={styles.aiBadge}>
-          <Text style={styles.aiBadgeText}>🤖 IA</Text>
-        </View>
-      )}
-
-      {/* Sintonia */}
       <View style={styles.sintoniaContainer}>
         <Text style={styles.sintoniaText}>{data.sintonia}%</Text>
         <Text style={styles.sintoniaLabel}>Sintonia</Text>
       </View>
 
-      {/* Info */}
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>
           {data.name}, {data.age}
@@ -77,20 +66,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: CARD_WIDTH * 1.3,
     backgroundColor: colors.grayDark,
-  },
-  aiBadge: {
-    position: 'absolute',
-    top: spacing.sm,
-    left: spacing.sm,
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  aiBadgeText: {
-    color: colors.background,
-    fontSize: fonts.sizes.xs,
-    fontWeight: 'bold',
   },
   sintoniaContainer: {
     position: 'absolute',

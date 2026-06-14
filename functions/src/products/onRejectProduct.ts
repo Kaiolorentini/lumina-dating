@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { assertAuthenticated, assertSuperAdmin } from "../utils/adminGuard";
 import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { createAuditLog } from "../utils/auditLog";
+import { notifyUser } from "../utils/notifyUser";
 
 export const onRejectProduct = onCall(async (request) => {
   assertAuthenticated(request.auth?.uid);
@@ -15,7 +16,6 @@ export const onRejectProduct = onCall(async (request) => {
     productId: string;
     reason?: string;
   };
-
   if (!productId) throw new HttpsError("invalid-argument", "productId obrigatório");
 
   const productRef = admin.firestore().collection("products").doc(productId);
@@ -28,6 +28,9 @@ export const onRejectProduct = onCall(async (request) => {
     throw new HttpsError("failed-precondition", "Produto não pode ser rejeitado neste estado");
   }
 
+  const ownerId = productSnap.data()!.ownerId;
+  const productTitle = productSnap.data()!.title ?? "seu produto";
+
   await productRef.update({
     status: "rejected",
     rejectionReason: reason ?? "Produto rejeitado pelo administrador",
@@ -39,9 +42,22 @@ export const onRejectProduct = onCall(async (request) => {
     performedBy: uid,
     targetId: productId,
     targetType: "product",
-    metadata: { reason },
+    metadata: { reason, ownerId },
     req: request.rawRequest,
   });
+
+  // ✅ Notifica o criador — push + in-app
+  if (ownerId) {
+    await notifyUser({
+      userId: ownerId,
+      title: "❌ Produto rejeitado",
+      body: reason
+        ? `"${productTitle}" foi rejeitado. Motivo: ${reason}`
+        : `"${productTitle}" foi rejeitado pelo administrador.`,
+      type: "product_rejected",
+      data: { productId },
+    });
+  }
 
   return { success: true };
 });

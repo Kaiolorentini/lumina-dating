@@ -4,6 +4,7 @@ import { assertAuthenticated, assertSuperAdmin } from "../utils/adminGuard";
 import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { createAuditLog } from "../utils/auditLog";
 import { incrementMetric } from "../utils/incrementMetric";
+import { notifyUser } from "../utils/notifyUser";
 
 export const onApproveProduct = onCall(async (request) => {
   assertAuthenticated(request.auth?.uid);
@@ -18,6 +19,8 @@ export const onApproveProduct = onCall(async (request) => {
   const db = admin.firestore();
   const productRef = db.collection("products").doc(productId);
 
+  let ownerId = "";
+
   await db.runTransaction(async (tx) => {
     const productSnap = await tx.get(productRef);
     if (!productSnap.exists) {
@@ -26,6 +29,8 @@ export const onApproveProduct = onCall(async (request) => {
     if (productSnap.data()?.status !== "pending") {
       throw new HttpsError("failed-precondition", "Produto não está pendente de aprovação");
     }
+
+    ownerId = productSnap.data()!.ownerId;
 
     tx.update(productRef, {
       status: "approved",
@@ -41,9 +46,20 @@ export const onApproveProduct = onCall(async (request) => {
     performedBy: uid,
     targetId: productId,
     targetType: "product",
-    metadata: {},
+    metadata: { ownerId },
     req: request.rawRequest,
   });
+
+  // ✅ Notifica o criador — push + in-app
+  if (ownerId) {
+    await notifyUser({
+      userId: ownerId,
+      title: "✅ Produto aprovado!",
+      body: "Seu produto foi aprovado e já está disponível no marketplace.",
+      type: "product_approved",
+      data: { productId },
+    });
+  }
 
   return { success: true };
 });
