@@ -425,6 +425,7 @@ match /creatorRequests/{requestId} {
       allow create, update, delete: if false;
     }
 
+
     // ============================================
     // MARKETPLACE — PRODUCT ANALYTICS
     // ============================================
@@ -451,6 +452,71 @@ match /creatorRequests/{requestId} {
       match /minutes/{minuteId} {
         allow read, write: if false;
       }
+
+
+      // ============================================
+// LUMINA — FIRESTORE RULES (ADIÇÕES FASE 0)
+// Adicionar ao firestore.rules existente
+// ============================================
+
+// Carteira — leitura permitida ao dono, escrita apenas pelo backend
+match /wallets/{userId} {
+  allow read:  if request.auth != null && request.auth.uid == userId;
+  allow write: if false; // somente Cloud Functions via Admin SDK
+}
+
+// Audit log financeiro — ninguém lê pelo cliente
+match /walletAuditLogs/{logId} {
+  allow read:  if false;
+  allow write: if false;
+}
+
+// Idempotência de earn — somente backend
+match /earnIdempotency/{key} {
+  allow read:  if false;
+  allow write: if false;
+}
+
+// Idempotência de spend — somente backend
+match /spendIdempotency/{key} {
+  allow read:  if false;
+  allow write: if false;
+}
+//trigger
+match /triggerControl/{docId} {
+  allow read: if false;
+  allow write: if false;
+}
+match /pendingLostSintonia/{docId} {
+  allow read: if false;
+  allow write: if false;
+}
+// ============================================
+// CHECKLIST FINAL FASE 0
+//
+// [x] economy.ts — catálogo central de preços
+// [x] auditLogFinanceiro.ts — log completo
+// [x] initWallet.ts — criação idempotente
+// [x] earnCoins.ts — crédito blindado
+// [x] spendCoins.ts — débito blindado
+// [x] walletService.ts — só leitura + CF calls
+// [x] useWallet.ts — onSnapshot + CF spend
+// [x] CoinsContext.tsx — spend por feature
+// [x] shared/types/index.ts — Wallet v5.0
+// [x] Firestore Rules — wallets write: false
+//
+// REGRAS ANTIFRAUDE COBERTAS:
+// [x] CRÍTICO 1  — runTransaction() em earn/spend
+// [x] CRÍTICO 2  — timestamps server-side only
+// [x] CRÍTICO 3  — idempotência uid+data+tipo
+// [x] CRÍTICO 4  — limite diário + mensal server
+// [x] CRÍTICO 10 — saldo nunca negativo (HttpsError)
+// [x] CRÍTICO 14 — coins separados (gratuito/premium)
+// [x] CRÍTICO 19 — ordem de gasto: gratuitos primeiro
+// [x] CRÍTICO 15 — auditLog em toda movimentação
+//
+// PRÓXIMO PASSO: Fase 1 — Cristais de Sintonia
+// ============================================
     }
 
   }

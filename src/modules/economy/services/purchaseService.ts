@@ -1,86 +1,100 @@
-import { addCoins } from './walletService';
-
 // ============================================
-// PURCHASE SERVICE — MÓDULO ECONOMY
+// LUMINA — PURCHASE SERVICE v5.1
+// src/modules/economy/services/purchaseService.ts
 //
-// Responsabilidade única:
-// Simular compra de pacotes de moedas.
-// Preparado para integração com gateway real.
+// REGRA 1: Nenhuma compra creditada client-side.
+// Crédito real: onAsaasWebhook (Cloud Function).
+//
+// CORREÇÃO: Removido import de ../../../functions/
+// (pasta backend não pode ser importada no client)
+// Pacotes definidos localmente para exibição apenas.
 // ============================================
 
-export interface CoinPackage {
-  id: string;
-  coins: number;
-  price: string;
-  priceValue: number;
-  label: string;
-  bonus: number;
-  icon: string;
-  highlighted?: boolean;
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
+const functions = getFunctions();
+
+// Pacotes apenas para exibição na UI
+// Preços e totais reais ficam em functions/src/config/economy.ts
+// Cliente nunca credita — apenas inicia o fluxo de pagamento
+export interface CoinPackageDisplay {
+  id:                 string;
+  label:              string;
+  coinsPremium:       number;
+  bonus:              number;
+  total:              number;
+  priceValue:         number;
+  priceLabel:         string;
+  highlighted?:       boolean;
+  packAsset:          string;
+  isFirstPurchasePkg: boolean;
 }
 
-export const COIN_PACKAGES: CoinPackage[] = [
+export const COIN_PACKAGES_DISPLAY: CoinPackageDisplay[] = [
   {
-    id: 'starter',
-    coins: 100,
-    price: 'R$ 4,99',
-    priceValue: 4.99,
-    label: 'Iniciante',
-    bonus: 0,
-    icon: '💰',
+    id:                 'starter',
+    label:              'Iniciante',
+    coinsPremium:       100,
+    bonus:              0,
+    total:              100,   // +100 na 1ª compra → 200 (backend calcula)
+    priceValue:         4.99,
+    priceLabel:         'R$ 4,99',
+    packAsset:          'pack-iniciante',
+    isFirstPurchasePkg: true,
   },
   {
-    id: 'popular',
-    coins: 500,
-    price: 'R$ 19,99',
-    priceValue: 19.99,
-    label: 'Popular',
-    bonus: 50,
-    icon: '💎',
-    highlighted: true,
+    id:                 'popular',
+    label:              'Popular',
+    coinsPremium:       500,
+    bonus:              100,
+    total:              600,
+    priceValue:         19.99,
+    priceLabel:         'R$ 19,99',
+    highlighted:        true,
+    packAsset:          'pack-popular',
+    isFirstPurchasePkg: false,
   },
   {
-    id: 'premium',
-    coins: 1200,
-    price: 'R$ 39,99',
-    priceValue: 39.99,
-    label: 'Premium',
-    bonus: 200,
-    icon: '👑',
+    id:                 'supremo',
+    label:              'Supremo',
+    coinsPremium:       1000,
+    bonus:              500,
+    total:              1500,
+    priceValue:         39.99,
+    priceLabel:         'R$ 39,99',
+    packAsset:          'pack-supremo',
+    isFirstPurchasePkg: false,
   },
   {
-    id: 'vip',
-    coins: 3000,
-    price: 'R$ 89,99',
-    priceValue: 89.99,
-    label: 'VIP',
-    bonus: 800,
-    icon: '✦',
+    id:                 'galaxia',
+    label:              'Galáxia',
+    coinsPremium:       4000,
+    bonus:              2000,
+    total:              6000,
+    priceValue:         99.99,
+    priceLabel:         'R$ 99,99',
+    packAsset:          'pack-galaxia',
+    isFirstPurchasePkg: false,
   },
 ];
 
-// Simula compra de moedas
-// Aqui você integraria Stripe, PagSeguro, etc.
-export async function purchaseCoins(
-  userId: string,
-  packageId: string
-): Promise<boolean> {
-  const pkg = COIN_PACKAGES.find(p => p.id === packageId);
-  if (!pkg) return false;
+// Inicia pagamento via Asaas
+// O crédito só acontece quando webhook confirmar
+export async function initiatePurchase(packageId: string): Promise<{
+  success:      boolean;
+  checkoutUrl?: string;
+  error?:       string;
+}> {
+  try {
+    const fn = httpsCallable<
+      { packageId: string },
+      { success: boolean; checkoutUrl?: string; error?: string }
+    >(functions, 'createAsaasPayment');
 
-  const totalCoins = pkg.coins + pkg.bonus;
-
-  // ============================================
-  // INTEGRAR GATEWAY AQUI:
-  // const paymentResult = await stripe.charge(pkg.priceValue);
-  // if (!paymentResult.success) return false;
-  // ============================================
-
-  await addCoins(
-    userId,
-    totalCoins,
-    `${pkg.icon} Compra: ${pkg.label} (${totalCoins} moedas)`
-  );
-
-  return true;
+    const result = await fn({ packageId });
+    return result.data;
+  } catch (error: unknown) {
+    console.error('[purchaseService] initiatePurchase error:', error);
+    return { success: false, error: 'Erro ao iniciar pagamento.' };
+  }
 }

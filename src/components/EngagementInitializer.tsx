@@ -1,19 +1,68 @@
-import { useEffect, useRef } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { onAppOpen } from '../services/engagementService';
+// ============================================
+// LUMINA — ENGAGEMENT INITIALIZER v5.4
+// src/components/EngagementInitializer.tsx
+//
+// v5.4: Verifica recompensa diária + gatilhos pendentes
+// Modal de recompensa diária aparece primeiro.
+// Se houver gatilhos não lidos → badge no sino.
+// ============================================
 
-// Componente invisível que inicializa o engajamento ao login
+import React, { useEffect, useState, useRef } from 'react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { useAuth }       from '../context/AuthContext';
+import DailyRewardModal  from './DailyRewardModal';
+
+const functions = getFunctions();
+
 export default function EngagementInitializer() {
-  const { user } = useAuth();
-  const initialized = useRef(false);
+  const { user, loading: authLoading } = useAuth();
+  const [showDailyReward, setShowDailyReward] = useState(false);
+  const checkedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!user || initialized.current) return;
-    initialized.current = true;
-    setTimeout(() => {
-      onAppOpen(user.uid).catch(console.error);
-    }, 2000);
-  }, [user]);
+    if (authLoading)    return;
+    if (!user?.uid)     return;
+    if (checkedRef.current === user.uid) return;
+    checkedRef.current = user.uid;
 
-  return null;
+    checkEngagements(user.uid);
+  }, [user?.uid, authLoading]);
+
+  async function checkEngagements(uid: string) {
+    console.log('[EngagementInitializer] Verificando para:', uid);
+    try {
+      // 1. Verifica recompensa diária
+      const fn = httpsCallable<void, { alreadyClaimed: boolean }>(
+        functions, 'getDailyRewardStatus'
+      );
+      const result = await fn();
+      console.log('[EngagementInitializer] alreadyClaimed:', result.data.alreadyClaimed);
+
+      if (!result.data.alreadyClaimed) {
+        setTimeout(() => setShowDailyReward(true), 1500);
+      }
+
+      // 2. Gatilhos emocionais pendentes são tratados
+      // na NotificationsScreen — não abrimos modal aqui
+      // para não sobrecarregar o usuário ao abrir o app.
+      // O badge do sino já indica notificações não lidas.
+
+    } catch (error) {
+      console.error('[EngagementInitializer] Erro:', error);
+      // Fallback: mostra modal mesmo se CF falhar
+      setTimeout(() => setShowDailyReward(true), 1500);
+    }
+  }
+
+  return (
+    <>
+      {showDailyReward && user?.uid && (
+        <DailyRewardModal
+          uid={user.uid}
+          visible={showDailyReward}
+          onClose={() => setShowDailyReward(false)}
+        />
+      )}
+    </>
+  );
 }

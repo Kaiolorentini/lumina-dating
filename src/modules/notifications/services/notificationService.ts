@@ -1,45 +1,51 @@
+// ============================================
+// LUMINA — NOTIFICATION SERVICE v5.3
+// src/modules/notifications/services/notificationService.ts
+//
+// v5.3: level_up, tree_evolution, achievement_unlocked,
+//       collection_complete adicionados
+// ============================================
+
 import {
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  updateDoc,
-  doc,
-  writeBatch,
-  getDocs,
-  serverTimestamp,
-  limit,
+  collection, addDoc, query, where, orderBy,
+  onSnapshot, updateDoc, doc, writeBatch,
+  getDocs, serverTimestamp, limit,
 } from 'firebase/firestore';
 import { db } from '../../../core/firebase';
 import { COLLECTIONS } from '../../../core/constants';
 import { NotificationType, AppNotification } from '../../../shared/types';
 
-// ============================================
-// NOTIFICATION SERVICE — MÓDULO NOTIFICATIONS
-// ============================================
-
 export function getNotificationIcon(type: NotificationType): string {
   const icons: Record<NotificationType, string> = {
-    sintonia:           '✦',
-    mensagem:           '💬',
-    promocao:           '💰',
-    creator_approved:   '🎨',
-    creator_rejected:   '❌',
-    product_approved:   '✅',
-    product_rejected:   '❌',
-    withdrawal_approved: '💸',
-    withdrawal_rejected: '❌',
-    withdrawal_paid:    '💰',
-    refund_processed:   '↩️',
+    sintonia:             '✦',
+    mensagem:             '💬',
+    promocao:             '💰',
+    creator_approved:     '🎨',
+    creator_rejected:     '❌',
+    product_approved:     '✅',
+    product_rejected:     '❌',
+    withdrawal_approved:  '💸',
+    withdrawal_rejected:  '❌',
+    withdrawal_paid:      '💰',
+    refund_processed:     '↩️',
+    quase_sintonia:       '💜',
+    sintonia_perdida:     '💔',
+    pensou_em_voce:       '✨',
+    cofre_cheio:          '🗝️',
+    streak_risco:         '🔥',
+    visibilidade_caindo:  '📉',
+    // v5.3 — XP + Conquistas
+    level_up:             '⬆️',
+    tree_evolution:       '🌳',
+    achievement_unlocked: '🏆',
+    collection_complete:  '📚',
   };
-  return icons[type] || '🔔';
+  return icons[type] ?? '🔔';
 }
 
 export async function createNotification(
-  userId: string,
-  type: NotificationType,
+  userId:  string,
+  type:    NotificationType,
   message: string
 ): Promise<void> {
   try {
@@ -47,16 +53,16 @@ export async function createNotification(
       userId,
       type,
       message,
-      read: false,
+      read:      false,
       timestamp: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Erro ao criar notificação:', error);
+    console.error('[notificationService] Erro ao criar notificação:', error);
   }
 }
 
 export function listenToNotifications(
-  userId: string,
+  userId:   string,
   onUpdate: (notifications: AppNotification[]) => void
 ): () => void {
   const q = query(
@@ -68,13 +74,14 @@ export function listenToNotifications(
 
   return onSnapshot(q, snapshot => {
     const notifications: AppNotification[] = snapshot.docs.map(d => ({
-      id: d.id,
-      userId: d.data().userId,
-      type: d.data().type,
-      message: d.data().message,
-      read: d.data().read,
+      id:        d.id,
+      userId:    d.data().userId,
+      type:      d.data().type,
+      message:   d.data().message,
+      read:      d.data().read,
       timestamp: d.data().timestamp?.toDate() || new Date(),
-      icon: getNotificationIcon(d.data().type),
+      icon:      getNotificationIcon(d.data().type),
+      dados:     d.data().dados ?? undefined,
     }));
     onUpdate(notifications);
   });
@@ -92,7 +99,7 @@ export async function markAllAsRead(userId: string): Promise<void> {
     where('read', '==', false)
   );
   const snapshot = await getDocs(q);
-  const batch = writeBatch(db);
+  const batch    = writeBatch(db);
   snapshot.docs.forEach(d => batch.update(d.ref, { read: true }));
   await batch.commit();
 }

@@ -1,21 +1,31 @@
+// ============================================
+// LUMINA — USE WALLET HOOK
+// src/modules/economy/hooks/useWallet.ts
+//
+// v5.0 — FASE 0: Blindagem da Economia
+//
+// REGRA 1: earn/spend chamam Cloud Functions.
+// Nenhum crédito/débito acontece aqui.
+// Saldo atualizado via onSnapshot (real-time).
+// ============================================
+
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { getWallet, addCoins, spendCoins } from '../services/walletService';
+import {
+  subscribeToWallet,
+  spendCoins as cfSpendCoins,
+  initWallet,
+  totalBalance,
+  SpendableFeature,
+} from '../services/walletService';
 import { Wallet } from '../../../shared/types';
-
-// ============================================
-// useWallet
-//
-// Hook reutilizável para qualquer tela
-// que precise do saldo de moedas.
-// ============================================
 
 interface UseWalletReturn {
   wallet: Wallet | null;
   loading: boolean;
-  refresh: () => Promise<void>;
-  earn: (amount: number, description: string) => Promise<void>;
-  spend: (amount: number, description: string) => Promise<boolean>;
+  totalCoins: number;
+  refresh: () => void;
+  spend: (feature: SpendableFeature, idempotencyKey?: string) => Promise<boolean>;
 }
 
 export function useWallet(): UseWalletReturn {
@@ -24,45 +34,68 @@ export function useWallet(): UseWalletReturn {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      loadWallet();
-    } else {
+    if (!user) {
       setWallet(null);
       setLoading(false);
+      return;
     }
+
+    setLoading(true);
+
+    // Inicializa carteira se não existir (idempotente no backend)
+    initWallet().catch(console.error);
+
+    // Listener em tempo real — saldo sempre atualizado
+    const unsubscribe = subscribeToWallet(
+      user.uid,
+      (updatedWallet) => {
+        setWallet(updatedWallet);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('[useWallet] Erro no listener:', error);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
   }, [user]);
 
-  const loadWallet = useCallback(async () => {
-    if (!user) return;
-    try {
-      setLoading(true);
-      const data = await getWallet(user.uid);
-      setWallet(data);
-    } catch (error) {
-      console.error('useWallet error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  async function earn(amount: number, description: string) {
-    if (!user) return;
-    await addCoins(user.uid, amount, description);
-    await loadWallet();
-  }
-
-  async function spend(amount: number, description: string): Promise<boolean> {
+  // REGRA 1: spend chama Cloud Function, não modifica Firestore diretamente
+  const spend = useCallback(async (
+    feature: SpendableFeature,
+    idempotencyKey?: string
+  ): Promise<boolean> => {
     if (!user) return false;
-    const success = await spendCoins(user.uid, amount, description);
-    if (success) await loadWallet();
-    return success;
-  }
+    try {
+      const result = await cfSpendCoins(feature, idempotencyKey);
+      // Saldo atualiza automaticamente via onSnapshot
+      return result.success;
+    } catch (error: any) {
+      if (error?.code === 'already-exists') {
+        console.warn('[useWallet] Operação já processada (idempotente).');
+        return false;
+      }
+      if (error?.code === 'failed-precondition') {
+        console.warn('[useWallet] Saldo insuficiente.');
+        return false;
+      }
+      console.error('[useWallet] spend error:', error);
+      return false;
+    }
+  }, [user]);
+
+  // refresh manual — onSnapshot já é real-time, mas exposto para pull-to-refresh
+  const refresh = useCallback(() => {
+    // o listener onSnapshot já mantém atualizado
+    // este método existe apenas por compatibilidade de interface
+  }, []);
 
   return {
     wallet,
     loading,
-    refresh: loadWallet,
-    earn,
+    totalCoins: wallet ? totalBalance(wallet) : 0,
+    refresh,
     spend,
   };
 }

@@ -112,5 +112,134 @@ service firebase.storage {
     match /{allPaths=**} {
       allow read, write: if false;
     }
+
+
+    // ============================================
+// LUMINA — FIRESTORE RULES COMPLETAS (FASE 0)
+// firestore.rules — substituir seção economy
+// ============================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----------------------------------------
+    // HELPERS
+    // ----------------------------------------
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function isSuperAdmin() {
+      return request.auth.uid in [
+        'DOoEhA9B2QZfTnJrIBJIUhNjuC23',
+        '8DyoecyZiuPOwvCDoO9WekJkVkH3'
+      ];
+    }
+
+    // ----------------------------------------
+    // CARTEIRAS — leitura pelo dono, escrita só backend
+    // ----------------------------------------
+    match /wallets/{userId} {
+      allow read:  if isAuthenticated() && isOwner(userId);
+      allow write: if false; // somente Admin SDK (Cloud Functions)
+
+      match /transactions/{txId} {
+        allow read:  if isAuthenticated() && isOwner(userId);
+        allow write: if false;
+      }
+    }
+
+    // ----------------------------------------
+    // AUDIT LOGS FINANCEIROS — somente backend
+    // ----------------------------------------
+    match /walletAuditLogs/{logId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    match /xpAuditLogs/{logId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ----------------------------------------
+    // IDEMPOTÊNCIA — somente backend
+    // ----------------------------------------
+    match /earnIdempotency/{key} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    match /spendIdempotency/{key} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ----------------------------------------
+    // ECONOMY CONFIG — leitura pública, escrita superadmin
+    // ----------------------------------------
+    match /config/{docId} {
+      allow read:  if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // ----------------------------------------
+    // ECONOMY SNAPSHOTS — somente superadmin lê
+    // ----------------------------------------
+    match /economySnapshots/{date} {
+      allow read:  if isSuperAdmin();
+      allow write: if false;
+    }
+
+    // ----------------------------------------
+    // RANKING SEMANAL — leitura pública, escrita backend
+    // ----------------------------------------
+    match /weeklyRanking/{weekId}/{category}/{userId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // ----------------------------------------
+    // USERS — leitura controlada, escrita restrita
+    // ----------------------------------------
+    match /users/{userId} {
+      allow read:  if isAuthenticated();
+      allow update: if isAuthenticated() && isOwner(userId)
+        // Campos que o cliente NÃO pode alterar diretamente
+        && !('economy' in request.resource.data)
+        && !('trustScore' in request.resource.data)
+        && !('progression.xp' in request.resource.data)
+        && !('progression.level' in request.resource.data);
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow delete: if false;
+    }
+
+    // ----------------------------------------
+    // NOTIFICAÇÕES — dono lê e marca como lida
+    // ----------------------------------------
+    match /notifications/{notifId} {
+      allow read:   if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['read']); // só pode marcar como lida
+      allow create, delete: if false;
+    }
+
+    // ----------------------------------------
+    // PURCHASES — dono lê, backend escreve
+    // ----------------------------------------
+    match /purchases/{userId}/transactions/{txId} {
+      allow read:  if isAuthenticated() && isOwner(userId);
+      allow write: if false;
+    }
+  }
+}
+
   }
 }

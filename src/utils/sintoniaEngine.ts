@@ -1,7 +1,14 @@
-// Compatibilidade — re-exporta do módulo novo
+// ============================================
+// LUMINA — SINTONIA ENGINE v5.1
+// src/utils/sintoniaEngine.ts
+//
+// CORREÇÃO: adiciona getSintoniaColor e getSintoniaLabel
+// + alias calcularSintoniaIA para compatibilidade
+// ============================================
+
 export {
   calcularSintonia,
-  calcularSintoniaIA,
+  calcularSintonia as calcularSintoniaIA,
 } from '../modules/ai/services/sintoniaCalculator';
 
 export type {
@@ -10,7 +17,8 @@ export type {
 } from '../modules/ai/services/sintoniaCalculator';
 
 export {
-  getSintoniaLabel,
   getSintoniaColor,
-  getSintoniaMilestone as getMilestone,
+  getSintoniaLabel,
+  getSintoniaMilestone,
+  getSintoniaIncreaseMessage,
 } from '../shared/utils/sintonia';

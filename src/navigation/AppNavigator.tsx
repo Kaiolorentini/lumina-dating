@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Alert, Text, View, StyleSheet } from 'react-native';
+import { Alert, Text, View, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -11,6 +12,7 @@ import PushInitializer from '../modules/notifications/components/PushInitializer
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { CoinsProvider } from '../context/CoinsContext';
 import SplashScreen from '../screens/Onboarding/SplashScreen';
+import FragmentsScreen from '../modules/engagement/screens/FragmentsScreen';
 import AppLoadingScreen from '../screens/Onboarding/LoadingScreen';
 import { LoginScreen, RegisterScreen } from '../modules/auth';
 import { ProfileSetupScreen } from '../modules/profile';
@@ -23,7 +25,7 @@ import { NotificationsScreen } from '../modules/notifications';
 import EngagementInitializer from '../components/EngagementInitializer';
 import UpdateChecker from '../components/UpdateChecker';
 import { RootStackParamList, TabParamList } from './types';
-
+import VaultScreen from '../modules/engagement/screens/VaultScreen';
 import MediaScreen from '../modules/media/screens/MediaScreen';
 import ProfileScreen from '../modules/profile/screens/ProfileScreen';
 import RealProfileScreen from '../screens/Profile/RealProfileScreen';
@@ -55,7 +57,14 @@ import AdminCreatorRequestsScreen from '../screens/admin/AdminCreatorRequestsScr
 import AdminWithdrawalsScreen from '../screens/admin/AdminWithdrawalsScreen';
 import AdminUserSearchScreen from '../screens/admin/AdminUserSearchScreen';
 import AdminUserDetailScreen from '../screens/admin/AdminUserDetailScreen';
+import MissionsScreen from '../modules/engagement/screens/MissionsScreen';
+import FaiscaScreen from '../modules/engagement/screens/FaiscaScreen';
+import AchievementsScreen from '../modules/engagement/screens/AchievementsScreen';
+import DestinyCardScreen from '../modules/engagement/screens/DestinyCardScreen';
 import AdminLoadingScreen from '../screens/admin/AdminLoadingScreen';
+import RankingScreen from '../modules/engagement/screens/RankingScreen';
+import PremiumToolsScreen from '../modules/premium/screens/PremiumToolsScreen';
+import PrestigeScreen from '../modules/engagement/screens/PrestigeScreen';
 import {
   AdminProductsModerationScreen,
   AdminSalesScreen,
@@ -66,31 +75,29 @@ import {
 } from '../screens/admin/AdminPlaceholderScreens';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-const Tab = createBottomTabNavigator<TabParamList>();
+const Tab   = createBottomTabNavigator<TabParamList>();
 
 const navigationRef = React.createRef<NavigationContainerRef<RootStackParamList>>();
 
-// ✅ Contexto único para permissões — evita múltiplos listeners Firestore
 const NavigationPermissionsContext = React.createContext({
-  isBlocked: false,
-  isSuperAdmin: false,
+  isBlocked:          false,
+  isSuperAdmin:       false,
   marketplaceEnabled: false,
 });
 
-// ✅ Função estável para ocultar tab — evita re-renders por nova referência
 const hideTabButton = () => null;
 
 // ============================================
 // TAB NAVIGATOR
 // ============================================
 function TabNavigator() {
-  const { user } = useAuth();
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const { user }  = useAuth();
+  const insets    = useSafeAreaInsets();
+  const [unreadMessages,  setUnreadMessages]  = useState(0);
+  const [unreadNotifs,    setUnreadNotifs]    = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
   const unsubscribersRef = useRef<(() => void)[]>([]);
 
-  // ✅ Consome do contexto — sem segundo listener Firestore
   const { isBlocked, isSuperAdmin, marketplaceEnabled } = React.useContext(NavigationPermissionsContext);
   const canAccessAdminPanel = isSuperAdmin;
 
@@ -116,9 +123,9 @@ function TabNavigator() {
           ? conexao.toUserId
           : conexao.fromUserId;
 
-        const chatId = generateChatId(user.uid, otherUserId);
+        const chatId      = generateChatId(user.uid, otherUserId);
         const messagesRef = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
-        const unreadQ = query(
+        const unreadQ     = query(
           messagesRef,
           where('read', '==', false),
           where('senderId', '==', otherUserId)
@@ -143,8 +150,7 @@ function TabNavigator() {
   }, [user?.uid]);
 
   const totalProfileBadge = pendingRequests;
-  // ✅ Variável estável — evita re-render por função inline
-  const showMarketplace = marketplaceEnabled && !isBlocked;
+  const showMarketplace   = marketplaceEnabled && !isBlocked;
 
   return (
     <Tab.Navigator
@@ -152,16 +158,17 @@ function TabNavigator() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: colors.surface,
-          borderTopColor: colors.gold,
-          borderTopWidth: 0.5,
-          height: 60,
-          paddingBottom: 8,
+          borderTopColor:  colors.gold,
+          borderTopWidth:  0.5,
+          height:          60 + insets.bottom,
+          paddingBottom:   insets.bottom > 0 ? insets.bottom : 8,
+          paddingTop:      4,
         },
-        tabBarActiveTintColor: colors.gold,
+        tabBarActiveTintColor:   colors.gold,
         tabBarInactiveTintColor: colors.gray,
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: 'bold',
+          fontSize:     10,
+          fontWeight:   'bold',
           letterSpacing: 0.5,
         },
       }}
@@ -181,12 +188,14 @@ function TabNavigator() {
           ),
         }}
       />
+
       <Tab.Screen name="Media" component={MediaScreen}
         options={{
           tabBarLabel: 'Mídia',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📸</Text>,
         }}
       />
+
       <Tab.Screen name="Sintonias" component={SintoniasScreen}
         options={{
           tabBarLabel: 'Sintonias',
@@ -202,21 +211,24 @@ function TabNavigator() {
           ),
         }}
       />
+
+      {/* ✅ FASE 1 — Cristais de Sintonia substituindo Moedas */}
       <Tab.Screen name="Store" component={StoreScreen}
         options={{
-          tabBarLabel: 'Moedas',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>💰</Text>,
+          tabBarLabel: 'Cristais',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>✨</Text>,
         }}
       />
+
       <Tab.Screen name="Marketplace" component={MarketplaceHomeScreen}
         options={{
-          tabBarLabel: 'Marketplace',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🛍️</Text>,
-          // ✅ Função estável — evita re-renders por nova referência a cada render
-          tabBarButton: showMarketplace ? undefined : hideTabButton,
+          tabBarLabel:   'Marketplace',
+          tabBarIcon:    ({ color }) => <Text style={{ fontSize: 20, color }}>🛍️</Text>,
+          tabBarButton:  showMarketplace ? undefined : hideTabButton,
           tabBarItemStyle: showMarketplace ? {} : { width: 0, height: 0 },
         }}
       />
+
       <Tab.Screen name="Profile" component={ProfileScreen}
         options={{
           tabBarLabel: 'Perfil',
@@ -232,12 +244,12 @@ function TabNavigator() {
           ),
         }}
       />
-      {/* ✅ Admin tab — só renderiza para superadmin, sem espaço vazio */}
+
       {canAccessAdminPanel && (
         <Tab.Screen name="Admin" component={AdminDashboardScreen}
           options={{
             tabBarLabel: 'Admin',
-            tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>👑</Text>,
+            tabBarIcon:  ({ color }) => <Text style={{ fontSize: 20, color }}>👑</Text>,
           }}
         />
       )}
@@ -248,85 +260,73 @@ function TabNavigator() {
 // ============================================
 // STACKS
 // ============================================
-function AuthStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Register" component={RegisterScreen} />
-    </Stack.Navigator>
-  );
-}
-
-function SetupStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-    </Stack.Navigator>
-  );
-}
-
 function MainStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="MainTabs" component={TabNavigator} />
-     
-      <Stack.Screen name="RealProfile" component={RealProfileScreen} />
-      
-      <Stack.Screen name="UserChat" component={UserChatScreen} />
-      <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen}
-        initialParams={{ editMode: true }} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} />
-      <Stack.Screen name="Requests" component={RequestsScreen} />
-      <Stack.Screen name="Blocked" component={BlockedScreen} />
-      <Stack.Screen name="PaymentSetup" component={PaymentSetupScreen} />
-      <Stack.Screen name="MarketplaceHome" component={MarketplaceHomeScreen} />
-      <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
-      <Stack.Screen name="MyPurchases" component={MyPurchasesScreen} />
-      <Stack.Screen name="ContentViewer" component={ContentViewerScreen} />
-      <Stack.Screen name="MyProducts" component={MyProductsScreen} />
-      <Stack.Screen name="CreateProduct" component={CreateProductScreen} />
-      <Stack.Screen name="EditProduct" component={EditProductScreen} />
-      <Stack.Screen name="MyFavorites" component={MyFavoritesScreen} />
-      <Stack.Screen name="MyEarnings" component={MyEarningsScreen} />
-      <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
-      <Stack.Screen name="CreatorRequest" component={CreatorRequestScreen} />
-      <Stack.Screen name="Checkout" component={CheckoutScreen} />
-      <Stack.Screen name="AdminPanel" component={AdminDashboardScreen} />
-      <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
-      <Stack.Screen name="AdminCreatorRequests" component={AdminCreatorRequestsScreen} />
+      <Stack.Screen name="MainTabs"              component={TabNavigator} />
+      <Stack.Screen name="RealProfile"           component={RealProfileScreen} />
+      <Stack.Screen name="UserChat"              component={UserChatScreen} />
+      <Stack.Screen name="ProfileSetup"          component={ProfileSetupScreen} initialParams={{ editMode: true }} />
+      <Stack.Screen name="Notifications"         component={NotificationsScreen} />
+      <Stack.Screen name="Requests"              component={RequestsScreen} />
+      <Stack.Screen name="Blocked"               component={BlockedScreen} />
+      <Stack.Screen name="PaymentSetup"          component={PaymentSetupScreen} />
+      <Stack.Screen name="MarketplaceHome"       component={MarketplaceHomeScreen} />
+      <Stack.Screen name="ProductDetail"         component={ProductDetailScreen} />
+      <Stack.Screen name="MyPurchases"           component={MyPurchasesScreen} />
+      <Stack.Screen name="ContentViewer"         component={ContentViewerScreen} />
+      <Stack.Screen name="MyProducts"            component={MyProductsScreen} />
+      <Stack.Screen name="CreateProduct"         component={CreateProductScreen} />
+      <Stack.Screen name="EditProduct"           component={EditProductScreen} />
+      <Stack.Screen name="MyFavorites"           component={MyFavoritesScreen} />
+      <Stack.Screen name="MyEarnings"            component={MyEarningsScreen} />
+      <Stack.Screen name="Withdrawal"            component={WithdrawalScreen} />
+      <Stack.Screen name="CreatorRequest"        component={CreatorRequestScreen} />
+      <Stack.Screen name="Checkout"              component={CheckoutScreen} />
+      <Stack.Screen name="AdminPanel"            component={AdminDashboardScreen} />
+      <Stack.Screen name="AdminDashboard"        component={AdminDashboardScreen} />
+      <Stack.Screen name="AdminCreatorRequests"  component={AdminCreatorRequestsScreen} />
       <Stack.Screen name="AdminProductsModeration" component={AdminProductsModerationScreen} />
-      <Stack.Screen name="AdminSales" component={AdminSalesScreen} />
-      <Stack.Screen name="AdminRefundRequests" component={AdminRefundRequestsScreen} />
-      <Stack.Screen name="AdminWithdrawals" component={AdminWithdrawalsScreen} />
-      <Stack.Screen name="AdminFraudFlags" component={AdminFraudFlagsScreen} />
-      <Stack.Screen name="AdminUserSearch" component={AdminUserSearchScreen} />
-      <Stack.Screen name="AdminUserDetail" component={AdminUserDetailScreen} />
-      <Stack.Screen name="AdminCoupons" component={AdminCouponsScreen} />
-      <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
+      <Stack.Screen name="AdminSales"            component={AdminSalesScreen} />
+      <Stack.Screen name="AdminRefundRequests"   component={AdminRefundRequestsScreen} />
+      <Stack.Screen name="AdminWithdrawals"      component={AdminWithdrawalsScreen} />
+      <Stack.Screen name="AdminFraudFlags"       component={AdminFraudFlagsScreen} />
+      <Stack.Screen name="AdminUserSearch"       component={AdminUserSearchScreen} />
+      <Stack.Screen name="AdminUserDetail"       component={AdminUserDetailScreen} />
+      <Stack.Screen name="AdminCoupons"          component={AdminCouponsScreen} />
+      <Stack.Screen name="AdminReports"          component={AdminReportsScreen} />
+      <Stack.Screen name="DestinyCard" component={DestinyCardScreen} />
+      <Stack.Screen name="Missions" component={MissionsScreen} />
+      <Stack.Screen name="Faisca" component={FaiscaScreen} />
+      <Stack.Screen name="Fragments" component={FragmentsScreen} />
+      <Stack.Screen name="Vault" component={VaultScreen} />
+      <Stack.Screen name="Achievements" component={AchievementsScreen} />
+      <Stack.Screen name="Ranking" component={RankingScreen} />
+      <Stack.Screen name="Prestige" component={PrestigeScreen} />
+      <Stack.Screen name="PremiumTools" component={PremiumToolsScreen} />
     </Stack.Navigator>
   );
 }
 
 // ============================================
-// APP CONTENT — controle de estado de auth
+// APP CONTENT
 // ============================================
 interface InAppNotifState {
-  title: string;
-  message: string;
-  type: string;
+  title:    string;
+  message:  string;
+  type:     string;
   onPress?: () => void;
 }
 
-// Persiste entre navegações — AdminLoadingScreen aparece uma vez por sessão
 let _adminBootDone = false;
 
 function AppContent() {
-  const { user, loading: authLoading, hasProfile } = useAuth(); // ✅ hasProfile adicionado
+  const { user, loading: authLoading, hasProfile } = useAuth();
   const { isSuperAdmin, isBlocked, loading: permLoading } = useUserPermissions(user?.uid);
-  const { marketplaceEnabled } = useAppSettings();
-  const canAccessAdminPanel = isSuperAdmin;
+  const { marketplaceEnabled }  = useAppSettings();
+  const canAccessAdminPanel     = isSuperAdmin;
   const [adminBootReady, setAdminBootReady] = useState(_adminBootDone);
-  const [inAppNotif, setInAppNotif] = useState<InAppNotifState | null>(null);
+  const [inAppNotif, setInAppNotif]         = useState<InAppNotifState | null>(null);
 
   usePushNotifications();
 
@@ -337,35 +337,23 @@ function AppContent() {
       case 'message':
         if (data.senderId && data.senderName && data.senderPhoto) {
           navigationRef.current.navigate('UserChat', {
-            userId: data.senderId,
-            userName: data.senderName,
-            userPhoto: data.senderPhoto,
+            userId: data.senderId, userName: data.senderName, userPhoto: data.senderPhoto,
           });
         }
         break;
-      case 'request':
-        navigationRef.current.navigate('Requests');
-        break;
+      case 'request':          navigationRef.current.navigate('Requests');     break;
       case 'sale_completed':
       case 'withdrawal_paid':
-      case 'withdrawal_rejected':
-        navigationRef.current.navigate('MyEarnings');
-        break;
+      case 'withdrawal_rejected': navigationRef.current.navigate('MyEarnings'); break;
       case 'purchase_confirmed':
-      case 'refund_processed':
-        navigationRef.current.navigate('MyPurchases');
-        break;
+      case 'refund_processed':    navigationRef.current.navigate('MyPurchases'); break;
       case 'creator_approved':
-      case 'product_approved':
-        navigationRef.current.navigate('MyProducts');
-        break;
+      case 'product_approved':    navigationRef.current.navigate('MyProducts');  break;
       case 'screenshot_warning':
         Alert.alert('⚠️ Aviso', data?.message ?? 'Ação proibida detectada em conteúdo protegido.');
         break;
       case 'screenshot_warning_ban':
         Alert.alert('🚫 Conta suspensa', data?.message ?? 'Sua conta foi suspensa por violação de política.');
-        break;
-      default:
         break;
     }
   }
@@ -383,124 +371,55 @@ function AppContent() {
       const body = notification.request.content.body ?? '';
 
       const typeMap: Record<string, { title: string; onPress: () => void }> = {
-        message: {
-          title: notification.request.content.title ?? 'Nova mensagem',
-          onPress: () => {
-            if (data.senderId && data.senderName && data.senderPhoto) {
-              navigationRef.current?.navigate('UserChat', {
-                userId: data.senderId,
-                userName: data.senderName,
-                userPhoto: data.senderPhoto,
-              });
-            }
-          },
-        },
-        request: {
-          title: 'Nova solicitação',
-          onPress: () => navigationRef.current?.navigate('Requests'),
-        },
-        sale_completed: {
-          title: '💰 Venda realizada!',
-          onPress: () => navigationRef.current?.navigate('MyEarnings'),
-        },
-        purchase_confirmed: {
-          title: '📦 Compra confirmada!',
-          onPress: () => navigationRef.current?.navigate('MyPurchases'),
-        },
-        creator_approved: {
-          title: '🎨 Você é um Criador!',
-          onPress: () => navigationRef.current?.navigate('MyProducts'),
-        },
-        product_approved: {
-          title: '✅ Produto aprovado!',
-          onPress: () => navigationRef.current?.navigate('MyProducts'),
-        },
-        refund_processed: {
-          title: '↩️ Reembolso processado',
-          onPress: () => navigationRef.current?.navigate('MyPurchases'),
-        },
-        withdrawal_paid: {
-          title: '💸 Saque pago!',
-          onPress: () => navigationRef.current?.navigate('MyEarnings'),
-        },
-        withdrawal_rejected: {
-          title: '❌ Saque rejeitado',
-          onPress: () => navigationRef.current?.navigate('MyEarnings'),
-        },
+        message:              { title: notification.request.content.title ?? 'Nova mensagem', onPress: () => { if (data.senderId) navigationRef.current?.navigate('UserChat', { userId: data.senderId, userName: data.senderName, userPhoto: data.senderPhoto }); } },
+        request:              { title: 'Nova solicitação',         onPress: () => navigationRef.current?.navigate('Requests') },
+        sale_completed:       { title: '💰 Venda realizada!',      onPress: () => navigationRef.current?.navigate('MyEarnings') },
+        purchase_confirmed:   { title: '📦 Compra confirmada!',    onPress: () => navigationRef.current?.navigate('MyPurchases') },
+        creator_approved:     { title: '🎨 Você é um Criador!',    onPress: () => navigationRef.current?.navigate('MyProducts') },
+        product_approved:     { title: '✅ Produto aprovado!',     onPress: () => navigationRef.current?.navigate('MyProducts') },
+        refund_processed:     { title: '↩️ Reembolso processado',  onPress: () => navigationRef.current?.navigate('MyPurchases') },
+        withdrawal_paid:      { title: '💸 Saque pago!',           onPress: () => navigationRef.current?.navigate('MyEarnings') },
+        withdrawal_rejected:  { title: '❌ Saque rejeitado',       onPress: () => navigationRef.current?.navigate('MyEarnings') },
       };
 
       const config = typeMap[type];
-      if (config) {
-        setInAppNotif({ title: config.title, message: body, type, onPress: config.onPress });
-      }
+      if (config) setInAppNotif({ title: config.title, message: body, type, onPress: config.onPress });
     });
 
-    return () => {
-      tapSub.remove();
-      receiveSub.remove();
-    };
+    return () => { tapSub.remove(); receiveSub.remove(); };
   }, [user]);
 
-  // ✅ Log ANTES dos returns
-  console.log('[APP STATE]', {
-    authLoading,
-    permLoading,
-    user: !!user,
-    hasProfile,
-    canAccessAdminPanel,
-    adminBootReady,
-  });
+  console.log('[APP STATE]', { authLoading, permLoading, user: !!user, hasProfile, canAccessAdminPanel, adminBootReady });
 
-  // ✅ Estado 1 — Auth carregando
-  if (authLoading) {
-    return (
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Splash" component={AppLoadingScreen} />
-      </Stack.Navigator>
-    );
-  }
+  if (authLoading) return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Splash" component={AppLoadingScreen} />
+    </Stack.Navigator>
+  );
 
-  // ✅ Estado 2 — Não autenticado → Login/Register
-  if (!user) {
-    return (
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Register" component={RegisterScreen} />
-      </Stack.Navigator>
-    );
-  }
+  if (!user) return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Login"    component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
+    </Stack.Navigator>
+  );
 
-  // ✅ Estado 3 — Sem perfil → ProfileSetup
-  if (!hasProfile) {
-    return (
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-      </Stack.Navigator>
-    );
-  }
+  if (!hasProfile) return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+    </Stack.Navigator>
+  );
 
-  // ✅ Estado 4 — Permissões carregando
-  if (permLoading) {
-    return (
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Splash" component={AppLoadingScreen} />
-      </Stack.Navigator>
-    );
-  }
+  if (permLoading) return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Splash" component={AppLoadingScreen} />
+    </Stack.Navigator>
+  );
 
-  // ✅ Estado 5 — Admin boot screen
-  if (canAccessAdminPanel && !adminBootReady) {
-    return (
-      <AdminLoadingScreen
-        onFinish={() => {
-          _adminBootDone = true;
-          setAdminBootReady(true);
-        }}
-      />
-    );
-  }
+  if (canAccessAdminPanel && !adminBootReady) return (
+    <AdminLoadingScreen onFinish={() => { _adminBootDone = true; setAdminBootReady(true); }} />
+  );
 
-  // ✅ Estado 6 — App principal
   return (
     <NavigationPermissionsContext.Provider value={{
       isBlocked,
@@ -541,20 +460,20 @@ export default function AppNavigator() {
 
 const styles = StyleSheet.create({
   badge: {
-    position: 'absolute',
-    top: -4,
-    right: -8,
+    position:        'absolute',
+    top:             -4,
+    right:           -8,
     backgroundColor: colors.gold,
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius:    8,
+    minWidth:        16,
+    height:          16,
+    alignItems:      'center',
+    justifyContent:  'center',
     paddingHorizontal: 2,
   },
   badgeText: {
-    color: colors.background,
-    fontSize: 9,
+    color:      colors.background,
+    fontSize:   9,
     fontWeight: 'bold',
   },
 });
