@@ -94,3 +94,4 @@ export { activateFertilizer, getFertilizerStatus } from './premium/fertilizerSer
 export { activateTurbo, getTurboStatus }            from './premium/turboService';
 export { getWeeklyChallenge, progressWeeklyChallenge, resetWeeklyChallenges } from './premium/weeklyChallengeService';
 export { registerPremiumAttempt, getActiveOffer }   from './premium/offerEngine';
+export { processGameEvent } from './gamification/GamificationEngine';
