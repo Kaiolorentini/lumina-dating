@@ -1,3 +1,13 @@
+// ============================================
+// LUMINA — REAL PROFILE SCREEN v5.2
+// src/screens/RealProfile/RealProfileScreen.tsx
+//
+// v5.2: botão ❤️ integrado ao ProfileLikeOrchestrator
+// Alterações: imports Firestore/Functions, estados liked/liking,
+// checkAlreadyLiked(), handleLike(), likeButton atualizado,
+// likeButtonActive no StyleSheet.
+// ============================================
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -28,8 +38,13 @@ import {
 import { estaBloqueado, bloquearUsuario } from '../../services/blockService';
 import { UserProfile } from '../../types';
 import { registrarVisita } from '../../services/visitsService';
+// v5.2 — adicionado
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable }           from 'firebase/functions';
+import { db }                                    from '../../services/firebase';
 
 const { width, height } = Dimensions.get('window');
+const functions         = getFunctions(); // v5.2
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -53,6 +68,9 @@ export default function RealProfileScreen() {
   const [requestSent, setRequestSent] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [sending, setSending] = useState(false);
+  // v5.2 — adicionado
+  const [liked,  setLiked]  = useState(false);
+  const [liking, setLiking] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -83,6 +101,10 @@ export default function RealProfileScreen() {
         setConnected(isConnected);
         setRequestSent(!!request);
         setBlocked(isBlocked);
+
+        // v5.2 — verifica se já curtiu hoje
+        const alreadyLiked = await checkAlreadyLiked(user.uid, targetUserId);
+        setLiked(alreadyLiked);
 
         // Registra visita
         await registrarVisita(user.uid, targetUserId);
@@ -151,6 +173,46 @@ export default function RealProfileScreen() {
           },
         ]
       );
+    }
+  }
+
+  // v5.2 — verifica curtida do dia
+  async function checkAlreadyLiked(uid: string, targetUid: string): Promise<boolean> {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const likeId   = `${uid}_${targetUid}_${todayStr}`;
+    const likeDoc  = await getDoc(doc(db, 'likes', likeId));
+    return likeDoc.exists();
+  }
+
+  // v5.2 — curtir perfil
+  async function handleLike() {
+    if (!user || liked || liking) return;
+    setLiking(true);
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const likeId   = `${user.uid}_${targetUserId}_${todayStr}`;
+
+      // Salva curtida no Firestore
+      await setDoc(doc(db, 'likes', likeId), {
+        likerUid:  user.uid,
+        targetUid: targetUserId,
+        date:      todayStr,
+        createdAt: serverTimestamp(),
+      });
+
+      setLiked(true);
+
+      // Dispara gamificação — fire-and-forget
+      const processLike = httpsCallable(functions, 'onProfileLike');
+      processLike({ likerUid: user.uid, targetUid: targetUserId }).catch(err => {
+        console.warn('[RealProfileScreen] onProfileLike falhou:', err);
+      });
+
+    } catch (error) {
+      Alert.alert('Erro', 'Não foi possível registrar a curtida.');
+      setLiked(false);
+    } finally {
+      setLiking(false);
     }
   }
 
@@ -328,8 +390,17 @@ export default function RealProfileScreen() {
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={styles.likeButton}>
-              <Text style={styles.likeButtonText}>❤️</Text>
+            {/* v5.2 — botão de curtida integrado ao ProfileLikeOrchestrator */}
+            <TouchableOpacity
+              style={[styles.likeButton, liked && styles.likeButtonActive]}
+              onPress={handleLike}
+              disabled={liked || liking}
+              activeOpacity={0.8}
+            >
+              {liking
+                ? <ActivityIndicator color={liked ? '#fff' : colors.gray} size="small" />
+                : <Text style={styles.likeButtonText}>{liked ? '❤️' : '🤍'}</Text>
+              }
             </TouchableOpacity>
           </View>
 
@@ -540,6 +611,11 @@ const styles = StyleSheet.create({
     borderColor: colors.grayDark,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // v5.2 — adicionado
+  likeButtonActive: {
+    backgroundColor: '#E91E63',
+    borderColor: '#E91E63',
   },
   likeButtonText: { fontSize: 24 },
 });

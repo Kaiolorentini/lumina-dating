@@ -1,10 +1,9 @@
 // ============================================
-// LUMINA — BASE EVENT ORCHESTRATOR v1.0
+// LUMINA — BASE EVENT ORCHESTRATOR v1.1
 // functions/src/gamification/orchestrators/BaseEventOrchestrator.ts
 //
-// BLOCO 5 — Lógica comum a todos os Orchestrators.
-// Logging, ErrorBoundary, IntegrationService.
-// Subclasses implementam apenas lógica específica.
+// v1.1: hook afterValidate() para registro pós-validação
+// (ex: AntiFarmService.register após validação bem-sucedida)
 // ============================================
 
 import { IEventOrchestrator, OrchestratorInput } from '../IEventOrchestrator';
@@ -20,7 +19,12 @@ export abstract class BaseEventOrchestrator implements IEventOrchestrator {
   abstract validate(input: OrchestratorInput): Promise<void>;
   abstract buildEvent(input: OrchestratorInput): GameEventInput;
 
-  // Executa o fluxo completo — igual para todos os Orchestrators
+  // Hook: chamado após validação bem-sucedida (ex: registrar anti-farm)
+  protected async afterValidate(_input: OrchestratorInput): Promise<void> {}
+
+  // Hook: gatilhos emocionais opcionais
+  protected async runEmotionalTriggers(_input: OrchestratorInput): Promise<void> {}
+
   async execute(input: OrchestratorInput): Promise<void> {
     const errorCtx = {
       uid:           input.uid,
@@ -41,28 +45,28 @@ export abstract class BaseEventOrchestrator implements IEventOrchestrator {
         warning:    boundary.code,
         meta:       { correlationId: input.correlationId },
       });
-      if (boundary.fatal) return;
-      return; // não-fatal: encerra sem gamificação
+      return;
     }
 
-    // ETAPA 2: Emotional Triggers (override em subclasse se necessário)
+    // ETAPA 2: Pós-validação (registro anti-farm, etc.)
+    try {
+      await this.afterValidate(input);
+    } catch (error) {
+      handleError(error, errorCtx);
+      // Falha no registro não cancela o fluxo
+    }
+
+    // ETAPA 3: Gatilhos emocionais (onde aplicável)
     try {
       await this.runEmotionalTriggers(input);
     } catch (error) {
       handleError(error, errorCtx);
-      // Triggers não param o fluxo
     }
 
-    // ETAPA 3: Gamification — fire-and-forget
+    // ETAPA 4: Gamification — fire-and-forget
     this.dispatchGamification(input);
   }
 
-  // Override em subclasses que têm gatilhos emocionais
-  protected async runEmotionalTriggers(_input: OrchestratorInput): Promise<void> {
-    // Padrão: sem gatilhos
-  }
-
-  // Despacha para o IntegrationService correto
   private dispatchGamification(input: OrchestratorInput): void {
     switch (this.eventType) {
       case 'PROFILE_LIKE':
@@ -87,7 +91,7 @@ export abstract class BaseEventOrchestrator implements IEventOrchestrator {
       case 'MISSION_COMPLETED':
         GamificationIntegrationService.handleMissionCompleted({
           uid:             input.uid,
-          missionId:       (input.meta?.missionId as string) ?? '',
+          missionId:       (input.meta?.missionId as string)       ?? '',
           missionCategory: (input.meta?.missionCategory as string) ?? '',
         });
         break;
