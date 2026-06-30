@@ -93,9 +93,8 @@ export { grantPrestigePoints, getPrestigeStatus, checkPrestigeTimeMarcos } from 
 export { activateFertilizer, getFertilizerStatus } from './premium/fertilizerService';
 export { activateTurbo, getTurboStatus }            from './premium/turboService';
 export { getWeeklyChallenge, progressWeeklyChallenge, resetWeeklyChallenges } from './premium/weeklyChallengeService';
-export { registerPremiumAttempt, getActiveOffer }   from './premium/offerEngine';
-export { processGameEvent } from './gamification/GamificationEngine';
-export { onProfileLike } from './engagement/profileLike';
+                    
 export { onMessageReply } from './engagement/messageReply';
 export { onMissionCompleted } from './engagement/missionCompleted';
-export { onCreateMatch } from './engagement/matchCreated';
+export { onCreateMatch } from './engagement/matchCreated';            
+export { getDashboardSnapshot } from './gamification/dashboard/getDashboardSnapshot';                          
