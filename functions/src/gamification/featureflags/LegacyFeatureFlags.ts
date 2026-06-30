@@ -1,25 +1,27 @@
 // ============================================
-// LUMINA — LEGACY FEATURE FLAGS v1.0
+// LUMINA — LEGACY FEATURE FLAGS v1.1
 // functions/src/gamification/featureflags/LegacyFeatureFlags.ts
 //
-// SPRINT 0 — Flags por sistema para controlar
+// SPRINT 0/1A — Flags por sistema para controlar
 // transição Legacy → Engine sem deploy (rollback em segundos).
-// Lidas do Firestore para permitir toggle em runtime.
+// v1.1: adiciona TREE e PRESTIGE como sistemas próprios.
 // ============================================
 
 import * as admin from 'firebase-admin';
 
 const db = admin.firestore();
 
-export type LegacySystem = 'XP' | 'RANKING' | 'ACHIEVEMENT' | 'VAULT';
+export type LegacySystem = 'XP' | 'RANKING' | 'ACHIEVEMENT' | 'VAULT' | 'TREE' | 'PRESTIGE';
 
 export interface LegacyFlagsState {
-  LegacyXP:          boolean; // true = legado ainda produz efeito real
+  LegacyXP:          boolean;
   LegacyRanking:      boolean;
   LegacyAchievement:  boolean;
   LegacyVault:        boolean;
-  ShadowModeEnabled:  boolean; // true = Engine roda em paralelo só comparando
-  CanaryPercentage:   number;  // 0-100 — % de usuários no Engine ativo
+  LegacyTree:         boolean;
+  LegacyPrestige:     boolean;
+  ShadowModeEnabled:  boolean;
+  CanaryPercentage:   number;
 }
 
 const DEFAULTS: LegacyFlagsState = {
@@ -27,12 +29,14 @@ const DEFAULTS: LegacyFlagsState = {
   LegacyRanking:      true,
   LegacyAchievement:  true,
   LegacyVault:        true,
+  LegacyTree:         true,
+  LegacyPrestige:     true,
   ShadowModeEnabled:  false,
   CanaryPercentage:   0,
 };
 
 let cache: { state: LegacyFlagsState; expiresAt: number } | null = null;
-const CACHE_TTL_MS = 30_000; // 30s — flags não precisam ser real-time
+const CACHE_TTL_MS = 30_000;
 
 export const LegacyFeatureFlags = {
   async getState(): Promise<LegacyFlagsState> {
@@ -49,13 +53,11 @@ export const LegacyFeatureFlags = {
     return state;
   },
 
-  // Verifica se um usuário específico está no grupo Canary (Engine ativo)
   async isUserInCanary(uid: string): Promise<boolean> {
     const state = await this.getState();
     if (state.CanaryPercentage >= 100) return true;
     if (state.CanaryPercentage <= 0)   return false;
 
-    // Hash determinístico do uid → 0-99
     let hash = 0;
     for (let i = 0; i < uid.length; i++) {
       hash = ((hash << 5) - hash) + uid.charCodeAt(i);
@@ -65,9 +67,8 @@ export const LegacyFeatureFlags = {
     return bucket < state.CanaryPercentage;
   },
 
-  // Define flags — chamado via painel admin
   async setState(partial: Partial<LegacyFlagsState>): Promise<void> {
     await db.collection('systemConfig').doc('legacyFlags').set(partial, { merge: true });
-    cache = null; // invalida cache imediatamente
+    cache = null;
   },
 };

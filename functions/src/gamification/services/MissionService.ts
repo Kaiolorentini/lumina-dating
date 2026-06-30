@@ -1,90 +1,168 @@
 // ============================================
-// LUMINA — MISSION SERVICE v1.0
+// LUMINA — MISSION SERVICE v2.0
 // functions/src/gamification/services/MissionService.ts
 //
-// Responsabilidade: concluir missão e entregar fragmentos.
-// Fragmentos entregues ANTES de chamar o Engine.
-// Emite MISSION_COMPLETED via GamificationIntegrationService.
+// SPRINT 1B — Único ponto de entrada para conclusão de missões.
+// Resolve o conflito identificado na auditoria:
+//   progressMission (legado) registra progresso + entrega recompensa.
+//   onMissionCompleted (novo) só entrega recompensa.
+//
+// Esta versão unifica os dois fluxos em um único método:
+//   completeMission() = registra progresso + entrega fragmentos + dispara Engine
+//
+// progressMission (legado) passa a chamar este método internamente,
+// SEM alterar seu comportamento externo (mesma resposta ao cliente).
 // ============================================
 
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-import { ValidationError } from '../ErrorBoundary';
+import { ValidationError }                from '../ErrorBoundary';
+import { GamificationIntegrationService } from '../GamificationIntegrationService';
 
 const db = admin.firestore();
 
-export interface MissionRewardResult {
-  missionId:       string;
-  missionCategory: string;
-  fragmentsEarned: number;
+export interface CompleteMissionInput {
+  uid:            string;
+  missionIdParam: string;
+  targetUid?:     string;
+  messageLength?: number;
 }
+
+export interface CompleteMissionResult {
+  alreadyCompleted: boolean;
+  duplicate?:       boolean;
+  fragments:        number;
+  crystals:         number;
+  progress:         number;
+  completed:        boolean;
+  missionCategory?: string;
+}
+
+const DAILY_FRAGMENT_LIMIT = 300;
+const DAILY_CRYSTAL_LIMIT  = 5;
 
 export const MissionService = {
 
-  // Marca missão como resgatada e entrega fragmentos — dentro de transaction
-  async claimReward(uid: string, missionId: string): Promise<MissionRewardResult> {
-    const todayStr   = new Date().toISOString().slice(0, 10);
-    const missionRef = db.collection('dailyMissions').doc(`${uid}_${todayStr}`);
-    const walletRef  = db.collection('wallets').doc(uid);
-    const ledgerRef  = db.collection('economyLedger');
+  // Único ponto de entrada — registra progresso E entrega recompensa.
+  // Ao concluir, dispara o Engine via GamificationIntegrationService.
+  async completeMission(input: CompleteMissionInput): Promise<CompleteMissionResult> {
+    const { uid, missionIdParam, targetUid, messageLength } = input;
+    const dateStr   = new Date().toISOString().slice(0, 10);
+    const missRef   = db.collection('dailyMissions').doc(`${uid}_${dateStr}`);
+    const walletRef = db.collection('wallets').doc(uid);
 
-    return db.runTransaction(async (t) => {
-      const [missionDoc, walletDoc] = await Promise.all([
-        t.get(missionRef),
-        t.get(walletRef),
-      ]);
+    const result = await db.runTransaction(async (t) => {
+      const [missDoc] = await Promise.all([t.get(missRef), t.get(walletRef)]);
 
-      if (!missionDoc.exists) {
+      if (!missDoc.exists) {
+        throw new ValidationError('MISSIONS_NOT_GENERATED', 'Missões do dia não geradas', true);
+      }
+
+      const data       = missDoc.data()!;
+      const missions   = [...(data.missions ?? [])];
+      const special    = data.special;
+
+      let missionIdx     = missions.findIndex((m: { missionId: string }) => m.missionId === missionIdParam);
+      let isSpecial      = false;
+      let targetMission: Record<string, unknown> | null = null;
+
+      if (missionIdx >= 0) {
+        targetMission = missions[missionIdx];
+      } else if (special?.missionId === missionIdParam) {
+        isSpecial = true;
+        targetMission = special;
+      } else {
         throw new ValidationError('MISSION_NOT_FOUND', 'Missão não encontrada', false);
       }
 
-      const data     = missionDoc.data()!;
-      const missions = data.missions as Array<{
-        id:        string;
-        category:  string;
-        completed: boolean;
-        claimed:   boolean;
-        fragments: number;
-      }> ?? [];
+      if (targetMission!.completed) {
+        return { alreadyCompleted: true, fragments: 0, crystals: 0, progress: targetMission!.progress as number, completed: true };
+      }
 
-      const idx     = missions.findIndex(m => m.id === missionId);
-      const mission = missions[idx];
+      // Anti-spam mensagem
+      if (targetMission!.type === 'send_message' && (!messageLength || messageLength < 10)) {
+        throw new ValidationError('MESSAGE_TOO_SHORT', 'Mensagem deve ter pelo menos 10 caracteres', false);
+      }
 
-      if (!mission) throw new ValidationError('MISSION_NOT_ASSIGNED', 'Missão não encontrada', false);
-      if (!mission.completed) throw new ValidationError('MISSION_NOT_COMPLETED', 'Missão não completada', false);
-      if (mission.claimed)    throw new ValidationError('MISSION_ALREADY_CLAIMED', 'Já resgatado', false);
+      // UIDs únicos para visitas/curtidas
+      if (['visit_profiles', 'like_profiles'].includes(targetMission!.type as string)) {
+        if (!targetUid) throw new ValidationError('MISSING_TARGET_UID', 'targetUid obrigatório', false);
+        if (targetUid === uid) throw new ValidationError('SELF_ACTION', 'Não pode contar consigo mesmo', false);
 
-      const fragments    = mission.fragments ?? 0;
-      const prevFrags    = walletDoc.data()?.fragments ?? 0;
+        const visitedKey = `visited_${targetMission!.type}`;
+        const visited    = (data[visitedKey] as string[]) ?? [];
+        if (visited.includes(targetUid)) {
+          return { alreadyCompleted: false, duplicate: true, fragments: 0, crystals: 0, progress: targetMission!.progress as number, completed: false };
+        }
+        t.set(missRef, { [visitedKey]: FieldValue.arrayUnion(targetUid) }, { merge: true });
+      }
 
-      // Marca como resgatada
-      const updatedMissions = [...missions];
-      updatedMissions[idx]  = { ...mission, claimed: true };
-      t.set(missionRef, { missions: updatedMissions }, { merge: true });
+      const newProgress   = Math.min((targetMission!.progress as number) + 1, targetMission!.target as number);
+      const justCompleted = newProgress >= (targetMission!.target as number);
+      const updatedMission = { ...targetMission, progress: newProgress, completed: justCompleted, claimed: justCompleted };
 
-      // Entrega fragmentos na wallet
-      t.set(walletRef, {
-        fragments: FieldValue.increment(fragments),
-        updatedAt: FieldValue.serverTimestamp(),
+      if (isSpecial) {
+        t.set(missRef, { special: updatedMission }, { merge: true });
+      } else {
+        missions[missionIdx] = updatedMission;
+        t.set(missRef, { missions }, { merge: true });
+      }
+
+      if (!justCompleted) {
+        return { alreadyCompleted: false, fragments: 0, crystals: 0, progress: newProgress, completed: false };
+      }
+
+      // ── Concluiu — entrega recompensa ──
+      const fragmentsToAdd = !isSpecial ? ((targetMission!.fragments as number) ?? 0) : 0;
+      const crystalsToAdd  = isSpecial  ? ((targetMission!.crystals  as number) ?? 0) : 0;
+
+      const fragmentsEarnedToday = (data.fragmentsEarnedToday as number) ?? 0;
+      const crystalsEarnedToday  = (data.crystalsEarnedToday  as number) ?? 0;
+
+      if (fragmentsToAdd > 0 && fragmentsEarnedToday >= DAILY_FRAGMENT_LIMIT) {
+        throw new ValidationError('FRAGMENT_DAILY_LIMIT', 'Limite diário de fragmentos atingido', false);
+      }
+      if (crystalsToAdd > 0 && crystalsEarnedToday >= DAILY_CRYSTAL_LIMIT) {
+        throw new ValidationError('CRYSTAL_DAILY_LIMIT', 'Limite diário de cristais via missões atingido', false);
+      }
+
+      if (fragmentsToAdd > 0) {
+        t.set(walletRef, { fragments: FieldValue.increment(fragmentsToAdd), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+      if (crystalsToAdd > 0) {
+        t.set(walletRef, { coinsGratuitos: FieldValue.increment(crystalsToAdd), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+
+      t.set(missRef, {
+        fragmentsEarnedToday: FieldValue.increment(fragmentsToAdd),
+        crystalsEarnedToday:  FieldValue.increment(crystalsToAdd),
+        updatedAt:            FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      // Ledger imutável
-      t.set(ledgerRef.doc(), {
-        uid,
-        tipo:        'MISSION_REWARD',
-        missionId,
-        fragmentos:  fragments,
-        saldoAntes:  prevFrags,
-        saldoDepois: prevFrags + fragments,
-        timestamp:   FieldValue.serverTimestamp(),
-        imutavel:    true,
+      t.set(db.collection('economyLedger').doc(), {
+        uid, origem: 'dailyMissions', missionId: missionIdParam,
+        tipo: isSpecial ? 'MISSAO_ESPECIAL' : 'MISSAO_COMUM',
+        fragmentos: fragmentsToAdd, cristais: crystalsToAdd,
+        timestamp: FieldValue.serverTimestamp(), imutavel: true,
       });
 
       return {
-        missionId,
-        missionCategory: mission.category ?? 'MISSION',
-        fragmentsEarned: fragments,
+        alreadyCompleted: false, fragments: fragmentsToAdd, crystals: crystalsToAdd,
+        progress: newProgress, completed: true,
+        missionCategory: (targetMission!.type as string) ?? 'MISSION',
       };
     });
+
+    // Dispara o Engine SOMENTE quando a missão é concluída agora
+    // (não dispara em alreadyCompleted ou duplicate — idempotência preservada)
+    if (result.completed && !result.alreadyCompleted) {
+      GamificationIntegrationService.handleMissionCompleted({
+        uid,
+        missionId:       missionIdParam,
+        missionCategory: result.missionCategory ?? 'MISSION',
+      });
+    }
+
+    return result;
   },
 };

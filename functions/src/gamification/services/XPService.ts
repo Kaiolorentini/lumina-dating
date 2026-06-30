@@ -1,9 +1,10 @@
 // ============================================
-// LUMINA — XP SERVICE v1.0
+// LUMINA — XP SERVICE v3.0
 // functions/src/gamification/services/XPService.ts
 //
-// RESPONSABILIDADE ÚNICA: lógica de negócio de XP.
-// Não acessa Firestore diretamente — usa XPRepository.
+// SPRINT 1C — v3.0: computeOnly() renomeado para simulate().
+// simulate() deixa explícito: ZERO persistência, nunca.
+// process() = calcula + persiste (modo ENGINE).
 // ============================================
 
 import * as admin from 'firebase-admin';
@@ -15,7 +16,6 @@ import { calcTreeStage }                   from '../../config/treeTable';
 
 const db = admin.firestore();
 
-// Mapeamento: GameEventType → XP action
 export const EVENT_TO_XP_ACTION: Record<string, string> = {
   PROFILE_VISIT:     'VISIT_PROFILE',
   PROFILE_LIKE:      'GIVE_LIKE',
@@ -25,12 +25,14 @@ export const EVENT_TO_XP_ACTION: Record<string, string> = {
 };
 
 export interface XPServiceResult {
-  skipped:    boolean;
-  reason?:    string;
-  xpGained?:  number;
-  treeGain?:  number;
-  leveledUp?: boolean;
-  stageUp?:   boolean;
+  skipped:     boolean;
+  reason?:     string;
+  xpGained?:   number;
+  treeGain?:   number;
+  newTotalXP?: number;
+  newLevel?:   number;
+  leveledUp?:  boolean;
+  stageUp?:    boolean;
 }
 
 export const XPService = {
@@ -38,6 +40,37 @@ export const XPService = {
     return EVENT_TO_XP_ACTION[eventType];
   },
 
+  // SPRINT 1C: renomeado de computeOnly() para simulate().
+  // ZERO persistência — usado apenas em modo SHADOW para comparação.
+  async simulate(uid: string, eventId: string, eventType: string): Promise<XPServiceResult> {
+    const actionKey = EVENT_TO_XP_ACTION[eventType];
+    if (!actionKey) return { skipped: true, reason: `Sem ação XP para ${eventType}` };
+
+    const actionDef = XP_ACTION_VALUES[actionKey];
+    if (!actionDef) return { skipped: true, reason: `Ação ${actionKey} não encontrada` };
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const userDoc  = await db.collection('users').doc(uid).get();
+    const data     = userDoc.data() ?? {};
+    const xp       = data.xp ?? {};
+    const arv      = data.progression?.arvore ?? {};
+
+    const totalXP        = xp.totalXP ?? 0;
+    const currentXPToday = xp.xpTodayDate === todayStr ? (xp.xpToday ?? 0) : 0;
+    if (currentXPToday >= DAILY_XP_MAX) return { skipped: true, reason: 'Limite diário atingido' };
+
+    const fertAtivo  = arv.fertilizanteAtivo === true;
+    const fertExpira = arv.fertilizanteExpiraEm?.toDate?.() ?? null;
+    const fertActive = fertAtivo && fertExpira && fertExpira > new Date();
+    const multiplier = fertActive ? XP_MULTIPLIERS.FERTILIZER : XP_MULTIPLIERS.NORMAL;
+    const xpGained   = Math.min(Math.floor(actionDef.xp * multiplier), DAILY_XP_MAX - currentXPToday);
+    const newTotalXP = totalXP + xpGained;
+    const newLevel   = calcLevel(newTotalXP);
+
+    return { skipped: false, xpGained, newTotalXP, newLevel: newLevel.level };
+  },
+
+  // Calcula + persiste — usado em modo ENGINE
   async process(uid: string, eventId: string, eventType: string): Promise<XPServiceResult> {
     const actionKey = EVENT_TO_XP_ACTION[eventType];
     if (!actionKey) return { skipped: true, reason: `Sem ação XP para ${eventType}` };
@@ -97,11 +130,13 @@ export const XPService = {
       });
 
       return {
-        skipped:   false,
+        skipped:    false,
         xpGained,
         treeGain,
-        leveledUp: newLevel.level > prevLevel.level,
-        stageUp:   newTree.current.stage > prevTree.current.stage,
+        newTotalXP,
+        newLevel:   newLevel.level,
+        leveledUp:  newLevel.level > prevLevel.level,
+        stageUp:    newTree.current.stage > prevTree.current.stage,
       };
     });
   },

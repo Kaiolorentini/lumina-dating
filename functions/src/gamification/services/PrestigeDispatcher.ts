@@ -1,40 +1,46 @@
 // ============================================
-// LUMINA — Prestige DISPATCHER v2.0
+// LUMINA — PRESTIGE DISPATCHER v4.0
 // functions/src/gamification/services/PrestigeDispatcher.ts
 //
-// RESPONSABILIDADE ÚNICA: adaptar GameEventInput → PrestigeService.
-// TODO Bloco 5: implementar PrestigeService e PrestigeRepository.
+// SPRINT 1C — v4.0: simplificado. Comparação Shadow é
+// responsabilidade exclusiva do PrestigeCompatibilityAdapter.
 // ============================================
 
 import { IGameDispatcher, DispatcherMetadata } from '../IGameDispatcher';
 import { GameEventInput, DispatcherResult }     from '../GameEventContext';
 import { registerDispatcher }                   from '../DispatcherRegistry';
+import { PrestigeService }                      from './PrestigeService';
+import { getDispatcherMode }                    from '../featureflags/DispatcherMode';
+import { GameLogger }                           from '../GameLogger';
 
 class PrestigeDispatcherImpl implements IGameDispatcher {
   getMetadata(): DispatcherMetadata {
-    return {
-      name:      'PrestigeDispatcher',
-      version:   1,
-      type:      'PRESTIGE' as any,
-      timeoutMs: 2000,
-      retryable: true,
-      priority:  'NORMAL',
-    };
+    return { name: 'PrestigeDispatcher', version: 4, type: 'PRESTIGE', timeoutMs: 2000, retryable: true, priority: 'NORMAL' };
   }
 
-  canHandle(_input: GameEventInput): boolean {
-    // TODO Bloco 5: implementar canHandle
-    return true;
+  canHandle(input: GameEventInput): boolean {
+    return PrestigeService.canHandle(input.eventType);
   }
 
-  async dispatch(_input: GameEventInput): Promise<DispatcherResult> {
-    // TODO Bloco 5: chamar PrestigeService
-    return {
-      dispatcher: 'PRESTIGE' as any,
-      status:     'SKIPPED',
-      durationMs: 0,
-      warnings:   ['PrestigeService não implementado — Bloco 5'],
-    };
+  async dispatch(input: GameEventInput): Promise<DispatcherResult> {
+    if (!this.canHandle(input)) {
+      return { dispatcher: 'PRESTIGE', status: 'SKIPPED', durationMs: 0 };
+    }
+
+    const mode = await getDispatcherMode('PRESTIGE');
+
+    if (mode !== 'ENGINE') {
+      return { dispatcher: 'PRESTIGE', status: 'SKIPPED', durationMs: 0, warnings: [`Modo ${mode} — PrestigeDispatcher não persiste`] };
+    }
+
+    const computation = await PrestigeService.computeEvolution(input.uid, input.eventType);
+    if (computation.skipped) {
+      return { dispatcher: 'PRESTIGE', status: 'SKIPPED', durationMs: 0, warnings: [computation.reason ?? ''] };
+    }
+
+    await PrestigeService.persist(input.uid, computation);
+    GameLogger.info({ dispatcher: 'PRESTIGE', eventId: input.eventId, uid: input.uid, message: 'Prestígio persistido (modo ENGINE)', meta: { newStage: computation.newStage } });
+    return { dispatcher: 'PRESTIGE', status: 'SUCCESS', durationMs: 0 };
   }
 }
 

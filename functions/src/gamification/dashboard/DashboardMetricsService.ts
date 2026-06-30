@@ -1,14 +1,14 @@
 // ============================================
-// LUMINA — DASHBOARD METRICS SERVICE v1.0
+// LUMINA — DASHBOARD METRICS SERVICE v2.0
 // functions/src/gamification/dashboard/DashboardMetricsService.ts
 //
-// SPRINT 0 — Agrega métricas do EventLedger para o
-// Gamification Dashboard. Somente leitura, sem efeito colateral.
+// SPRINT 1C — v2.0: usa ShadowMetricsService.getAllScores()
+// em vez do método removido ShadowComparisonService.getComparisonScore().
 // ============================================
 
 import * as admin from 'firebase-admin';
-import { ShadowComparisonService, ShadowSystem } from '../shadow/ShadowComparisonService';
-import { LegacyFeatureFlags }                    from '../featureflags/LegacyFeatureFlags';
+import { ShadowMetricsService } from '../shadow/ShadowMetricsService';
+import { LegacyFeatureFlags }   from '../featureflags/LegacyFeatureFlags';
 
 const db = admin.firestore();
 
@@ -32,19 +32,14 @@ export interface DispatcherErrorRate {
   errorRate:  number;
 }
 
-export interface ShadowDivergenceSummary {
-  system: ShadowSystem;
-  score:  number;
-}
-
 export interface DashboardSnapshot {
-  generatedAt:       string;
-  rates:             RatePerMinute;
-  queues:            QueueMetrics;
-  dispatcherErrors:  DispatcherErrorRate[];
-  shadowScores:      ShadowDivergenceSummary[];
-  legacyFlags:       Awaited<ReturnType<typeof LegacyFeatureFlags.getState>>;
-  avgLatencyMs:      number;
+  generatedAt:      string;
+  rates:            RatePerMinute;
+  queues:           QueueMetrics;
+  dispatcherErrors: DispatcherErrorRate[];
+  shadowScores:     Awaited<ReturnType<typeof ShadowMetricsService.getAllScores>>;
+  legacyFlags:      Awaited<ReturnType<typeof LegacyFeatureFlags.getState>>;
+  avgLatencyMs:     number;
 }
 
 const WINDOW_MIN = 5;
@@ -121,13 +116,10 @@ export const DashboardMetricsService = {
       ? entries.reduce((sum, e) => sum + ((e.totalDurationMs as number) ?? 0), 0) / entries.length
       : 0;
 
-    const [queues, legacyFlags, ...shadowScores] = await Promise.all([
+    const [queues, legacyFlags, shadowScores] = await Promise.all([
       getQueueMetrics(),
       LegacyFeatureFlags.getState(),
-      ShadowComparisonService.getComparisonScore('XP'),
-      ShadowComparisonService.getComparisonScore('RANKING'),
-      ShadowComparisonService.getComparisonScore('ACHIEVEMENT'),
-      ShadowComparisonService.getComparisonScore('VAULT'),
+      ShadowMetricsService.getAllScores(),
     ]);
 
     return {
@@ -135,12 +127,7 @@ export const DashboardMetricsService = {
       rates:            calcRates(entries),
       queues,
       dispatcherErrors: calcDispatcherErrors(entries),
-      shadowScores: [
-        { system: 'XP',          score: shadowScores[0] },
-        { system: 'RANKING',     score: shadowScores[1] },
-        { system: 'ACHIEVEMENT', score: shadowScores[2] },
-        { system: 'VAULT',       score: shadowScores[3] },
-      ],
+      shadowScores,
       legacyFlags,
       avgLatencyMs: Math.round(avgLatency),
     };

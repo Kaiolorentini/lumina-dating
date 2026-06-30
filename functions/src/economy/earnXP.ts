@@ -1,11 +1,18 @@
 // ============================================
-// LUMINA — EARN XP (ANTI-FARM)
-// functions/src/economy/earnXP.ts — v5.1
+// LUMINA — EARN XP (ANTI-FARM) v6.0
+// functions/src/economy/earnXP.ts
+//
+// SPRINT 1C — v6.0: usa LegacyShadowOrchestrator.
+// Adapters são comparadores puros — nunca tocam o Engine real,
+// nunca criam GameEvents, nunca persistem nada.
+// Resposta ao cliente 100% inalterada.
 // ============================================
 
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { XP_REWARDS, DAILY_LIMITS, XP_LEVELS } from '../config/economy';
+import { LegacyShadowOrchestrator } from '../gamification/compatibility/LegacyShadowOrchestrator';
+import { CompareParams } from '../gamification/compatibility/ICompatibilityAdapter';
 
 export type XPAction =
   | 'VISIT_PROFILE'
@@ -19,6 +26,10 @@ export type XPAction =
 interface EarnXPRequest {
   action:     XPAction;
   targetUid?: string;
+}
+
+function newEventId(): string {
+  return `earnxp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
 export const earnXP = onCall(
@@ -140,6 +151,28 @@ export const earnXP = onCall(
 
         return { success: true, xpAmount, newXP, newLevel, newTier, leveledUp: newLevel > prevLevel, tierUp: newTier !== prevTier };
       });
+
+      // SPRINT 1C — v6.0: dispara comparação Shadow via Orchestrator.
+      // 100% fire-and-forget. Adapters são comparadores puros —
+      // nunca tocam o Engine real, nunca persistem nada.
+      if ('success' in result && result.success) {
+        const eventId = newEventId();
+
+        const xpParams: CompareParams = {
+          uid, eventId, legacyActionKey: action,
+          legacyResult: { xpAmount: result.xpAmount, newXP: result.newXP, newLevel: result.newLevel },
+          calculatorInput: {
+            actionKey: action,
+            currentTotalXP: result.newXP - result.xpAmount,
+            currentXPToday: 0, // aproximação — Shadow não precisa de precisão perfeita no estado diário
+            fertilizerActive: false,
+          },
+        };
+
+        LegacyShadowOrchestrator
+          .dispatchComparisons(action, { XP: xpParams })
+          .catch(() => { /* nunca afeta a resposta ao cliente */ });
+      }
 
       return result;
     } catch (error: unknown) {
