@@ -97,4 +97,11 @@ export { getWeeklyChallenge, progressWeeklyChallenge, resetWeeklyChallenges } fr
 export { onMessageReply } from './engagement/messageReply';
 export { onMissionCompleted } from './engagement/missionCompleted';
 export { onCreateMatch } from './engagement/matchCreated';            
-export { getDashboardSnapshot } from './gamification/dashboard/getDashboardSnapshot';                          
+export { getDashboardSnapshot } from './gamification/dashboard/getDashboardSnapshot';
+
+// ============================================
+// GAMIFICATION ENGINE
+// ============================================
+export { processGameEvent } from './gamification/GamificationEngine';
+export { onProfileLike } from './engagement/profileLike';
+export { gamificationHealthCheck } from './gamification/health/healthCheck';
