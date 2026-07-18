@@ -6,42 +6,41 @@ import { UserProfile } from '../../../shared/types';
 // ============================================
 // PROFILE SERVICE — MÓDULO PROFILE
 //
-// Responsabilidade única:
-// Salvar e buscar dados do perfil no Firestore.
-// Sem upload de foto aqui — isso é photoService.
+// saveProfile adiciona role/isBlocked APENAS no create
+// (quando o documento não existe). Em qualquer update,
+// esses campos protegidos NÃO entram no payload — evitando
+// que a regra hasNoProtectedFields() bloqueie o update.
+//
+// Backup de segurança: initWallet (Admin SDK) garante
+// role/isBlocked caso o documento seja criado por outro
+// caminho antes do saveProfile.
 // ============================================
 
-// Salva ou atualiza perfil
 export async function saveProfile(
   uid: string,
   data: Partial<UserProfile>
 ): Promise<void> {
   const profileRef = doc(db, COLLECTIONS.USERS, uid);
-
-  // Verifica se é criação ou atualização
-  const existing = await getDoc(profileRef);
+  const existing   = await getDoc(profileRef);
 
   await setDoc(profileRef, {
     ...data,
-    // Campos de segurança apenas na criação — nunca sobrescreve
     ...(!existing.exists() && { role: 'user', isBlocked: false }),
     updatedAt: new Date(),
   }, { merge: true });
 }
 
-// Busca perfil pelo ID
 export async function getProfile(
   uid: string
 ): Promise<UserProfile | null> {
   const profileRef = doc(db, COLLECTIONS.USERS, uid);
-  const snap = await getDoc(profileRef);
+  const snap       = await getDoc(profileRef);
   if (snap.exists()) {
     return snap.data() as UserProfile;
   }
   return null;
 }
 
-// Verifica se perfil está completo
 export function isProfileComplete(profile: Partial<UserProfile>): boolean {
   return !!(
     profile.name &&

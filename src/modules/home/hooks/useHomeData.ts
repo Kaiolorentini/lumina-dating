@@ -1,10 +1,10 @@
 // ============================================
-// LUMINA — USE HOME DATA v5.1
+// LUMINA — USE HOME DATA v5.2
 // src/modules/home/hooks/useHomeData.ts
 //
-// CORREÇÃO: wallet.coins → coinsGratuitos + coinsPremium
-// coins agora retorna total (gratuitos + premium)
-// isAI removido de ProfileCardData (IA foi removida)
+// v5.2: removida simulateVisits() — visitas fictícias
+// de visitor_1/2/3 removidas da produção.
+// Visitas agora só ocorrem quando um usuário real visita o perfil.
 // ============================================
 
 import { useState, useEffect } from 'react';
@@ -15,10 +15,7 @@ import { useVisits }        from '../../../hooks/useVisits';
 import { getProfile }       from '../../profile/services/profileService';
 import { getCompatibleProfiles }     from '../../../services/usersService';
 import { getMostVisitedProfileCards } from '../../../services/mostVisitedService';
-import {
-  getMostVisitedProfiles,
-  registrarVisita,
-} from '../../../services/visitsService';
+import { getMostVisitedProfiles }    from '../../../services/visitsService';
 import { ProfileCardData, UserProfile } from '../../../shared/types';
 
 export type HomeTab = 'perfis' | 'visitados' | 'conversas';
@@ -31,14 +28,14 @@ interface UseHomeDataReturn {
   loadingVisited:  boolean;
   visitasHoje:     number;
   unreadCount:     number;
-  coins:           number;   // total = gratuitos + premium
+  coins:           number;
   loadMostVisited: () => Promise<void>;
 }
 
 export function useHomeData(): UseHomeDataReturn {
-  const { user }                           = useAuth();
-  const { wallet }                         = useCoins();
-  const { unreadCount }                    = useNotifications(user?.uid);
+  const { user }                               = useAuth();
+  const { wallet }                             = useCoins();
+  const { unreadCount }                        = useNotifications(user?.uid);
   const { visitasHoje, refresh: refreshVisits } = useVisits(user?.uid);
 
   const [userProfile,    setUserProfile]    = useState<UserProfile | null>(null);
@@ -66,21 +63,12 @@ export function useHomeData(): UseHomeDataReturn {
             location: `${p.city || ''}, ${p.state || ''}`,
             sintonia: p.sintonia,
             photoURL: p.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
-            // isAI removido — IA foi removida do projeto
           }))
         );
       }
-      await simulateVisits(user.uid);
       await refreshVisits();
     } catch (error) {
       console.error('[useHomeData] error:', error);
-    }
-  }
-
-  async function simulateVisits(userId: string) {
-    const fakeVisitors = ['visitor_1', 'visitor_2', 'visitor_3'];
-    for (const visitorId of fakeVisitors) {
-      await registrarVisita(visitorId, userId);
     }
   }
 
@@ -101,18 +89,11 @@ export function useHomeData(): UseHomeDataReturn {
     }
   }
 
-  // v5.1: coins = total (gratuitos + premium)
   const totalCoins = (wallet?.coinsGratuitos ?? 0) + (wallet?.coinsPremium ?? 0);
 
   return {
-    realProfiles,
-    mostVisited,
-    visitCounts,
-    userProfile,
-    loadingVisited,
-    visitasHoje,
-    unreadCount,
-    coins: totalCoins,
-    loadMostVisited,
+    realProfiles, mostVisited, visitCounts, userProfile,
+    loadingVisited, visitasHoje, unreadCount,
+    coins: totalCoins, loadMostVisited,
   };
 }

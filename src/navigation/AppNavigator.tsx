@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Alert, Text, View, StyleSheet, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -26,7 +26,6 @@ import EngagementInitializer from '../components/EngagementInitializer';
 import UpdateChecker from '../components/UpdateChecker';
 import { RootStackParamList, TabParamList } from './types';
 import VaultScreen from '../modules/engagement/screens/VaultScreen';
-import MediaScreen from '../modules/media/screens/MediaScreen';
 import ProfileScreen from '../modules/profile/screens/ProfileScreen';
 import RealProfileScreen from '../screens/Profile/RealProfileScreen';
 import UserChatScreen from '../modules/chat/screens/UserChatScreen';
@@ -72,6 +71,7 @@ import {
   AdminFraudFlagsScreen,
   AdminCouponsScreen,
   AdminReportsScreen,
+  AdminProductReviewScreen,
 } from '../screens/admin/AdminPlaceholderScreens';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -189,12 +189,6 @@ function TabNavigator() {
         }}
       />
 
-      <Tab.Screen name="Media" component={MediaScreen}
-        options={{
-          tabBarLabel: 'Mídia',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📸</Text>,
-        }}
-      />
 
       <Tab.Screen name="Sintonias" component={SintoniasScreen}
         options={{
@@ -295,6 +289,7 @@ function MainStack() {
       <Stack.Screen name="AdminUserDetail"       component={AdminUserDetailScreen} />
       <Stack.Screen name="AdminCoupons"          component={AdminCouponsScreen} />
       <Stack.Screen name="AdminReports"          component={AdminReportsScreen} />
+      <Stack.Screen name="AdminProductReview"    component={AdminProductReviewScreen} />
       <Stack.Screen name="DestinyCard" component={DestinyCardScreen} />
       <Stack.Screen name="Missions" component={MissionsScreen} />
       <Stack.Screen name="Faisca" component={FaiscaScreen} />
@@ -448,13 +443,15 @@ function AppContent() {
 // ============================================
 export default function AppNavigator() {
   return (
-    <AuthProvider>
-      <CoinsProvider>
-        <NavigationContainer ref={navigationRef}>
-          <AppContent />
-        </NavigationContainer>
-      </CoinsProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <CoinsProvider>
+          <NavigationContainer ref={navigationRef}>
+            <AppContent />
+          </NavigationContainer>
+        </CoinsProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 

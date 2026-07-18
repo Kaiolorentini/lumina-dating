@@ -134,7 +134,7 @@ export default function MissionsScreen() {
       claim_faisca:     () => navigation.navigate('Faisca' as any),
       claim_daily:      () => navigation.navigate('DailyReward' as any),
       like_profiles:    () => navigation.navigate('MainTabs'),
-      view_media:       () => navigation.navigate('MainTabs', { screen: 'Media' } as any),
+      view_media:       () => navigation.navigate('MainTabs'),
       update_profile:   () => navigation.navigate('ProfileSetup'),
       create_sintonia:  () => navigation.navigate('MainTabs', { screen: 'Sintonias' } as any),
       complete_profile: () => navigation.navigate('ProfileSetup'),

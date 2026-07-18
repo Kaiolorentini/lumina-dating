@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200" width="600" height="200">
+  <defs>
+    <linearGradient id="premiumBannerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f0720;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1a1035;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0c0a1a;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="premiumBannerText" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#fbbf24;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:1" />
+    </linearGradient>
+    <filter id="premiumBannerGlow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="600" height="200" fill="url(#premiumBannerGrad)"/>
+  <circle cx="100" cy="100" r="60" fill="#7c3aed" opacity="0.1"/>
+  <circle cx="500" cy="100" r="80" fill="#7c3aed" opacity="0.08"/>
+  <text x="300" y="90" text-anchor="middle" font-family="Arial" font-size="42" font-weight="bold" fill="url(#premiumBannerText)" filter="url(#premiumBannerGlow)">GALÁXIA PLUS</text>
+  <text x="300" y="130" text-anchor="middle" font-family="Arial" font-size="16" fill="#c4b5fd">Experiência premium exclusiva</text>
+  <circle cx="50" cy="50" r="2" fill="#fbbf24" opacity="0.5"/>
+  <circle cx="550" cy="50" r="2" fill="#a78bfa" opacity="0.5"/>
+  <circle cx="50" cy="150" r="2" fill="#a78bfa" opacity="0.4"/>
+  <circle cx="550" cy="150" r="2" fill="#fbbf24" opacity="0.4"/>
+</svg>

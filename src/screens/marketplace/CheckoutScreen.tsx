@@ -1,11 +1,3 @@
-// ============================================
-// LUMINA — CHECKOUT SCREEN v5.1
-// src/screens/marketplace/CheckoutScreen.tsx
-//
-// CORREÇÃO: guard para saleId undefined
-// doc(db, 'sales', saleId) só chamado se saleId existe
-// ============================================
-
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
@@ -18,6 +10,7 @@ import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '../../core/firebase';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
+import ScreenContainer from '../../components/ScreenContainer';
 
 type NavProp    = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'Checkout'>;
@@ -148,7 +141,7 @@ export default function CheckoutScreen() {
 
   if (saleStatus === 'paid') {
     return (
-      <View style={styles.container}>
+      <ScreenContainer>
         <View style={styles.header}>
           <View style={{ width: 40 }} />
           <Text style={styles.headerTitle}>Pagamento</Text>
@@ -161,13 +154,13 @@ export default function CheckoutScreen() {
             <Text style={styles.primaryBtnText}>Ver Minhas Compras</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScreenContainer>
     );
   }
 
   if (saleStatus === 'overdue' || saleStatus === 'refunded' || saleStatus === 'cancelled') {
     return (
-      <View style={styles.container}>
+      <ScreenContainer>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.backBtn}>‹</Text>
@@ -184,12 +177,16 @@ export default function CheckoutScreen() {
             <Text style={styles.primaryBtnText}>Voltar</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScreenContainer>
     );
   }
 
+  // Sem QR (ex.: cobrança pendente reusada não guarda o QR) mas com copia-e-cola
+  const hasQr = !!pixQrCode;
+  const hasCopyPaste = !!pixCopyPaste;
+
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack}>
           <Text style={styles.backBtn}>‹</Text>
@@ -204,43 +201,58 @@ export default function CheckoutScreen() {
           <Text style={styles.statusText}>Aguardando pagamento...</Text>
         </View>
 
-        {pixQrCode ? (
+        {hasQr ? (
           <View style={styles.qrSection}>
             <Text style={styles.qrLabel}>Escaneie o QR Code no seu app de pagamento</Text>
             <View style={styles.qrWrapper}>
               <Image source={{ uri: `data:image/png;base64,${pixQrCode}` }} style={styles.qrImage} resizeMode="contain" />
             </View>
           </View>
+        ) : hasCopyPaste ? (
+          // Sem imagem de QR, mas há copia-e-cola: instrui a usar o código abaixo
+          <View style={styles.noQrBox}>
+            <Text style={styles.noQrIcon}>ℹ️</Text>
+            <Text style={styles.noQrText}>
+              Você já tem um pagamento em aberto para este item. Use o código
+              Pix "Copia e Cola" abaixo para concluir.
+            </Text>
+          </View>
         ) : (
-          <View style={styles.qrPlaceholder}>
-            <ActivityIndicator color={colors.gold} />
-            <Text style={styles.qrPlaceholderText}>Carregando QR Code...</Text>
+          // Nem QR nem copia-e-cola — cobrança não recuperável por aqui
+          <View style={styles.noQrBox}>
+            <Text style={styles.noQrIcon}>⚠️</Text>
+            <Text style={styles.noQrText}>
+              Não foi possível carregar os dados do Pix. Volte e tente iniciar o
+              pagamento novamente.
+            </Text>
           </View>
         )}
 
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>ou</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {pixCopyPaste ? (
-          <View style={styles.copySection}>
-            <Text style={styles.copyLabel}>Pix Copia e Cola</Text>
-            <View style={styles.copyBox}>
-              <Text style={styles.copyCode} numberOfLines={3}>{pixCopyPaste}</Text>
+        {hasCopyPaste && (
+          <>
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>{hasQr ? 'ou' : 'Pix Copia e Cola'}</Text>
+              <View style={styles.dividerLine} />
             </View>
-            <TouchableOpacity
-              style={[styles.copyBtn, copied && styles.copyBtnSuccess]}
-              onPress={handleCopy}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.copyBtnText, copied && styles.copyBtnTextSuccess]}>
-                {copied ? '✅ Copiado!' : '📋 Copiar código Pix'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
+
+            <View style={styles.copySection}>
+              <Text style={styles.copyLabel}>Pix Copia e Cola</Text>
+              <View style={styles.copyBox}>
+                <Text style={styles.copyCode} numberOfLines={3}>{pixCopyPaste}</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.copyBtn, copied && styles.copyBtnSuccess]}
+                onPress={handleCopy}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.copyBtnText, copied && styles.copyBtnTextSuccess]}>
+                  {copied ? '✅ Copiado!' : '📋 Copiar código Pix'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>⏱ A confirmação é automática após o Pix ser processado.</Text>
@@ -248,13 +260,13 @@ export default function CheckoutScreen() {
           <Text style={styles.infoText}>⚠️ O código expira em 15 minutos.</Text>
         </View>
       </ScrollView>
-    </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: colors.background },
-  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44' },
+  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',     paddingHorizontal: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44' },
   backBtn:       { color: colors.gold, fontSize: 28 },
   headerTitle:   { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   content:       { padding: spacing.md, paddingBottom: spacing.xl * 2 },
@@ -264,8 +276,9 @@ const styles = StyleSheet.create({
   qrLabel:       { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center', marginBottom: spacing.md },
   qrWrapper:     { padding: spacing.sm, backgroundColor: colors.white, borderRadius: borderRadius.md },
   qrImage:       { width: 240, height: 240 },
-  qrPlaceholder: { height: 240, alignSelf: 'center', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
-  qrPlaceholderText: { color: colors.gray, fontSize: fonts.sizes.sm },
+  noQrBox:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.gold + '44', padding: spacing.md, marginBottom: spacing.lg },
+  noQrIcon:      { fontSize: 22 },
+  noQrText:      { color: colors.gray, fontSize: fonts.sizes.sm, flex: 1, lineHeight: 18 },
   divider:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: spacing.lg },
   dividerLine:   { flex: 1, height: 0.5, backgroundColor: colors.grayDark },
   dividerText:   { color: colors.gray, fontSize: fonts.sizes.sm },

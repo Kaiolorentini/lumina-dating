@@ -3,7 +3,9 @@
 //
 // getSignedUrl real implementado.
 // URL expira em 5 minutos — auto-refresh on error.
-// Screenshot bloqueado (Android) / detectado (iOS).
+// Screenshot: apenas DETECTADO e SINALIZADO em ambos os SOs
+//   (não bloqueia — FLAG_SECURE não é confiável em MIUI etc.)
+//   Dupla detecção sem permissão: addScreenshotListener + AppState.
 // Watermark com UID do usuário.
 // ============================================
 
@@ -11,7 +13,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator,
   Alert, TouchableOpacity, Dimensions, Image,
-  FlatList, Platform,
+  FlatList, Platform, AppState, AppStateStatus,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ScreenCapture from 'expo-screen-capture';
@@ -22,6 +24,7 @@ import { RootStackParamList } from '../../navigation/types';
 import app from '../../core/firebase';
 import { getProduct } from '../../services/marketplace/productService';
 import { Product } from '../../shared/types/marketplace';
+import ScreenContainer from '../../components/ScreenContainer';
 
 type RouteProps = RouteProp<RootStackParamList, 'ContentViewer'>;
 const { width, height } = Dimensions.get('window');
@@ -84,29 +87,79 @@ export default function ContentViewerScreen() {
   const screenshotCount = useRef(0);
   const urlExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Debounce anti-duplicidade: se listener e AppState dispararem
+  // quase juntos para o MESMO print, conta só uma vez.
+  const lastReportRef = useRef<number>(0);
+
+  // AppState: marca quando o app deixou de ficar ativo
+  const backgroundedAtRef = useRef<number | null>(null);
+
+  // handleScreenshot precisa ser estável para os listeners
+  const handleScreenshot = useCallback(async () => {
+    // Debounce de 1.2s — evita contagem dupla no mesmo print
+    const now = Date.now();
+    if (now - lastReportRef.current < 1200) return;
+    lastReportRef.current = now;
+
+    screenshotCount.current += 1;
+    const count = screenshotCount.current;
+
+    setContentHidden(true);
+    setTimeout(() => setContentHidden(false), 3000);
+
+    if (user?.uid) {
+      try {
+        const functions = getFunctions(app, 'us-central1');
+        const report = httpsCallable(functions, 'reportScreenshot');
+        await report({ productId });
+      } catch {
+        // Falha silenciosa — não bloqueia o fluxo
+      }
+    }
+
+    const warningIndex = Math.min(count - 1, WARNING_MESSAGES.length - 1);
+    const warning = WARNING_MESSAGES[warningIndex];
+    Alert.alert(warning.title, warning.message, [
+      { text: warning.button, style: 'default' },
+    ]);
+  }, [productId, user?.uid]);
+
   // ============================================
-  // DRM — Screenshot protection
+  // DRM — Detecção de screenshot (ambos SOs, sem bloqueio)
   // ============================================
   useEffect(() => {
-    if (Platform.OS === 'android') {
-      ScreenCapture.preventScreenCaptureAsync();
-    }
+    // 1. Listener nativo de screenshot (iOS + Android)
+    const subscription = ScreenCapture.addScreenshotListener(() => {
+      handleScreenshot();
+    });
 
-    let subscription: ReturnType<typeof ScreenCapture.addScreenshotListener> | null = null;
-    if (Platform.OS === 'ios') {
-      subscription = ScreenCapture.addScreenshotListener(() => {
-        handleScreenshot();
-      });
-    }
+    // 2. AppState — indício de print por perda rápida de foco.
+    //    Complementa o listener no Android sem exigir permissão.
+    //    Só conta se voltar em menos de 1.5s (padrão de screenshot),
+    //    não uma troca de app comum.
+    const onAppStateChange = (state: AppStateStatus) => {
+      if (state === 'active') {
+        const bgAt = backgroundedAtRef.current;
+        if (bgAt !== null) {
+          const away = Date.now() - bgAt;
+          if (away > 0 && away < 1500) {
+            handleScreenshot();
+          }
+        }
+        backgroundedAtRef.current = null;
+      } else {
+        // inactive / background
+        backgroundedAtRef.current = Date.now();
+      }
+    };
+    const appStateSub = AppState.addEventListener('change', onAppStateChange);
 
     return () => {
-      if (Platform.OS === 'android') {
-        ScreenCapture.allowScreenCaptureAsync();
-      }
-      subscription?.remove();
+      subscription.remove();
+      appStateSub.remove();
       if (urlExpiryTimer.current) clearTimeout(urlExpiryTimer.current);
     };
-  }, []);
+  }, [handleScreenshot]);
 
   // ============================================
   // Load product + files
@@ -191,33 +244,6 @@ export default function ContentViewerScreen() {
   }
 
   // ============================================
-  // Screenshot handler (iOS)
-  // ============================================
-  async function handleScreenshot() {
-    screenshotCount.current += 1;
-    const count = screenshotCount.current;
-
-    setContentHidden(true);
-    setTimeout(() => setContentHidden(false), 3000);
-
-    if (user?.uid) {
-      try {
-        const functions = getFunctions(app, 'us-central1');
-        const report = httpsCallable(functions, 'reportScreenshot');
-        await report({ productId });
-      } catch {
-        // Falha silenciosa
-      }
-    }
-
-    const warningIndex = Math.min(count - 1, WARNING_MESSAGES.length - 1);
-    const warning = WARNING_MESSAGES[warningIndex];
-    Alert.alert(warning.title, warning.message, [
-      { text: warning.button, style: 'default' },
-    ]);
-  }
-
-  // ============================================
   // Render file content
   // ============================================
   function renderContent() {
@@ -297,7 +323,7 @@ export default function ContentViewerScreen() {
   // ============================================
   if (loading) {
     return (
-      <View style={styles.container}>
+      <ScreenContainer>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.backBtn}>‹</Text>
@@ -309,7 +335,7 @@ export default function ContentViewerScreen() {
           <ActivityIndicator color={colors.gold} size="large" />
           <Text style={styles.loadingText}>Verificando acesso...</Text>
         </View>
-      </View>
+      </ScreenContainer>
     );
   }
 
@@ -317,7 +343,7 @@ export default function ContentViewerScreen() {
   // Main render
   // ============================================
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -373,7 +399,7 @@ export default function ContentViewerScreen() {
       <View style={styles.watermark} pointerEvents="none">
         <Text style={styles.watermarkText}>{user?.uid?.slice(0, 8)}</Text>
       </View>
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -381,7 +407,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },

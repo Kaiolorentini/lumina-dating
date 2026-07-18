@@ -23,6 +23,7 @@ export interface FraudFlag {
   status: FraudStatus;
   description: string;
   relatedSaleId?: string;
+  relatedProductId?: string;
   createdAt: Date;
   reviewedAt?: Date;
   reviewedBy?: string;

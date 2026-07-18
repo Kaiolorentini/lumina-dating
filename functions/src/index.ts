@@ -32,6 +32,9 @@ export { onRejectWithdrawal }       from "./wallet/onRejectWithdrawal";
 export { onMarkWithdrawalPaid }     from "./wallet/onMarkWithdrawalPaid";
 export { blockUser }                from "./users/blockUser";
 export { unblockUser }              from "./users/unblockUser";
+export { getModeratorFileUrl } from "./admin/getModeratorFileUrl";
+export { resolveFraudFlag } from "./admin/resolveFraudFlag";
+
 
 // ============================================
 // FASE 6B — Com Asaas
@@ -105,3 +108,15 @@ export { getDashboardSnapshot } from './gamification/dashboard/getDashboardSnaps
 export { processGameEvent } from './gamification/GamificationEngine';
 export { onProfileLike } from './engagement/profileLike';
 export { gamificationHealthCheck } from './gamification/health/healthCheck';
+
+export { createCoupon } from "./marketplace/coupons/createCoupon";
+export { updateCoupon } from "./marketplace/coupons/updateCoupon";
+export { toggleCoupon } from "./marketplace/coupons/toggleCoupon";
+
+// ============================================
+// TRIGGERS — notificação de admin
+// ============================================
+export { onCreatorRequestCreated } from "./triggers/onCreatorRequestCreated";
+export { onWithdrawalCreated } from "./triggers/onWithdrawalCreated";
+export { onProductPending } from "./triggers/onProductPending";
+export { saveCreatorPixKey } from "./payments/saveCreatorPixKey";

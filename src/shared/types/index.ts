@@ -19,8 +19,12 @@ export interface UserProfile {
   preferences: Preference[];
   bio: string;
   photoURL: string;
+  cpf?: string; 
   createdAt: Date;
   updatedAt?: Date;
+  // Campos de segurança — obrigatórios para Firestore Rules
+  role: 'user' | 'creator' | 'admin' | 'superadmin';
+  isBlocked: boolean;
 }
 
 // ------------------------------------------
@@ -279,6 +283,7 @@ export interface ProfileCardData {
   location: string;
   sintonia: number;
   photoURL: string;
+  
 }
 
 // ------------------------------------------

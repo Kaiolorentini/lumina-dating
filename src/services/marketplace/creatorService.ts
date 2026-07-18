@@ -68,6 +68,7 @@ export async function createCreatorRequest(userId: string): Promise<string> {
     throw new Error('Você já é um criador aprovado');
   }
 
+  // Operação principal — nunca deve falhar por causa de audit/notificação
   const docRef = await addDoc(
     collection(db, MARKETPLACE_COLLECTIONS.CREATOR_REQUESTS),
     {
@@ -77,16 +78,16 @@ export async function createCreatorRequest(userId: string): Promise<string> {
     },
   );
 
-  await createAuditLog({
+  // Audit e notificação — fire-and-forget, nunca bloqueiam o fluxo
+  createAuditLog({
     action: 'creator_request_created',
     performedBy: userId,
     targetId: docRef.id,
     targetType: 'creator',
     metadata: { userId },
-  });
+  }).catch(() => { /* auditoria nunca bloqueia */ });
 
-  // ✅ Notifica superadmins via push
-  await notifySuperAdmins(
+  notifySuperAdmins(
     '🎨 Nova solicitação de criador',
     `Usuário ${userId.slice(0, 8)}... quer se tornar criador`,
     {
@@ -94,7 +95,7 @@ export async function createCreatorRequest(userId: string): Promise<string> {
       userId,
       requestId: docRef.id,
     },
-  );
+  ).catch(() => { /* notificação nunca bloqueia */ });
 
   return docRef.id;
 }
@@ -113,13 +114,14 @@ export async function cancelCreatorRequest(
     rejectionReason: 'Cancelado pelo usuário',
   });
 
-  await createAuditLog({
+  // Audit — fire-and-forget
+  createAuditLog({
     action: 'creator_request_cancelled',
     performedBy: userId,
     targetId: requestId,
     targetType: 'creator',
     metadata: { userId },
-  });
+  }).catch(() => { /* auditoria nunca bloqueia */ });
 }
 
 // ============================================

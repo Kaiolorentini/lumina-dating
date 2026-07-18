@@ -4,12 +4,16 @@
 // Validação de token obrigatória.
 // Idempotente: verifica sale.status antes.
 // Salva lastWebhookEvent + lastWebhookAt.
+// Chargeback gera fraudFlag (reason: chargeback).
 // ============================================
 
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { createAuditLog } from "../utils/auditLog";
 import { incrementMetrics } from "../utils/incrementMetric";
+import { createFraudFlag } from "../utils/createFraudFlag";
+import { notifyAdmins } from "../utils/notifyAdmins";
+import { notifyUser } from "../utils/notifyUser";
 
 export const onAsaasWebhook = onRequest(
   {
@@ -86,6 +90,18 @@ export const onAsaasWebhook = onRequest(
           const walletRef = db.collection("creatorWallets").doc(saleData.sellerId);
           const walletSnap = await tx.get(walletRef);
 
+          // Cupom: lê ANTES de qualquer escrita (regra da transação).
+          // Só incrementa se a sale tem couponId E o cupom ainda existe.
+          let couponRef: FirebaseFirestore.DocumentReference | null = null;
+          if (saleData.couponId) {
+            couponRef = db.collection("coupons").doc(saleData.couponId);
+            const couponSnap = await tx.get(couponRef);
+            if (!couponSnap.exists) {
+              console.warn(`[onAsaasWebhook] cupom ${saleData.couponId} não existe mais — pulando usedCount`);
+              couponRef = null;
+            }
+          }
+
           const refundWindowExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
           tx.update(saleRef, {
@@ -97,6 +113,14 @@ export const onAsaasWebhook = onRequest(
             lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
             refundWindowExpiresAt: admin.firestore.Timestamp.fromDate(refundWindowExpires),
           });
+
+          // Incrementa usedCount do cupom — só aqui, no pagamento confirmado.
+          // Idempotente: o guard `sale.status === "paid"` acima garante 1x.
+          if (couponRef) {
+            tx.update(couponRef, {
+              usedCount: admin.firestore.FieldValue.increment(1),
+            });
+          }
 
           tx.set(purchaseRef, {
             buyerId: saleData.buyerId,
@@ -111,15 +135,17 @@ export const onAsaasWebhook = onRequest(
 
           if (walletSnap.exists) {
             tx.update(walletRef, {
-              pendingBalance: admin.firestore.FieldValue.increment(saleData.sellerAmount),
+              // Sem período pendente: a venda já cai como DISPONÍVEL para saque.
+              // O desconto do saldo ocorre em onMarkWithdrawalPaid.
+              availableBalance: admin.firestore.FieldValue.increment(saleData.sellerAmount),
               totalEarned: admin.firestore.FieldValue.increment(saleData.sellerAmount),
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
           } else {
             tx.set(walletRef, {
               userId: saleData.sellerId,
-              availableBalance: 0,
-              pendingBalance: saleData.sellerAmount,
+              availableBalance: saleData.sellerAmount,
+              pendingBalance: 0,
               totalEarned: saleData.sellerAmount,
               totalWithdrawn: 0,
               hasChargebackPending: false,
@@ -156,6 +182,32 @@ export const onAsaasWebhook = onRequest(
           metadata: { eventType, amount: sale.amount, paymentId: payment.id },
           req,
         });
+
+        // Notifica o VENDEDOR sobre a venda (push + in-app). Fire-and-forget.
+        notifyUser({
+          userId: sale.sellerId,
+          title: "🎉 Você fez uma venda!",
+          body: `Você recebeu R$ ${(sale.sellerAmount ?? 0).toFixed(2)} por uma venda no marketplace.`,
+          type: "sale_completed",
+          data: { saleId, productId: sale.productId ?? "" },
+        }).catch(() => {});
+
+        // Notifica o COMPRADOR que o conteúdo está disponível. Fire-and-forget.
+        notifyUser({
+          userId: sale.buyerId,
+          title: "✅ Compra confirmada",
+          body: "Seu pagamento foi confirmado. Seu conteúdo já está disponível em Minhas Compras.",
+          type: "purchase_confirmed",
+          data: { saleId, productId: sale.productId ?? "" },
+        }).catch(() => {});
+
+        // Notifica os ADMINS sobre a venda realizada. Fire-and-forget.
+        notifyAdmins({
+          title: "💰 Nova venda realizada",
+          body: `Venda de R$ ${(sale.amount ?? 0).toFixed(2)} confirmada no marketplace.`,
+          type: "sale_completed",
+          data: { saleId, productId: sale.productId ?? "" },
+        }).catch(() => {});
       }
 
       // ============================================
@@ -186,9 +238,14 @@ export const onAsaasWebhook = onRequest(
       // CHARGEBACK_REQUESTED
       // ============================================
       if (eventType === "CHARGEBACK_REQUESTED") {
+        // buyerId capturado dentro da tx para uso na fraudFlag (fora do escopo)
+        let buyerId = "";
+
         await db.runTransaction(async (tx) => {
           const saleDoc = await tx.get(saleRef);
           const saleData = saleDoc.data()!;
+
+          buyerId = saleData.buyerId ?? "";
 
           if (saleData.isChargebacked) return;
 
@@ -235,6 +292,20 @@ export const onAsaasWebhook = onRequest(
           metadata: { eventType, paymentId: payment.id },
           req,
         });
+
+        // Fraud detection — fire-and-forget, nunca derruba o webhook.
+        // O helper é idempotente (não duplica se já houver flag ativa).
+        if (buyerId) {
+          createFraudFlag({
+            userId: buyerId,
+            reason: "chargeback",
+            description: `Chargeback recebido na venda ${saleId}`,
+            relatedSaleId: saleId,
+          }).catch((error) => {
+            console.warn("[onAsaasWebhook] erro criando fraudFlag:", error);
+          });
+        }
+
       }
 
       // ============================================

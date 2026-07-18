@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="nightSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="constellationTrunk" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#818cf8;stop-opacity:1" />
+    </linearGradient>
+    <filter id="starGlow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="256" height="256" fill="url(#nightSky)"/>
+  <circle cx="30" cy="30" r="1" fill="#f8fafc" opacity="0.6"/>
+  <circle cx="220" cy="45" r="1.5" fill="#f8fafc" opacity="0.7"/>
+  <circle cx="40" cy="100" r="1" fill="#f8fafc" opacity="0.5"/>
+  <circle cx="200" cy="120" r="1" fill="#f8fafc" opacity="0.6"/>
+  <circle cx="240" cy="80" r="1.5" fill="#f8fafc" opacity="0.4"/>
+  <circle cx="15" cy="180" r="1" fill="#f8fafc" opacity="0.5"/>
+  <rect x="120" y="100" width="16" height="120" rx="4" fill="url(#constellationTrunk)"/>
+  <rect x="80" y="130" width="40" height="6" rx="2" fill="#6366f1" transform="rotate(-25 80 130)"/>
+  <rect x="136" y="120" width="40" height="6" rx="2" fill="#6366f1" transform="rotate(20 136 120)"/>
+  <circle cx="128" cy="80" r="30" fill="none" stroke="#818cf8" stroke-width="2" opacity="0.3"/>
+  <circle cx="128" cy="80" r="20" fill="#6366f1" opacity="0.4"/>
+  <circle cx="128" cy="80" r="12" fill="#818cf8" opacity="0.5"/>
+  <circle cx="128" cy="80" r="6" fill="#c7d2fe" opacity="0.8" filter="url(#starGlow)"/>
+  <circle cx="90" cy="70" r="4" fill="#a5b4fc" opacity="0.7" filter="url(#starGlow)"/>
+  <circle cx="166" cy="75" r="4" fill="#a5b4fc" opacity="0.7" filter="url(#starGlow)"/>
+  <circle cx="100" cy="100" r="3" fill="#c7d2fe" opacity="0.6" filter="url(#starGlow)"/>
+  <circle cx="156" cy="95" r="3" fill="#c7d2fe" opacity="0.6" filter="url(#starGlow)"/>
+  <line x1="128" y1="80" x2="90" y2="70" stroke="#818cf8" stroke-width="1" opacity="0.4"/>
+  <line x1="128" y1="80" x2="166" y2="75" stroke="#818cf8" stroke-width="1" opacity="0.4"/>
+  <line x1="128" y1="80" x2="100" y2="100" stroke="#818cf8" stroke-width="1" opacity="0.3"/>
+  <line x1="128" y1="80" x2="156" y2="95" stroke="#818cf8" stroke-width="1" opacity="0.3"/>
+</svg>

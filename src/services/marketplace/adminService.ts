@@ -15,7 +15,7 @@ import { db } from '../../core/firebase';
 import { COLLECTIONS, MARKETPLACE_COLLECTIONS } from '../../core/constants';
 import {
   AdminMetrics, Sale, Withdrawal,
-  FraudFlag,
+  FraudFlag, Coupon,
 } from '../../shared/types/marketplace';
 import { CreatorRequest } from './creatorService';
 import { RefundRequest } from '../../shared/types/marketplace';
@@ -168,6 +168,36 @@ export async function getWithdrawals(
     hasMore,
   };
 }
+// Busca sinalizações de fraude
+export async function getFraudFlags(
+  status?: string,
+  pageSize = 20,
+  lastDoc: DocumentSnapshot | null = null,
+): Promise<{ flags: FraudFlag[]; lastDoc: DocumentSnapshot | null; hasMore: boolean }> {
+  const constraints: any[] = [];
+  if (status) constraints.push(where('status', '==', status));
+  constraints.push(orderBy('createdAt', 'desc'));
+  constraints.push(limit(pageSize + 1));
+  if (lastDoc) constraints.push(startAfter(lastDoc));
+
+  const snap = await getDocs(
+    query(collection(db, MARKETPLACE_COLLECTIONS.FRAUD_FLAGS), ...constraints)
+  );
+
+  const hasMore = snap.docs.length > pageSize;
+  const docs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
+
+  return {
+    flags: docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      createdAt: d.data().createdAt?.toDate() ?? new Date(),
+      reviewedAt: d.data().reviewedAt?.toDate(),
+    } as FraudFlag)),
+    lastDoc: docs.length > 0 ? docs[docs.length - 1] : null,
+    hasMore,
+  };
+}
 
 // Busca usuário por UID
 export async function getUserById(userId: string): Promise<UserProfile | null> {
@@ -207,4 +237,22 @@ export async function getScreenshotEvents(userId: string): Promise<any[]> {
     ...d.data(),
     createdAt: d.data().createdAt?.toDate() ?? new Date(),
   }));
+}
+
+// Busca cupons (leitura para o painel admin)
+export async function getCoupons(): Promise<Coupon[]> {
+  const snap = await getDocs(
+    query(
+      collection(db, MARKETPLACE_COLLECTIONS.COUPONS),
+      orderBy('createdAt', 'desc'),
+    )
+  );
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data(),
+    startDate: d.data().startDate?.toDate() ?? new Date(),
+    expiresAt: d.data().expiresAt?.toDate() ?? new Date(),
+    createdAt: d.data().createdAt?.toDate() ?? new Date(),
+    updatedAt: d.data().updatedAt?.toDate() ?? new Date(),
+  } as Coupon));
 }

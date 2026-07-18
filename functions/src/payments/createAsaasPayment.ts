@@ -11,6 +11,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { calculateCommission } from "../utils/calculateCommission";
+import { buildPurchasePricing } from "../utils/buildPurchasePricing";
 import { createAuditLog } from "../utils/auditLog";
 import {
   findOrCreateCustomer,
@@ -28,9 +29,10 @@ export const createAsaasPayment = onCall(
 
     await assertUserNotBlocked(uid);
 
-    const { productId, paymentMethod } = request.data as {
+    const { productId, paymentMethod, couponCode } = request.data as {
       productId: string;
       paymentMethod: "pix" | "credit_card";
+      couponCode?: string;
     };
 
     if (!productId) throw new HttpsError("invalid-argument", "productId obrigatório");
@@ -134,7 +136,19 @@ export const createAsaasPayment = onCall(
     // ============================================
     // Criar cobrança no Asaas
     // ============================================
-    const { platformCommission, sellerAmount } = calculateCommission(product.price);
+    // ============================================
+    // Pricing — motor único (valida cupom + calcula desconto)
+    // Sem cupom: finalAmount = product.price. Com cupom inválido: erro.
+    // ============================================
+    const pricing = await buildPurchasePricing({
+      couponCode,
+      amount: product.price,
+    });
+    if (!pricing.valid) {
+      throw new HttpsError("failed-precondition", pricing.reason ?? "Cupom inválido");
+    }
+
+    const { platformCommission, sellerAmount } = calculateCommission(pricing.finalAmount);
 
     // Busca ou cria customer Asaas
     const customer = await findOrCreateCustomer({
@@ -144,26 +158,43 @@ export const createAsaasPayment = onCall(
       externalReference: uid,
     });
 
-    // Cria cobrança Pix
+    // ============================================
+    // Correção do vínculo Sale ↔ Payment (solução B):
+    // gera o saleId ANTES de criar a cobrança, para que o
+    // externalReference já nasça correto. Assim o webhook
+    // (que usa payment.externalReference) sempre acha a sale.
+    // ============================================
+    const saleRef = db.collection("sales").doc(); // gera ID sem gravar
+
+    // Cria cobrança Pix — valor COM desconto, referência = saleId
     const pixPayment = await createPixPayment({
       customerId: customer.id,
-      value: product.price,
+      value: pricing.finalAmount,
       description: `Lumina: ${product.title}`,
-      externalReference: "", // será preenchido com saleId abaixo
+      externalReference: saleRef.id,
       dueDate: formatDueDate(1),
     });
 
     // ============================================
-    // Salvar sale no Firestore
+    // Grava a sale com o MESMO id usado na cobrança — valores CONGELADOS
     // ============================================
-    const saleRef = await db.collection("sales").add({
+    await saleRef.set({
       buyerId: uid,
       sellerId: product.ownerId,
       productId,
       purchaseId,
-      amount: product.price,
+      amount: pricing.finalAmount,          // valor efetivamente cobrado
       platformCommission,
       sellerAmount,
+      // --- pricing congelado (auditável mesmo se o cupom mudar depois) ---
+      originalAmount: pricing.originalAmount,
+      discountAmount: pricing.discountAmount,
+      finalAmount: pricing.finalAmount,
+      couponId: pricing.couponId ?? null,
+      couponCode: pricing.couponCode ?? null,
+      couponType: pricing.couponType ?? null,
+      couponValue: pricing.couponValue ?? null,
+      // ------------------------------------------------------------------
       status: "pending",
       paymentStatus: "pending",
       paymentProvider: "asaas",
@@ -187,7 +218,10 @@ export const createAsaasPayment = onCall(
       metadata: {
         productId,
         paymentMethod: "pix",
-        amount: product.price,
+        amount: pricing.finalAmount,
+        originalAmount: pricing.originalAmount,
+        discountAmount: pricing.discountAmount,
+        couponCode: pricing.couponCode,
         asaasPaymentId: pixPayment.id,
       },
       req: request.rawRequest,

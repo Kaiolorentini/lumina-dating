@@ -106,8 +106,15 @@ export default function RealProfileScreen() {
         const alreadyLiked = await checkAlreadyLiked(user.uid, targetUserId);
         setLiked(alreadyLiked);
 
-        // Registra visita
-        await registrarVisita(user.uid, targetUserId);
+        // Registra visita — só se ambos os IDs forem válidos
+        if (user?.uid && targetUserId) {
+          await registrarVisita(user.uid, targetUserId);
+
+          // Gamificação — XP por visita (fire-and-forget)
+          const earnXPFn = httpsCallable(functions, 'earnXP');
+          earnXPFn({ action: 'VISIT_PROFILE', targetUid: targetUserId, actionId: `visit_${user.uid}_${targetUserId}` })
+            .catch(() => { /* silencioso */ });
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);

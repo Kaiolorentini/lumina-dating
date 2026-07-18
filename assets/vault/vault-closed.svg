@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="vaultClosedGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#78716c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#57534e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="vaultMetal" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#a8a29e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#78716c;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect x="20" y="40" width="88" height="72" rx="4" fill="url(#vaultClosedGrad)"/>
+  <rect x="24" y="44" width="80" height="64" rx="2" fill="#44403c"/>
+  <rect x="48" y="56" width="32" height="24" rx="2" fill="url(#vaultMetal)"/>
+  <circle cx="64" cy="68" r="6" fill="#292524"/>
+  <circle cx="64" cy="68" r="3" fill="#78716c"/>
+  <rect x="36" y="36" width="56" height="8" rx="2" fill="url(#vaultMetal)"/>
+  <line x1="20" y1="44" x2="108" y2="44" stroke="#57534e" stroke-width="2"/>
+  <rect x="28" y="80" width="72" height="4" rx="1" fill="#57534e" opacity="0.5"/>
+  <rect x="28" y="92" width="72" height="4" rx="1" fill="#57534e" opacity="0.5"/>
+</svg>

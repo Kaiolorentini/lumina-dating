@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="stormGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0284c7;stop-opacity:1" />
+    </linearGradient>
+    <filter id="stormGlow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <circle cx="100" cy="100" r="90" fill="none" stroke="url(#stormGrad)" stroke-width="6"/>
+  <circle cx="100" cy="100" r="84" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.3"/>
+  <path d="M60,30 L80,70 L70,70 L90,110 L80,110 L100,150" fill="none" stroke="#fbbf24" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#stormGlow)"/>
+  <path d="M140,40 L120,80 L130,80 L110,120 L120,120 L100,160" fill="none" stroke="#fbbf24" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+  <circle cx="50" cy="50" r="8" fill="#e0f2fe" opacity="0.4"/>
+  <circle cx="150" cy="40" r="10" fill="#e0f2fe" opacity="0.3"/>
+  <circle cx="40" cy="140" r="6" fill="#e0f2fe" opacity="0.3"/>
+  <circle cx="160" cy="150" r="8" fill="#e0f2fe" opacity="0.2"/>
+</svg>

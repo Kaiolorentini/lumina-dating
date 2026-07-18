@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="valentineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ec4899;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f43f5e;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="100" cy="100" r="90" fill="none" stroke="url(#valentineGrad)" stroke-width="6"/>
+  <circle cx="100" cy="100" r="84" fill="none" stroke="#f9a8d4" stroke-width="2" opacity="0.4"/>
+  <path d="M100,30 C100,30 130,50 130,80 C130,100 100,120 100,120 C100,120 70,100 70,80 C70,50 100,30 100,30 Z" fill="#ec4899" opacity="0.6"/>
+  <path d="M100,40 C100,40 120,55 120,75 C120,90 100,105 100,105 C100,105 80,90 80,75 C80,55 100,40 100,40 Z" fill="#f472b6" opacity="0.5"/>
+  <circle cx="60" cy="50" r="4" fill="#f9a8d4" opacity="0.5"/>
+  <circle cx="140" cy="50" r="4" fill="#f9a8d4" opacity="0.5"/>
+  <circle cx="40" cy="100" r="3" fill="#fbcfe8" opacity="0.4"/>
+  <circle cx="160" cy="100" r="3" fill="#fbcfe8" opacity="0.4"/>
+  <circle cx="60" cy="150" r="4" fill="#f9a8d4" opacity="0.5"/>
+  <circle cx="140" cy="150" r="4" fill="#f9a8d4" opacity="0.5"/>
+</svg>

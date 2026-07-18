@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" width="600" height="300">
+  <defs>
+    <linearGradient id="sintoniaWeekGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4c1d95;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="sintoniaWeekGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  <rect width="600" height="300" fill="url(#sintoniaWeekGrad)"/>
+  <circle cx="300" cy="150" r="120" fill="url(#sintoniaWeekGlow)"/>
+  <circle cx="100" cy="50" r="3" fill="#c4b5fd" opacity="0.6"/>
+  <circle cx="500" cy="80" r="4" fill="#ede9fe" opacity="0.5"/>
+  <circle cx="80" cy="200" r="2" fill="#c4b5fd" opacity="0.4"/>
+  <circle cx="520" cy="220" r="3" fill="#ede9fe" opacity="0.6"/>
+  <text x="300" y="120" text-anchor="middle" font-family="Arial" font-size="36" font-weight="bold" fill="#ede9fe">SEMANA DA</text>
+  <text x="300" y="170" text-anchor="middle" font-family="Arial" font-size="48" font-weight="bold" fill="#fbbf24">SINTONIA</text>
+  <text x="300" y="210" text-anchor="middle" font-family="Arial" font-size="16" fill="#c4b5fd">Conecte-se com sua alma gêmea</text>
+  <circle cx="200" cy="250" r="20" fill="none" stroke="#c4b5fd" stroke-width="2" opacity="0.4"/>
+  <circle cx="400" cy="250" r="20" fill="none" stroke="#c4b5fd" stroke-width="2" opacity="0.4"/>
+  <path d="M220,250 L380,250" stroke="#c4b5fd" stroke-width="2" opacity="0.4"/>
+</svg>

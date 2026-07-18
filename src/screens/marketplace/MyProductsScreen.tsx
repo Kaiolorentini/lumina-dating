@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useProducts } from '../../hooks/useProducts';
 import { MarketplaceEmptyState } from '../../components/marketplace/MarketplaceEmptyState';
 import { Product, ProductStatus } from '../../shared/types/marketplace';
+import ScreenContainer from '../../components/ScreenContainer';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -70,7 +71,7 @@ export default function MyProductsScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>‹</Text>
@@ -111,7 +112,7 @@ export default function MyProductsScreen() {
       >
         <Text style={styles.fabText}>+ Novo produto</Text>
       </TouchableOpacity>
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -119,7 +120,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },

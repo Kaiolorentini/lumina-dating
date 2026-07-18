@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="fragRareGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <filter id="fragRareGlow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <polygon points="64,12 92,36 92,92 64,116 36,92 36,36" fill="url(#fragRareGrad)" filter="url(#fragRareGlow)"/>
+  <polygon points="64,24 84,42 84,86 64,104 44,86 44,42" fill="#a78bfa" opacity="0.5"/>
+  <polygon points="64,36 76,46 76,82 64,92 52,82 52,46" fill="#c4b5fd" opacity="0.4"/>
+  <polygon points="64,48 70,52 70,76 64,80 58,76 58,52" fill="#ddd6fe" opacity="0.3"/>
+  <circle cx="64" cy="64" r="6" fill="#ede9fe" opacity="0.5"/>
+</svg>

@@ -1,47 +1,73 @@
 import React, { useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator, RefreshControl,
+  TouchableOpacity, ActivityIndicator, RefreshControl, Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
-import { useFavorites } from '../../hooks/useFavorites';
+import { useFavoriteProducts } from '../../hooks/useFavoriteProducts';
 import { MarketplaceEmptyState } from '../../components/marketplace/MarketplaceEmptyState';
+import ScreenContainer from '../../components/ScreenContainer';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function MyFavoritesScreen() {
   const navigation = useNavigation<NavProp>();
   const { user } = useAuth();
-  const { favoriteIds, loading, loadMore, hasMore, loadingMore, refresh, toggleFavorite } = useFavorites(user?.uid);
+  const { items, loading, loadMore, hasMore, loadingMore, refresh, remove, error } = useFavoriteProducts(user?.uid);
 
-  const renderItem = useCallback(({ item }: { item: string }) => (
-    <View style={styles.card}>
-      <View style={styles.cardInfo}>
-        <Text style={styles.productId} numberOfLines={1}>📦 {item.slice(0, 20)}...</Text>
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh]),
+  );
+
+  const renderItem = useCallback(({ item }: { item: {
+    productId: string; title: string; coverImage: string; ownerId: string;
+  } }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => navigation.navigate('ProductDetail', { productId: item.productId })}
+      activeOpacity={0.85}
+    >
+      <Image
+        source={{ uri: item.coverImage || 'https://via.placeholder.com/60' }}
+        style={styles.cover}
+        resizeMode="cover"
+      />
+      <View style={styles.info}>
+        <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
+        {item.ownerId ? (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('RealProfile', { userId: item.ownerId })}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.creatorLink}>Ver perfil do criador →</Text>
+          </TouchableOpacity>
+        ) : null}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={styles.viewBtn}
+            onPress={() => navigation.navigate('ProductDetail', { productId: item.productId })}
+          >
+            <Text style={styles.viewBtnText}>Ver produto</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.removeBtn}
+            onPress={() => remove(item.productId)}
+          >
+            <Text style={styles.removeBtnText}>Remover</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={styles.cardActions}>
-        <TouchableOpacity
-          style={styles.viewBtn}
-          onPress={() => navigation.navigate('ProductDetail', { productId: item })}
-        >
-          <Text style={styles.viewBtnText}>Ver produto</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.removeBtn}
-          onPress={() => toggleFavorite(item)}
-        >
-          <Text style={styles.removeBtnText}>❌</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  ), [toggleFavorite]);
+    </TouchableOpacity>
+  ), [navigation, remove]);
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>‹</Text>
@@ -52,10 +78,18 @@ export default function MyFavoritesScreen() {
 
       {loading ? (
         <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Erro ao carregar favoritos</Text>
+          <Text style={styles.errorDetail}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={refresh}>
+            <Text style={styles.retryBtnText}>Tentar novamente</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <FlatList
-          data={favoriteIds}
-          keyExtractor={item => item}
+          data={items}
+          keyExtractor={item => item.productId}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.gold} />
@@ -73,7 +107,7 @@ export default function MyFavoritesScreen() {
           renderItem={renderItem}
         />
       )}
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -81,7 +115,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },
@@ -89,17 +123,49 @@ const styles = StyleSheet.create({
   listContent: { padding: spacing.md },
   card: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderColor: colors.grayDark, marginBottom: spacing.md,
+    flexDirection: 'row', overflow: 'hidden',
   },
-  cardInfo: { flex: 1 },
-  productId: { color: colors.gray, fontSize: fonts.sizes.sm },
-  cardActions: { flexDirection: 'row', gap: spacing.sm },
+  cover: {
+    width: 80, height: 80,
+  },
+  info: {
+    flex: 1, padding: spacing.md,
+    justifyContent: 'center',
+  },
+  title: {
+    color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold',
+    marginBottom: spacing.xs,
+  },
+  creatorLink: {
+    color: colors.gold, fontSize: fonts.sizes.sm,
+    marginBottom: spacing.sm,
+  },
+  actions: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+  },
   viewBtn: {
     backgroundColor: colors.gold, borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
   },
   viewBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.sm },
-  removeBtn: { padding: spacing.sm },
-  removeBtnText: { fontSize: 18 },
+  removeBtn: {
+    borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.gray,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
+  },
+  removeBtnText: { color: colors.gray, fontSize: fonts.sizes.sm },
+  errorContainer: {
+    flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.md,
+  },
+  errorText: {
+    color: colors.gold, fontSize: fonts.sizes.lg, fontWeight: 'bold', marginBottom: spacing.sm,
+  },
+  errorDetail: {
+    color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center', marginBottom: spacing.md,
+  },
+  retryBtn: {
+    backgroundColor: colors.gold, borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
+  },
+  retryBtnText: { color: colors.background, fontWeight: 'bold' },
 });

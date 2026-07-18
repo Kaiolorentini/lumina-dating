@@ -14,6 +14,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { RootStackParamList } from '../../../navigation/types';
 import { useRegisterForm } from '../hooks/useAuthForm';
+import ScreenContainer from '../../../components/ScreenContainer';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
@@ -29,80 +30,82 @@ export default function RegisterScreen({ navigation }: Props) {
   } = useRegisterForm();
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <Text style={styles.logo}>✦</Text>
-          <Text style={styles.title}>Lumina</Text>
-          <Text style={styles.phrase}>"Descubra conexões únicas"</Text>
-        </View>
+    <ScreenContainer>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView contentContainerStyle={styles.scroll}>
+          {/* Logo */}
+          <View style={styles.logoContainer}>
+            <Text style={styles.logo}>✦</Text>
+            <Text style={styles.title}>Lumina</Text>
+            <Text style={styles.phrase}>"Descubra conexões únicas"</Text>
+          </View>
 
-        {/* Formulário */}
-        <View style={styles.form}>
-          <Text style={styles.formTitle}>Criar conta</Text>
+          {/* Formulário */}
+          <View style={styles.form}>
+            <Text style={styles.formTitle}>Criar conta</Text>
 
-          <Text style={styles.label}>E-mail</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="seu@email.com"
-            placeholderTextColor={colors.gray}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+            <Text style={styles.label}>E-mail</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="seu@email.com"
+              placeholderTextColor={colors.gray}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
-          <Text style={styles.label}>Senha</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Mínimo 6 caracteres"
-            placeholderTextColor={colors.gray}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+            <Text style={styles.label}>Senha</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Mínimo 6 caracteres"
+              placeholderTextColor={colors.gray}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
 
-          <Text style={styles.label}>Confirmar senha</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Repita sua senha"
-            placeholderTextColor={colors.gray}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-          />
+            <Text style={styles.label}>Confirmar senha</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Repita sua senha"
+              placeholderTextColor={colors.gray}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <TouchableOpacity
-            style={styles.button}
-            onPress={submit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.background} />
-            ) : (
-              <Text style={styles.buttonText}>Criar conta</Text>
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={submit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.background} />
+              ) : (
+                <Text style={styles.buttonText}>Criar conta</Text>
+              )}
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.linkButton}
-            onPress={() => navigation.navigate('Login')}
-          >
-            <Text style={styles.linkText}>
-              Já tem conta?{' '}
-              <Text style={styles.linkTextBold}>Entrar</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <TouchableOpacity
+              style={styles.linkButton}
+              onPress={() => navigation.navigate('Login')}
+            >
+              <Text style={styles.linkText}>
+                Já tem conta?{' '}
+                <Text style={styles.linkTextBold}>Entrar</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ScreenContainer>
   );
 }
 

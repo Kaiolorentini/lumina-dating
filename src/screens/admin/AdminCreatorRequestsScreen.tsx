@@ -12,6 +12,7 @@ import { getUserById } from '../../services/marketplace/adminService';
 import app from '../../core/firebase';
 import { CreatorRequest } from '../../services/marketplace/creatorService';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
+import ScreenContainer from '../../components/ScreenContainer';
 
 const STATUS_TABS = ['pending', 'approved', 'rejected'] as const;
 type StatusTab = typeof STATUS_TABS[number];
@@ -120,7 +121,7 @@ export default function AdminCreatorRequestsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -272,7 +273,7 @@ export default function AdminCreatorRequestsScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -280,7 +281,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },

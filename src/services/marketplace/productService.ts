@@ -28,6 +28,7 @@ import {
   increment,
   serverTimestamp,
   DocumentSnapshot,
+  QueryConstraint,
 } from 'firebase/firestore';
 import {
   ref,
@@ -112,7 +113,7 @@ function createUploadHandle(
                 }
               },
               error => {
-                if ((error as any).code === 'storage/canceled') {
+                if ((error as { code?: string }).code === 'storage/canceled') {
                   reject(new Error('CANCELLED'));
                 } else {
                   reject(error);
@@ -125,7 +126,6 @@ function createUploadHandle(
                     const downloadURL = await getDownloadURL(currentTask!.snapshot.ref);
                     resolve({ downloadURL, storagePath: finalPath });
                   } else {
-                    // Arquivo pago — NUNCA expõe downloadURL
                     resolve({ storagePath: finalPath });
                   }
                 } catch (e) {
@@ -137,12 +137,13 @@ function createUploadHandle(
         );
 
         return result;
-      } catch (error: any) {
-        if (error.message === 'CANCELLED' || cancelled) {
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        if (err.message === 'CANCELLED' || cancelled) {
           throw new Error('Upload cancelado pelo usuário');
         }
         if (attempt === MAX_ATTEMPTS) {
-          throw new Error(`Upload falhou após ${MAX_ATTEMPTS} tentativas: ${error.message}`);
+          throw new Error(`Upload falhou após ${MAX_ATTEMPTS} tentativas: ${err.message}`);
         }
         await new Promise(r => setTimeout(r, attempt * 1000));
       }
@@ -266,13 +267,14 @@ export async function createProduct(
     updatedAt: serverTimestamp(),
   });
 
-  await createAuditLog({
+  // Audit — fire-and-forget, nunca bloqueia o fluxo principal
+  createAuditLog({
     action: 'product_created',
     performedBy: ownerId,
     targetId: docRef.id,
     targetType: 'product',
     metadata: { title: data.title, category: data.category, price: data.price },
-  });
+  }).catch(() => {});
 
   return docRef.id;
 }
@@ -319,13 +321,14 @@ export async function updateProduct(
 
   await updateDoc(productRef, updateData);
 
-  await createAuditLog({
+  // Audit — fire-and-forget
+  createAuditLog({
     action: 'product_updated',
     performedBy: ownerId,
     targetId: productId,
     targetType: 'product',
     metadata: { fields: Object.keys(updates) },
-  });
+  }).catch(() => {});
 }
 
 export async function submitProductForReview(
@@ -348,24 +351,20 @@ export async function submitProductForReview(
     updatedAt: serverTimestamp(),
   });
 
-  await createAuditLog({
+  // Audit e notificação — fire-and-forget
+  createAuditLog({
     action: 'product_submitted_for_review',
     performedBy: ownerId,
     targetId: productId,
     targetType: 'product',
     metadata: { title: snap.data().title },
-  });
+  }).catch(() => {});
 
-  // ✅ Notifica superadmins via push
-  await notifySuperAdmins(
+  notifySuperAdmins(
     '📦 Novo produto para moderação',
     `"${snap.data().title}" aguarda revisão`,
-    {
-      type: 'product_review_new',
-      productId,
-      ownerId,
-    },
-  );
+    { type: 'product_review_new', productId, ownerId },
+  ).catch(() => {});
 }
 
 export async function softDeleteProduct(
@@ -385,13 +384,14 @@ export async function softDeleteProduct(
     updatedAt: serverTimestamp(),
   });
 
-  await createAuditLog({
+  // Audit — fire-and-forget
+  createAuditLog({
     action: 'product_deleted',
     performedBy: ownerId,
     targetId: productId,
     targetType: 'product',
     metadata: { title: snap.data().title },
-  });
+  }).catch(() => {});
 }
 
 export async function getProduct(productId: string): Promise<Product | null> {
@@ -409,7 +409,7 @@ export async function getProducts(filters: {
   lastDoc?: DocumentSnapshot | null;
 }): Promise<{ products: Product[]; lastDoc: DocumentSnapshot | null; hasMore: boolean }> {
   const {
-    status = 'approved',
+    status,
     category,
     ownerId,
     isFeatured,
@@ -417,13 +417,20 @@ export async function getProducts(filters: {
     lastDoc = null,
   } = filters;
 
-  const constraints: any[] = [
+  const constraints: QueryConstraint[] = [
     where('isDeleted', '==', false),
-    where('status', '==', status),
   ];
 
-  if (category) constraints.push(where('category', '==', category));
-  if (ownerId) constraints.push(where('ownerId', '==', ownerId));
+  // Se ownerId passado sem status → mostra todos os status do dono (draft, pending, approved, rejected)
+  // Se sem ownerId → filtra por approved por padrão (marketplace público)
+  if (status) {
+    constraints.push(where('status', '==', status));
+  } else if (!ownerId) {
+    constraints.push(where('status', '==', 'approved'));
+  }
+
+  if (ownerId)    constraints.push(where('ownerId', '==', ownerId));
+  if (category)   constraints.push(where('category', '==', category));
   if (isFeatured !== undefined) constraints.push(where('isFeatured', '==', isFeatured));
 
   constraints.push(orderBy('createdAt', 'desc'));
@@ -435,8 +442,8 @@ export async function getProducts(filters: {
     query(collection(db, MARKETPLACE_COLLECTIONS.PRODUCTS), ...constraints),
   );
 
-  const hasMore = snapshot.docs.length > pageSize;
-  const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
+  const hasMore  = snapshot.docs.length > pageSize;
+  const docs     = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
   const products = docs.map(d => ({ id: d.id, ...d.data() } as Product));
   const newLastDoc = docs.length > 0 ? docs[docs.length - 1] : null;
 
@@ -451,7 +458,7 @@ const SHARD_COUNT = 5;
 
 export async function incrementProductViews(productId: string): Promise<void> {
   try {
-    const shardId = Math.floor(Math.random() * SHARD_COUNT).toString();
+    const shardId  = Math.floor(Math.random() * SHARD_COUNT).toString();
     const shardRef = doc(
       db,
       MARKETPLACE_COLLECTIONS.PRODUCT_ANALYTICS,

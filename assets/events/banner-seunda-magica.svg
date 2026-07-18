@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" width="600" height="300">
+  <defs>
+    <linearGradient id="mondaMagicGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e40af;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e3a8a;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="mondaMagicGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#1e40af;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  <rect width="600" height="300" fill="url(#mondaMagicGrad)"/>
+  <circle cx="300" cy="150" r="100" fill="url(#mondaMagicGlow)"/>
+  <path d="M150,80 L160,60 L170,80" fill="#fbbf24" opacity="0.7"/>
+  <path d="M430,70 L440,50 L450,70" fill="#fbbf24" opacity="0.6"/>
+  <path d="M200,220 L210,200 L220,220" fill="#fbbf24" opacity="0.5"/>
+  <text x="300" y="120" text-anchor="middle" font-family="Arial" font-size="36" font-weight="bold" fill="#e0f2fe">SEGUNDA</text>
+  <text x="300" y="170" text-anchor="middle" font-family="Arial" font-size="48" font-weight="bold" fill="#fbbf24">MÁGICA</text>
+  <text x="300" y="210" text-anchor="middle" font-family="Arial" font-size="16" fill="#93c5fd">O melhor dia para encontrar amor</text>
+  <circle cx="100" cy="250" r="8" fill="#60a5fa" opacity="0.4"/>
+  <circle cx="500" cy="250" r="8" fill="#60a5fa" opacity="0.4"/>
+</svg>

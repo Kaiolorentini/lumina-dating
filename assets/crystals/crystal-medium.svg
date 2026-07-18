@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="mediumGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#7c3aed;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6d28d9;stop-opacity:1" />
+    </linearGradient>
+    <filter id="mediumGlow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <polygon points="64,4 88,32 96,72 64,124 32,72 40,32" fill="url(#mediumGrad)" filter="url(#mediumGlow)"/>
+  <polygon points="64,16 80,36 86,68 64,112 42,68 48,36" fill="#a78bfa" opacity="0.5"/>
+  <polygon points="64,28 74,42 78,62 64,100 50,62 54,42" fill="#ddd6fe" opacity="0.4"/>
+  <polygon points="64,40 70,48 72,58 64,88 56,58 58,48" fill="#ede9fe" opacity="0.3"/>
+  <circle cx="64" cy="64" r="8" fill="#f5f3ff" opacity="0.6"/>
+</svg>

@@ -16,16 +16,6 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-// ============================================
-// SISTEMA DE VISITAS DE PERFIL
-//
-// Duas coleções:
-//
-// 1. profile_visits/ — registro individual de cada visita
-// 2. profile_visit_counts/ — contador de visitas por perfil
-//    (usado para buscar os mais visitados rapidamente)
-// ============================================
-
 export interface ProfileVisit {
   id: string;
   visitorId: string;
@@ -42,7 +32,6 @@ export interface ProfileVisitCount {
 
 const DUPLICATE_WINDOW_MINUTES = 5;
 
-// Verifica se já existe visita recente
 async function hasRecentVisit(
   visitorId: string,
   profileId: string
@@ -66,7 +55,6 @@ async function hasRecentVisit(
   }
 }
 
-// Atualiza contador de visitas do perfil
 async function updateVisitCount(profileId: string): Promise<void> {
   try {
     const countRef = doc(db, 'profile_visit_counts', profileId);
@@ -80,7 +68,6 @@ async function updateVisitCount(profileId: string): Promise<void> {
       const lastVisitDate = data.lastVisit?.toDate() || new Date(0);
       lastVisitDate.setHours(0, 0, 0, 0);
 
-      // Reseta contador diário se for novo dia
       const isNewDay = lastVisitDate.getTime() < today.getTime();
 
       await updateDoc(countRef, {
@@ -89,7 +76,6 @@ async function updateVisitCount(profileId: string): Promise<void> {
         lastVisit: serverTimestamp(),
       });
     } else {
-      // Cria contador novo
       await setDoc(countRef, {
         profileId,
         totalVisits: 1,
@@ -98,41 +84,45 @@ async function updateVisitCount(profileId: string): Promise<void> {
       });
     }
   } catch (error) {
-    console.error('Erro ao atualizar contador:', error);
+    console.error('[updateVisitCount] Erro:', error);
   }
 }
 
-// Registra visita ao perfil
 export async function registrarVisita(
   visitorId: string,
   profileId: string
 ): Promise<boolean> {
+  if (!visitorId || !profileId) {
+    console.warn('[registrarVisita] IDs inválidos — abortando:', visitorId, profileId);
+    return false;
+  }
   try {
+    console.log('[registrarVisita] Iniciando:', visitorId, '->', profileId);
+
     const isDuplicate = await hasRecentVisit(visitorId, profileId);
+    console.log('[registrarVisita] isDuplicate:', isDuplicate);
+
     if (isDuplicate) {
-      console.log('⏱️ Visita ignorada — muito recente');
+      console.log('[registrarVisita] Visita ignorada — muito recente');
       return false;
     }
 
-    // Salva visita individual
+    console.log('[registrarVisita] Criando documento...');
     await addDoc(collection(db, 'profile_visits'), {
       visitorId,
       profileId,
       timestamp: serverTimestamp(),
     });
+    console.log('[registrarVisita] ✅ Documento criado com sucesso');
 
-    // Atualiza contador do perfil
     await updateVisitCount(profileId);
-
-    console.log('✅ Visita registrada com sucesso');
     return true;
   } catch (error) {
-    console.error('Erro ao registrar visita:', error);
+    console.error('[registrarVisita] ❌ Erro:', error);
     return false;
   }
 }
 
-// Busca visitas de hoje
 export async function getVisitasHoje(profileId: string): Promise<number> {
   try {
     const countRef = doc(db, 'profile_visit_counts', profileId);
@@ -147,7 +137,6 @@ export async function getVisitasHoje(profileId: string): Promise<number> {
     today.setHours(0, 0, 0, 0);
     lastVisitDate.setHours(0, 0, 0, 0);
 
-    // Se a última visita foi hoje, retorna o contador diário
     if (lastVisitDate.getTime() === today.getTime()) {
       return data.todayVisits || 0;
     }
@@ -158,7 +147,6 @@ export async function getVisitasHoje(profileId: string): Promise<number> {
   }
 }
 
-// Busca total de visitas
 export async function getTotalVisitas(profileId: string): Promise<number> {
   try {
     const countRef = doc(db, 'profile_visit_counts', profileId);
@@ -170,7 +158,6 @@ export async function getTotalVisitas(profileId: string): Promise<number> {
   }
 }
 
-// Busca os perfis mais visitados
 export async function getMostVisitedProfiles(
   limitCount: number = 20
 ): Promise<ProfileVisitCount[]> {
@@ -189,12 +176,11 @@ export async function getMostVisitedProfiles(
       lastVisit: d.data().lastVisit?.toDate() || new Date(),
     }));
   } catch (error) {
-    console.error('Erro ao buscar mais visitados:', error);
+    console.error('[getMostVisitedProfiles] Erro:', error);
     return [];
   }
 }
 
-// Busca visitas recentes
 export async function getVisitasRecentes(
   profileId: string,
   limitCount: number = 10
@@ -208,11 +194,11 @@ export async function getVisitasRecentes(
     );
 
     const snap = await getDocs(q);
-    return snap.docs.map(doc => ({
-      id: doc.id,
-      visitorId: doc.data().visitorId,
-      profileId: doc.data().profileId,
-      timestamp: doc.data().timestamp?.toDate() || new Date(),
+    return snap.docs.map(d => ({
+      id: d.id,
+      visitorId: d.data().visitorId,
+      profileId: d.data().profileId,
+      timestamp: d.data().timestamp?.toDate() || new Date(),
     }));
   } catch (error) {
     return [];

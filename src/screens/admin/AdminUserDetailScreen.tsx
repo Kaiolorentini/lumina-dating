@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Alert,
+  TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -13,6 +13,7 @@ import { getUserById, getScreenshotEvents } from '../../services/marketplace/adm
 import app from '../../core/firebase';
 import { UserProfile } from '../../shared/types';
 import { useSuperAdminGuard } from '../../hooks/useAdminGuard';
+import ScreenContainer from '../../components/ScreenContainer';
 
 type RouteProps = RouteProp<RootStackParamList, 'AdminUserDetail'>;
 
@@ -27,6 +28,10 @@ export default function AdminUserDetailScreen() {
   const [screenshots, setScreenshots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+
+  // ✅ Modal de bloqueio — funciona no Android e iOS (Alert.prompt é iOS-only)
+  const [blockModal, setBlockModal] = useState(false);
+  const [blockReason, setBlockReason] = useState('');
 
   useEffect(() => {
     loadData();
@@ -48,22 +53,29 @@ export default function AdminUserDetailScreen() {
     }
   }
 
-  async function handleBlock() {
-    Alert.prompt('Bloquear usuário', 'Motivo do bloqueio:', async (reason) => {
-      if (!reason?.trim()) return;
-      setProcessing(true);
-      try {
-        const functions = getFunctions(app, 'us-central1');
-        const block = httpsCallable(functions, 'blockUser');
-        await block({ userId, reason });
-        Alert.alert('✅ Usuário bloqueado');
-        loadData();
-      } catch (e: any) {
-        Alert.alert('Erro', e.message);
-      } finally {
-        setProcessing(false);
-      }
-    }, 'plain-text');
+  function openBlockModal() {
+    setBlockReason('');
+    setBlockModal(true);
+  }
+
+  async function confirmBlock() {
+    if (!blockReason.trim()) {
+      Alert.alert('Erro', 'Informe o motivo do bloqueio.');
+      return;
+    }
+    setBlockModal(false);
+    setProcessing(true);
+    try {
+      const functions = getFunctions(app, 'us-central1');
+      const block = httpsCallable(functions, 'blockUser');
+      await block({ userId, reason: blockReason.trim() });
+      Alert.alert('✅ Usuário bloqueado');
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Erro', e.message);
+    } finally {
+      setProcessing(false);
+    }
   }
 
   async function handleUnblock() {
@@ -90,16 +102,16 @@ export default function AdminUserDetailScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+      <ScreenContainer style={{ alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={colors.gold} />
-      </View>
+      </ScreenContainer>
     );
   }
 
   const isBlocked = (profile as any)?.isBlocked;
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>‹</Text>
@@ -144,14 +156,47 @@ export default function AdminUserDetailScreen() {
                 <Text style={styles.unblockBtnText}>✅ Desbloquear usuário</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.blockBtn} onPress={handleBlock}>
+              <TouchableOpacity style={styles.blockBtn} onPress={openBlockModal}>
                 <Text style={styles.blockBtnText}>🚫 Bloquear usuário</Text>
               </TouchableOpacity>
             )}
           </View>
         )}
       </ScrollView>
-    </View>
+
+      {/* ✅ Modal de bloqueio — Android + iOS */}
+      <Modal
+        visible={blockModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBlockModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🚫 Bloquear usuário</Text>
+            <Text style={styles.modalSubtitle}>{profile?.name ?? userId.slice(0, 16)}</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Informe o motivo do bloqueio..."
+              placeholderTextColor={colors.gray}
+              value={blockReason}
+              onChangeText={setBlockReason}
+              multiline
+              numberOfLines={3}
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setBlockModal(false)}>
+                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmBlock}>
+                <Text style={styles.modalConfirmBtnText}>Bloquear</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </ScreenContainer>
   );
 }
 
@@ -159,7 +204,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },
@@ -186,4 +231,31 @@ const styles = StyleSheet.create({
     borderColor: colors.success, padding: spacing.md, alignItems: 'center',
   },
   unblockBtnText: { color: colors.success, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  // Modal
+  modalOverlay: {
+    flex: 1, backgroundColor: '#00000088',
+    alignItems: 'center', justifyContent: 'center', padding: spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
+    borderColor: colors.grayDark, padding: spacing.lg, width: '100%', gap: spacing.md,
+  },
+  modalTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
+  modalSubtitle: { color: colors.gray, fontSize: fonts.sizes.sm },
+  modalInput: {
+    backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1,
+    borderColor: colors.grayDark, color: colors.white, padding: spacing.md,
+    fontSize: fonts.sizes.md, textAlignVertical: 'top', minHeight: 80,
+  },
+  modalActions: { flexDirection: 'row', gap: spacing.sm },
+  modalCancelBtn: {
+    flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm,
+    padding: spacing.md, alignItems: 'center',
+  },
+  modalCancelBtnText: { color: colors.white, fontWeight: 'bold' },
+  modalConfirmBtn: {
+    flex: 1, backgroundColor: colors.error, borderRadius: borderRadius.sm,
+    padding: spacing.md, alignItems: 'center',
+  },
+  modalConfirmBtnText: { color: colors.white, fontWeight: 'bold' },
 });

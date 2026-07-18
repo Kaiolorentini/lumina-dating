@@ -12,29 +12,18 @@ import { useFavorites } from '../../hooks/useFavorites';
 import { useAuth } from '../../context/AuthContext';
 import { ProductCard } from '../../components/marketplace/ProductCard';
 import { MarketplaceEmptyState } from '../../components/marketplace/MarketplaceEmptyState';
-import { ProductCategory } from '../../shared/types/marketplace';
+import ScreenContainer from '../../components/ScreenContainer';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
-
-const CATEGORIES: { label: string; value: ProductCategory | 'todos' }[] = [
-  { label: 'Todos', value: 'todos' },
-  { label: 'Fotos', value: 'fotos' },
-  { label: 'Vídeos', value: 'videos' },
-  { label: 'Cursos', value: 'cursos' },
-  { label: 'PDFs', value: 'pdfs' },
-  { label: 'Outros', value: 'outros' },
-];
 
 export default function MarketplaceHomeScreen() {
   const navigation = useNavigation<NavProp>();
   const { user } = useAuth();
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'todos'>('todos');
 
   const filters = useMemo(() => ({
     status: 'approved' as const,
-    category: selectedCategory === 'todos' ? undefined : selectedCategory,
-  }), [selectedCategory]);
+  }), []);
 
   const { products, loading, loadingMore, hasMore, loadMore, refresh } = useProducts(filters);
   const { favoriteIds, toggleFavorite } = useFavorites(user?.uid);
@@ -51,7 +40,7 @@ export default function MarketplaceHomeScreen() {
   }, [loadingMore, hasMore, loadMore]);
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -72,39 +61,30 @@ export default function MarketplaceHomeScreen() {
         />
       </View>
 
-      {/* Categorias */}
-      <FlatList
-        horizontal
-        data={CATEGORIES}
-        keyExtractor={item => item.value}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoriesContainer}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.categoryChip,
-              selectedCategory === item.value && styles.categoryChipActive,
-            ]}
-            onPress={() => setSelectedCategory(item.value)}
-          >
-            <Text style={[
-              styles.categoryText,
-              selectedCategory === item.value && styles.categoryTextActive,
-            ]}>
-              {item.label}
-            </Text>
-          </TouchableOpacity>
-        )}
-      />
-
       {/* Produtos */}
       {loading ? (
-        <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
+        <View style={styles.skeletonContainer}>
+          {[0, 1].map(row => (
+            <View key={row} style={styles.skeletonRow}>
+              {[0, 1].map(col => (
+                <View key={col} style={styles.skeletonCard}>
+                  <View style={styles.skeletonImage} />
+                  <View style={styles.skeletonInfo}>
+                    <View style={styles.skeletonLineWide} />
+                    <View style={styles.skeletonLineShort} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
       ) : (
         <FlatList
           data={filteredProducts}
           keyExtractor={item => item.id}
+          numColumns={2}
           contentContainerStyle={styles.listContent}
+          columnWrapperStyle={styles.columnWrapper}
           refreshControl={
             <RefreshControl
               refreshing={false}
@@ -127,18 +107,22 @@ export default function MarketplaceHomeScreen() {
             ) : null
           }
           renderItem={({ item }) => (
-            <ProductCard
-              product={item}
-              onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
-              onFavorite={() => toggleFavorite(item.id)}
-              isFavorited={favoriteIds.includes(item.id)}
-            />
+            <View style={styles.cardWrapper}>
+              <ProductCard
+                product={item}
+                onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
+                onFavorite={() => toggleFavorite(item.id)}
+                isFavorited={favoriteIds.includes(item.id)}
+              />
+            </View>
           )}
         />
       )}
-    </View>
+    </ScreenContainer>
   );
 }
+
+const CARD_GAP = spacing.sm;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -147,7 +131,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
     paddingBottom: spacing.md,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.gold + '44',
@@ -168,20 +151,35 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     fontSize: fonts.sizes.md,
   },
-  categoriesContainer: { paddingHorizontal: spacing.md, gap: spacing.sm },
-  categoryChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+  listContent: { padding: spacing.md, paddingTop: spacing.sm, rowGap: CARD_GAP },
+  columnWrapper: { gap: CARD_GAP },
+  cardWrapper: { flex: 1 },
+  skeletonContainer: { padding: spacing.md, paddingTop: spacing.sm, gap: CARD_GAP },
+  skeletonRow: { flexDirection: 'row', gap: CARD_GAP },
+  skeletonCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.grayDark,
-    marginRight: spacing.xs,
+    overflow: 'hidden',
   },
-  categoryChipActive: {
-    backgroundColor: colors.gold,
-    borderColor: colors.gold,
+  skeletonImage: {
+    width: '100%',
+    height: 140,
+    backgroundColor: colors.grayDark + '44',
   },
-  categoryText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  categoryTextActive: { color: colors.background, fontWeight: 'bold' },
-  listContent: { padding: spacing.md },
+  skeletonInfo: { padding: spacing.md, gap: spacing.sm },
+  skeletonLineWide: {
+    height: 14,
+    backgroundColor: colors.grayDark + '44',
+    borderRadius: borderRadius.sm,
+    width: '80%',
+  },
+  skeletonLineShort: {
+    height: 14,
+    backgroundColor: colors.grayDark + '44',
+    borderRadius: borderRadius.sm,
+    width: '50%',
+  },
 });

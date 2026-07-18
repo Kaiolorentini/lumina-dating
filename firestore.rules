@@ -335,7 +335,7 @@ match /creatorRequests/{requestId} {
     match /favorites/{favoriteId} {
       allow read: if isAuthenticated() &&
         resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && isNotBlocked() &&
+      allow create: if isAuthenticated() &&
         request.resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() &&
         resource.data.userId == request.auth.uid;

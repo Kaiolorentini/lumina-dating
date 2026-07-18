@@ -1,6 +1,11 @@
 // ============================================
 // LUMINA — INIT WALLET
 // functions/src/economy/initWallet.ts
+//
+// v2: garante role/isBlocked no documento users/{uid}.
+// Admin SDK ignora Firestore Rules — este é o lugar
+// correto e seguro para inicializar campos protegidos.
+// merge:true torna idempotente (não sobrescreve se já existir).
 // ============================================
 
 import * as admin from 'firebase-admin';
@@ -21,6 +26,18 @@ export const initWallet = onCall(
     try {
       await db.runTransaction(async (t) => {
         const walletSnap = await t.get(walletRef);
+        const userSnap   = await t.get(userRef);
+
+        // Garante role/isBlocked SEMPRE — mesmo se a wallet já existe.
+        // Só define se ainda não existirem (idempotente, não sobrescreve).
+        const userData    = userSnap.exists ? userSnap.data() ?? {} : {};
+        const roleFields: Record<string, unknown> = {};
+        if (userData.role === undefined)      roleFields.role = 'user';
+        if (userData.isBlocked === undefined) roleFields.isBlocked = false;
+
+        if (Object.keys(roleFields).length > 0) {
+          t.set(userRef, roleFields, { merge: true });
+        }
 
         // Admin SDK: .exists é propriedade, não método
         if (walletSnap.exists) {

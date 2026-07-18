@@ -65,6 +65,7 @@ export function useFavorites(
       lastDocRef.current = result.lastDoc;
     } catch (e: any) {
       if (!mountedRef.current || thisRequestId !== requestIdRef.current) return;
+      console.error('[useFavorites] fetchFirst error:', e.code, e.message);
       setError(e.message ?? 'Erro ao carregar favoritos');
     } finally {
       if (mountedRef.current && thisRequestId === requestIdRef.current) {

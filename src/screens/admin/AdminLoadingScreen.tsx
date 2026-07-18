@@ -4,6 +4,7 @@ import {
   Dimensions, StatusBar,
 } from 'react-native';
 import { colors, fonts, spacing } from '../../theme';
+import ScreenContainer from '../../components/ScreenContainer';
 
 const { width, height } = Dimensions.get('window');
 
@@ -192,106 +193,108 @@ export default function AdminLoadingScreen({ onFinish }: Props) {
   });
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      <StatusBar backgroundColor="#050505" barStyle="light-content" />
+    <ScreenContainer>
+      <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+        <StatusBar backgroundColor="#050505" barStyle="light-content" />
 
-      {/* Fundo com grade */}
-      <View style={styles.gridOverlay} />
+        {/* Fundo com grade */}
+        <View style={styles.gridOverlay} />
 
-      {/* Scanner animado */}
-      <Animated.View style={[
-        styles.scanLine,
-        { transform: [{ translateY: scanTranslate }] },
-      ]} />
+        {/* Scanner animado */}
+        <Animated.View style={[
+          styles.scanLine,
+          { transform: [{ translateY: scanTranslate }] },
+        ]} />
 
-      {/* Glow dourado de fundo */}
-      <Animated.View style={[styles.glowCircle, { opacity: glowOpacity }]} />
+        {/* Glow dourado de fundo */}
+        <Animated.View style={[styles.glowCircle, { opacity: glowOpacity }]} />
 
-      {/* Cantos decorativos */}
-      <View style={[styles.corner, styles.cornerTL]} />
-      <View style={[styles.corner, styles.cornerTR]} />
-      <View style={[styles.corner, styles.cornerBL]} />
-      <View style={[styles.corner, styles.cornerBR]} />
+        {/* Cantos decorativos */}
+        <View style={[styles.corner, styles.cornerTL]} />
+        <View style={[styles.corner, styles.cornerTR]} />
+        <View style={[styles.corner, styles.cornerBL]} />
+        <View style={[styles.corner, styles.cornerBR]} />
 
-      {/* Conteúdo principal */}
-      <View style={styles.content}>
+        {/* Conteúdo principal */}
+        <View style={styles.content}>
 
-        {/* Ícone + título */}
-        <Animated.Text style={[styles.crownIcon, { transform: [{ scale: pulseAnim }] }]}>
-          👑
-        </Animated.Text>
+          {/* Ícone + título */}
+          <Animated.Text style={[styles.crownIcon, { transform: [{ scale: pulseAnim }] }]}>
+            👑
+          </Animated.Text>
 
-        <Text style={styles.title}>SUPER ADMIN</Text>
-        <View style={styles.titleUnderline} />
-        <Text style={styles.subtitle}>LUMINA · ACESSO NÍVEL MÁXIMO</Text>
+          <Text style={styles.title}>SUPER ADMIN</Text>
+          <View style={styles.titleUnderline} />
+          <Text style={styles.subtitle}>LUMINA · ACESSO NÍVEL MÁXIMO</Text>
 
-        {/* Divisor */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerDot}>◆</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Steps de carregamento */}
-        <View style={styles.stepsContainer}>
-          {STATUS_STEPS.map((step, index) => {
-            const isCompleted = completedSteps.includes(index);
-            const isCurrent = currentStep === index && !isCompleted;
-            return (
-              <View key={index} style={styles.stepRow}>
-                <View style={[
-                  styles.stepDot,
-                  isCompleted && styles.stepDotCompleted,
-                  isCurrent && styles.stepDotActive,
-                ]} />
-                <Text style={[
-                  styles.stepLabel,
-                  isCompleted && styles.stepLabelCompleted,
-                  isCurrent && styles.stepLabelActive,
-                ]}>
-                  {isCompleted ? `✓  ${step.label}` : isCurrent ? `▶  ${step.label}` : `○  ${step.label}`}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Barra de progresso */}
-        <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: progressAnim }]}>
-            <View style={styles.progressGlow} />
-          </Animated.View>
-        </View>
-
-        {/* Divisor */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerDot}>◆</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Card de dica */}
-        <Animated.View style={[styles.tipCard, { opacity: tipFadeAnim }]}>
-          <View style={styles.tipTopBar} />
-          <View style={styles.tipHeader}>
-            <Text style={styles.tipIcon}>{currentTip.icon}</Text>
-            <View>
-              <Text style={styles.tipCategoryLabel}>DICA · {currentTip.category.toUpperCase()}</Text>
-            </View>
+          {/* Divisor */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerDot}>◆</Text>
+            <View style={styles.dividerLine} />
           </View>
-          <Text style={styles.tipText}>{currentTip.tip}</Text>
-          <View style={styles.tipBottomBar} />
-        </Animated.View>
 
-      </View>
+          {/* Steps de carregamento */}
+          <View style={styles.stepsContainer}>
+            {STATUS_STEPS.map((step, index) => {
+              const isCompleted = completedSteps.includes(index);
+              const isCurrent = currentStep === index && !isCompleted;
+              return (
+                <View key={index} style={styles.stepRow}>
+                  <View style={[
+                    styles.stepDot,
+                    isCompleted && styles.stepDotCompleted,
+                    isCurrent && styles.stepDotActive,
+                  ]} />
+                  <Text style={[
+                    styles.stepLabel,
+                    isCompleted && styles.stepLabelCompleted,
+                    isCurrent && styles.stepLabelActive,
+                  ]}>
+                    {isCompleted ? `✓  ${step.label}` : isCurrent ? `▶  ${step.label}` : `○  ${step.label}`}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
 
-      {/* Rodapé */}
-      <View style={styles.footer}>
-        <View style={styles.footerDot} />
-        <Text style={styles.footerText}>SESSÃO CRIPTOGRAFADA · AUDIT ATIVO</Text>
-        <View style={styles.footerDot} />
-      </View>
-    </Animated.View>
+          {/* Barra de progresso */}
+          <View style={styles.progressTrack}>
+            <Animated.View style={[styles.progressFill, { width: progressAnim }]}>
+              <View style={styles.progressGlow} />
+            </Animated.View>
+          </View>
+
+          {/* Divisor */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerDot}>◆</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Card de dica */}
+          <Animated.View style={[styles.tipCard, { opacity: tipFadeAnim }]}>
+            <View style={styles.tipTopBar} />
+            <View style={styles.tipHeader}>
+              <Text style={styles.tipIcon}>{currentTip.icon}</Text>
+              <View>
+                <Text style={styles.tipCategoryLabel}>DICA · {currentTip.category.toUpperCase()}</Text>
+              </View>
+            </View>
+            <Text style={styles.tipText}>{currentTip.tip}</Text>
+            <View style={styles.tipBottomBar} />
+          </Animated.View>
+
+        </View>
+
+        {/* Rodapé */}
+        <View style={styles.footer}>
+          <View style={styles.footerDot} />
+          <Text style={styles.footerText}>SESSÃO CRIPTOGRAFADA · AUDIT ATIVO</Text>
+          <View style={styles.footerDot} />
+        </View>
+      </Animated.View>
+    </ScreenContainer>
   );
 }
 

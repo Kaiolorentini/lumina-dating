@@ -33,15 +33,16 @@ export async function registerDownload(
       createdAt: serverTimestamp(),
     });
 
-    await createAuditLog({
+    // Audit — fire-and-forget, nunca bloqueia o acesso ao conteúdo
+    createAuditLog({
       action: 'download_registered',
       performedBy: userId,
       targetId: purchaseId,
       targetType: 'product',
       metadata: { productId, fileIndex },
-    });
+    }).catch(() => { /* auditoria nunca bloqueia */ });
+
   } catch (error) {
-    // Download log não deve bloquear o acesso
     console.warn('[downloadsService] Erro ao registrar download:', error);
   }
 }

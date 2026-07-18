@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="halloweenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f97316;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="100" cy="100" r="90" fill="none" stroke="url(#halloweenGrad)" stroke-width="6"/>
+  <circle cx="100" cy="100" r="84" fill="none" stroke="#f97316" stroke-width="2" opacity="0.3"/>
+  <path d="M70,40 Q80,20 90,40 Q100,20 110,40 Q120,20 130,40" fill="none" stroke="#f97316" stroke-width="3" opacity="0.6"/>
+  <circle cx="75" cy="70" r="6" fill="#f97316" opacity="0.8"/>
+  <circle cx="125" cy="70" r="6" fill="#f97316" opacity="0.8"/>
+  <path d="M80,100 Q100,120 120,100" fill="none" stroke="#7c3aed" stroke-width="3" opacity="0.6"/>
+  <circle cx="50" cy="140" r="4" fill="#a78bfa" opacity="0.5"/>
+  <circle cx="150" cy="140" r="4" fill="#a78bfa" opacity="0.5"/>
+  <circle cx="100" cy="160" r="3" fill="#f97316" opacity="0.4"/>
+</svg>

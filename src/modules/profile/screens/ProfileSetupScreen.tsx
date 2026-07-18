@@ -16,6 +16,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { RootStackParamList } from '../../../navigation/types';
 import { Gender, Preference } from '../../../shared/types';
 import { useProfileSetup } from '../hooks/useProfileSetup';
+import ScreenContainer from '../../../components/ScreenContainer';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -47,6 +48,7 @@ export default function ProfileSetupScreen() {
     city, setCity,
     state, setState,
     bio, setBio,
+    cpf, setCpf,
     gender, setGender,
     preferences, togglePreference,
     photoURI, pickPhoto,
@@ -124,139 +126,169 @@ export default function ProfileSetupScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <View style={styles.header}>
-        <Text style={styles.logo}>*</Text>
-        <Text style={styles.title}>
-          {isEditing ? 'Editar Perfil' : 'Seu Perfil'}
-        </Text>
-        <Text style={styles.subtitle}>
-          Essas informacoes geram sua Sintonia
-        </Text>
-      </View>
-
-      <TouchableOpacity style={styles.photoContainer} onPress={pickPhoto}>
-        {photoURI ? (
-          <Image source={{ uri: photoURI }} style={styles.photo} />
-        ) : (
-          <View style={styles.photoPlaceholder}>
-            <Text style={styles.photoIcon}>+</Text>
-            <Text style={styles.photoText}>Adicionar foto</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      <Text style={styles.label}>Nome *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Seu nome"
-        placeholderTextColor={colors.gray}
-        value={name}
-        onChangeText={setName}
-      />
-
-      <Text style={styles.label}>Idade *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Sua idade"
-        placeholderTextColor={colors.gray}
-        value={age}
-        onChangeText={setAge}
-        keyboardType="numeric"
-        maxLength={3}
-      />
-
-      <Text style={styles.label}>Cidade *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Sua cidade"
-        placeholderTextColor={colors.gray}
-        value={city}
-        onChangeText={setCity}
-      />
-
-      <Text style={styles.label}>Estado *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Ex: SP, RJ, MG"
-        placeholderTextColor={colors.gray}
-        value={state}
-        onChangeText={setState}
-        maxLength={2}
-        autoCapitalize="characters"
-      />
-
-      <Text style={styles.label}>Bio</Text>
-      <TextInput
-        style={[styles.input, styles.bioInput]}
-        placeholder="Fale um pouco sobre voce..."
-        placeholderTextColor={colors.gray}
-        value={bio}
-        onChangeText={setBio}
-        multiline
-        maxLength={300}
-      />
-
-      <Text style={styles.label}>Genero *</Text>
-      <View style={styles.optionsRow}>
-        {GENDER_OPTIONS.map(option => (
-          <TouchableOpacity
-            key={option.value}
-            style={[
-              styles.optionButton,
-              gender === option.value && styles.optionButtonActive,
-            ]}
-            onPress={() => setGender(option.value)}
-          >
-            <Text style={[
-              styles.optionText,
-              gender === option.value && styles.optionTextActive,
-            ]}>
-              {option.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={styles.label}>Tenho interesse em *</Text>
-      <View style={styles.optionsRow}>
-        {PREFERENCE_OPTIONS.map(option => (
-          <TouchableOpacity
-            key={option.value}
-            style={[
-              styles.optionButton,
-              preferences.includes(option.value) && styles.optionButtonActive,
-            ]}
-            onPress={() => togglePreference(option.value)}
-          >
-            <Text style={[
-              styles.optionText,
-              preferences.includes(option.value) && styles.optionTextActive,
-            ]}>
-              {option.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleSave}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color={colors.background} />
-        ) : (
-          <Text style={styles.buttonText}>
-            {isEditing ? 'Salvar alteracoes' : 'Salvar e continuar'}
+    <ScreenContainer>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.header}>
+          <Text style={styles.logo}>*</Text>
+          <Text style={styles.title}>
+            {isEditing ? 'Editar Perfil' : 'Seu Perfil'}
           </Text>
-        )}
-      </TouchableOpacity>
+          <Text style={styles.subtitle}>
+            Essas informacoes geram sua Sintonia
+          </Text>
+        </View>
 
-      <View style={{ height: 40 }} />
-    </ScrollView>
+        <TouchableOpacity style={styles.photoContainer} onPress={pickPhoto}>
+          {photoURI ? (
+            <Image source={{ uri: photoURI }} style={styles.photo} />
+          ) : (
+            <View style={styles.photoPlaceholder}>
+              <Text style={styles.photoIcon}>+</Text>
+              <Text style={styles.photoText}>Adicionar foto</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.label}>Nome *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Seu nome"
+          placeholderTextColor={colors.gray}
+          value={name}
+          onChangeText={setName}
+        />
+
+        <Text style={styles.label}>Idade *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Sua idade"
+          placeholderTextColor={colors.gray}
+          value={age}
+          onChangeText={setAge}
+          keyboardType="numeric"
+          maxLength={3}
+        />
+
+        <Text style={styles.label}>Cidade *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Sua cidade"
+          placeholderTextColor={colors.gray}
+          value={city}
+          onChangeText={setCity}
+        />
+
+        <Text style={styles.label}>Estado *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Ex: SP, RJ, MG"
+          placeholderTextColor={colors.gray}
+          value={state}
+          onChangeText={setState}
+          maxLength={2}
+          autoCapitalize="characters"
+        />
+
+        <Text style={styles.label}>Bio</Text>
+        <TextInput
+          style={[styles.input, styles.bioInput]}
+          placeholder="Fale um pouco sobre voce..."
+          placeholderTextColor={colors.gray}
+          value={bio}
+          onChangeText={setBio}
+          multiline
+          maxLength={300}
+        />
+
+        <Text style={styles.label}>CPF (para compras)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="000.000.000-00"
+          placeholderTextColor={colors.gray}
+          value={cpf}
+          onChangeText={setCpf}
+          keyboardType="numeric"
+          maxLength={14}
+        />
+        <View style={styles.cpfInfoBox}>
+          <Text style={styles.cpfInfoTitle}>Por que pedimos seu CPF?</Text>
+          <Text style={styles.cpfInfoText}>
+            O CPF é necessário apenas para processar pagamentos de compras no
+            marketplace, conforme exigido pela regulamentação do Banco Central
+            para transações via Pix.
+          </Text>
+          <Text style={styles.cpfInfoText}>
+            É totalmente opcional — preencha somente se desejar comprar conteúdos.
+            Você pode adicioná-lo depois, a qualquer momento, aqui no seu perfil.
+          </Text>
+          <Text style={styles.cpfPrivacyText}>
+            🔒 Seu CPF é armazenado com segurança, nunca é exibido para outros
+            usuários e jamais será compartilhado ou usado para qualquer
+            finalidade sem a sua permissão.
+          </Text>
+        </View>
+
+        <Text style={styles.label}>Genero *</Text>
+        <View style={styles.optionsRow}>
+          {GENDER_OPTIONS.map(option => (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.optionButton,
+                gender === option.value && styles.optionButtonActive,
+              ]}
+              onPress={() => setGender(option.value)}
+            >
+              <Text style={[
+                styles.optionText,
+                gender === option.value && styles.optionTextActive,
+              ]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Tenho interesse em *</Text>
+        <View style={styles.optionsRow}>
+          {PREFERENCE_OPTIONS.map(option => (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.optionButton,
+                preferences.includes(option.value) && styles.optionButtonActive,
+              ]}
+              onPress={() => togglePreference(option.value)}
+            >
+              <Text style={[
+                styles.optionText,
+                preferences.includes(option.value) && styles.optionTextActive,
+              ]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <TouchableOpacity
+          style={styles.button}
+          onPress={handleSave}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.background} />
+          ) : (
+            <Text style={styles.buttonText}>
+              {isEditing ? 'Salvar alteracoes' : 'Salvar e continuar'}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
@@ -375,6 +407,31 @@ const styles = StyleSheet.create({
     borderColor: colors.grayDark,
   },
   bioInput: { height: 100, textAlignVertical: 'top' },
+  cpfInfoBox: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.gold + '33',
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  cpfInfoTitle: {
+    color: colors.gold,
+    fontSize: fonts.sizes.sm,
+    fontWeight: 'bold',
+  },
+  cpfInfoText: {
+    color: colors.gray,
+    fontSize: fonts.sizes.xs,
+    lineHeight: 18,
+  },
+  cpfPrivacyText: {
+    color: colors.grayLight,
+    fontSize: fonts.sizes.xs,
+    lineHeight: 18,
+    marginTop: spacing.xs,
+  },
   optionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -13,6 +13,7 @@ import { listenToAdminMetrics } from '../../services/marketplace/adminService';
 import { AdminMetrics } from '../../shared/types/marketplace';
 import AdminLoadingScreen from './AdminLoadingScreen';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
+import ScreenContainer from '../../components/ScreenContainer';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -71,9 +72,9 @@ export default function AdminDashboardScreen() {
 
   if (guardLoading || blocked) {
     return (
-      <View style={styles.container}>
+      <ScreenContainer>
         <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
-      </View>
+      </ScreenContainer>
     );
   }
 
@@ -82,7 +83,7 @@ export default function AdminDashboardScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>‹</Text>
@@ -181,7 +182,7 @@ export default function AdminDashboardScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -189,7 +190,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },

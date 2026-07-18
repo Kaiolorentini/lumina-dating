@@ -44,4 +44,8 @@ export interface Sale {
   refundedAt?: Date;
   refundRequestedAt?: Date        // ← ADICIONAR
   refundWindowExpiresAt?: Date    // ← ADICIONAR (paidAt + 24h)
+  couponId?: string;
+  couponType?: 'percentage' | 'fixed';
+  couponValue?: number;
+  finalAmount?: number;
 }

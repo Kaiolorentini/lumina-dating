@@ -32,17 +32,9 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
-import {
-  Sale,
-  SaleStatus,
-  PaymentMethod,
-} from '../../shared/types/marketplace';
+import { Sale, SaleStatus, PaymentMethod } from '../../shared/types/marketplace';
 import { createAuditLog } from './auditService';
 import { getAppSettings } from './appSettingsService';
-
-// ============================================
-// VALIDAÇÕES
-// ============================================
 
 function validateNotSelfPurchase(buyerId: string, sellerId: string): void {
   if (buyerId === sellerId) {
@@ -59,10 +51,6 @@ async function validateMarketplaceEnabled(): Promise<void> {
     throw new Error(settings.maintenanceMessage);
   }
 }
-
-// ============================================
-// CRIAR SALE
-// ============================================
 
 interface CreateSaleInput {
   buyerId: string;
@@ -82,8 +70,6 @@ export async function createSale(input: CreateSaleInput): Promise<string> {
   const settings = await getAppSettings();
   const platformCommission = input.amount * settings.commissionRate;
   const sellerAmount = input.amount - platformCommission;
-
-  // Para produto gratuito — paymentMethod = 'free'
   const isFree = input.paymentMethod === 'free' || input.amount === 0;
 
   const saleData: Record<string, unknown> = {
@@ -107,12 +93,14 @@ export async function createSale(input: CreateSaleInput): Promise<string> {
   if (input.discountAmount) saleData.discountAmount = input.discountAmount;
   if (input.originalAmount) saleData.originalAmount = input.originalAmount;
 
+  // Operação principal — nunca deve falhar por causa de audit
   const docRef = await addDoc(
     collection(db, MARKETPLACE_COLLECTIONS.SALES),
     saleData,
   );
 
-  await createAuditLog({
+  // Audit — fire-and-forget
+  createAuditLog({
     action: 'sale_created',
     performedBy: input.buyerId,
     targetId: docRef.id,
@@ -122,14 +110,10 @@ export async function createSale(input: CreateSaleInput): Promise<string> {
       amount: input.amount,
       paymentMethod: input.paymentMethod,
     },
-  });
+  }).catch(() => { /* auditoria nunca bloqueia */ });
 
   return docRef.id;
 }
-
-// ============================================
-// LEITURA
-// ============================================
 
 export async function getSaleById(saleId: string): Promise<Sale | null> {
   const snap = await getDoc(doc(db, MARKETPLACE_COLLECTIONS.SALES, saleId));
@@ -151,7 +135,7 @@ export async function getBuyerSales(
   pageSize = 20,
   lastDoc: DocumentSnapshot | null = null,
 ): Promise<{ sales: Sale[]; lastDoc: DocumentSnapshot | null; hasMore: boolean }> {
-  const constraints: any[] = [
+  const constraints: Parameters<typeof query>[1][] = [
     where('buyerId', '==', buyerId),
     orderBy('createdAt', 'desc'),
     limit(pageSize + 1),
@@ -183,7 +167,7 @@ export async function getSellerSales(
   pageSize = 20,
   lastDoc: DocumentSnapshot | null = null,
 ): Promise<{ sales: Sale[]; lastDoc: DocumentSnapshot | null; hasMore: boolean }> {
-  const constraints: any[] = [
+  const constraints: Parameters<typeof query>[1][] = [
     where('sellerId', '==', sellerId),
     orderBy('createdAt', 'desc'),
     limit(pageSize + 1),
@@ -208,10 +192,6 @@ export async function getSellerSales(
     hasMore,
   };
 }
-
-// ============================================
-// LISTENERS
-// ============================================
 
 export function listenToBuyerSales(
   buyerId: string,

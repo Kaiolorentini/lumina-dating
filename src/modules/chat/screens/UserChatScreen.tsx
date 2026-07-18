@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
 import Header from '../../../components/Header';
@@ -23,7 +24,7 @@ import { useUserChat } from '../hooks/useChat';
 import { useBlock } from '../../profile/hooks/useBlock';
 import { ChatMessage } from '../../../shared/types';
 import { formatTime } from '../../../shared/utils';
-import { markAsRead, generateChatId } from '../services/messageService';
+import { markAsDelivered, markAsRead, generateChatId } from '../services/messageService';
 import { Audio } from 'expo-av';
 import {
   setupAudio,
@@ -86,6 +87,7 @@ export default function UserChatScreen() {
   const targetUserId: string = route.params?.userId;
   const targetUserName: string = route.params?.userName;
   const targetUserPhoto: string = route.params?.userPhoto;
+  const insets = useSafeAreaInsets();
 
   const {
     messages,
@@ -115,6 +117,7 @@ export default function UserChatScreen() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [otherIsTyping, setOtherIsTyping] = useState(false);
   const [showReactions, setShowReactions] = useState<string | null>(null);
+  const isNearBottomRef = useRef(true);
 
   useEffect(() => {
     if (!user?.uid || !targetUserId) return;
@@ -126,6 +129,7 @@ export default function UserChatScreen() {
   useEffect(() => {
     if (!user?.uid || !targetUserId) return;
     const chatId = generateChatId(user.uid, targetUserId);
+    markAsDelivered(chatId, user.uid);
     markAsRead(chatId, user.uid);
   }, [messages]);
 
@@ -167,10 +171,7 @@ export default function UserChatScreen() {
     setRecordingSeconds(0);
 
     timerRef.current = setInterval(() => {
-      setRecordingSeconds(prev => {
-        if (prev >= 30) { handleStopRecording(); return 30; }
-        return prev + 1;
-      });
+      setRecordingSeconds(prev => Math.min(prev + 1, MAX_DURATION));
     }, 1000);
 
     setTimeout(() => {
@@ -384,8 +385,17 @@ export default function UserChatScreen() {
           renderItem={renderMessage}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          onScroll={e => {
+            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+            const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+            isNearBottomRef.current = distanceFromBottom < 100;
+          }}
+          scrollEventThrottle={100}
+          onContentSizeChange={() => {
+            if (isNearBottomRef.current) {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }
+          }}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>💬</Text>
@@ -403,7 +413,7 @@ export default function UserChatScreen() {
         </View>
       )}
 
-      <View style={styles.inputContainer}>
+      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
         {isRecording ? (
           <View style={styles.recordingContainer}>
             <View style={styles.recordingDot} />

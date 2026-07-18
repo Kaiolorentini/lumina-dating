@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="cosmicBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f0720;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1a1035;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0c0a1a;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="cosmicBgNebula" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:#0f0720;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  <rect width="128" height="128" rx="16" fill="url(#cosmicBgGrad)"/>
+  <circle cx="64" cy="64" r="50" fill="url(#cosmicBgNebula)"/>
+  <circle cx="20" cy="20" r="1.5" fill="#f8fafc" opacity="0.6"/>
+  <circle cx="108" cy="30" r="2" fill="#f8fafc" opacity="0.5"/>
+  <circle cx="15" cy="80" r="1" fill="#f8fafc" opacity="0.4"/>
+  <circle cx="113" cy="100" r="1.5" fill="#f8fafc" opacity="0.6"/>
+  <circle cx="40" cy="110" r="1" fill="#f8fafc" opacity="0.3"/>
+  <circle cx="90" cy="15" r="1" fill="#f8fafc" opacity="0.5"/>
+  <circle cx="64" cy="64" r="20" fill="#7c3aed" opacity="0.3"/>
+  <circle cx="64" cy="64" r="12" fill="#a78bfa" opacity="0.4"/>
+  <circle cx="64" cy="64" r="6" fill="#c4b5fd" opacity="0.6"/>
+</svg>

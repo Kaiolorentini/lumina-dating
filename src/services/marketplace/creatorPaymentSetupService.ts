@@ -1,162 +1,117 @@
 // ============================================
-// CREATOR PAYMENT SETUP SERVICE — MARKETPLACE
+// CREATOR PAYMENT SETUP SERVICE — chave Pix (saque manual)
 //
-// verifyAsaasWalletViaApi → Cloud Function
-// (cache 24h, validação real Asaas)
+// O criador informa a chave Pix onde recebe os saques.
+// Validação de formato + persistência via Cloud Function
+// (saveCreatorPixKey). NÃO usa API do Asaas.
 // ============================================
 
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../../core/firebase';
 import app from '../../core/firebase';
 import { COLLECTIONS } from '../../core/constants';
-import { AsaasAccountStatus } from '../../shared/types/marketplace';
 
-const WALLET_ID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export type PixKeyType = 'cpf' | 'email' | 'phone' | 'random';
 
-export function validateWalletIdFormat(walletId: string): boolean {
-  return WALLET_ID_REGEX.test(walletId.trim());
-}
-
-export interface VerifyWalletResult {
+export interface SavePixKeyResult {
   valid: boolean;
   error?: string;
-  accountName?: string;
-  cached?: boolean;
+  maskedKey?: string;
 }
 
 // ============================================
-// Verifica formato apenas (sem API)
-// Mantido para compatibilidade
+// Validação de formato local (feedback rápido antes de enviar)
 // ============================================
-export async function verifyWalletId(
-  walletId: string
-): Promise<VerifyWalletResult> {
-  const trimmed = walletId.trim();
-  if (!trimmed) return { valid: false, error: 'Informe o Wallet ID' };
-  if (!validateWalletIdFormat(trimmed)) {
-    return {
-      valid: false,
-      error: 'Formato inválido. O Wallet ID deve ter o formato:\nxxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
-    };
+export function isValidCpf(raw: string): boolean {
+  const cpf = raw.replace(/\D/g, '');
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i], 10) * (10 - i);
+  let check = (sum * 10) % 11;
+  if (check === 10) check = 0;
+  if (check !== parseInt(cpf[9], 10)) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i], 10) * (11 - i);
+  check = (sum * 10) % 11;
+  if (check === 10) check = 0;
+  return check === parseInt(cpf[10], 10);
+}
+
+export function isValidEmail(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+}
+
+export function isValidPhone(v: string): boolean {
+  const digits = v.replace(/\D/g, '').replace(/^55/, '');
+  return digits.length === 10 || digits.length === 11;
+}
+
+export function isValidRandomKey(v: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
+}
+
+export function validatePixKeyFormat(type: PixKeyType, value: string): boolean {
+  switch (type) {
+    case 'cpf': return isValidCpf(value);
+    case 'email': return isValidEmail(value);
+    case 'phone': return isValidPhone(value);
+    case 'random': return isValidRandomKey(value);
+    default: return false;
   }
-  return { valid: true };
 }
 
 // ============================================
-// Verifica via Cloud Function (Asaas real)
-// Cache de 24h na Cloud Function
+// Salva a chave Pix via Cloud Function
 // ============================================
-export async function verifyAsaasWalletViaApi(
-  walletId: string
-): Promise<VerifyWalletResult> {
-  // Validar formato antes de chamar a API
-  const formatCheck = await verifyWalletId(walletId);
-  if (!formatCheck.valid) return formatCheck;
+export async function saveCreatorPixKey(
+  pixKey: string,
+  pixKeyType: PixKeyType,
+): Promise<SavePixKeyResult> {
+  if (!validatePixKeyFormat(pixKeyType, pixKey)) {
+    return { valid: false, error: 'Formato de chave Pix inválido para o tipo escolhido.' };
+  }
 
   try {
     const functions = getFunctions(app, 'us-central1');
-    const fn = httpsCallable(functions, 'verifyAsaasWallet');
-    const result = await fn({ walletId: walletId.trim() }) as {
-      data: {
-        valid: boolean;
-        accountName?: string;
-        cached?: boolean;
-        status: string;
-      };
+    const fn = httpsCallable(functions, 'saveCreatorPixKey');
+    const result = await fn({ pixKey: pixKey.trim(), pixKeyType }) as {
+      data: { valid: boolean; maskedKey?: string };
     };
-
-    return {
-      valid: result.data.valid,
-      accountName: result.data.accountName,
-      cached: result.data.cached,
-    };
+    return { valid: result.data.valid, maskedKey: result.data.maskedKey };
   } catch (error: any) {
     const code: string = error?.code ?? '';
-
-    if (code === 'functions/not-found') {
-      return {
-        valid: false,
-        error: 'Wallet ID não encontrado no Asaas. Verifique se o ID está correto.',
-      };
-    }
     if (code === 'functions/invalid-argument') {
-      return {
-        valid: false,
-        error: error.message ?? 'Wallet ID inválido.',
-      };
+      return { valid: false, error: error.message ?? 'Chave Pix inválida.' };
     }
     if (code === 'functions/permission-denied') {
-      return {
-        valid: false,
-        error: 'Conta bloqueada ou sem permissão.',
-      };
+      return { valid: false, error: 'Conta bloqueada ou sem permissão.' };
     }
-    if (code === 'functions/unavailable' || code === 'functions/internal') {
-      return {
-        valid: false,
-        error: 'Serviço temporariamente indisponível. Tente novamente.',
-      };
-    }
-
-    return {
-      valid: false,
-      error: error.message ?? 'Erro ao verificar conta Asaas.',
-    };
+    return { valid: false, error: error.message ?? 'Erro ao salvar chave Pix.' };
   }
 }
 
 // ============================================
-// Salva Wallet ID como pending (legado)
+// Lê a configuração atual de recebimento do criador
 // ============================================
-export async function saveWalletId(uid: string, walletId: string): Promise<void> {
-  const userRef = doc(db, COLLECTIONS.USERS, uid);
-  await updateDoc(userRef, {
-    asaasWalletId: walletId.trim(),
-    asaasAccountVerified: false,
-    asaasAccountStatus: 'pending' as AsaasAccountStatus,
-    asaasAccountType: 'cpf',
-  });
-}
-
-// ============================================
-// Marca como verificado (usado pela CF)
-// ============================================
-export async function markWalletVerified(uid: string, walletId: string): Promise<void> {
-  const userRef = doc(db, COLLECTIONS.USERS, uid);
-  await updateDoc(userRef, {
-    asaasWalletId: walletId.trim(),
-    asaasAccountVerified: true,
-    asaasAccountVerifiedAt: new Date(),
-    asaasAccountStatus: 'verified' as AsaasAccountStatus,
-    asaasAccountType: 'cpf',
-  });
-}
-
-export async function markWalletError(uid: string): Promise<void> {
-  const userRef = doc(db, COLLECTIONS.USERS, uid);
-  await updateDoc(userRef, {
-    asaasAccountVerified: false,
-    asaasAccountStatus: 'error' as AsaasAccountStatus,
-  });
-}
-
-export async function getAsaasStatus(uid: string): Promise<{
-  status: AsaasAccountStatus;
-  walletId?: string;
-  accountName?: string;
+export async function getPixKeyStatus(uid: string): Promise<{
+  configured: boolean;
+  pixKeyType?: PixKeyType;
+  maskedKey?: string;
 }> {
   try {
     const snap = await getDoc(doc(db, COLLECTIONS.USERS, uid));
-    if (!snap.exists()) return { status: 'not_configured' };
+    if (!snap.exists()) return { configured: false };
     const data = snap.data();
+    if (!data.pixKey) return { configured: false };
+    const key: string = data.pixKey;
     return {
-      status: (data.asaasAccountStatus as AsaasAccountStatus) ?? 'not_configured',
-      walletId: data.asaasWalletId,
-      accountName: data.asaasAccountName,
+      configured: true,
+      pixKeyType: data.pixKeyType as PixKeyType,
+      maskedKey: key.length > 4 ? `${key.slice(0, 3)}***${key.slice(-2)}` : '***',
     };
   } catch {
-    return { status: 'not_configured' };
+    return { configured: false };
   }
 }

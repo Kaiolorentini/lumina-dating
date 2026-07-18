@@ -4,8 +4,8 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing } from '../theme';
@@ -26,18 +26,21 @@ export default function Header({
   showHome = true,
   rightElement,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavProp>();
 
   const canGoBack = navigation.canGoBack();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
       {/* Lado esquerdo — Voltar */}
       <View style={styles.left}>
-        {showBack && canGoBack && (
+        {showBack && (
           <TouchableOpacity
             style={styles.button}
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              if (canGoBack) navigation.goBack();
+            }}
             activeOpacity={0.7}
           >
             <Text style={styles.backIcon}>‹</Text>
@@ -59,7 +62,7 @@ export default function Header({
 
       {/* Lado direito — Home ou elemento customizado */}
       <View style={styles.right}>
-        {rightElement ? rightElement : showHome && canGoBack && (
+        {rightElement ? rightElement : showHome && !canGoBack && (
           <TouchableOpacity
             style={styles.button}
             onPress={() => navigation.navigate('MainTabs')}
@@ -79,7 +82,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: Platform.OS === 'ios' ? 50 : spacing.xl,
     paddingBottom: spacing.md,
     backgroundColor: colors.background,
     borderBottomWidth: 1,

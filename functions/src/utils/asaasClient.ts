@@ -79,7 +79,27 @@ export async function findOrCreateCustomer(params: {
     });
 
     if (search.data.data?.length > 0) {
-      return search.data.data[0] as AsaasCustomer;
+      const existing = search.data.data[0] as AsaasCustomer;
+
+      // PREVENÇÃO (auditoria): um customer pode ter sido criado ANTES do
+      // usuário ter CPF (ficando sem cpfCnpj no Asaas). Nesse caso, toda
+      // cobrança falha com "necessário preencher o CPF ou CNPJ".
+      // Se encontramos um customer sem cpfCnpj E agora temos um CPF válido
+      // para informar, ATUALIZAMOS o customer no Asaas antes de reutilizá-lo.
+      if (!existing.cpfCnpj && params.cpfCnpj) {
+        try {
+          const updated = await client.post(`/customers/${existing.id}`, {
+            cpfCnpj: params.cpfCnpj,
+          });
+          return updated.data as AsaasCustomer;
+        } catch (updateError) {
+          // Sem CPF a cobrança não funciona — falhar de forma clara é melhor
+          // do que retornar um customer que causará erro no pagamento.
+          handleAsaasError(updateError, "findOrCreateCustomer:update");
+        }
+      }
+
+      return existing;
     }
 
     // Cria novo customer

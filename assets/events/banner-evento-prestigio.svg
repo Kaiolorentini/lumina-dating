@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" width="600" height="300">
+  <defs>
+    <linearGradient id="prestigeEventGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#581c87;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b0764;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="prestigeEventGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#a855f7;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#581c87;stop-opacity:0" />
+    </radialGradient>
+    <filter id="prestigeEventFilter">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="600" height="300" fill="url(#prestigeEventGrad)"/>
+  <circle cx="300" cy="150" r="110" fill="url(#prestigeEventGlow)"/>
+  <polygon points="300,40 310,65 335,65 315,80 322,105 300,90 278,105 285,80 265,65 290,65" fill="#fbbf24" filter="url(#prestigeEventFilter)"/>
+  <text x="300" y="140" text-anchor="middle" font-family="Arial" font-size="36" font-weight="bold" fill="#e9d5ff">EVENTO</text>
+  <text x="300" y="190" text-anchor="middle" font-family="Arial" font-size="48" font-weight="bold" fill="#fbbf24">PRESTÍGIO</text>
+  <text x="300" y="230" text-anchor="middle" font-family="Arial" font-size="16" fill="#d8b4fe">Alcance o próximo nível</text>
+  <circle cx="150" cy="260" r="6" fill="#a855f7" opacity="0.5"/>
+  <circle cx="450" cy="260" r="6" fill="#a855f7" opacity="0.5"/>
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="fireGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#dc2626;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#f97316;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fbbf24;stop-opacity:1" />
+    </linearGradient>
+    <filter id="fireGlow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <circle cx="100" cy="100" r="90" fill="none" stroke="url(#fireGrad)" stroke-width="8" filter="url(#fireGlow)"/>
+  <path d="M100,5 Q110,25 105,40 Q115,30 120,50 Q130,35 135,55 Q140,40 148,60" fill="none" stroke="#f97316" stroke-width="3" opacity="0.6"/>
+  <path d="M100,5 Q90,25 95,40 Q85,30 80,50 Q70,35 65,55 Q60,40 52,60" fill="none" stroke="#f97316" stroke-width="3" opacity="0.6"/>
+  <path d="M100,195 Q110,175 105,160 Q115,170 120,150 Q130,165 135,145 Q140,160 148,140" fill="none" stroke="#dc2626" stroke-width="3" opacity="0.5"/>
+  <path d="M100,195 Q90,175 95,160 Q85,170 80,150 Q70,165 65,145 Q60,160 52,140" fill="none" stroke="#dc2626" stroke-width="3" opacity="0.5"/>
+</svg>

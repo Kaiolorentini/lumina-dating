@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="legendaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="legendaryInner" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fde68a;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#fbbf24;stop-opacity:0.3" />
+    </linearGradient>
+    <filter id="legendaryGlow">
+      <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="legendaryOuter">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <polygon points="64,0 96,24 108,72 64,128 20,72 32,24" fill="#fbbf24" opacity="0.3" filter="url(#legendaryOuter)"/>
+  <polygon points="64,4 92,28 100,72 64,124 28,72 36,28" fill="url(#legendaryGrad)" filter="url(#legendaryGlow)"/>
+  <polygon points="64,14 84,34 90,68 64,114 38,68 44,34" fill="#fcd34d" opacity="0.6"/>
+  <polygon points="64,26 76,40 80,62 64,102 48,62 52,40" fill="#fde68a" opacity="0.5"/>
+  <polygon points="64,38 72,46 74,58 64,90 54,58 56,46" fill="#fef3c7" opacity="0.4"/>
+  <polygon points="64,50 68,54 70,56 64,78 58,56 60,54" fill="#fffbeb" opacity="0.3"/>
+  <ellipse cx="64" cy="64" rx="14" ry="18" fill="url(#legendaryInner)" opacity="0.5"/>
+  <circle cx="48" cy="44" r="4" fill="#fffbeb" opacity="0.8"/>
+  <circle cx="76" cy="52" r="3" fill="#fffbeb" opacity="0.6"/>
+  <circle cx="60" cy="36" r="2" fill="#fffbeb" opacity="0.5"/>
+  <path d="M64,20 L66,28 L64,24 L62,28 Z" fill="#fffbeb" opacity="0.7"/>
+  <path d="M64,108 L66,100 L64,104 L62,100 Z" fill="#fffbeb" opacity="0.7"/>
+</svg>

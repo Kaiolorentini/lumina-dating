@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
   TouchableOpacity, ActivityIndicator, Alert, RefreshControl,
+  Modal, TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,6 +14,7 @@ import { MarketplaceEmptyState } from '../../components/marketplace/MarketplaceE
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../core/firebase';
 import { Purchase } from '../../shared/types/marketplace';
+import ScreenContainer from '../../components/ScreenContainer';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -22,26 +24,51 @@ export default function MyPurchasesScreen() {
   const { purchases, loading, loadMore, hasMore, loadingMore, refresh } = usePurchases(user?.uid);
   const [requestingRefund, setRequestingRefund] = useState<string | null>(null);
 
-  async function handleRefund(purchase: Purchase) {
-    Alert.prompt(
-      'Solicitar reembolso',
-      'Informe o motivo da solicitação:',
-      async (reason) => {
-        if (!reason?.trim()) return;
-        setRequestingRefund(purchase.saleId ?? '');
-        try {
-          const functions = getFunctions(app, 'us-central1');
-          const requestRefund = httpsCallable(functions, 'requestRefund');
-          await requestRefund({ saleId: purchase.saleId, reason });
-          Alert.alert('✅ Solicitação enviada', 'Nossa equipe analisará em até 24 horas.');
-        } catch (error: any) {
-          Alert.alert('Erro', error.message ?? 'Não foi possível enviar a solicitação.');
-        } finally {
-          setRequestingRefund(null);
-        }
-      },
-      'plain-text',
-    );
+  // Modal de reembolso (cross-platform — substitui Alert.prompt iOS-only)
+  const [refundModal, setRefundModal] = useState(false);
+  const [refundTarget, setRefundTarget] = useState<Purchase | null>(null);
+  const [refundReason, setRefundReason] = useState('');
+
+  // Deduplica por productId (evita duplicata quando listener + loadMore se sobrepõem)
+  const uniquePurchases = useMemo(() => {
+    const seen = new Set<string>();
+    const result: Purchase[] = [];
+    for (const p of purchases) {
+      const key = `${p.buyerId}_${p.productId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(p);
+      }
+    }
+    return result;
+  }, [purchases]);
+
+  function openRefund(purchase: Purchase) {
+    setRefundTarget(purchase);
+    setRefundReason('');
+    setRefundModal(true);
+  }
+
+  async function confirmRefund() {
+    if (!refundTarget) return;
+    if (!refundReason.trim()) {
+      Alert.alert('Motivo obrigatório', 'Informe o motivo da solicitação.');
+      return;
+    }
+    const saleId = refundTarget.saleId ?? '';
+    setRequestingRefund(saleId);
+    setRefundModal(false);
+    try {
+      const functions = getFunctions(app, 'us-central1');
+      const requestRefund = httpsCallable(functions, 'requestRefund');
+      await requestRefund({ saleId: refundTarget.saleId, reason: refundReason.trim() });
+      Alert.alert('✅ Solicitação enviada', 'Nossa equipe analisará em até 24 horas.');
+    } catch (error: any) {
+      Alert.alert('Erro', error.message ?? 'Não foi possível enviar a solicitação.');
+    } finally {
+      setRequestingRefund(null);
+      setRefundTarget(null);
+    }
   }
 
   const renderItem = useCallback(({ item }: { item: Purchase }) => {
@@ -86,7 +113,7 @@ export default function MyPurchasesScreen() {
           {item.status === 'active' && item.saleId && (
             <TouchableOpacity
               style={styles.refundBtn}
-              onPress={() => handleRefund(item)}
+              onPress={() => openRefund(item)}
               disabled={requestingRefund === item.saleId}
             >
               {requestingRefund === item.saleId ? (
@@ -102,7 +129,7 @@ export default function MyPurchasesScreen() {
   }, [user?.uid, requestingRefund]);
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>‹</Text>
@@ -115,7 +142,7 @@ export default function MyPurchasesScreen() {
         <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
       ) : (
         <FlatList
-          data={purchases}
+          data={uniquePurchases}
           keyExtractor={item => `${item.buyerId}_${item.productId}`}
           contentContainerStyle={styles.listContent}
           refreshControl={
@@ -134,7 +161,45 @@ export default function MyPurchasesScreen() {
           renderItem={renderItem}
         />
       )}
-    </View>
+
+      {/* Modal de reembolso — cross-platform */}
+      <Modal
+        visible={refundModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRefundModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Solicitar reembolso</Text>
+            <Text style={styles.modalSubtitle}>Informe o motivo da solicitação:</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Ex: não era o que eu esperava"
+              placeholderTextColor={colors.gray}
+              value={refundReason}
+              onChangeText={setRefundReason}
+              multiline
+              maxLength={300}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setRefundModal(false)}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmBtn}
+                onPress={confirmRefund}
+              >
+                <Text style={styles.modalConfirmBtnText}>Enviar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </ScreenContainer>
   );
 }
 
@@ -142,7 +207,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },
@@ -172,4 +237,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   refundBtnText: { color: colors.error, fontSize: fonts.sizes.sm },
+  // Modal
+  modalOverlay: {
+    flex: 1, backgroundColor: '#000000aa',
+    alignItems: 'center', justifyContent: 'center', padding: spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: colors.surface, borderRadius: borderRadius.lg,
+    borderWidth: 1, borderColor: colors.grayDark, padding: spacing.lg, width: '100%',
+  },
+  modalTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', marginBottom: spacing.xs },
+  modalSubtitle: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.md },
+  modalInput: {
+    backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1,
+    borderColor: colors.grayDark, color: colors.white, padding: spacing.md,
+    fontSize: fonts.sizes.md, minHeight: 80, textAlignVertical: 'top', marginBottom: spacing.md,
+  },
+  modalActions: { flexDirection: 'row', gap: spacing.sm },
+  modalCancelBtn: {
+    flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm,
+    padding: spacing.md, alignItems: 'center',
+  },
+  modalCancelBtnText: { color: colors.white, fontWeight: 'bold' },
+  modalConfirmBtn: {
+    flex: 1, backgroundColor: colors.error, borderRadius: borderRadius.sm,
+    padding: spacing.md, alignItems: 'center',
+  },
+  modalConfirmBtnText: { color: colors.white, fontWeight: 'bold' },
 });

@@ -33,7 +33,7 @@ export const ProductCard = memo(function ProductCard({
         </TouchableOpacity>
       )}
       <View style={styles.info}>
-        <Text style={styles.title} numberOfLines={2}>{product.title}</Text>
+        <Text style={styles.title} numberOfLines={3}>{product.title}</Text>
         <View style={styles.row}>
           <Text style={styles.price}>
             {product.isFree ? 'Grátis' : `R$ ${product.price.toFixed(2)}`}
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.grayDark,
     overflow: 'hidden',
-    marginBottom: spacing.md,
+    width: '100%',
   },
   cardCompact: {
     width: 160,

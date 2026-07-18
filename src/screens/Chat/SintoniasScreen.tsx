@@ -5,30 +5,70 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+import { COLLECTIONS } from '../../core/constants';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
-import { getUserConversations, UserChatPreview } from '../../services/chatsListService';
+import { getConexoesAceitas } from '../../modules/profile/services/requestsService';
+import { getBloqueados } from '../../modules/profile/services/blockService';
 import { RootStackParamList } from '../../navigation/types';
 import Header from '../../components/Header';
+import ScreenContainer from '../../components/ScreenContainer';
+
+type NavProp = NativeStackNavigationProp<RootStackParamList>;
+
+interface Connection {
+  userId: string;
+  userName: string;
+  userPhoto: string;
+}
 
 export default function SintoniasScreen() {
   const { user } = useAuth();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [conversations, setConversations] = useState<UserChatPreview[]>([]);
+  const navigation = useNavigation<NavProp>();
+  const insets = useSafeAreaInsets();
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    loadConversations();
+    loadConnections();
   }, [user]);
 
-  async function loadConversations() {
+  async function loadConnections() {
     if (!user) return;
     try {
-      const result = await getUserConversations(user.uid);
-      setConversations(result);
+      const conexoes = await getConexoesAceitas(user.uid);
+      const blocked = await getBloqueados(user.uid);
+      const blockedIds = new Set(blocked.map(b => b.blockedId));
+
+      const result: Connection[] = [];
+
+      for (const conexao of conexoes) {
+        const otherUserId = conexao.fromUserId === user.uid
+          ? conexao.toUserId
+          : conexao.fromUserId;
+
+        if (blockedIds.has(otherUserId)) continue;
+
+        const otherUserSnap = await getDoc(doc(db, COLLECTIONS.USERS, otherUserId));
+        const otherUser = otherUserSnap.data();
+        if (!otherUser) continue;
+
+        if (otherUser.isBlocked) continue;
+
+        result.push({
+          userId: otherUserId,
+          userName: otherUser.name || 'Usuario',
+          userPhoto: otherUser.photoURL || '',
+        });
+      }
+
+      setConnections(result);
     } catch (error) {
-      console.error('Erro ao carregar conversas:', error);
+      console.error('Erro ao carregar conexoes:', error);
     } finally {
       setLoading(false);
     }
@@ -36,72 +76,69 @@ export default function SintoniasScreen() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    await loadConversations();
+    await loadConnections();
     setRefreshing(false);
   }
 
-  function formatTime(date: Date | null): string {
-    if (!date) return '';
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    if (minutes < 1) return 'Agora';
-    if (minutes < 60) return `${minutes}min`;
-    if (hours < 24) return `${hours}h`;
-    return `${days}d`;
-  }
-
-  function renderConversation({ item }: { item: UserChatPreview }) {
+  function renderConnection({ item }: { item: Connection }) {
     return (
-      <TouchableOpacity
-        style={styles.chatItem}
-        onPress={() => navigation.navigate('UserChat', {
-          userId: item.userId,
-          userName: item.userName,
-          userPhoto: item.userPhoto,
-        })}
-        activeOpacity={0.8}
-      >
-        <View style={styles.avatarContainer}>
+      <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.profileArea}
+          onPress={() => navigation.navigate('RealProfile', { userId: item.userId })}
+          activeOpacity={0.7}
+        >
           {item.userPhoto ? (
             <Image source={{ uri: item.userPhoto }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarPlaceholderText}>👤</Text>
+              <Text style={styles.avatarLetter}>
+                {item.userName.charAt(0).toUpperCase()}
+              </Text>
             </View>
           )}
-        </View>
+          <Text style={styles.userName} numberOfLines={1}>{item.userName}</Text>
+        </TouchableOpacity>
 
-        <View style={styles.chatInfo}>
-          <View style={styles.chatHeader}>
-            <Text style={styles.userName}>{item.userName}</Text>
-            <Text style={styles.time}>{formatTime(item.lastMessageTime)}</Text>
-          </View>
-          <Text style={styles.lastMessage} numberOfLines={1}>
-            {item.lastMessage}
-          </Text>
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={styles.profileBtn}
+            onPress={() => navigation.navigate('RealProfile', { userId: item.userId })}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.profileBtnText}>👤 Perfil</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.chatBtn}
+            onPress={() => navigation.navigate('UserChat', {
+              userId: item.userId,
+              userName: item.userName,
+              userPhoto: item.userPhoto,
+            })}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.chatBtnText}>💬 Conversar</Text>
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <Header title="Sintonias" showBack={false} showHome={false} />
 
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator color={colors.gold} size="large" />
-          <Text style={styles.loadingText}>Carregando conversas...</Text>
+          <Text style={styles.loadingText}>Carregando conexoes...</Text>
         </View>
-      ) : conversations.length === 0 ? (
+      ) : connections.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>💫</Text>
-          <Text style={styles.emptyTitle}>Nenhuma Sintonia ainda</Text>
+          <Text style={styles.emptyTitle}>Nenhuma conexao ainda</Text>
           <Text style={styles.emptySubtitle}>
-            Conecte-se com perfis na aba Descobrir para iniciar conversas reais!
+            Conecte-se com perfis para comecar a interagir!
           </Text>
           <TouchableOpacity
             style={styles.discoverButton}
@@ -112,9 +149,10 @@ export default function SintoniasScreen() {
         </View>
       ) : (
         <FlatList
-          data={conversations}
+          data={connections}
           keyExtractor={item => item.userId}
-          renderItem={renderConversation}
+          renderItem={renderConnection}
+          contentContainerStyle={{ paddingBottom: insets.bottom + spacing.md }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -123,15 +161,13 @@ export default function SintoniasScreen() {
               tintColor={colors.gold}
             />
           }
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       )}
-    </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   loadingText: { color: colors.gray, fontSize: fonts.sizes.md },
   emptyContainer: {
@@ -146,30 +182,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl, paddingVertical: spacing.md, marginTop: spacing.sm,
   },
   discoverButtonText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
-  chatItem: {
+  card: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
     gap: spacing.md, backgroundColor: colors.background,
+    borderBottomWidth: 0.5, borderBottomColor: colors.grayDark,
   },
-  avatarContainer: { position: 'relative' },
+  profileArea: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md, flex: 1,
+  },
   avatar: {
-    width: 56, height: 56, borderRadius: 28,
+    width: 48, height: 48, borderRadius: 24,
     borderWidth: 2, borderColor: colors.gold,
   },
   avatarPlaceholder: {
     backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center',
   },
-  avatarPlaceholderText: { fontSize: 24 },
-  chatInfo: { flex: 1 },
-  chatHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 4,
+  avatarLetter: { color: colors.gold, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
+  userName: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', flex: 1 },
+  actions: { flexDirection: 'row', gap: spacing.sm },
+  profileBtn: {
+    backgroundColor: colors.surface, borderRadius: borderRadius.sm,
+    borderWidth: 1, borderColor: colors.gold, paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  userName: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  time: { color: colors.gray, fontSize: fonts.sizes.xs },
-  lastMessage: { color: colors.gray, fontSize: fonts.sizes.sm },
-  separator: {
-    height: 1, backgroundColor: colors.grayDark,
-    marginLeft: spacing.lg + 56 + spacing.md,
+  profileBtnText: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  chatBtn: {
+    backgroundColor: colors.gold, borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
   },
+  chatBtnText: { color: colors.background, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
 });

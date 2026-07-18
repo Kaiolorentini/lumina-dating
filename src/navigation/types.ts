@@ -1,5 +1,5 @@
-// LUMINA — NAVIGATION TYPES v5.12
-// PremiumTools + WeeklyChallenge adicionados
+// LUMINA — NAVIGATION TYPES v5.13
+// AdminProductReview adicionado (moderação de conteúdo)
 
 export type PremiumFeatureStatus = 'LOCKED' | 'READY' | 'ACTIVE' | 'EXPIRED' | 'COOLDOWN';
 
@@ -49,6 +49,7 @@ export type RootStackParamList = {
   AdminDashboard:           undefined;
   AdminCreatorRequests:     undefined;
   AdminProductsModeration:  undefined;
+  AdminProductReview:       { productId: string };
   AdminSales:               undefined;
   AdminRefundRequests:      undefined;
   AdminWithdrawals:         undefined;
@@ -60,6 +61,6 @@ export type RootStackParamList = {
 };
 
 export type TabParamList = {
-  Home: undefined; Media: undefined; Sintonias: undefined;
+  Home: undefined; Sintonias: undefined;
   Store: undefined; Marketplace: undefined; Profile: undefined; Admin: undefined;
 };

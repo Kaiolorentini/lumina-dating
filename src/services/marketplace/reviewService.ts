@@ -62,13 +62,14 @@ export async function createReview(
     updatedAt: serverTimestamp(),
   });
 
-  await createAuditLog({
+  // Audit — fire-and-forget
+  createAuditLog({
     action: 'review_created',
     performedBy: userId,
     targetId: reviewId,
     targetType: 'review',
     metadata: { productId, rating: data.rating },
-  });
+  }).catch(() => { /* auditoria nunca bloqueia */ });
 }
 
 export async function updateReview(
@@ -90,13 +91,14 @@ export async function updateReview(
     updatedAt: serverTimestamp(),
   }, { merge: true });
 
-  await createAuditLog({
+  // Audit — fire-and-forget
+  createAuditLog({
     action: 'review_updated',
     performedBy: userId,
     targetId: reviewId,
     targetType: 'review',
     metadata: { productId, newRating: data.rating },
-  });
+  }).catch(() => { /* auditoria nunca bloqueia */ });
 }
 
 export async function getMyReview(
@@ -118,7 +120,7 @@ export async function getProductReviews(
   pageSize = 10,
   lastDoc: DocumentSnapshot | null = null,
 ): Promise<{ reviews: ProductReview[]; lastDoc: DocumentSnapshot | null; hasMore: boolean }> {
-  const constraints: any[] = [
+  const constraints: Parameters<typeof query>[1][] = [
     where('productId', '==', productId),
     where('isHidden', '==', false),
     orderBy('createdAt', 'desc'),

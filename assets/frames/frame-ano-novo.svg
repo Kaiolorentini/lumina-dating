@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="newYearGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="100" cy="100" r="90" fill="none" stroke="url(#newYearGrad)" stroke-width="6"/>
+  <circle cx="100" cy="100" r="84" fill="none" stroke="#fde68a" stroke-width="2" opacity="0.3"/>
+  <text x="100" y="70" text-anchor="middle" font-family="Arial" font-size="24" font-weight="bold" fill="#fbbf24">2026</text>
+  <circle cx="40" cy="40" r="4" fill="#fbbf24" opacity="0.6"/>
+  <circle cx="160" cy="40" r="4" fill="#fbbf24" opacity="0.6"/>
+  <circle cx="30" cy="100" r="3" fill="#fde68a" opacity="0.5"/>
+  <circle cx="170" cy="100" r="3" fill="#fde68a" opacity="0.5"/>
+  <circle cx="40" cy="160" r="4" fill="#fbbf24" opacity="0.6"/>
+  <circle cx="160" cy="160" r="4" fill="#fbbf24" opacity="0.6"/>
+  <path d="M100,140 L105,160 L100,180 L95,160 Z" fill="#fbbf24" opacity="0.5"/>
+  <circle cx="100" cy="190" r="3" fill="#fde68a" opacity="0.4"/>
+</svg>

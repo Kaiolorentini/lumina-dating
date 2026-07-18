@@ -18,9 +18,8 @@ import { auth } from '../services/firebase';
 import { getProfile } from '../services/profileService';
 
 const HAS_PROFILE_KEY = '@lumina:hasProfile';
-const USER_UID_KEY = '@lumina:userUid';
+const USER_UID_KEY    = '@lumina:userUid';
 
-// ✅ Timeout para evitar loading infinito se Firestore não responder
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
@@ -32,41 +31,40 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 export function translateAuthError(code: string): string {
   const errors: Record<string, string> = {
-    'auth/user-not-found': 'E-mail ou senha incorretos',
-    'auth/wrong-password': 'E-mail ou senha incorretos',
-    'auth/invalid-credential': 'E-mail ou senha incorretos',
+    'auth/user-not-found':            'E-mail ou senha incorretos',
+    'auth/wrong-password':            'E-mail ou senha incorretos',
+    'auth/invalid-credential':        'E-mail ou senha incorretos',
     'auth/invalid-login-credentials': 'E-mail ou senha incorretos',
-    'auth/invalid-email': 'E-mail invalido',
-    'auth/email-already-in-use': 'Este e-mail ja esta em uso. Faca login.',
-    'auth/weak-password': 'Senha fraca. Use pelo menos 6 caracteres',
-    'auth/too-many-requests': 'Muitas tentativas. Tente mais tarde',
-    'auth/network-request-failed': 'Sem conexao. Verifique sua internet',
-    'auth/operation-not-allowed': 'Operacao nao permitida',
+    'auth/invalid-email':             'E-mail inválido',
+    'auth/email-already-in-use':      'Este e-mail já está em uso. Faça login.',
+    'auth/weak-password':             'Senha fraca. Use pelo menos 6 caracteres',
+    'auth/too-many-requests':         'Muitas tentativas. Tente mais tarde',
+    'auth/network-request-failed':    'Sem conexão. Verifique sua internet',
+    'auth/operation-not-allowed':     'Operação não permitida',
   };
   return errors[code] || `Erro: ${code}`;
 }
 
 interface AuthContextData {
-  user: User | null;
-  loading: boolean;
-  hasProfile: boolean;
-  setHasProfile: (value: boolean) => void;
+  user:           User | null;
+  loading:        boolean;
+  hasProfile:     boolean;
+  setHasProfile:  (value: boolean) => void;
   refreshProfile: () => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
+  signUp:         (email: string, password: string) => Promise<void>;
+  signIn:         (email: string, password: string) => Promise<void>;
+  logout:         () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [hasProfile, setHasProfileState] = useState(false);
+  const [user,           setUser]            = useState<User | null>(null);
+  const [loading,        setLoading]         = useState(true);
+  const [hasProfile,     setHasProfileState] = useState(false);
   const userRef = useRef<User | null>(null);
 
   useEffect(() => {
-    // ✅ Timeout global de segurança — 15s máximo para o auth resolver
     const globalTimeout = setTimeout(() => {
       console.warn('[AuthContext] Timeout global — liberando loading');
       setLoading(false);
@@ -92,13 +90,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setHasProfileState(true);
           setLoading(false);
 
-          // Verifica Firestore em background SEM bloquear UI
           withTimeout(getProfile(firebaseUser.uid), 8000)
             .then(profile => {
               if (profile?.name) {
                 AsyncStorage.setItem(
-                  `${HAS_PROFILE_KEY}:${firebaseUser.uid}`,
-                  'true'
+                  `${HAS_PROFILE_KEY}:${firebaseUser.uid}`, 'true'
                 ).catch(console.error);
               }
             })
@@ -109,8 +105,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // ✅ Reduzido para 2 tentativas × 4s = 8s — cabe no globalTimeout de 15s
-        // Era 3 tentativas × 5s = 17s > 15s — causava setHasProfileState após loading liberado
         let profile = null;
         for (let i = 1; i <= 2; i++) {
           console.log(`[AuthContext] Buscando perfil tentativa ${i}...`);
@@ -128,8 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (found) {
           await AsyncStorage.setItem(
-            `${HAS_PROFILE_KEY}:${firebaseUser.uid}`,
-            'true'
+            `${HAS_PROFILE_KEY}:${firebaseUser.uid}`, 'true'
           );
         }
 
@@ -163,7 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!u) return;
     try {
       const profile = await withTimeout(getProfile(u.uid), 8000);
-      const found = !!(profile?.name);
+      const found   = !!(profile?.name);
       setHasProfileState(found);
       if (found) {
         await AsyncStorage.setItem(`${HAS_PROFILE_KEY}:${u.uid}`, 'true');

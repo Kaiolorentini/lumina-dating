@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="streak7Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f97316;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ea580c;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="56" fill="url(#streak7Grad)"/>
+  <circle cx="64" cy="64" r="50" fill="none" stroke="#fdba74" stroke-width="2" opacity="0.5"/>
+  <path d="M64,20 L72,50 L64,45 L56,50 Z" fill="#fbbf24"/>
+  <path d="M64,45 L76,70 L64,65 L52,70 Z" fill="#f97316"/>
+  <path d="M64,65 L80,95 L64,88 L48,95 Z" fill="#ea580c"/>
+  <circle cx="64" cy="105" r="6" fill="#fbbf24" opacity="0.8"/>
+  <text x="64" y="108" text-anchor="middle" font-family="Arial" font-size="8" font-weight="bold" fill="#7c2d12">7</text>
+</svg>

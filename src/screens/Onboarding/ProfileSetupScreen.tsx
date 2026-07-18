@@ -20,6 +20,7 @@ import { saveProfile, uploadProfilePhoto, getProfile } from '../../services/prof
 import { RootStackParamList } from '../../navigation/types';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { Gender, Preference } from '../../types';
+import ScreenContainer from '../../components/ScreenContainer';
 
 export default function ProfileSetupScreen() {
   const { user, setHasProfile } = useAuth();
@@ -163,146 +164,148 @@ async function handleSave() {
     }
   }
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.logo}>✦</Text>
-        <Text style={styles.title}>Seu Perfil</Text>
-        <Text style={styles.subtitle}>
-          Essas informações geram sua Sintonia
-        </Text>
-      </View>
+    <ScreenContainer>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.logo}>✦</Text>
+          <Text style={styles.title}>Seu Perfil</Text>
+          <Text style={styles.subtitle}>
+            Essas informações geram sua Sintonia
+          </Text>
+        </View>
 
-      {/* Foto */}
-      <TouchableOpacity style={styles.photoContainer} onPress={handlePickPhoto}>
-        {photoURI ? (
-          <Image source={{ uri: photoURI }} style={styles.photo} />
-        ) : (
-          <View style={styles.photoPlaceholder}>
-            <Text style={styles.photoIcon}>📷</Text>
-            <Text style={styles.photoText}>Adicionar foto</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+        {/* Foto */}
+        <TouchableOpacity style={styles.photoContainer} onPress={handlePickPhoto}>
+          {photoURI ? (
+            <Image source={{ uri: photoURI }} style={styles.photo} />
+          ) : (
+            <View style={styles.photoPlaceholder}>
+              <Text style={styles.photoIcon}>📷</Text>
+              <Text style={styles.photoText}>Adicionar foto</Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
-      {/* Nome */}
-      <Text style={styles.label}>Nome *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Seu nome"
-        placeholderTextColor={colors.gray}
-        value={name}
-        onChangeText={setName}
-      />
+        {/* Nome */}
+        <Text style={styles.label}>Nome *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Seu nome"
+          placeholderTextColor={colors.gray}
+          value={name}
+          onChangeText={setName}
+        />
 
-      {/* Idade */}
-      <Text style={styles.label}>Idade *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Sua idade"
-        placeholderTextColor={colors.gray}
-        value={age}
-        onChangeText={setAge}
-        keyboardType="numeric"
-        maxLength={3}
-      />
+        {/* Idade */}
+        <Text style={styles.label}>Idade *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Sua idade"
+          placeholderTextColor={colors.gray}
+          value={age}
+          onChangeText={setAge}
+          keyboardType="numeric"
+          maxLength={3}
+        />
 
-      {/* Cidade */}
-      <Text style={styles.label}>Cidade *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Sua cidade"
-        placeholderTextColor={colors.gray}
-        value={city}
-        onChangeText={setCity}
-      />
+        {/* Cidade */}
+        <Text style={styles.label}>Cidade *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Sua cidade"
+          placeholderTextColor={colors.gray}
+          value={city}
+          onChangeText={setCity}
+        />
 
-      {/* Estado */}
-      <Text style={styles.label}>Estado *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Ex: SP, RJ, MG"
-        placeholderTextColor={colors.gray}
-        value={state}
-        onChangeText={setState}
-        maxLength={2}
-        autoCapitalize="characters"
-      />
+        {/* Estado */}
+        <Text style={styles.label}>Estado *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Ex: SP, RJ, MG"
+          placeholderTextColor={colors.gray}
+          value={state}
+          onChangeText={setState}
+          maxLength={2}
+          autoCapitalize="characters"
+        />
 
-      {/* Bio */}
-      <Text style={styles.label}>Bio</Text>
-      <TextInput
-        style={[styles.input, styles.bioInput]}
-        placeholder="Fale um pouco sobre você..."
-        placeholderTextColor={colors.gray}
-        value={bio}
-        onChangeText={setBio}
-        multiline
-        maxLength={300}
-      />
+        {/* Bio */}
+        <Text style={styles.label}>Bio</Text>
+        <TextInput
+          style={[styles.input, styles.bioInput]}
+          placeholder="Fale um pouco sobre você..."
+          placeholderTextColor={colors.gray}
+          value={bio}
+          onChangeText={setBio}
+          multiline
+          maxLength={300}
+        />
 
-      {/* Gênero */}
-      <Text style={styles.label}>Gênero *</Text>
-      <View style={styles.optionsRow}>
-        {genderOptions.map(option => (
-          <TouchableOpacity
-            key={option.value}
-            style={[
-              styles.optionButton,
-              gender === option.value && styles.optionButtonActive,
-            ]}
-            onPress={() => setGender(option.value)}
-          >
-            <Text style={[
-              styles.optionText,
-              gender === option.value && styles.optionTextActive,
-            ]}>
-              {option.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        {/* Gênero */}
+        <Text style={styles.label}>Gênero *</Text>
+        <View style={styles.optionsRow}>
+          {genderOptions.map(option => (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.optionButton,
+                gender === option.value && styles.optionButtonActive,
+              ]}
+              onPress={() => setGender(option.value)}
+            >
+              <Text style={[
+                styles.optionText,
+                gender === option.value && styles.optionTextActive,
+              ]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      {/* Preferências */}
-      <Text style={styles.label}>Tenho interesse em *</Text>
-      <View style={styles.optionsRow}>
-        {preferenceOptions.map(option => (
-          <TouchableOpacity
-            key={option.value}
-            style={[
-              styles.optionButton,
-              preferences.includes(option.value) && styles.optionButtonActive,
-            ]}
-            onPress={() => togglePreference(option.value)}
-          >
-            <Text style={[
-              styles.optionText,
-              preferences.includes(option.value) && styles.optionTextActive,
-            ]}>
-              {option.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        {/* Preferências */}
+        <Text style={styles.label}>Tenho interesse em *</Text>
+        <View style={styles.optionsRow}>
+          {preferenceOptions.map(option => (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.optionButton,
+                preferences.includes(option.value) && styles.optionButtonActive,
+              ]}
+              onPress={() => togglePreference(option.value)}
+            >
+              <Text style={[
+                styles.optionText,
+                preferences.includes(option.value) && styles.optionTextActive,
+              ]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      {/* Erro */}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+        {/* Erro */}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {/* Botão salvar */}
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleSave}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color={colors.background} />
-        ) : (
-          <Text style={styles.buttonText}>Salvar e continuar ✦</Text>
-        )}
-      </TouchableOpacity>
+        {/* Botão salvar */}
+        <TouchableOpacity
+          style={styles.button}
+          onPress={handleSave}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.background} />
+          ) : (
+            <Text style={styles.buttonText}>Salvar e continuar ✦</Text>
+          )}
+        </TouchableOpacity>
 
-      <View style={{ height: 40 }} />
-    </ScrollView>
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 

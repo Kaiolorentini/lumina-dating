@@ -8,6 +8,7 @@ import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { useCreatorRequests } from '../../hooks/useCreatorRequests';
 import { createCreatorRequest, cancelCreatorRequest } from '../../services/marketplace/creatorService';
+import ScreenContainer from '../../components/ScreenContainer';
 
 export default function CreatorRequestScreen() {
   const navigation = useNavigation();
@@ -52,7 +53,7 @@ export default function CreatorRequestScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>‹</Text>
@@ -139,7 +140,7 @@ export default function CreatorRequestScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -147,7 +148,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },

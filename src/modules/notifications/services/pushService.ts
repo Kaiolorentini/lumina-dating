@@ -41,7 +41,7 @@ export async function registerForPushNotifications(
 
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
-    
+
     console.log('Status permissao atual:', existingStatus);
 
     let finalStatus = existingStatus;
@@ -82,7 +82,6 @@ export async function registerForPushNotifications(
     console.log('Push Token obtido:', token);
 
     await savePushToken(userId, token);
-    console.log('Push Token salvo no Firestore!');
     return token;
   } catch (error) {
     console.error('Erro ao registrar push:', error);
@@ -91,16 +90,29 @@ export async function registerForPushNotifications(
 }
 
 // Salva token no Firestore
+// CORREÇÃO: verifica se o documento users/{uid} existe antes de escrever.
+// Isso evita criar um documento órfão (sem role/isBlocked) antes do perfil,
+// que faria o saveProfile virar UPDATE e bater na regra hasNoProtectedFields().
 export async function savePushToken(
   userId: string,
   token: string
 ): Promise<void> {
-  const userRef = doc(db, COLLECTIONS.USERS, userId);
-  await setDoc(
-    userRef,
-    { pushToken: token, pushTokenUpdatedAt: new Date() },
-    { merge: true }
-  );
+  try {
+    const userRef = doc(db, COLLECTIONS.USERS, userId);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) {
+      console.log('[pushService] Documento não existe ainda — push token será salvo após criar perfil');
+      return;
+    }
+    await setDoc(
+      userRef,
+      { pushToken: token, pushTokenUpdatedAt: new Date() },
+      { merge: true }
+    );
+    console.log('Push Token salvo no Firestore!');
+  } catch (error) {
+    console.error('[pushService] Erro ao salvar push token:', error);
+  }
 }
 
 // Busca token de um usuário

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="soilGrad3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#92400e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#78350f;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="trunkGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#78350f;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#92400e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#22c55e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16a34a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <ellipse cx="128" cy="220" rx="80" ry="20" fill="url(#soilGrad3)"/>
+  <rect x="118" y="100" width="20" height="120" rx="4" fill="url(#trunkGrad)"/>
+  <rect x="80" y="140" width="40" height="8" rx="2" fill="#92400e" transform="rotate(-25 80 140)"/>
+  <rect x="136" y="130" width="40" height="8" rx="2" fill="#92400e" transform="rotate(20 136 130)"/>
+  <ellipse cx="60" cy="120" rx="28" ry="20" fill="url(#leafGrad)"/>
+  <ellipse cx="196" cy="110" rx="28" ry="20" fill="url(#leafGrad)"/>
+  <ellipse cx="128" cy="80" rx="36" ry="28" fill="#22c55e"/>
+  <ellipse cx="100" cy="90" rx="24" ry="18" fill="#4ade80"/>
+  <ellipse cx="156" cy="85" rx="24" ry="18" fill="#4ade80"/>
+  <circle cx="110" cy="70" r="6" fill="#f472b6" opacity="0.8"/>
+  <circle cx="145" cy="75" r="5" fill="#fb7185" opacity="0.7"/>
+  <circle cx="128" cy="65" r="4" fill="#fda4af" opacity="0.6"/>
+  <circle cx="90" cy="85" r="3" fill="#f472b6" opacity="0.5"/>
+  <circle cx="165" cy="80" r="3" fill="#fb7185" opacity="0.5"/>
+</svg>

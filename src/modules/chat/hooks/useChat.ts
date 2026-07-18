@@ -48,12 +48,6 @@ export function useUserChat(targetUserId: string): UseUserChatReturn {
     return unsubscribe;
   }, [chatId]);
 
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    }
-  }, [messages]);
-
   async function sendUserMessage() {
     if (!inputText.trim() || !user || !chatId) return;
     const text = inputText.trim();

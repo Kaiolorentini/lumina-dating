@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="vaultGlowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#78716c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#57534e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="vaultGlowLight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#f59e0b;stop-opacity:0.2" />
+    </linearGradient>
+    <filter id="vaultGlow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="20" y="40" width="88" height="72" rx="4" fill="url(#vaultGlowGrad)"/>
+  <rect x="24" y="44" width="80" height="64" rx="2" fill="#44403c"/>
+  <rect x="48" y="56" width="32" height="24" rx="2" fill="#78716c"/>
+  <circle cx="64" cy="68" r="6" fill="#292524"/>
+  <circle cx="64" cy="68" r="3" fill="#fbbf24" filter="url(#vaultGlow)"/>
+  <rect x="36" y="36" width="56" height="8" rx="2" fill="#78716c"/>
+  <ellipse cx="64" cy="68" rx="20" ry="12" fill="url(#vaultGlowLight)" opacity="0.4"/>
+  <path d="M44,52 L64,48 L84,52 L84,56 L44,56 Z" fill="#fbbf24" opacity="0.3"/>
+  <circle cx="40" cy="60" r="2" fill="#fbbf24" opacity="0.5"/>
+  <circle cx="88" cy="60" r="2" fill="#fbbf24" opacity="0.5"/>
+</svg>

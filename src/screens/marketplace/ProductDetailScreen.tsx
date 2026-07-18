@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image,
-  TouchableOpacity, ActivityIndicator, Alert, Dimensions,
+  TouchableOpacity, ActivityIndicator, Alert, Dimensions, TextInput,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -17,6 +17,7 @@ import { getProduct, incrementProductViews } from '../../services/marketplace/pr
 import { Product } from '../../shared/types/marketplace';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../core/firebase';
+import ScreenContainer from '../../components/ScreenContainer';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProductDetail'>;
@@ -31,6 +32,7 @@ export default function ProductDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
+  const [couponCode, setCouponCode] = useState('');
 
   const { favoriteIds, toggleFavorite } = useFavorites(user?.uid);
   const { reviews } = useReviews(productId, user?.uid);
@@ -97,7 +99,12 @@ export default function ProductDetailScreen() {
     try {
       const functions = getFunctions(app, 'us-central1');
       const createPayment = httpsCallable(functions, 'createAsaasPayment');
-      const result = await createPayment({ productId, paymentMethod: 'pix' }) as any;
+      const trimmedCoupon = couponCode.trim().toUpperCase();
+      const result = await createPayment({
+        productId,
+        paymentMethod: 'pix',
+        ...(trimmedCoupon && { couponCode: trimmedCoupon }),
+      }) as any;
 
       navigation.navigate('Checkout', {
         saleId: result.data.saleId,
@@ -145,7 +152,7 @@ export default function ProductDetailScreen() {
   const isOwner = product.ownerId === user?.uid;
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>‹</Text>
@@ -255,22 +262,37 @@ export default function ProductDetailScreen() {
             <Text style={styles.buyButtonText}>📂 Abrir conteúdo</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
-            style={[styles.buyButton, buying && styles.buyButtonDisabled]}
-            onPress={handleBuy}
-            disabled={buying}
-          >
-            {buying ? (
-              <ActivityIndicator color={colors.background} />
-            ) : (
-              <Text style={styles.buyButtonText}>
-                {product.isFree ? '🎁 Obter grátis' : `💳 Comprar — R$ ${product.price.toFixed(2)}`}
-              </Text>
+          <>
+            {!product.isFree && (
+              <View style={styles.couponRow}>
+                <TextInput
+                  style={styles.couponInput}
+                  placeholder="Cupom de desconto (opcional)"
+                  placeholderTextColor={colors.gray}
+                  value={couponCode}
+                  onChangeText={t => setCouponCode(t.toUpperCase())}
+                  autoCapitalize="characters"
+                  editable={!buying}
+                />
+              </View>
             )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.buyButton, buying && styles.buyButtonDisabled]}
+              onPress={handleBuy}
+              disabled={buying}
+            >
+              {buying ? (
+                <ActivityIndicator color={colors.background} />
+              ) : (
+                <Text style={styles.buyButtonText}>
+                  {product.isFree ? '🎁 Obter grátis' : `💳 Comprar — R$ ${product.price.toFixed(2)}`}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </>
         )}
       </View>
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -279,7 +301,7 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },
@@ -314,6 +336,13 @@ const styles = StyleSheet.create({
   reviewRating: { fontSize: 14, marginBottom: spacing.xs },
   reviewComment: { color: colors.gray, fontSize: fonts.sizes.sm },
   footer: { padding: spacing.md, borderTopWidth: 0.5, borderTopColor: colors.grayDark },
+  couponRow: { marginBottom: spacing.sm },
+  couponInput: {
+    backgroundColor: colors.surface, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.grayDark,
+    color: colors.white, padding: spacing.md,
+    fontSize: fonts.sizes.md, letterSpacing: 1,
+  },
   buyButton: {
     backgroundColor: colors.gold, borderRadius: borderRadius.md,
     padding: spacing.md, alignItems: 'center',

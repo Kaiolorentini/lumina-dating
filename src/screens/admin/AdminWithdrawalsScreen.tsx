@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, Alert, RefreshControl,
+  ActivityIndicator, Alert, RefreshControl, Modal, TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -10,6 +10,7 @@ import { getWithdrawals } from '../../services/marketplace/adminService';
 import app from '../../core/firebase';
 import { Withdrawal } from '../../shared/types/marketplace';
 import { useSuperAdminGuard } from '../../hooks/useAdminGuard';
+import ScreenContainer from '../../components/ScreenContainer';
 
 const STATUS_TABS = ['pending', 'approved', 'paid', 'rejected'] as const;
 type StatusTab = typeof STATUS_TABS[number];
@@ -25,6 +26,9 @@ export default function AdminWithdrawalsScreen() {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<Withdrawal | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const loadWithdrawals = useCallback(async () => {
     setLoading(true);
@@ -65,13 +69,23 @@ export default function AdminWithdrawalsScreen() {
     ]);
   }
 
-  async function handleReject(w: Withdrawal) {
-    Alert.prompt('Rejeitar saque', 'Motivo:', async (reason) => {
-      if (!reason?.trim()) return;
-      setProcessing(w.id);
-      await callFunction('onRejectWithdrawal', { withdrawalId: w.id, reason }, '❌ Saque rejeitado');
-      setProcessing(null);
-    }, 'plain-text');
+  function handleReject(w: Withdrawal) {
+    setRejectTarget(w);
+    setRejectReason('');
+    setShowRejectModal(true);
+  }
+
+  async function confirmReject() {
+    if (!rejectTarget) return;
+    if (!rejectReason.trim()) {
+      Alert.alert('Motivo obrigatório', 'Informe o motivo da rejeição.');
+      return;
+    }
+    setProcessing(rejectTarget.id);
+    setShowRejectModal(false);
+    await callFunction('onRejectWithdrawal', { withdrawalId: rejectTarget.id, reason: rejectReason.trim() }, '❌ Saque rejeitado');
+    setProcessing(null);
+    setRejectTarget(null);
   }
 
   async function handleMarkPaid(w: Withdrawal) {
@@ -88,7 +102,7 @@ export default function AdminWithdrawalsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>‹</Text>
@@ -155,6 +169,33 @@ export default function AdminWithdrawalsScreen() {
                 </View>
               ) : null}
 
+        <Modal visible={showRejectModal} transparent animationType="fade" onRequestClose={() => setShowRejectModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Rejeitar saque</Text>
+              <Text style={styles.modalSubtitle}>
+                R$ {rejectTarget?.amount.toFixed(2)} — {rejectTarget?.pixKey}
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                value={rejectReason}
+                onChangeText={setRejectReason}
+                placeholder="Motivo da rejeição"
+                placeholderTextColor={colors.gray}
+                autoFocus
+              />
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowRejectModal(false)}>
+                  <Text style={styles.modalCancelText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmReject}>
+                  <Text style={styles.modalConfirmText}>Rejeitar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
               {item.rejectionReason && (
                 <Text style={styles.reason}>Motivo: {item.rejectionReason}</Text>
               )}
@@ -162,7 +203,7 @@ export default function AdminWithdrawalsScreen() {
           )}
         />
       )}
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -170,7 +211,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },
@@ -209,4 +250,30 @@ const styles = StyleSheet.create({
   reason: { color: colors.error, fontSize: fonts.sizes.xs, marginTop: spacing.sm },
   empty: { alignItems: 'center', padding: spacing.xl },
   emptyText: { color: colors.gray, fontSize: fonts.sizes.md },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center', padding: spacing.md,
+  },
+  modalContent: {
+    backgroundColor: colors.surface, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.grayDark, padding: spacing.lg,
+  },
+  modalTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', marginBottom: spacing.xs },
+  modalSubtitle: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.md },
+  modalInput: {
+    backgroundColor: colors.background, borderRadius: borderRadius.sm,
+    borderWidth: 1, borderColor: colors.grayDark, color: colors.white,
+    padding: spacing.md, fontSize: fonts.sizes.md, marginBottom: spacing.md,
+  },
+  modalActions: { flexDirection: 'row', gap: spacing.sm },
+  modalCancelBtn: {
+    flex: 1, padding: spacing.md, borderRadius: borderRadius.sm,
+    borderWidth: 1, borderColor: colors.gray, alignItems: 'center',
+  },
+  modalCancelText: { color: colors.gray, fontWeight: 'bold' },
+  modalConfirmBtn: {
+    flex: 1, padding: spacing.md, borderRadius: borderRadius.sm,
+    backgroundColor: colors.error, alignItems: 'center',
+  },
+  modalConfirmText: { color: colors.white, fontWeight: 'bold' },
 });

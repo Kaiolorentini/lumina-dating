@@ -2,13 +2,14 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors, fonts, spacing } from '../../theme';
+import ScreenContainer from '../../components/ScreenContainer';
 
 // Reutiliza a lógica do CreateProductScreen com dados pré-carregados
 // Implementação completa na revisão final da FASE 9
 export default function EditProductScreen() {
   const navigation = useNavigation();
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>‹</Text>
@@ -21,7 +22,7 @@ export default function EditProductScreen() {
         <Text style={styles.title}>Edição de produto</Text>
         <Text style={styles.subtitle}>Em implementação final</Text>
       </View>
-    </View>
+    </ScreenContainer>
   );
 }
 
@@ -29,7 +30,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },

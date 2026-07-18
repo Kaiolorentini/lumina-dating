@@ -4,15 +4,20 @@
 // Comprador solicita reembolso em até 24h após pagamento.
 // Admin tem 24h para aprovar ou rejeitar manualmente.
 // NÃO há reembolso automático.
+// 3+ reembolsos em 30 dias gera fraudFlag (reason: abuse).
 // ============================================
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { createAuditLog } from "../utils/auditLog";
+import { createFraudFlag } from "../utils/createFraudFlag";
+import { notifyAdmins } from "../utils/notifyAdmins";
 
 const REFUND_WINDOW_HOURS = 24;
 const ADMIN_REVIEW_HOURS = 24;
+const ABUSE_THRESHOLD = 3;          // 3+ reembolsos em 30 dias → flag
+const ABUSE_WINDOW_DAYS = 30;
 
 export const requestRefund = onCall(async (request) => {
   const uid = request.auth?.uid;
@@ -107,6 +112,41 @@ export const requestRefund = onCall(async (request) => {
     metadata: { reason, productId: sale.productId, amount: sale.amount },
     req: request.rawRequest,
   });
+
+  // Notifica admins — novo pedido de reembolso aguardando decisão.
+  notifyAdmins({
+    title: "↩️ Novo pedido de reembolso",
+    body: `Reembolso de R$ ${(sale.amount ?? 0).toFixed(2)} solicitado. Motivo: ${reason.trim()}`,
+    type: "refund_requested",
+    data: { saleId, productId: sale.productId ?? "" },
+  }).catch(() => {});
+
+  // ============================================
+  // Fraud detection — abuso de reembolso (3+ em 30 dias)
+  // Secundário: falha aqui NÃO derruba o reembolso.
+  // ============================================
+  try {
+    const windowStart = new Date(Date.now() - ABUSE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const refundsSnap = await db.collection("refundRequests")
+      .where("buyerId", "==", uid)
+      .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(windowStart))
+      .get();
+
+    const refundCount = refundsSnap.size;
+
+    if (refundCount >= ABUSE_THRESHOLD) {
+      // Fire-and-forget — idempotente pelo helper.
+      createFraudFlag({
+        userId: uid,
+        reason: "abuse",
+        description: `Usuário solicitou ${refundCount} reembolsos nos últimos ${ABUSE_WINDOW_DAYS} dias`,
+        relatedSaleId: saleId,
+      }).catch(() => {});
+    }
+  } catch (error) {
+    // Falha de índice ou leitura não pode impedir o reembolso.
+    console.warn("[requestRefund] erro verificando abuso:", error);
+  }
 
   return { success: true };
 });
