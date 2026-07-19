@@ -10,7 +10,7 @@
 
 import React from 'react';
 import { View, Image, StyleSheet, ViewStyle } from 'react-native';
-import { COLORS, TIER_COLORS, TIER_GLOW, SHADOWS, BORDER_RADIUS } from '../../theme/tokens';
+import { COLORS, TIER_COLORS, TIER_GLOW, SHADOWS } from '../../theme/tokens';
 import { getFrameAsset } from '../../assets';
 
 type Tier = 'comum' | 'raro' | 'epico' | 'lendario' | 'galaxia';

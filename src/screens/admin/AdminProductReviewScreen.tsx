@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image,
-  TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput,
+  TouchableOpacity, ActivityIndicator, Alert, Modal,
   Linking, Dimensions,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { Button, Card, Input } from '../../components/ui';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Video, ResizeMode } from 'expo-av';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha , colors } from '../../theme/tokens';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
 import { getProduct } from '../../services/marketplace/productService';
@@ -200,7 +201,7 @@ export default function AdminProductReviewScreen() {
   if (loading) {
     return (
       <ScreenContainer style={styles.center}>
-        <ActivityIndicator color={colors.gold} size="large" />
+        <ActivityIndicator color={COLORS.gold} size="large" />
       </ScreenContainer>
     );
   }
@@ -209,13 +210,11 @@ export default function AdminProductReviewScreen() {
     return (
       <ScreenContainer>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backBtn}>‹</Text>
-          </TouchableOpacity>
+          <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
           <Text style={styles.headerTitle}>Revisar Produto</Text>
           <View style={{ width: 40 }} />
         </View>
-        <View style={[styles.center, { flex: 1, padding: spacing.xl }]}>
+        <View style={[styles.center, { flex: 1, padding: SPACING.xl }]}>
           <Text style={styles.errorIcon}>⚠️</Text>
           <Text style={styles.errorText}>{error ?? 'Produto não encontrado'}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={loadData}>
@@ -235,9 +234,7 @@ export default function AdminProductReviewScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle} numberOfLines={1}>Revisar Produto</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -316,7 +313,7 @@ export default function AdminProductReviewScreen() {
                     disabled={loadingFileIndex === index}
                   >
                     {loadingFileIndex === index ? (
-                      <ActivityIndicator color={colors.gold} size="small" />
+                      <ActivityIndicator color={COLORS.gold} size="small" />
                     ) : (
                       <Text style={styles.viewBtnText}>👁️ Ver</Text>
                     )}
@@ -364,7 +361,7 @@ export default function AdminProductReviewScreen() {
         {isPending && (
           <View style={styles.actions}>
             {processing ? (
-              <ActivityIndicator color={colors.gold} style={{ paddingVertical: spacing.md }} />
+              <ActivityIndicator color={COLORS.gold} style={{ paddingVertical: SPACING.md }} />
             ) : (
               <>
                 <TouchableOpacity style={styles.approveBtn} onPress={handleApprove}>
@@ -405,10 +402,8 @@ export default function AdminProductReviewScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>❌ Rejeitar produto</Text>
             <Text style={styles.modalSubtitle}>{product.title}</Text>
-            <TextInput
-              style={styles.modalInput}
+            <Input
               placeholder="Informe o motivo da rejeição..."
-              placeholderTextColor={colors.gray}
               value={rejectReason}
               onChangeText={setRejectReason}
               multiline
@@ -416,15 +411,8 @@ export default function AdminProductReviewScreen() {
               autoFocus
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setRejectModal(false)}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmReject}>
-                <Text style={styles.modalConfirmBtnText}>Confirmar</Text>
-              </TouchableOpacity>
+              <Button label="Cancelar" variant="ghost" onPress={() => setRejectModal(false)} />
+              <Button label="Confirmar" variant="primary" onPress={confirmReject} />
             </View>
           </View>
         </View>
@@ -434,128 +422,112 @@ export default function AdminProductReviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   center: { alignItems: 'center', justifyContent: 'center' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.gold + '44',
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', flex: 1, textAlign: 'center' },
-  content: { paddingBottom: spacing.xl },
-  cover: { width, height: 240, backgroundColor: colors.surface },
-  noCover: { color: colors.gray, fontSize: fonts.sizes.md },
-  previewRow: { paddingHorizontal: spacing.md, paddingTop: spacing.sm },
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, flex: 1, textAlign: 'center' },
+  content: { paddingBottom: SPACING.xl },
+  cover: { width, height: 240, backgroundColor: COLORS.card },
+  noCover: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body },
+  previewRow: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm },
   previewThumb: {
-    width: 90, height: 90, borderRadius: borderRadius.sm, marginRight: spacing.sm,
-    backgroundColor: colors.surface,
+    width: 90, height: 90, borderRadius: BORDER_RADIUS.sm, marginRight: SPACING.sm,
+    backgroundColor: COLORS.card,
   },
-  block: { padding: spacing.md, gap: spacing.xs },
-  title: { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold' },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs },
-  category: { color: colors.gold, fontSize: fonts.sizes.sm, textTransform: 'capitalize' },
-  price: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
+  block: { padding: SPACING.md, gap: SPACING.xs },
+  title: { color: COLORS.textPrimary, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SPACING.xs },
+  category: { color: COLORS.gold, fontSize: FONT_SIZE.caption, textTransform: 'capitalize' },
+  price: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs, marginTop: SPACING.xs },
   chip: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm, paddingVertical: 2,
-    borderWidth: 1, borderColor: colors.grayDark,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.full,
+    paddingHorizontal: SPACING.sm, paddingVertical: 2,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  chipText: { color: colors.gray, fontSize: fonts.sizes.xs },
+  chipText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
   sectionLabel: {
-    color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold',
-    marginTop: spacing.sm, marginBottom: spacing.xs,
+    color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold,
+    marginTop: SPACING.sm, marginBottom: SPACING.xs,
   },
-  description: { color: colors.gray, fontSize: fonts.sizes.md, lineHeight: 22 },
+  description: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, lineHeight: 22 },
   attentionBox: {
-    marginHorizontal: spacing.md, padding: spacing.md,
-    backgroundColor: colors.gold + '11', borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.gold + '44', gap: 2,
+    marginHorizontal: SPACING.md, padding: SPACING.md,
+    backgroundColor: COLORS.gold + '11', borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.gold + '44', gap: 2,
   },
-  attentionTitle: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold', marginBottom: spacing.xs },
-  attentionLine: { color: colors.white, fontSize: fonts.sizes.sm },
+  attentionTitle: { color: COLORS.gold, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.xs },
+  attentionLine: { color: COLORS.textPrimary, fontSize: FONT_SIZE.caption },
   fileItem: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark,
-    padding: spacing.md, marginBottom: spacing.sm,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.border,
+    padding: SPACING.md, marginBottom: SPACING.sm,
   },
-  fileHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  fileHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   fileIconText: { fontSize: 24 },
-  fileName: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  fileMeta: { color: colors.gray, fontSize: fonts.sizes.xs },
+  fileName: { color: COLORS.textPrimary, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  fileMeta: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
   viewBtn: {
-    backgroundColor: colors.gold + '22', borderRadius: borderRadius.sm,
-    borderWidth: 1, borderColor: colors.gold,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    backgroundColor: COLORS.gold + '22', borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1, borderColor: COLORS.gold,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
   },
-  viewBtnText: { color: colors.gold, fontWeight: 'bold', fontSize: fonts.sizes.sm },
+  viewBtnText: { color: COLORS.gold, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.caption },
   openedImage: {
-    width: '100%', height: 320, marginTop: spacing.md,
-    borderRadius: borderRadius.sm, backgroundColor: colors.background,
+    width: '100%', height: 320, marginTop: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm, backgroundColor: COLORS.background,
   },
   openedVideo: {
-    width: '100%', height: 240, marginTop: spacing.md,
-    borderRadius: borderRadius.sm, backgroundColor: '#000',
+    width: '100%', height: 240, marginTop: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm, backgroundColor: '#000',
   },
-  ownerName: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  ownerUid: { color: colors.gray, fontSize: fonts.sizes.xs },
+  ownerName: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  ownerUid: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
   profileBtn: {
-    marginTop: spacing.sm, alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.grayDark,
+    marginTop: SPACING.sm, alignSelf: 'flex-start',
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm, borderWidth: 1, borderColor: COLORS.border,
   },
-  profileBtnText: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  actions: { padding: spacing.md, gap: spacing.sm },
+  profileBtnText: { color: COLORS.gold, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  actions: { padding: SPACING.md, gap: SPACING.sm },
   approveBtn: {
-    backgroundColor: colors.success + '22', borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.success, padding: spacing.md, alignItems: 'center',
+    backgroundColor: COLORS.success + '22', borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.success, padding: SPACING.md, alignItems: 'center',
   },
-  approveBtnText: { color: colors.success, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  approveBtnText: { color: COLORS.success, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.body },
   rejectBtn: {
-    backgroundColor: colors.error + '11', borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.error, padding: spacing.md, alignItems: 'center',
+    backgroundColor: COLORS.error + '11', borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.error, padding: SPACING.md, alignItems: 'center',
   },
-  rejectBtnText: { color: colors.error, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  rejectBtnText: { color: COLORS.error, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.body },
   statusBox: {
-    margin: spacing.md, padding: spacing.md,
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark,
+    margin: SPACING.md, padding: SPACING.md,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  statusText: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  statusReason: { color: colors.gray, fontSize: fonts.sizes.sm, marginTop: spacing.xs },
+  statusText: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  statusReason: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, marginTop: SPACING.xs },
   errorIcon: { fontSize: 48 },
-  errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center', marginTop: spacing.md },
+  errorText: { color: COLORS.error, fontSize: FONT_SIZE.body, textAlign: 'center', marginTop: SPACING.md },
   retryBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.sm,
-    padding: spacing.md, paddingHorizontal: spacing.xl, marginTop: spacing.md,
+    backgroundColor: COLORS.gold, borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.md, paddingHorizontal: SPACING.xl, marginTop: SPACING.md,
   },
-  retryBtnText: { color: colors.background, fontWeight: 'bold' },
+  retryBtnText: { color: COLORS.background, fontWeight: FONT_WEIGHT.bold },
   // Modal
   modalOverlay: {
-    flex: 1, backgroundColor: '#00000088',
-    alignItems: 'center', justifyContent: 'center', padding: spacing.lg,
+    flex: 1, backgroundColor: alpha(colors.black, 0.53),
+    alignItems: 'center', justifyContent: 'center', padding: SPACING.lg,
   },
   modalContent: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.lg, width: '100%', gap: spacing.md,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.border, padding: SPACING.lg, width: '100%', gap: SPACING.md,
   },
-  modalTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  modalSubtitle: { color: colors.gray, fontSize: fonts.sizes.sm },
-  modalInput: {
-    backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.grayDark, color: colors.white, padding: spacing.md,
-    fontSize: fonts.sizes.md, textAlignVertical: 'top', minHeight: 80,
-  },
-  modalActions: { flexDirection: 'row', gap: spacing.sm },
-  modalCancelBtn: {
-    flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalCancelBtnText: { color: colors.white, fontWeight: 'bold' },
-  modalConfirmBtn: {
-    flex: 1, backgroundColor: colors.error, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalConfirmBtnText: { color: colors.white, fontWeight: 'bold' },
+  modalTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  modalSubtitle: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  modalActions: { flexDirection: 'row', gap: SPACING.sm },
 });

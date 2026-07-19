@@ -8,11 +8,11 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS, alpha } from '../theme/tokens';
 import { MediaItem, unlockMediaItem, isUnlocked } from '../services/mediaService';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - spacing.lg * 2 - spacing.sm) / 2;
+const CARD_WIDTH = (width - SPACING.lg * 2 - SPACING.sm) / 2;
 
 interface Props {
   item: MediaItem;
@@ -85,7 +85,7 @@ export default function MediaCard({ item, userId, onUnlock }: Props) {
           disabled={unlocking}
         >
           {unlocking ? (
-            <ActivityIndicator color={colors.background} size="small" />
+            <ActivityIndicator color={COLORS.background} size="small" />
           ) : (
             <Text style={styles.unlockText}>🔓 Desbloquear</Text>
           )}
@@ -105,12 +105,12 @@ export default function MediaCard({ item, userId, onUnlock }: Props) {
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
-    marginBottom: spacing.md,
+    marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
   },
   imageContainer: {
     width: '100%',
@@ -132,76 +132,76 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background + '88',
+    backgroundColor: alpha(COLORS.background, 0.53),
   },
   lockIcon: {
-    fontSize: 28,
+    fontSize: FONT_SIZE.hero,
     marginBottom: 4,
   },
   lockText: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xs,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.xs,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 1,
   },
   typeBadge: {
     position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    backgroundColor: colors.background + 'CC',
-    borderRadius: borderRadius.full,
+    top: SPACING.xs,
+    right: SPACING.xs,
+    backgroundColor: alpha(COLORS.background, 0.8),
+    borderRadius: BORDER_RADIUS.full,
     width: 28,
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
   typeBadgeText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.body,
   },
   uploaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.sm,
-    gap: spacing.xs,
+    padding: SPACING.sm,
+    gap: SPACING.xs,
   },
   uploaderAvatar: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: COLORS.gold,
   },
   uploaderName: {
-    color: colors.grayLight,
-    fontSize: fonts.sizes.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.xs,
     flex: 1,
   },
   unlockButton: {
-    backgroundColor: colors.gold,
-    marginHorizontal: spacing.sm,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.sm,
-    padding: spacing.xs,
+    backgroundColor: COLORS.gold,
+    marginHorizontal: SPACING.sm,
+    marginBottom: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.xs,
     alignItems: 'center',
   },
   unlockText: {
-    color: colors.background,
-    fontSize: fonts.sizes.xs,
-    fontWeight: 'bold',
+    color: COLORS.background,
+    fontSize: FONT_SIZE.xs,
+    fontWeight: FONT_WEIGHT.bold,
   },
   unlockedBadge: {
-    marginHorizontal: spacing.sm,
-    marginBottom: spacing.sm,
-    borderRadius: borderRadius.sm,
-    padding: spacing.xs,
+    marginHorizontal: SPACING.sm,
+    marginBottom: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.xs,
     alignItems: 'center',
-    backgroundColor: colors.success + '22',
+    backgroundColor: alpha(COLORS.success, 0.13),
     borderWidth: 1,
-    borderColor: colors.success + '44',
+    borderColor: alpha(COLORS.success, 0.27),
   },
   unlockedText: {
-    color: colors.success,
-    fontSize: fonts.sizes.xs,
-    fontWeight: 'bold',
+    color: COLORS.success,
+    fontSize: FONT_SIZE.xs,
+    fontWeight: FONT_WEIGHT.bold,
   },
 });

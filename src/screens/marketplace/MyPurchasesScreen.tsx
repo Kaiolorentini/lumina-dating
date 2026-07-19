@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator, Alert, RefreshControl,
-  Modal, TextInput,
+  ActivityIndicator, Alert, RefreshControl,
+  Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha} from '../../theme/tokens';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
 import { usePurchases } from '../../hooks/usePurchases';
@@ -15,6 +15,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../core/firebase';
 import { Purchase } from '../../shared/types/marketplace';
 import ScreenContainer from '../../components/ScreenContainer';
+import { Badge, Button, Input } from '../../components/ui';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -23,22 +24,16 @@ export default function MyPurchasesScreen() {
   const { user } = useAuth();
   const { purchases, loading, loadMore, hasMore, loadingMore, refresh } = usePurchases(user?.uid);
   const [requestingRefund, setRequestingRefund] = useState<string | null>(null);
-
-  // Modal de reembolso (cross-platform — substitui Alert.prompt iOS-only)
   const [refundModal, setRefundModal] = useState(false);
   const [refundTarget, setRefundTarget] = useState<Purchase | null>(null);
   const [refundReason, setRefundReason] = useState('');
 
-  // Deduplica por productId (evita duplicata quando listener + loadMore se sobrepõem)
   const uniquePurchases = useMemo(() => {
     const seen = new Set<string>();
     const result: Purchase[] = [];
     for (const p of purchases) {
       const key = `${p.buyerId}_${p.productId}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        result.push(p);
-      }
+      if (!seen.has(key)) { seen.add(key); result.push(p); }
     }
     return result;
   }, [purchases]);
@@ -51,10 +46,7 @@ export default function MyPurchasesScreen() {
 
   async function confirmRefund() {
     if (!refundTarget) return;
-    if (!refundReason.trim()) {
-      Alert.alert('Motivo obrigatório', 'Informe o motivo da solicitação.');
-      return;
-    }
+    if (!refundReason.trim()) { Alert.alert('Motivo obrigatório', 'Informe o motivo da solicitação.'); return; }
     const saleId = refundTarget.saleId ?? '';
     setRequestingRefund(saleId);
     setRefundModal(false);
@@ -76,52 +68,24 @@ export default function MyPurchasesScreen() {
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={styles.productId} numberOfLines={1}>
-            📦 {item.productId.slice(0, 16)}...
-          </Text>
-          <View style={[
-            styles.statusBadge,
-            item.status === 'active' ? styles.statusActive : styles.statusRefunded,
-          ]}>
-            <Text style={styles.statusText}>
-              {item.status === 'active' ? 'Ativo' : item.status}
-            </Text>
-          </View>
+          <Text style={styles.productId} numberOfLines={1}>📦 {item.productId.slice(0, 16)}...</Text>
+          <Badge label={item.status === 'active' ? 'Ativo' : item.status} variant={item.status === 'active' ? 'success' : 'error'} size="sm" />
         </View>
-
-        <Text style={styles.amount}>
-          {item.amount === 0 ? 'Grátis' : `R$ ${item.amount.toFixed(2)}`}
-        </Text>
-
-        <Text style={styles.date}>
-          Comprado em {item.createdAt.toLocaleDateString('pt-BR')}
-        </Text>
-
+        <Text style={styles.amount}>{item.amount === 0 ? 'Grátis' : `R$ ${item.amount.toFixed(2)}`}</Text>
+        <Text style={styles.date}>Comprado em {item.createdAt.toLocaleDateString('pt-BR')}</Text>
         <View style={styles.cardActions}>
           {item.status === 'active' && (
-            <TouchableOpacity
-              style={styles.openBtn}
-              onPress={() => navigation.navigate('ContentViewer', {
-                productId: item.productId,
-                purchaseId,
-              })}
-            >
-              <Text style={styles.openBtnText}>📂 Abrir</Text>
-            </TouchableOpacity>
+            <Button label="📂 Abrir" onPress={() => navigation.navigate('ContentViewer', { productId: item.productId, purchaseId })} variant="primary" size="sm" />
           )}
-
           {item.status === 'active' && item.saleId && (
-            <TouchableOpacity
-              style={styles.refundBtn}
+            <Button
+              label="↩️ Reembolso"
               onPress={() => openRefund(item)}
+              variant="danger"
+              size="sm"
+              loading={requestingRefund === item.saleId}
               disabled={requestingRefund === item.saleId}
-            >
-              {requestingRefund === item.saleId ? (
-                <ActivityIndicator color={colors.error} size="small" />
-              ) : (
-                <Text style={styles.refundBtnText}>↩️ Reembolso</Text>
-              )}
-            </TouchableOpacity>
+            />
           )}
         </View>
       </View>
@@ -131,70 +95,36 @@ export default function MyPurchasesScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Minhas Compras</Text>
         <View style={{ width: 40 }} />
       </View>
 
       {loading ? (
-        <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
+        <ActivityIndicator color={COLORS.gold} style={{ flex: 1 }} />
       ) : (
         <FlatList
           data={uniquePurchases}
           keyExtractor={item => `${item.buyerId}_${item.productId}`}
           contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.gold} />
-          }
+          refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={COLORS.gold} />}
           onEndReached={() => { if (hasMore) loadMore(); }}
           onEndReachedThreshold={0.3}
-          ListEmptyComponent={
-            <MarketplaceEmptyState
-              icon="🛒"
-              title="Nenhuma compra ainda"
-              subtitle="Explore o marketplace e adquira produtos digitais"
-            />
-          }
-          ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.gold} /> : null}
+          ListEmptyComponent={<MarketplaceEmptyState icon="🛒" title="Nenhuma compra ainda" subtitle="Explore o marketplace e adquira produtos digitais" />}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={COLORS.gold} /> : null}
           renderItem={renderItem}
         />
       )}
 
-      {/* Modal de reembolso — cross-platform */}
-      <Modal
-        visible={refundModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRefundModal(false)}
-      >
+      <Modal visible={refundModal} transparent animationType="fade" onRequestClose={() => setRefundModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Solicitar reembolso</Text>
             <Text style={styles.modalSubtitle}>Informe o motivo da solicitação:</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Ex: não era o que eu esperava"
-              placeholderTextColor={colors.gray}
-              value={refundReason}
-              onChangeText={setRefundReason}
-              multiline
-              maxLength={300}
-            />
+            <Input placeholder="Ex: não era o que eu esperava" value={refundReason} onChangeText={setRefundReason} multiline maxLength={300} />
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setRefundModal(false)}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmBtn}
-                onPress={confirmRefund}
-              >
-                <Text style={styles.modalConfirmBtnText}>Enviar</Text>
-              </TouchableOpacity>
+              <Button label="Cancelar" onPress={() => setRefundModal(false)} variant="ghost" />
+              <Button label="Enviar" onPress={confirmRefund} variant="danger" />
             </View>
           </View>
         </View>
@@ -204,64 +134,20 @@ export default function MyPurchasesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
-  },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  listContent: { padding: spacing.md },
-  card: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  productId: { color: colors.gray, fontSize: fonts.sizes.sm, flex: 1 },
-  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderRadius: borderRadius.full },
-  statusActive: { backgroundColor: colors.success + '22', borderWidth: 1, borderColor: colors.success },
-  statusRefunded: { backgroundColor: colors.error + '22', borderWidth: 1, borderColor: colors.error },
-  statusText: { color: colors.white, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  amount: { color: colors.gold, fontSize: fonts.sizes.lg, fontWeight: 'bold', marginBottom: spacing.xs },
-  date: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.md },
-  cardActions: { flexDirection: 'row', gap: spacing.sm },
-  openBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, flex: 1, alignItems: 'center',
-  },
-  openBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.sm },
-  refundBtn: {
-    backgroundColor: 'transparent', borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.error, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    alignItems: 'center',
-  },
-  refundBtnText: { color: colors.error, fontSize: fonts.sizes.sm },
-  // Modal
-  modalOverlay: {
-    flex: 1, backgroundColor: '#000000aa',
-    alignItems: 'center', justifyContent: 'center', padding: spacing.lg,
-  },
-  modalContent: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.lg,
-    borderWidth: 1, borderColor: colors.grayDark, padding: spacing.lg, width: '100%',
-  },
-  modalTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', marginBottom: spacing.xs },
-  modalSubtitle: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.md },
-  modalInput: {
-    backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.grayDark, color: colors.white, padding: spacing.md,
-    fontSize: fonts.sizes.md, minHeight: 80, textAlignVertical: 'top', marginBottom: spacing.md,
-  },
-  modalActions: { flexDirection: 'row', gap: spacing.sm },
-  modalCancelBtn: {
-    flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalCancelBtnText: { color: colors.white, fontWeight: 'bold' },
-  modalConfirmBtn: {
-    flex: 1, backgroundColor: colors.error, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalConfirmBtnText: { color: colors.white, fontWeight: 'bold' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingBottom: SPACING.md, borderBottomWidth: 0.5, borderBottomColor: alpha(COLORS.gold, 0.27) },
+  // backBtn removed — now uses Button
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  listContent: { padding: SPACING.md },
+  card: { backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.lg, borderWidth: 1, borderColor: COLORS.border, padding: SPACING.md, marginBottom: SPACING.md },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
+  productId: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, flex: 1 },
+  amount: { color: COLORS.gold, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.xs },
+  date: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, marginBottom: SPACING.md },
+  cardActions: { flexDirection: 'row', gap: SPACING.sm },
+  modalOverlay: { flex: 1, backgroundColor: COLORS.overlay, alignItems: 'center', justifyContent: 'center', padding: SPACING.lg },
+  modalContent: { backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.xl, borderWidth: 1, borderColor: COLORS.border, padding: SPACING.lg, width: '100%' },
+  modalTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.xs },
+  modalSubtitle: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, marginBottom: SPACING.md },
+  // modalInput removed — now uses Input
+  modalActions: { flexDirection: 'row', gap: SPACING.sm },
 });

@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useNavigation }  from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../../theme';
+import { colors, fonts, spacing, borderRadius, alpha } from '../../../theme';
 import { useAuth }           from '../../../context/AuthContext';
 import { useNotifications }  from '../hooks/useNotifications';
 import { AppNotification }   from '../../../shared/types';
@@ -193,21 +193,21 @@ const styles = StyleSheet.create({
 
   item:             { flexDirection: 'row', alignItems: 'flex-start', padding: spacing.lg, gap: spacing.md, backgroundColor: colors.background },
   itemUnread:       { backgroundColor: colors.gold + '11' },
-  itemTrigger:      { backgroundColor: 'rgba(123,47,190,0.08)' },
+  itemTrigger:      { backgroundColor: alpha(colors.primaryLegacy, 0.08) },
 
   iconContainer:        { position: 'relative', width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.grayDark },
-  iconContainerTrigger: { borderColor: '#7B2FBE' },
+  iconContainerTrigger: { borderColor: colors.primaryLegacy },
 
-  icon:             { fontSize: 20 },
+  icon:             { fontSize: fonts.sizes.xl },
   unreadDot:        { position: 'absolute', top: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.gold, borderWidth: 2, borderColor: colors.background },
 
   content:          { flex: 1 },
-  triggerTitle:     { color: '#B57BEE', fontSize: fonts.sizes.sm, fontWeight: 'bold', marginBottom: 2 },
+  triggerTitle:     { color: colors.secondaryLegacy, fontSize: fonts.sizes.sm, fontWeight: 'bold', marginBottom: 2 },
   message:          { color: colors.gray, fontSize: fonts.sizes.md, lineHeight: 22 },
   messageUnread:    { color: colors.white, fontWeight: 'bold' },
   bottomRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs },
   time:             { color: colors.gray, fontSize: fonts.sizes.xs },
-  tapToReveal:      { color: '#7B2FBE', fontSize: fonts.sizes.xs, fontWeight: 'bold' },
+  tapToReveal:      { color: colors.primaryLegacy, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
 
   separator:        { height: 1, backgroundColor: colors.grayDark, marginLeft: spacing.lg + 44 + spacing.md },
   emptyContainer:   { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },

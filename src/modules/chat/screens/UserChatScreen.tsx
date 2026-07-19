@@ -16,7 +16,7 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fonts, spacing, borderRadius } from '../../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../../theme/tokens';
 import { useAuth } from '../../../context/AuthContext';
 import Header from '../../../components/Header';
 import { RootStackParamList } from '../../../navigation/types';
@@ -72,7 +72,7 @@ function TypingDots() {
       {[dot1, dot2, dot3].map((dot, i) => (
         <Animated.View key={i} style={{
           width: 5, height: 5, borderRadius: 3,
-          backgroundColor: colors.gold, opacity: dot,
+          backgroundColor: COLORS.gold, opacity: dot,
         }} />
       ))}
     </View>
@@ -110,6 +110,7 @@ export default function UserChatScreen() {
   const soundRef = useRef<Audio.Sound | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isNearBottomRef = useRef(true);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -117,7 +118,6 @@ export default function UserChatScreen() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [otherIsTyping, setOtherIsTyping] = useState(false);
   const [showReactions, setShowReactions] = useState<string | null>(null);
-  const isNearBottomRef = useRef(true);
 
   useEffect(() => {
     if (!user?.uid || !targetUserId) return;
@@ -375,7 +375,7 @@ export default function UserChatScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator color={colors.gold} size="large" />
+          <ActivityIndicator color={COLORS.gold} size="large" />
         </View>
       ) : (
         <FlatList
@@ -413,7 +413,7 @@ export default function UserChatScreen() {
         </View>
       )}
 
-      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, SPACING.sm) }]}>
         {isRecording ? (
           <View style={styles.recordingContainer}>
             <View style={styles.recordingDot} />
@@ -422,14 +422,14 @@ export default function UserChatScreen() {
           </View>
         ) : uploadingAudio ? (
           <View style={styles.recordingContainer}>
-            <ActivityIndicator color={colors.gold} size="small" />
+            <ActivityIndicator color={COLORS.gold} size="small" />
             <Text style={styles.recordingText}>Enviando audio...</Text>
           </View>
         ) : (
           <TextInput
             style={styles.input}
             placeholder={`Mensagem para ${targetUserName}...`}
-            placeholderTextColor={colors.gray}
+            placeholderTextColor={COLORS.textSecondary}
             value={inputText}
             onChangeText={handleInputChange}
             multiline
@@ -458,166 +458,166 @@ export default function UserChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  blockIcon: { fontSize: 20 },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  blockIcon: { fontSize: FONT_SIZE.title },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  blockedContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  blockedContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: SPACING.md },
   blockedIcon: { fontSize: 60 },
-  blockedText: { color: colors.gray, fontSize: fonts.sizes.lg },
+  blockedText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.subtitle },
   backButton: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    paddingHorizontal: spacing.xl,
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
   },
-  backButtonText: { color: colors.white, fontWeight: 'bold' },
-  messagesList: { padding: spacing.md, paddingBottom: spacing.xl, flexGrow: 1 },
+  backButtonText: { color: COLORS.textPrimary, fontWeight: FONT_WEIGHT.bold },
+  messagesList: { padding: SPACING.md, paddingBottom: SPACING.xl, flexGrow: 1 },
   messageRow: {
     flexDirection: 'row',
-    marginBottom: spacing.sm,
+    marginBottom: SPACING.sm,
     alignItems: 'flex-end',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
   },
   rowMe: { justifyContent: 'flex-end', flexDirection: 'row' },
   rowOther: { justifyContent: 'flex-start', flexDirection: 'row' },
-  avatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.gold },
+  avatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: COLORS.gold },
   bubbleWrapper: {
     maxWidth: '75%',
     flexShrink: 1,
   },
-  bubble: { borderRadius: borderRadius.md, padding: spacing.md },
-  bubbleMe: { backgroundColor: colors.gold, borderBottomRightRadius: 4 },
+  bubble: { borderRadius: BORDER_RADIUS.md, padding: SPACING.md },
+  bubbleMe: { backgroundColor: COLORS.gold, borderBottomRightRadius: 4 },
   bubbleOther: {
-    backgroundColor: colors.surface,
+    backgroundColor: COLORS.card,
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
   },
-  messageText: { fontSize: fonts.sizes.md, lineHeight: 22 },
-  textMe: { color: colors.background, fontWeight: '500' },
-  textOther: { color: colors.white },
-  messageTime: { fontSize: fonts.sizes.xs, marginTop: 4 },
-  timeMe: { color: colors.background + 'AA', textAlign: 'right' },
-  timeOther: { color: colors.gray },
+  messageText: { fontSize: FONT_SIZE.body, lineHeight: 22 },
+  textMe: { color: COLORS.background, fontWeight: '500' },
+  textOther: { color: COLORS.textPrimary },
+  messageTime: { fontSize: FONT_SIZE.xs, marginTop: 4 },
+  timeMe: { color: COLORS.background + 'AA', textAlign: 'right' },
+  timeOther: { color: COLORS.textSecondary },
   statusRow: { marginTop: 3, alignItems: 'flex-end' },
-  statusSent: { color: colors.gray, fontSize: 16, lineHeight: 18 },
-  statusDelivered: { color: colors.white, fontSize: 16, lineHeight: 18 },
-  statusRead: { color: colors.gold, fontSize: 16, lineHeight: 18 },
+  statusSent: { color: COLORS.textSecondary, fontSize: FONT_SIZE.subtitle, lineHeight: 18 },
+  statusDelivered: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, lineHeight: 18 },
+  statusRead: { color: COLORS.gold, fontSize: FONT_SIZE.subtitle, lineHeight: 18 },
   typingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
-    gap: spacing.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xs,
+    gap: SPACING.sm,
   },
-  typingText: { color: colors.gray, fontSize: fonts.sizes.xs, fontStyle: 'italic' },
+  typingText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, fontStyle: 'italic' },
   reactionPicker: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    gap: spacing.xs,
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    gap: SPACING.xs,
     borderWidth: 1,
-    borderColor: colors.gold + '44',
-    marginTop: spacing.xs,
+    borderColor: COLORS.gold + '44',
+    marginTop: SPACING.xs,
   },
   reactionPickerMe: { alignSelf: 'flex-end' },
   reactionPickerOther: { alignSelf: 'flex-start' },
   reactionOption: { padding: 4, borderRadius: 8 },
-  reactionOptionActive: { backgroundColor: colors.gold + '33' },
-  reactionEmoji: { fontSize: 20 },
+  reactionOptionActive: { backgroundColor: COLORS.gold + '33' },
+  reactionEmoji: { fontSize: FONT_SIZE.title },
   reactionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 },
   reactionsRowMe: { justifyContent: 'flex-end' },
   reactionsRowOther: { justifyContent: 'flex-start' },
   reactionBadge: {
-    backgroundColor: colors.surface,
+    backgroundColor: COLORS.card,
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: colors.gold + '44',
+    borderColor: COLORS.gold + '44',
   },
-  reactionBadgeText: { fontSize: 14 },
+  reactionBadgeText: { fontSize: FONT_SIZE.body },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.card,
     borderTopWidth: 1,
-    borderTopColor: colors.grayDark,
-    gap: spacing.sm,
+    borderTopColor: COLORS.border,
+    gap: SPACING.sm,
   },
   input: {
     flex: 1,
-    backgroundColor: colors.background,
-    color: colors.white,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fonts.sizes.md,
+    backgroundColor: COLORS.background,
+    color: COLORS.textPrimary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    fontSize: FONT_SIZE.body,
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
     maxHeight: 100,
   },
   sendButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendIcon: { color: colors.background, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
+  sendIcon: { color: COLORS.background, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
   audioButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.surface,
+    backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: COLORS.gold,
   },
-  audioButtonRecording: { backgroundColor: colors.error, borderColor: colors.error },
-  audioButtonIcon: { fontSize: 20 },
+  audioButtonRecording: { backgroundColor: COLORS.error, borderColor: COLORS.error },
+  audioButtonIcon: { fontSize: FONT_SIZE.title },
   recordingContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.sm,
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
   },
-  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error },
-  recordingText: { color: colors.white, fontSize: fonts.sizes.md, flex: 1 },
-  recordingMax: { color: colors.gray, fontSize: fonts.sizes.xs },
-  audioPlayer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 150 },
-  audioPlayIcon: { fontSize: 18 },
-  audioPlayIconMe: { color: colors.background },
-  audioPlayIconOther: { color: colors.gold },
+  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.error },
+  recordingText: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, flex: 1 },
+  recordingMax: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  audioPlayer: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, minWidth: 150 },
+  audioPlayIcon: { fontSize: FONT_SIZE.xl },
+  audioPlayIconMe: { color: COLORS.background },
+  audioPlayIconOther: { color: COLORS.gold },
   audioWave: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 2, height: 24 },
   audioBar: { width: 3, borderRadius: 2, opacity: 0.7 },
-  audioBarMe: { backgroundColor: colors.background },
-  audioBarOther: { backgroundColor: colors.gold },
+  audioBarMe: { backgroundColor: COLORS.background },
+  audioBarOther: { backgroundColor: COLORS.gold },
   audioBarPlaying: { opacity: 1 },
-  audioDuration: { fontSize: fonts.sizes.xs },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: spacing.sm },
+  audioDuration: { fontSize: FONT_SIZE.xs },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: SPACING.sm },
   emptyIcon: { fontSize: 60 },
-  emptyTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', textAlign: 'center' },
-  emptySubtitle: { color: colors.gray, fontSize: fonts.sizes.md },
+  emptyTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
+  emptySubtitle: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body },
   reactionTrigger: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.surface,
+    backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
     marginBottom: 4,
   },
-  reactionTriggerText: { fontSize: 14 },
+  reactionTriggerText: { fontSize: FONT_SIZE.body },
 });

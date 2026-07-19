@@ -19,7 +19,7 @@ import { useCoins }         from '../../../context/CoinsContext';
 import { useMissions, CommonMission, SpecialMission } from '../hooks/useMissions';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT , colors , alpha } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -208,7 +208,7 @@ export default function MissionsScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
 
         {/* Hero */}
-        <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.hero}>
+        <LinearGradient colors={[colors.cardLegacy, '#2D1B4E']} style={styles.hero}>
           <Text style={styles.heroTitle}>📋 Missões de hoje</Text>
           <Text style={styles.heroSub}>{completedCommon}/{missions.length} missões comuns concluídas</Text>
           <View style={styles.heroProgress}>
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   toastText:  { color: COLORS.surface, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.sm },
 
   // Hero
-  hero:         { margin: S.md, borderRadius: R.xl, padding: S.xl, gap: S.sm, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  hero:         { margin: S.md, borderRadius: R.xl, padding: S.xl, gap: S.sm, borderWidth: 1, borderColor: alpha(colors.secondaryLegacy, 0.3) },
   heroTitle:    { color: COLORS.surface, fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.extrabold },
   heroSub:      { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
   heroProgress: { height: 8, backgroundColor: COLORS.border, borderRadius: R.full, overflow: 'hidden' },
@@ -309,9 +309,9 @@ const styles = StyleSheet.create({
   // Card comum
   card:         { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, gap: S.md, borderWidth: 1, borderColor: COLORS.border },
   cardDone:     { borderColor: COLORS.success, backgroundColor: 'rgba(76,175,80,0.05)' },
-  cardIcon:     { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(123,47,190,0.2)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.secondary },
+  cardIcon:     { width: 44, height: 44, borderRadius: 22, backgroundColor: alpha(colors.primaryLegacy, 0.2), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.secondary },
   cardIconDone: { backgroundColor: 'rgba(76,175,80,0.2)', borderColor: COLORS.success },
-  cardIconText: { fontSize: 22 },
+  cardIconText: { fontSize: FONT_SIZE.xxl },
   cardInfo:     { flex: 1, gap: 4 },
   cardLabel:    { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
   cardLabelDone: { color: COLORS.textMuted },
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   rewardDone:   { opacity: 0.4 },
   rewardValue:  { color: COLORS.secondary, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.extrabold },
   rewardValueDone: { color: COLORS.textMuted },
-  rewardUnit:   { fontSize: 14 },
+  rewardUnit:   { fontSize: FONT_SIZE.body },
 
   // Card especial
   specialCard:   { marginBottom: S.xs, borderRadius: R.xl, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.premium },

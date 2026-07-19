@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet,
   ActivityIndicator, Alert, Image, ScrollView,
   Clipboard, AppState, AppStateStatus,
 } from 'react-native';
+import { Button, Card } from '../../components/ui';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '../../core/firebase';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha} from '../../theme/tokens';
 import { RootStackParamList } from '../../navigation/types';
 import ScreenContainer from '../../components/ScreenContainer';
 
@@ -73,7 +74,7 @@ export default function CheckoutScreen() {
   const startListening = useCallback(() => {
     if (unsubscribeRef.current) return;
     if (resolvedRef.current)    return;
-    if (!saleId)                return; // guard — sem saleId não há o que ouvir
+    if (!saleId)                return;
 
     const saleRef = doc(db, 'sales', saleId);
     unsubscribeRef.current = onSnapshot(
@@ -88,7 +89,6 @@ export default function CheckoutScreen() {
 
   useEffect(() => {
     if (!saleId) {
-      // Sem saleId não conseguimos monitorar — mostra aviso e volta
       setSaleStatus('cancelled');
       return;
     }
@@ -150,9 +150,7 @@ export default function CheckoutScreen() {
         <View style={styles.center}>
           <Text style={styles.bigIcon}>✅</Text>
           <Text style={styles.successTitle}>Pagamento confirmado!</Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('MyPurchases')}>
-            <Text style={styles.primaryBtnText}>Ver Minhas Compras</Text>
-          </TouchableOpacity>
+          <Button label="Ver Minhas Compras" onPress={() => navigation.navigate('MyPurchases')} variant="primary" fullWidth />
         </View>
       </ScreenContainer>
     );
@@ -162,9 +160,7 @@ export default function CheckoutScreen() {
     return (
       <ScreenContainer>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backBtn}>‹</Text>
-          </TouchableOpacity>
+          <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
           <Text style={styles.headerTitle}>Pagamento</Text>
           <View style={{ width: 40 }} />
         </View>
@@ -173,31 +169,26 @@ export default function CheckoutScreen() {
           <Text style={styles.errorTitle}>
             {saleStatus === 'overdue' ? 'Pagamento expirado' : 'Pagamento cancelado'}
           </Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.primaryBtnText}>Voltar</Text>
-          </TouchableOpacity>
+          <Button label="Voltar" onPress={() => navigation.goBack()} variant="primary" fullWidth />
         </View>
       </ScreenContainer>
     );
   }
 
-  // Sem QR (ex.: cobrança pendente reusada não guarda o QR) mas com copia-e-cola
   const hasQr = !!pixQrCode;
   const hasCopyPaste = !!pixCopyPaste;
 
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={handleBack} />
         <Text style={styles.headerTitle}>Pagamento via Pix</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.statusRow}>
-          <ActivityIndicator color={colors.gold} size="small" />
+          <ActivityIndicator color={COLORS.gold} size="small" />
           <Text style={styles.statusText}>Aguardando pagamento...</Text>
         </View>
 
@@ -209,23 +200,21 @@ export default function CheckoutScreen() {
             </View>
           </View>
         ) : hasCopyPaste ? (
-          // Sem imagem de QR, mas há copia-e-cola: instrui a usar o código abaixo
-          <View style={styles.noQrBox}>
+          <Card padding={SPACING.md} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm }}>
             <Text style={styles.noQrIcon}>ℹ️</Text>
             <Text style={styles.noQrText}>
               Você já tem um pagamento em aberto para este item. Use o código
               Pix "Copia e Cola" abaixo para concluir.
             </Text>
-          </View>
+          </Card>
         ) : (
-          // Nem QR nem copia-e-cola — cobrança não recuperável por aqui
-          <View style={styles.noQrBox}>
+          <Card padding={SPACING.md} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm }}>
             <Text style={styles.noQrIcon}>⚠️</Text>
             <Text style={styles.noQrText}>
               Não foi possível carregar os dados do Pix. Volte e tente iniciar o
               pagamento novamente.
             </Text>
-          </View>
+          </Card>
         )}
 
         {hasCopyPaste && (
@@ -241,15 +230,12 @@ export default function CheckoutScreen() {
               <View style={styles.copyBox}>
                 <Text style={styles.copyCode} numberOfLines={3}>{pixCopyPaste}</Text>
               </View>
-              <TouchableOpacity
-                style={[styles.copyBtn, copied && styles.copyBtnSuccess]}
+              <Button
+                label={copied ? '✅ Copiado!' : '📋 Copiar código Pix'}
                 onPress={handleCopy}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.copyBtnText, copied && styles.copyBtnTextSuccess]}>
-                  {copied ? '✅ Copiado!' : '📋 Copiar código Pix'}
-                </Text>
-              </TouchableOpacity>
+                variant="primary"
+                fullWidth
+              />
             </View>
           </>
         )}
@@ -265,37 +251,33 @@ export default function CheckoutScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:     { flex: 1, backgroundColor: colors.background },
-  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',     paddingHorizontal: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44' },
-  backBtn:       { color: colors.gold, fontSize: 28 },
-  headerTitle:   { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  content:       { padding: spacing.md, paddingBottom: spacing.xl * 2 },
-  statusRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg, justifyContent: 'center' },
-  statusText:    { color: colors.gold, fontSize: fonts.sizes.md },
-  qrSection:     { alignItems: 'center', marginBottom: spacing.lg },
-  qrLabel:       { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center', marginBottom: spacing.md },
-  qrWrapper:     { padding: spacing.sm, backgroundColor: colors.white, borderRadius: borderRadius.md },
+  container:     { flex: 1, backgroundColor: COLORS.background },
+  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',     paddingHorizontal: SPACING.md, paddingBottom: SPACING.md, borderBottomWidth: 0.5, borderBottomColor: alpha(COLORS.gold, 0.27) },
+  // backBtn removed — now uses Button
+  headerTitle:   { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  content:       { padding: SPACING.md, paddingBottom: SPACING.xl * 2 },
+  statusRow:     { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.lg, justifyContent: 'center' },
+  statusText:    { color: COLORS.gold, fontSize: FONT_SIZE.body },
+  qrSection:     { alignItems: 'center', marginBottom: SPACING.lg },
+  qrLabel:       { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, textAlign: 'center', marginBottom: SPACING.md },
+  qrWrapper:     { padding: SPACING.sm, backgroundColor: COLORS.textPrimary, borderRadius: BORDER_RADIUS.md },
   qrImage:       { width: 240, height: 240 },
-  noQrBox:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.gold + '44', padding: spacing.md, marginBottom: spacing.lg },
-  noQrIcon:      { fontSize: 22 },
-  noQrText:      { color: colors.gray, fontSize: fonts.sizes.sm, flex: 1, lineHeight: 18 },
-  divider:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: spacing.lg },
-  dividerLine:   { flex: 1, height: 0.5, backgroundColor: colors.grayDark },
-  dividerText:   { color: colors.gray, fontSize: fonts.sizes.sm },
-  copySection:   { marginBottom: spacing.lg },
-  copyLabel:     { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', marginBottom: spacing.sm },
-  copyBox:       { backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.sm },
-  copyCode:      { color: colors.gray, fontSize: fonts.sizes.xs, fontFamily: 'monospace', lineHeight: 18 },
-  copyBtn:       { backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.gold, padding: spacing.md, alignItems: 'center' },
-  copyBtnSuccess: { borderColor: '#4CAF50', backgroundColor: '#4CAF5022' },
-  copyBtnText:   { color: colors.gold, fontWeight: 'bold', fontSize: fonts.sizes.md },
-  copyBtnTextSuccess: { color: '#4CAF50' },
-  infoBox:       { backgroundColor: colors.gold + '11', borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.gold + '33', padding: spacing.md, gap: spacing.xs },
-  infoText:      { color: colors.gold, fontSize: fonts.sizes.sm, lineHeight: 20 },
-  center:        { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.lg },
+  noQrIcon:      { fontSize: FONT_SIZE.xxl },
+  noQrText:      { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, flex: 1, lineHeight: 18 },
+  // noQrBox removed — now uses Card
+  divider:       { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginVertical: SPACING.lg },
+  dividerLine:   { flex: 1, height: 0.5, backgroundColor: COLORS.border },
+  dividerText:   { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  copySection:   { marginBottom: SPACING.lg },
+  copyLabel:     { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.sm },
+  copyBox:       { backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1, borderColor: COLORS.border, padding: SPACING.md, marginBottom: SPACING.sm },
+  copyCode:      { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: 'monospace', lineHeight: 18 },
+  // copyBtn/copyBtnSuccess/copyBtnText/copyBtnTextSuccess removed — now uses Button
+  infoBox:       { backgroundColor: alpha(COLORS.gold, 0.07), borderRadius: BORDER_RADIUS.md, borderWidth: 1, borderColor: alpha(COLORS.gold, 0.2), padding: SPACING.md, gap: SPACING.xs },
+  infoText:      { color: COLORS.gold, fontSize: FONT_SIZE.caption, lineHeight: 20 },
+  center:        { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl, gap: SPACING.lg },
   bigIcon:       { fontSize: 80 },
-  successTitle:  { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', textAlign: 'center' },
-  errorTitle:    { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', textAlign: 'center' },
-  primaryBtn:    { backgroundColor: colors.gold, borderRadius: borderRadius.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
-  primaryBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  successTitle:  { color: COLORS.textPrimary, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
+  errorTitle:    { color: COLORS.textPrimary, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
+  // primaryBtn/primaryBtnText removed — now uses Button
 });

@@ -5,7 +5,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
-import { colors, fonts, spacing } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from '../../theme/tokens';
 
 // ============================================
 // LOADING SCREEN — COMPARTILHADO
@@ -21,7 +21,7 @@ export default function LoadingScreen({ message }: Props) {
     <View style={styles.container}>
       <Text style={styles.logo}>✦</Text>
       <ActivityIndicator
-        color={colors.gold}
+        color={COLORS.gold}
         size="large"
         style={styles.spinner}
       />
@@ -35,21 +35,21 @@ export default function LoadingScreen({ message }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md,
+    gap: SPACING.md,
   },
   logo: {
     fontSize: 40,
-    color: colors.gold,
+    color: COLORS.gold,
   },
   spinner: {
-    marginTop: spacing.sm,
+    marginTop: SPACING.sm,
   },
   message: {
-    color: colors.gray,
-    fontSize: fonts.sizes.md,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.body,
     textAlign: 'center',
   },
 });

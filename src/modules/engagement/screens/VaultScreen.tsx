@@ -1,5 +1,5 @@
 // ============================================
-// LUMINA — VAULT SCREEN v5.2
+// LUMINA — VAULT SCREEN v5.3
 // src/modules/engagement/screens/VaultScreen.tsx
 //
 // Cofre de Sintonia — recompensa atividade social.
@@ -9,7 +9,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Animated,
+  ActivityIndicator, Animated,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { useNavigation }   from '@react-navigation/native';
@@ -19,7 +19,8 @@ import { useCoins }        from '../../../context/CoinsContext';
 import { useVault, VaultStatus } from '../hooks/useVault';
 import { RootStackParamList }    from '../../../navigation/types';
 import Header from '../../../components/Header';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { Button, Card } from '../../../components/ui';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, GRADIENTS, RARITY_COLORS , colors } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -37,10 +38,10 @@ const STATUS_CONFIG: Record<VaultStatus, {
   gradient:  [string, string];
   message:   string;
 }> = {
-  EMPTY:   { icon: '🗝️', label: 'Vazio',      color: COLORS.textMuted, gradient: ['#0D0D1A', '#1A0A2E'], message: 'Interaja com outros usuários para encher o Cofre.' },
-  FILLING: { icon: '🔮', label: 'Enchendo',   color: COLORS.secondary, gradient: ['#1A0A2E', '#2D1B4E'], message: 'Continue interagindo para encher o Cofre.' },
-  READY:   { icon: '✨', label: 'Pronto!',    color: '#A8E063',        gradient: ['#0A2E0A', '#1B4E1B'], message: 'Você tem cristais para resgatar!' },
-  FULL:    { icon: '👑', label: 'Cheio!',     color: '#FFD700',        gradient: ['#2E1A00', '#4E3200'], message: 'Cofre cheio! Resgate agora para continuar acumulando.' },
+  EMPTY:   { icon: '🗝️', label: 'Vazio',      color: COLORS.textMuted, gradient: GRADIENTS.vaultStates.empty as [string, string], message: 'Interaja com outros usuários para encher o Cofre.' },
+  FILLING: { icon: '🔮', label: 'Enchendo',   color: COLORS.secondary, gradient: GRADIENTS.vaultStates.filling as [string, string], message: 'Continue interagindo para encher o Cofre.' },
+  READY:   { icon: '✨', label: 'Pronto!',    color: colors.successLegacy,        gradient: GRADIENTS.vaultStates.ready as [string, string], message: 'Você tem cristais para resgatar!' },
+  FULL:    { icon: '👑', label: 'Cheio!',     color: RARITY_COLORS.legendary, gradient: GRADIENTS.vaultStates.claimed as [string, string], message: 'Cofre cheio! Resgate agora para continuar acumulando.' },
 };
 
 export default function VaultScreen() {
@@ -167,7 +168,7 @@ export default function VaultScreen() {
 
           {/* Cooldown ativo */}
           {data?.isLocked && cooldownLeft > 0 && !withdrawResult && (
-            <View style={styles.cooldownCard}>
+            <Card padding={S.md} style={{ flexDirection: 'row', alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: COLORS.border }}>
               <Text style={styles.cooldownIcon}>⏳</Text>
               <View>
                 <Text style={styles.cooldownText}>
@@ -177,7 +178,7 @@ export default function VaultScreen() {
                   Galáxia Plus libera saque imediato
                 </Text>
               </View>
-            </View>
+            </Card>
           )}
 
           {/* Limite diário */}
@@ -187,38 +188,26 @@ export default function VaultScreen() {
             </Text>
           )}
 
-          <TouchableOpacity
-            style={[
-              styles.withdrawBtn,
-              (!data?.canWithdraw || withdrawing) && styles.withdrawBtnDisabled,
-              data?.status === 'FULL' && styles.withdrawBtnFull,
-            ]}
+          <Button
+            icon={<Text style={{ fontSize: FONT_SIZE.lg }}>{cfg.icon}</Text>}
+            label={data?.canWithdraw
+              ? `Sacar ${data.crystalsEquivalent} Cristal${data.crystalsEquivalent !== 1 ? 'is' : ''}`
+              : data?.status === 'EMPTY' || data?.status === 'FILLING'
+                ? 'Cofre ainda enchendo...'
+                : 'Aguardando desbloqueio'}
             onPress={handleWithdraw}
+            loading={withdrawing}
             disabled={!data?.canWithdraw || withdrawing}
-            activeOpacity={0.85}
-          >
-            {withdrawing ? (
-              <ActivityIndicator color={COLORS.background} />
-            ) : (
-              <>
-                <Text style={styles.withdrawBtnIcon}>{cfg.icon}</Text>
-                <Text style={styles.withdrawBtnText}>
-                  {data?.canWithdraw
-                    ? `Sacar ${data.crystalsEquivalent} Cristal${data.crystalsEquivalent !== 1 ? 'is' : ''}`
-                    : data?.status === 'EMPTY' || data?.status === 'FILLING'
-                      ? 'Cofre ainda enchendo...'
-                      : 'Aguardando desbloqueio'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+            variant={data?.status === 'FULL' ? 'premium' : 'primary'}
+            fullWidth
+          />
 
           {error && <Text style={styles.errorText}>{error}</Text>}
         </View>
 
         {/* Como encher o Cofre */}
         <Text style={styles.sectionTitle}>Como encher o Cofre</Text>
-        <View style={styles.sourcesList}>
+        <Card padding={0} style={{ marginHorizontal: S.md, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg }}>
           {[
             { icon: '👁️', action: 'Receber visita no perfil',  reward: '+2 🔮', note: '1x por visitante/dia'  },
             { icon: '💜', action: 'Receber uma curtida',        reward: '+5 🔮', note: '1x por usuário/dia'    },
@@ -233,10 +222,10 @@ export default function VaultScreen() {
               <Text style={styles.sourceReward}>{item.reward}</Text>
             </View>
           ))}
-        </View>
+        </Card>
 
         {/* Regras */}
-        <View style={styles.rulesCard}>
+        <Card padding={S.lg} style={{ marginHorizontal: S.md, borderWidth: 1, borderColor: COLORS.border, gap: S.sm }}>
           <Text style={styles.rulesTitle}>⚠️ Regras do Cofre</Text>
           <Text style={styles.rulesText}>• Armazena apenas Fragmentos — nunca cristais</Text>
           <Text style={styles.rulesText}>• Capacidade máxima: 5.000 fragmentos (= 50 cristais)</Text>
@@ -245,7 +234,7 @@ export default function VaultScreen() {
           <Text style={styles.rulesText}>• Cofre cheio para de acumular — resgate para continuar</Text>
           <Text style={styles.rulesText}>• Limite: 100 cristais/dia via Cofre</Text>
           <Text style={styles.rulesText}>• Missões e compras NÃO alimentam o Cofre</Text>
-        </View>
+        </Card>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -259,7 +248,7 @@ const R = BORDER_RADIUS;
 const styles = StyleSheet.create({
   container:       { flex: 1, backgroundColor: COLORS.background },
   center:          { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  hero:            { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  hero:            { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: COLORS.borderLight },
   heroIcon:        { fontSize: 72 },
   statusBadge:     { borderRadius: R.full, borderWidth: 1, paddingHorizontal: S.lg, paddingVertical: S.xs },
   statusLabel:     { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.extrabold, textTransform: 'uppercase', letterSpacing: 1 },
@@ -271,39 +260,30 @@ const styles = StyleSheet.create({
   progressValue:   { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
   progressBar:     { height: 12, backgroundColor: COLORS.border, borderRadius: R.full, overflow: 'hidden' },
   progressFill:    { height: '100%', borderRadius: R.full },
-  equivalentRow:   { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: R.lg, paddingHorizontal: S.lg, paddingVertical: S.sm },
+  equivalentRow:   { backgroundColor: COLORS.surface + '0D', borderRadius: R.lg, paddingHorizontal: S.lg, paddingVertical: S.sm },
   equivalentText:  { color: COLORS.surface, fontSize: FONT_SIZE.sm, textAlign: 'center' },
   hintText:        { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textAlign: 'center', fontStyle: 'italic' },
 
-  resultCard:      { marginHorizontal: S.md, marginBottom: S.md, backgroundColor: 'rgba(181,123,238,0.15)', borderRadius: R.lg, padding: S.lg, alignItems: 'center', gap: S.xs, borderWidth: 1, borderColor: COLORS.secondary },
-  resultIcon:      { fontSize: 36 },
+  resultCard:      { marginHorizontal: S.md, marginBottom: S.md, backgroundColor: COLORS.secondary + '26', borderRadius: R.lg, padding: S.lg, alignItems: 'center', gap: S.xs, borderWidth: 1, borderColor: COLORS.secondary },
+  resultIcon:      { fontSize: FONT_SIZE.display },
   resultText:      { color: COLORS.secondary, fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.extrabold },
 
   withdrawSection: { marginHorizontal: S.md, gap: S.md, marginBottom: S.lg },
-  galaxiaBadge:    { backgroundColor: 'rgba(181,123,238,0.15)', borderRadius: R.lg, padding: S.sm, alignItems: 'center', borderWidth: 1, borderColor: COLORS.secondary },
+  galaxiaBadge:    { backgroundColor: COLORS.secondary + '26', borderRadius: R.lg, padding: S.sm, alignItems: 'center', borderWidth: 1, borderColor: COLORS.secondary },
   galaxiaBadgeText: { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
-  cooldownCard:    { flexDirection: 'row', alignItems: 'center', gap: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.border },
-  cooldownIcon:    { fontSize: 28 },
+  cooldownIcon:    { fontSize: FONT_SIZE.hero },
   cooldownText:    { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
   cooldownSub:     { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
   dailyInfo:       { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textAlign: 'center' },
-  withdrawBtn:     { backgroundColor: COLORS.primary, borderRadius: R.lg, paddingVertical: S.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: S.sm },
-  withdrawBtnDisabled: { opacity: 0.4 },
-  withdrawBtnFull: { backgroundColor: '#FFD700' },
-  withdrawBtnIcon: { fontSize: 20 },
-  withdrawBtnText: { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  errorText:       { color: '#FF6B6B', fontSize: FONT_SIZE.sm, textAlign: 'center' },
+  errorText:       { color: COLORS.error, fontSize: FONT_SIZE.sm, textAlign: 'center' },
 
   sectionTitle:    { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginBottom: S.sm },
-  sourcesList:     { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg },
   sourceItem:      { flexDirection: 'row', alignItems: 'center', padding: S.md, gap: S.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   sourceIcon:      { fontSize: 24, width: 32 },
   sourceInfo:      { flex: 1 },
   sourceAction:    { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
   sourceNote:      { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
   sourceReward:    { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
-
-  rulesCard:       { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.sm, borderWidth: 1, borderColor: COLORS.border },
   rulesTitle:      { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginBottom: S.xs },
   rulesText:       { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },
 });

@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, ScrollView,
+  ActivityIndicator, Alert,
 } from 'react-native';
+import { Button, Card, Input } from '../../components/ui';
 import { useNavigation } from '@react-navigation/native';
 import { addDoc, collection, serverTimestamp, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS, COLLECTIONS } from '../../core/constants';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha} from '../../theme/tokens';
 import { useAuth } from '../../context/AuthContext';
 import { useCreatorWallet } from '../../hooks/useCreatorWallet';
 import { PixType } from '../../shared/types/marketplace';
@@ -22,7 +22,6 @@ const PIX_TYPES: { label: string; value: PixType }[] = [
   { label: 'Chave aleatória', value: 'chave' },
 ];
 
-// Mapeia o tipo salvo no perfil (saveCreatorPixKey) para o tipo do saque
 function mapProfileTypeToPixType(profileType?: string): PixType | null {
   switch (profileType) {
     case 'cpf':    return 'cpf';
@@ -33,7 +32,6 @@ function mapProfileTypeToPixType(profileType?: string): PixType | null {
   }
 }
 
-// --- Validação de formato por tipo (evita chave inválida no saque) ---
 function onlyDigits(v: string): string { return v.replace(/\D/g, ''); }
 
 function isValidCpf(raw: string): boolean {
@@ -51,7 +49,7 @@ function isValidCpf(raw: string): boolean {
 }
 function isValidCnpj(raw: string): boolean {
   const c = onlyDigits(raw);
-  return c.length === 14; // validação leve (comprimento). CNPJ completo é opcional.
+  return c.length === 14;
 }
 function isValidEmail(v: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
@@ -93,7 +91,6 @@ export default function WithdrawalScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
 
-  // Modelo C — pré-preenche a chave Pix salva no perfil (se houver)
   useEffect(() => {
     async function loadProfilePixKey() {
       if (!user) return;
@@ -109,7 +106,6 @@ export default function WithdrawalScreen() {
           setPrefilled(true);
         }
       } catch {
-        // silencioso — se falhar, o criador digita manualmente
       }
     }
     loadProfilePixKey();
@@ -135,13 +131,11 @@ export default function WithdrawalScreen() {
       Alert.alert('Erro', 'Informe sua chave Pix.');
       return;
     }
-    // Validação de formato da chave conforme o tipo
     if (!validateKeyByType(pixType, pixKey)) {
       Alert.alert('Chave Pix inválida', TYPE_ERROR[pixType]);
       return;
     }
 
-    // Trava: verifica se já há saque pendente ou aprovado
     const existing = await getDocs(
       query(
         collection(db, MARKETPLACE_COLLECTIONS.WITHDRAWALS),
@@ -188,55 +182,44 @@ export default function WithdrawalScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Solicitar Saque</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.balanceCard}>
+        <Card padding={SPACING.md} style={{ alignItems: 'center', marginBottom: SPACING.lg }}>
           <Text style={styles.balanceLabel}>Disponível para saque</Text>
           <Text style={styles.balanceValue}>
             R$ {(wallet?.availableBalance ?? 0).toFixed(2)}
           </Text>
-        </View>
+        </Card>
 
         <Text style={styles.label}>Valor do saque (mínimo R$ 10,00)</Text>
-        <TextInput
-          style={styles.input}
-          value={amount}
-          onChangeText={setAmount}
-          placeholder="Ex: 100,00"
-          placeholderTextColor={colors.gray}
-          keyboardType="decimal-pad"
-        />
+        <Input value={amount} onChangeText={setAmount} placeholder="Ex: 100,00" keyboardType="decimal-pad" />
 
         <Text style={styles.label}>Tipo de chave Pix</Text>
         <View style={styles.pixTypeGrid}>
           {PIX_TYPES.map(type => (
-            <TouchableOpacity
+            <Button
               key={type.value}
-              style={[styles.pixTypeChip, pixType === type.value && styles.pixTypeChipActive]}
+              label={type.label}
+              variant="ghost"
               onPress={() => setPixType(type.value)}
-            >
-              <Text style={[styles.pixTypeText, pixType === type.value && styles.pixTypeTextActive]}>
-                {type.label}
-              </Text>
-            </TouchableOpacity>
+              style={{
+                flex: 1, borderWidth: 1, alignItems: 'center',
+                borderColor: pixType === type.value ? COLORS.gold : COLORS.border,
+                backgroundColor: pixType === type.value ? alpha(COLORS.gold, 0.13) : COLORS.card,
+              }}
+              textStyle={{
+                color: pixType === type.value ? COLORS.gold : COLORS.textSecondary,
+              }}
+            />
           ))}
         </View>
 
         <Text style={styles.label}>Chave Pix</Text>
-        <TextInput
-          style={styles.input}
-          value={pixKey}
-          onChangeText={setPixKey}
-          placeholder="Informe sua chave Pix"
-          placeholderTextColor={colors.gray}
-          autoCapitalize="none"
-        />
+        <Input value={pixKey} onChangeText={setPixKey} placeholder="Informe sua chave Pix" autoCapitalize="none" />
 
         {prefilled && (
           <Text style={styles.prefilledHint}>
@@ -244,71 +227,51 @@ export default function WithdrawalScreen() {
           </Text>
         )}
 
-        <View style={styles.infoBox}>
+        <Card padding={SPACING.md} style={{ marginBottom: SPACING.lg }}>
           <Text style={styles.infoText}>
             💡 Após solicitar, nossa equipe analisa o pedido e faz o depósito via Pix
             na chave informada em até 24 horas úteis. Você será notificado quando
             o pagamento for concluído.
           </Text>
-        </View>
+        </Card>
 
-        <TouchableOpacity
-          style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
+        <Button
+          label="💸 Solicitar saque"
           onPress={handleSubmit}
+          loading={submitting}
           disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <Text style={styles.submitBtnText}>💸 Solicitar saque</Text>
-          )}
-        </TouchableOpacity>
+          variant="primary"
+          fullWidth
+        />
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: alpha(COLORS.gold, 0.27),
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  content: { padding: spacing.md },
+  // backBtn removed — now uses Button
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  content: { padding: SPACING.md },
   balanceCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.gold + '44', padding: spacing.md, marginBottom: spacing.md, alignItems: 'center',
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: alpha(COLORS.gold, 0.27), padding: SPACING.md, marginBottom: SPACING.md, alignItems: 'center',
   },
-  balanceLabel: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.xs },
-  balanceValue: { color: colors.success, fontSize: fonts.sizes.xxl, fontWeight: 'bold' },
-  label: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.xs, marginTop: spacing.md },
-  input: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, color: colors.white, padding: spacing.md, fontSize: fonts.sizes.md,
-  },
+  balanceLabel: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, marginBottom: SPACING.xs },
+  balanceValue: { color: COLORS.success, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.bold },
+  label: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, marginBottom: SPACING.xs, marginTop: SPACING.md },
+  // input removed — now uses Input
   prefilledHint: {
-    color: colors.gold, fontSize: fonts.sizes.xs, marginTop: spacing.xs, lineHeight: 16,
+    color: COLORS.gold, fontSize: FONT_SIZE.xs, marginTop: SPACING.xs, lineHeight: 16,
   },
-  pixTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  pixTypeChip: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark,
-  },
-  pixTypeChipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  pixTypeText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  pixTypeTextActive: { color: colors.background, fontWeight: 'bold' },
-  infoBox: {
-    backgroundColor: colors.gold + '11', borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.gold + '44', padding: spacing.md, marginTop: spacing.md,
-  },
-  infoText: { color: colors.gold, fontSize: fonts.sizes.sm },
-  submitBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.md,
-    padding: spacing.md, alignItems: 'center', marginTop: spacing.md,
-  },
-  submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  pixTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.sm },
+  // pixTypeChip/pixTypeChipActive/pixTypeText/pixTypeTextActive removed — now uses Button
+  // infoBox removed — now uses Card
+  infoText: { color: COLORS.gold, fontSize: FONT_SIZE.caption },
+  // submitBtn/submitBtnDisabled/submitBtnText removed — now uses Button
 });

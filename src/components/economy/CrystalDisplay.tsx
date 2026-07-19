@@ -9,7 +9,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, FONT_SIZE, FONT_WEIGHT, SPACING, BORDER_RADIUS, SHADOWS } from '../../theme/tokens';
+import { COLORS, FONT_SIZE, FONT_WEIGHT, SPACING, BORDER_RADIUS, SHADOWS, alpha } from '../../theme/tokens';
 import { ECONOMY_ASSETS } from '../../assets';
 import { Wallet } from '../../shared/types';
 
@@ -114,12 +114,12 @@ const styles = StyleSheet.create({
   headerContainer: {
     flexDirection:  'row',
     alignItems:     'center',
-    backgroundColor: 'rgba(123, 47, 190, 0.2)',
+    backgroundColor: alpha(COLORS.primaryLegacy, 0.2),
     paddingHorizontal: SPACING.sm,
     paddingVertical:   SPACING.xs,
     borderRadius:   BORDER_RADIUS.full,
     borderWidth:    1,
-    borderColor:    'rgba(181, 123, 238, 0.4)',
+    borderColor:    alpha(COLORS.secondaryLegacy, 0.4),
     gap: SPACING.xs,
   },
   headerAmount: {
@@ -152,10 +152,10 @@ const styles = StyleSheet.create({
 
   // Full variant
   fullContainer: {
-    backgroundColor: 'rgba(26, 10, 46, 0.9)',
+    backgroundColor: alpha(COLORS.cardLegacy, 0.9),
     borderRadius:    BORDER_RADIUS.xl,
     borderWidth:     1,
-    borderColor:     'rgba(181, 123, 238, 0.3)',
+    borderColor:     alpha(COLORS.secondaryLegacy, 0.3),
     padding:         SPACING.lg,
     ...SHADOWS.primary,
   },
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   divider: {
     width:           1,
     height:          60,
-    backgroundColor: 'rgba(181, 123, 238, 0.3)',
+    backgroundColor: alpha(COLORS.secondaryLegacy, 0.3),
   },
   fullAmount: {
     color:      COLORS.surface,
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     marginTop:      SPACING.md,
     paddingTop:     SPACING.md,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(181, 123, 238, 0.2)',
+    borderTopColor: alpha(COLORS.secondaryLegacy, 0.2),
     gap:            SPACING.xs,
   },
   fragmentsText: {

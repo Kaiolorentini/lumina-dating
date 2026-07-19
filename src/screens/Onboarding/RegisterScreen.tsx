@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 
 type Props = {
   navigation: NativeStackNavigationProp<any>;
@@ -27,7 +27,6 @@ export default function RegisterScreen({ navigation }: Props) {
   const [error, setError] = useState('');
 
   async function handleRegister() {
-    // Validações
     if (!email || !password || !confirmPassword) {
       setError('Preencha todos os campos');
       return;
@@ -49,7 +48,6 @@ export default function RegisterScreen({ navigation }: Props) {
       setLoading(true);
       setError('');
       await signUp(email, password);
-      // Navegação acontece automaticamente pelo AuthContext
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
         setError('Este e-mail já está em uso');
@@ -71,14 +69,12 @@ export default function RegisterScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Logo */}
         <View style={styles.logoContainer}>
           <Text style={styles.logo}>✦</Text>
           <Text style={styles.title}>Lumina</Text>
           <Text style={styles.phrase}>"Descubra conexões únicas"</Text>
         </View>
 
-        {/* Formulário */}
         <View style={styles.form}>
           <Text style={styles.formTitle}>Criar conta</Text>
 
@@ -86,7 +82,7 @@ export default function RegisterScreen({ navigation }: Props) {
           <TextInput
             style={styles.input}
             placeholder="seu@email.com"
-            placeholderTextColor={colors.gray}
+            placeholderTextColor={COLORS.textSecondary}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -97,7 +93,7 @@ export default function RegisterScreen({ navigation }: Props) {
           <TextInput
             style={styles.input}
             placeholder="Mínimo 6 caracteres"
-            placeholderTextColor={colors.gray}
+            placeholderTextColor={COLORS.textSecondary}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -107,29 +103,26 @@ export default function RegisterScreen({ navigation }: Props) {
           <TextInput
             style={styles.input}
             placeholder="Repita sua senha"
-            placeholderTextColor={colors.gray}
+            placeholderTextColor={COLORS.textSecondary}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
           />
 
-          {/* Mensagem de erro */}
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {/* Botão de cadastro */}
           <TouchableOpacity
             style={styles.button}
             onPress={handleRegister}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color={colors.background} />
+              <ActivityIndicator color={COLORS.background} />
             ) : (
               <Text style={styles.buttonText}>Criar conta</Text>
             )}
           </TouchableOpacity>
 
-          {/* Link para login */}
           <TouchableOpacity
             style={styles.linkButton}
             onPress={() => navigation.navigate('Login')}
@@ -148,90 +141,91 @@ export default function RegisterScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: COLORS.background,
   },
   scroll: {
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.lg,
+    padding: SPACING.lg,
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: SPACING.xl,
   },
   logo: {
     fontSize: 48,
-    color: colors.gold,
+    color: COLORS.gold,
   },
   title: {
-    fontSize: fonts.sizes.xxxl,
-    color: colors.white,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZE.display,
+    color: COLORS.textPrimary,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 4,
   },
   phrase: {
-    color: colors.gold,
-    fontSize: fonts.sizes.md,
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.body,
     textAlign: 'center',
     fontStyle: 'italic',
-    marginTop: spacing.sm,
+    marginTop: SPACING.sm,
   },
   form: {
     width: '100%',
   },
   formTitle: {
-    color: colors.white,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
-    marginBottom: spacing.lg,
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
+    marginBottom: SPACING.lg,
     letterSpacing: 1,
   },
   label: {
-    color: colors.grayLight,
-    fontSize: fonts.sizes.sm,
-    marginBottom: spacing.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.caption,
+    marginBottom: SPACING.xs,
     letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   input: {
-    backgroundColor: colors.surface,
-    color: colors.white,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    fontSize: fonts.sizes.md,
+    backgroundColor: COLORS.card,
+    color: COLORS.textPrimary,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    fontSize: FONT_SIZE.body,
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
   },
   error: {
-    color: colors.error,
-    fontSize: fonts.sizes.sm,
-    marginBottom: spacing.md,
+    color: COLORS.error,
+    fontSize: FONT_SIZE.caption,
+    marginBottom: SPACING.md,
     textAlign: 'center',
   },
   button: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
+    backgroundColor: COLORS.gold,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
     alignItems: 'center',
-    marginTop: spacing.sm,
+    marginTop: SPACING.sm,
   },
   buttonText: {
-    color: colors.background,
-    fontSize: fonts.sizes.lg,
-    fontWeight: 'bold',
+    color: COLORS.background,
+    fontSize: FONT_SIZE.subtitle,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 1,
   },
   linkButton: {
-    marginTop: spacing.lg,
+    marginTop: SPACING.lg,
     alignItems: 'center',
   },
   linkText: {
-    color: colors.gray,
-    fontSize: fonts.sizes.md,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.body,
   },
   linkTextBold: {
-    color: colors.gold,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontWeight: FONT_WEIGHT.bold,
   },
 });

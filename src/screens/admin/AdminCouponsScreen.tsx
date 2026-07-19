@@ -1,12 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, Alert, RefreshControl, TextInput, Modal,
+  ActivityIndicator, Alert, RefreshControl, Modal,
   ScrollView, Switch,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Button, Card, Input } from '../../components/ui';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { getCoupons } from '../../services/marketplace/adminService';
 import { Coupon, CouponDiscountType } from '../../shared/types/marketplace';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
@@ -280,9 +281,7 @@ export default function AdminCouponsScreen() {
     <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Cupons</Text>
         <TouchableOpacity onPress={openCreate}>
           <Text style={styles.addBtn}>+ Novo</Text>
@@ -307,7 +306,7 @@ export default function AdminCouponsScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
+        <ActivityIndicator color={COLORS.gold} style={{ flex: 1 }} />
       ) : error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorIcon}>⚠️</Text>
@@ -322,7 +321,7 @@ export default function AdminCouponsScreen() {
           keyExtractor={item => item.id ?? item.code}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={false} onRefresh={loadCoupons} tintColor={colors.gold} />
+            <RefreshControl refreshing={false} onRefresh={loadCoupons} tintColor={COLORS.gold} />
           }
           ListEmptyComponent={
             <View style={styles.empty}>
@@ -333,7 +332,7 @@ export default function AdminCouponsScreen() {
           renderItem={({ item }) => {
             const expired = isExpired(item);
             const statusLabel = expired ? 'EXPIRADO' : item.isActive ? 'ATIVO' : 'INATIVO';
-            const statusColor = expired ? colors.gray : item.isActive ? colors.success : colors.error;
+            const statusColor = expired ? COLORS.textSecondary : item.isActive ? COLORS.success : COLORS.error;
             return (
               <View style={styles.card}>
                 <View style={styles.cardTop}>
@@ -368,13 +367,13 @@ export default function AdminCouponsScreen() {
                       {item.isActive ? 'Ativo' : 'Desativado'}
                     </Text>
                     {processing === item.id ? (
-                      <ActivityIndicator color={colors.gold} size="small" />
+                      <ActivityIndicator color={COLORS.gold} size="small" />
                     ) : (
                       <Switch
                         value={item.isActive}
                         onValueChange={() => handleToggle(item)}
-                        trackColor={{ false: colors.grayDark, true: colors.success + '88' }}
-                        thumbColor={item.isActive ? colors.success : colors.gray}
+                        trackColor={{ false: COLORS.border, true: COLORS.success + '88' }}
+                        thumbColor={item.isActive ? COLORS.success : COLORS.textSecondary}
                       />
                     )}
                   </View>
@@ -400,14 +399,11 @@ export default function AdminCouponsScreen() {
               </Text>
 
               <Text style={styles.fieldLabel}>Código {isEditing ? '(não editável)' : ''}</Text>
-              <TextInput
-                style={[styles.input, isEditing && styles.inputDisabled]}
+              <Input
                 placeholder="PROMO10"
-                placeholderTextColor={colors.gray}
                 value={fCode}
                 onChangeText={t => setFCode(t.toUpperCase())}
                 autoCapitalize="characters"
-                editable={!isEditing}
               />
 
               <Text style={styles.fieldLabel}>Tipo de desconto</Text>
@@ -433,70 +429,54 @@ export default function AdminCouponsScreen() {
               <Text style={styles.fieldLabel}>
                 Valor {fType === 'percentage' ? '(1 a 100)' : '(R$)'}
               </Text>
-              <TextInput
-                style={styles.input}
+              <Input
                 placeholder={fType === 'percentage' ? '10' : '5,00'}
-                placeholderTextColor={colors.gray}
                 value={fValue}
                 onChangeText={setFValue}
                 keyboardType="decimal-pad"
               />
 
               <Text style={styles.fieldLabel}>Data inicial (dd/mm/aaaa)</Text>
-              <TextInput
-                style={styles.input}
+              <Input
                 placeholder="01/07/2026"
-                placeholderTextColor={colors.gray}
                 value={fStart}
                 onChangeText={setFStart}
                 keyboardType="numbers-and-punctuation"
               />
 
               <Text style={styles.fieldLabel}>Data final (dd/mm/aaaa)</Text>
-              <TextInput
-                style={styles.input}
+              <Input
                 placeholder="31/07/2026"
-                placeholderTextColor={colors.gray}
                 value={fEnd}
                 onChangeText={setFEnd}
                 keyboardType="numbers-and-punctuation"
               />
 
               <Text style={styles.fieldLabel}>Limite de uso (0 = ilimitado)</Text>
-              <TextInput
-                style={styles.input}
+              <Input
                 placeholder="0"
-                placeholderTextColor={colors.gray}
                 value={fMaxUses}
                 onChangeText={setFMaxUses}
                 keyboardType="number-pad"
               />
 
               <Text style={styles.fieldLabel}>Valor mínimo de compra (opcional)</Text>
-              <TextInput
-                style={styles.input}
+              <Input
                 placeholder="0,00"
-                placeholderTextColor={colors.gray}
                 value={fMinPurchase}
                 onChangeText={setFMinPurchase}
                 keyboardType="decimal-pad"
               />
 
               <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setFormModal(false)}
-                  disabled={saving}
-                >
-                  <Text style={styles.modalCancelBtnText}>Cancelar</Text>
-                </TouchableOpacity>
+                <Button label="Cancelar" variant="ghost" onPress={() => setFormModal(false)} disabled={saving} />
                 <TouchableOpacity
                   style={styles.modalConfirmBtn}
                   onPress={confirmSave}
                   disabled={saving}
                 >
                   {saving ? (
-                    <ActivityIndicator color={colors.background} size="small" />
+                    <ActivityIndicator color={COLORS.background} size="small" />
                   ) : (
                     <Text style={styles.modalConfirmBtnText}>
                       {isEditing ? 'Salvar' : 'Criar cupom'}
@@ -513,94 +493,82 @@ export default function AdminCouponsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.gold + '44',
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  addBtn: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  tabsWrap: { borderBottomWidth: 0.5, borderBottomColor: colors.grayDark },
-  tab: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, alignItems: 'center' },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: colors.gold },
-  tabText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  tabTextActive: { color: colors.gold, fontWeight: 'bold' },
-  list: { padding: spacing.md },
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  addBtn: { color: COLORS.gold, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  tabsWrap: { borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
+  tab: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, alignItems: 'center' },
+  tabActive: { borderBottomWidth: 2, borderBottomColor: COLORS.gold },
+  tabText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  tabTextActive: { color: COLORS.gold, fontWeight: FONT_WEIGHT.bold },
+  list: { padding: SPACING.md },
   card: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
-    gap: spacing.xs,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.border, padding: SPACING.md, marginBottom: SPACING.md,
+    gap: SPACING.xs,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  code: { color: colors.gold, fontSize: fonts.sizes.lg, fontWeight: 'bold', letterSpacing: 1 },
+  code: { color: COLORS.gold, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold, letterSpacing: 1 },
   statusBadge: {
-    borderRadius: borderRadius.sm, borderWidth: 1,
-    paddingHorizontal: spacing.sm, paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.sm, borderWidth: 1,
+    paddingHorizontal: SPACING.sm, paddingVertical: 2,
   },
-  statusText: { fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  cardRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs },
-  discount: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  uses: { color: colors.gray, fontSize: fonts.sizes.sm },
-  validity: { color: colors.gray, fontSize: fonts.sizes.xs },
-  minPurchase: { color: colors.gray, fontSize: fonts.sizes.xs },
+  statusText: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+  cardRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: SPACING.xs },
+  discount: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  uses: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  validity: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  minPurchase: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
   toggleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginTop: spacing.sm, borderTopWidth: 0.5, borderTopColor: colors.grayDark,
-    paddingTop: spacing.sm,
+    marginTop: SPACING.sm, borderTopWidth: 0.5, borderTopColor: COLORS.border,
+    paddingTop: SPACING.sm,
   },
-  editBtn: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  toggleRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  toggleLabel: { color: colors.gray, fontSize: fonts.sizes.sm },
+  editBtn: { color: COLORS.gold, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  toggleRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  toggleLabel: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
   errorContainer: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl,
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: SPACING.md, padding: SPACING.xl,
   },
   errorIcon: { fontSize: 48 },
-  errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center' },
+  errorText: { color: COLORS.error, fontSize: FONT_SIZE.body, textAlign: 'center' },
   retryBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.sm,
-    padding: spacing.md, paddingHorizontal: spacing.xl,
+    backgroundColor: COLORS.gold, borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.md, paddingHorizontal: SPACING.xl,
   },
-  retryBtnText: { color: colors.background, fontWeight: 'bold' },
-  empty: { flex: 1, alignItems: 'center', padding: spacing.xl, gap: spacing.md },
+  retryBtnText: { color: COLORS.background, fontWeight: FONT_WEIGHT.bold },
+  empty: { flex: 1, alignItems: 'center', padding: SPACING.xl, gap: SPACING.md },
   emptyIcon: { fontSize: 48 },
-  emptyText: { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center' },
+  emptyText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, textAlign: 'center' },
   // Modal
   modalOverlay: {
     flex: 1, backgroundColor: '#000000aa',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.surface, borderTopLeftRadius: borderRadius.lg,
-    borderTopRightRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.grayDark,
-    padding: spacing.lg, maxHeight: '90%',
+    backgroundColor: COLORS.card, borderTopLeftRadius: BORDER_RADIUS.lg,
+    borderTopRightRadius: BORDER_RADIUS.lg, borderWidth: 1, borderColor: COLORS.border,
+    padding: SPACING.lg, maxHeight: '90%',
   },
-  modalTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', marginBottom: spacing.md },
-  fieldLabel: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.xs, marginTop: spacing.sm },
-  input: {
-    backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.grayDark, color: colors.white, padding: spacing.md,
-    fontSize: fonts.sizes.md,
-  },
-  inputDisabled: { opacity: 0.5 },
-  typeRow: { flexDirection: 'row', gap: spacing.sm },
+  modalTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.md },
+  fieldLabel: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, marginBottom: SPACING.xs, marginTop: SPACING.sm },
+  typeRow: { flexDirection: 'row', gap: SPACING.sm },
   typeBtn: {
-    flex: 1, padding: spacing.md, alignItems: 'center',
-    borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.grayDark,
+    flex: 1, padding: SPACING.md, alignItems: 'center',
+    borderRadius: BORDER_RADIUS.sm, borderWidth: 1, borderColor: COLORS.border,
   },
-  typeBtnActive: { borderColor: colors.gold, backgroundColor: colors.gold + '11' },
-  typeBtnText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  typeBtnTextActive: { color: colors.gold, fontWeight: 'bold' },
-  modalActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  modalCancelBtn: {
-    flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalCancelBtnText: { color: colors.white, fontWeight: 'bold' },
+  typeBtnActive: { borderColor: COLORS.gold, backgroundColor: COLORS.gold + '11' },
+  typeBtnText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  typeBtnTextActive: { color: COLORS.gold, fontWeight: FONT_WEIGHT.bold },
+  modalActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.lg },
   modalConfirmBtn: {
-    flex: 1, backgroundColor: colors.gold, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
+    flex: 1, backgroundColor: COLORS.gold, borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.md, alignItems: 'center',
   },
-  modalConfirmBtnText: { color: colors.background, fontWeight: 'bold' },
+  modalConfirmBtnText: { color: COLORS.background, fontWeight: FONT_WEIGHT.bold },
 });

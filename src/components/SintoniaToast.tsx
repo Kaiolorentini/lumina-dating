@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../theme/tokens';
 
 interface Props {
   message: string;
@@ -80,35 +80,35 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     zIndex: 999,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: SPACING.md,
     borderWidth: 1,
-    borderColor: colors.gold,
-    shadowColor: colors.gold,
+    borderColor: COLORS.gold,
+    shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   icon: {
-    fontSize: 28,
-    color: colors.gold,
+    fontSize: FONT_SIZE.hero,
+    color: COLORS.gold,
   },
   content: {
     flex: 1,
   },
   message: {
-    color: colors.white,
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
   },
   milestone: {
-    color: colors.gold,
-    fontSize: fonts.sizes.sm,
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.caption,
     marginTop: 2,
   },
 });

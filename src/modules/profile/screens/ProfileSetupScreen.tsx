@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
@@ -11,7 +10,8 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../../theme';
+import { Button, Card, Input } from '../../../components/ui';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
 import { useAuth } from '../../../context/AuthContext';
 import { RootStackParamList } from '../../../navigation/types';
 import { Gender, Preference } from '../../../shared/types';
@@ -102,25 +102,20 @@ export default function ProfileSetupScreen() {
         <Text style={styles.successSubtitle}>
           Sua jornada comeca agora. Descubra conexoes unicas e encontre sua Sintonia perfeita.
         </Text>
-        <TouchableOpacity
-          style={[styles.continueButton, continuing && { opacity: 0.7 }]}
+        <Button
+          label="Descobrir conexoes"
           onPress={handleContinue}
+          loading={continuing}
           disabled={continuing}
-        >
-          {continuing ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <Text style={styles.continueButtonText}>
-              Descobrir conexoes
-            </Text>
-          )}
-        </TouchableOpacity>
-        <View style={styles.successFeatures}>
+          variant="primary"
+          fullWidth
+        />
+        <Card padding={S.md} style={{ borderWidth: 1, borderColor: COLORS.gold + '44', gap: S.xs }}>
           <Text style={styles.successFeature}>10 Modelos IA esperando por voce</Text>
           <Text style={styles.successFeature}>Sistema de Sintonia exclusivo</Text>
           <Text style={styles.successFeature}>Chat em tempo real</Text>
           <Text style={styles.successFeature}>Perfis compativeis com voce</Text>
-        </View>
+        </Card>
       </View>
     );
   }
@@ -149,68 +144,13 @@ export default function ProfileSetupScreen() {
           )}
         </TouchableOpacity>
 
-        <Text style={styles.label}>Nome *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Seu nome"
-          placeholderTextColor={colors.gray}
-          value={name}
-          onChangeText={setName}
-        />
-
-        <Text style={styles.label}>Idade *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Sua idade"
-          placeholderTextColor={colors.gray}
-          value={age}
-          onChangeText={setAge}
-          keyboardType="numeric"
-          maxLength={3}
-        />
-
-        <Text style={styles.label}>Cidade *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Sua cidade"
-          placeholderTextColor={colors.gray}
-          value={city}
-          onChangeText={setCity}
-        />
-
-        <Text style={styles.label}>Estado *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex: SP, RJ, MG"
-          placeholderTextColor={colors.gray}
-          value={state}
-          onChangeText={setState}
-          maxLength={2}
-          autoCapitalize="characters"
-        />
-
-        <Text style={styles.label}>Bio</Text>
-        <TextInput
-          style={[styles.input, styles.bioInput]}
-          placeholder="Fale um pouco sobre voce..."
-          placeholderTextColor={colors.gray}
-          value={bio}
-          onChangeText={setBio}
-          multiline
-          maxLength={300}
-        />
-
-        <Text style={styles.label}>CPF (para compras)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="000.000.000-00"
-          placeholderTextColor={colors.gray}
-          value={cpf}
-          onChangeText={setCpf}
-          keyboardType="numeric"
-          maxLength={14}
-        />
-        <View style={styles.cpfInfoBox}>
+        <Input label="Nome *" placeholder="Seu nome" value={name} onChangeText={setName} />
+        <Input label="Idade *" placeholder="Sua idade" value={age} onChangeText={setAge} keyboardType="numeric" />
+        <Input label="Cidade *" placeholder="Sua cidade" value={city} onChangeText={setCity} />
+        <Input label="Estado *" placeholder="Ex: SP, RJ, MG" value={state} onChangeText={setState} autoCapitalize="characters" />
+        <Input label="Bio" placeholder="Fale um pouco sobre voce..." value={bio} onChangeText={setBio} multiline maxLength={300} />
+        <Input label="CPF (para compras)" placeholder="000.000.000-00" value={cpf} onChangeText={setCpf} keyboardType="numeric" />
+        <Card padding={S.md} style={{ borderWidth: 1, borderColor: COLORS.gold + '33' }}>
           <Text style={styles.cpfInfoTitle}>Por que pedimos seu CPF?</Text>
           <Text style={styles.cpfInfoText}>
             O CPF é necessário apenas para processar pagamentos de compras no
@@ -226,65 +166,56 @@ export default function ProfileSetupScreen() {
             usuários e jamais será compartilhado ou usado para qualquer
             finalidade sem a sua permissão.
           </Text>
-        </View>
+        </Card>
 
         <Text style={styles.label}>Genero *</Text>
         <View style={styles.optionsRow}>
           {GENDER_OPTIONS.map(option => (
-            <TouchableOpacity
+            <Button
               key={option.value}
-              style={[
-                styles.optionButton,
-                gender === option.value && styles.optionButtonActive,
-              ]}
+              label={option.label}
+              variant="ghost"
               onPress={() => setGender(option.value)}
-            >
-              <Text style={[
-                styles.optionText,
-                gender === option.value && styles.optionTextActive,
-              ]}>
-                {option.label}
-              </Text>
-            </TouchableOpacity>
+              style={{
+                ...(gender === option.value ? { borderColor: COLORS.gold, backgroundColor: COLORS.gold + '22' } : { borderColor: COLORS.border, backgroundColor: COLORS.card }),
+              }}
+              textStyle={{
+                color: gender === option.value ? COLORS.gold : COLORS.textSecondary,
+                fontWeight: gender === option.value ? FONT_WEIGHT.bold : 'normal',
+              }}
+            />
           ))}
         </View>
 
         <Text style={styles.label}>Tenho interesse em *</Text>
         <View style={styles.optionsRow}>
           {PREFERENCE_OPTIONS.map(option => (
-            <TouchableOpacity
+            <Button
               key={option.value}
-              style={[
-                styles.optionButton,
-                preferences.includes(option.value) && styles.optionButtonActive,
-              ]}
+              label={option.label}
+              variant="ghost"
               onPress={() => togglePreference(option.value)}
-            >
-              <Text style={[
-                styles.optionText,
-                preferences.includes(option.value) && styles.optionTextActive,
-              ]}>
-                {option.label}
-              </Text>
-            </TouchableOpacity>
+              style={{
+                ...(preferences.includes(option.value) ? { borderColor: COLORS.gold, backgroundColor: COLORS.gold + '22' } : { borderColor: COLORS.border, backgroundColor: COLORS.card }),
+              }}
+              textStyle={{
+                color: preferences.includes(option.value) ? COLORS.gold : COLORS.textSecondary,
+                fontWeight: preferences.includes(option.value) ? FONT_WEIGHT.bold : 'normal',
+              }}
+            />
           ))}
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <TouchableOpacity
-          style={styles.button}
+        <Button
+          label={isEditing ? 'Salvar alteracoes' : 'Salvar e continuar'}
           onPress={handleSave}
+          loading={loading}
           disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <Text style={styles.buttonText}>
-              {isEditing ? 'Salvar alteracoes' : 'Salvar e continuar'}
-            </Text>
-          )}
-        </TouchableOpacity>
+          variant="primary"
+          fullWidth
+        />
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -292,183 +223,113 @@ export default function ProfileSetupScreen() {
   );
 }
 
+const S = SPACING;
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.lg },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  scroll: { padding: SPACING.lg },
   successContainer: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.lg,
+    padding: SPACING.xl,
+    gap: SPACING.lg,
   },
-  successStar: { fontSize: 72, color: colors.gold },
+  successStar: { fontSize: 72, color: COLORS.gold },
   successTitle: {
-    fontSize: fonts.sizes.xxxl,
-    color: colors.white,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZE.xxl,
+    color: COLORS.textPrimary,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 2,
     textAlign: 'center',
   },
   successSubtitle: {
-    fontSize: fonts.sizes.md,
-    color: colors.gray,
+    fontSize: FONT_SIZE.body,
+    color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
-    paddingHorizontal: spacing.md,
-  },
-  continueButton: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.sm,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl * 2,
-    alignItems: 'center',
-    width: '100%',
-    elevation: 8,
-  },
-  continueButtonText: {
-    color: colors.background,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
-    letterSpacing: 2,
-  },
-  successFeatures: {
-    width: '100%',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.gold + '44',
-    gap: spacing.md,
+    paddingHorizontal: SPACING.md,
   },
   successFeature: {
-    color: colors.grayLight,
-    fontSize: fonts.sizes.md,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.body,
     lineHeight: 22,
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
-    marginTop: spacing.lg,
+    marginBottom: SPACING.xl,
+    marginTop: SPACING.lg,
   },
-  logo: { fontSize: 36, color: colors.gold },
+  logo: { fontSize: FONT_SIZE.display, color: COLORS.gold },
   title: {
-    fontSize: fonts.sizes.xxl,
-    color: colors.white,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZE.xxl,
+    color: COLORS.textPrimary,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 2,
-    marginTop: spacing.sm,
+    marginTop: SPACING.sm,
   },
   subtitle: {
-    fontSize: fonts.sizes.md,
-    color: colors.gray,
-    marginTop: spacing.xs,
+    fontSize: FONT_SIZE.body,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
     textAlign: 'center',
   },
-  photoContainer: { alignSelf: 'center', marginBottom: spacing.xl },
+  photoContainer: { alignSelf: 'center', marginBottom: SPACING.xl },
   photo: {
     width: 120,
     height: 120,
     borderRadius: 60,
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: COLORS.gold,
   },
   photoPlaceholder: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.surface,
+    backgroundColor: COLORS.card,
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: COLORS.gold,
     alignItems: 'center',
     justifyContent: 'center',
   },
   photoIcon: { fontSize: 32 },
   photoText: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xs,
-    marginTop: spacing.xs,
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.xs,
+    marginTop: SPACING.xs,
   },
   label: {
-    color: colors.grayLight,
-    fontSize: fonts.sizes.sm,
-    marginBottom: spacing.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.caption,
+    marginBottom: SPACING.xs,
     letterSpacing: 1,
   },
-  input: {
-    backgroundColor: colors.surface,
-    color: colors.white,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    fontSize: fonts.sizes.md,
-    borderWidth: 1,
-    borderColor: colors.grayDark,
-  },
-  bioInput: { height: 100, textAlignVertical: 'top' },
-  cpfInfoBox: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.gold + '33',
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
-  },
   cpfInfoTitle: {
-    color: colors.gold,
-    fontSize: fonts.sizes.sm,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.caption,
+    fontWeight: FONT_WEIGHT.bold,
   },
   cpfInfoText: {
-    color: colors.gray,
-    fontSize: fonts.sizes.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.xs,
     lineHeight: 18,
   },
   cpfPrivacyText: {
-    color: colors.grayLight,
-    fontSize: fonts.sizes.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.xs,
     lineHeight: 18,
-    marginTop: spacing.xs,
+    marginTop: SPACING.xs,
   },
   optionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
   },
-  optionButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.grayDark,
-    backgroundColor: colors.surface,
-  },
-  optionButtonActive: {
-    borderColor: colors.gold,
-    backgroundColor: colors.gold + '22',
-  },
-  optionText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  optionTextActive: { color: colors.gold, fontWeight: 'bold' },
   error: {
-    color: colors.error,
-    fontSize: fonts.sizes.sm,
-    marginBottom: spacing.md,
+    color: COLORS.error,
+    fontSize: FONT_SIZE.caption,
+    marginBottom: SPACING.md,
     textAlign: 'center',
-  },
-  button: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  buttonText: {
-    color: colors.background,
-    fontSize: fonts.sizes.lg,
-    fontWeight: 'bold',
-    letterSpacing: 1,
   },
 });

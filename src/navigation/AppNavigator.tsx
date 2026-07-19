@@ -20,7 +20,7 @@ import { HomeScreen } from '../modules/home';
 import { ChatScreen } from '../modules/chat';
 import SintoniasScreen from '../screens/Chat/SintoniasScreen';
 import { StoreScreen } from '../modules/economy';
-import { colors } from '../theme';
+import { COLORS, FONT_SIZE } from '../theme/tokens';
 import { NotificationsScreen } from '../modules/notifications';
 import EngagementInitializer from '../components/EngagementInitializer';
 import UpdateChecker from '../components/UpdateChecker';
@@ -157,17 +157,17 @@ function TabNavigator() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor:  colors.gold,
+          backgroundColor: COLORS.card,
+          borderTopColor:  COLORS.gold,
           borderTopWidth:  0.5,
           height:          60 + insets.bottom,
           paddingBottom:   insets.bottom > 0 ? insets.bottom : 8,
           paddingTop:      4,
         },
-        tabBarActiveTintColor:   colors.gold,
-        tabBarInactiveTintColor: colors.gray,
+        tabBarActiveTintColor:   COLORS.gold,
+        tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarLabelStyle: {
-          fontSize:     10,
+          fontSize: FONT_SIZE.overline,
           fontWeight:   'bold',
           letterSpacing: 0.5,
         },
@@ -178,7 +178,7 @@ function TabNavigator() {
           tabBarLabel: 'Descobrir',
           tabBarIcon: ({ color }) => (
             <View>
-              <Text style={{ fontSize: 20, color }}>✦</Text>
+              <Text style={{ fontSize: FONT_SIZE.title, color }}>✦</Text>
               {unreadNotifs > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</Text>
@@ -195,7 +195,7 @@ function TabNavigator() {
           tabBarLabel: 'Sintonias',
           tabBarIcon: ({ color }) => (
             <View>
-              <Text style={{ fontSize: 20, color }}>✨</Text>
+              <Text style={{ fontSize: FONT_SIZE.title, color }}>✨</Text>
               {unreadMessages > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{unreadMessages > 9 ? '9+' : unreadMessages}</Text>
@@ -210,14 +210,14 @@ function TabNavigator() {
       <Tab.Screen name="Store" component={StoreScreen}
         options={{
           tabBarLabel: 'Cristais',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>✨</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: FONT_SIZE.title, color }}>✨</Text>,
         }}
       />
 
       <Tab.Screen name="Marketplace" component={MarketplaceHomeScreen}
         options={{
           tabBarLabel:   'Marketplace',
-          tabBarIcon:    ({ color }) => <Text style={{ fontSize: 20, color }}>🛍️</Text>,
+          tabBarIcon:    ({ color }) => <Text style={{ fontSize: FONT_SIZE.title, color }}>🛍️</Text>,
           tabBarButton:  showMarketplace ? undefined : hideTabButton,
           tabBarItemStyle: showMarketplace ? {} : { width: 0, height: 0 },
         }}
@@ -228,7 +228,7 @@ function TabNavigator() {
           tabBarLabel: 'Perfil',
           tabBarIcon: ({ color }) => (
             <View>
-              <Text style={{ fontSize: 20, color }}>👤</Text>
+              <Text style={{ fontSize: FONT_SIZE.title, color }}>👤</Text>
               {totalProfileBadge > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{totalProfileBadge > 9 ? '9+' : totalProfileBadge}</Text>
@@ -243,7 +243,7 @@ function TabNavigator() {
         <Tab.Screen name="Admin" component={AdminDashboardScreen}
           options={{
             tabBarLabel: 'Admin',
-            tabBarIcon:  ({ color }) => <Text style={{ fontSize: 20, color }}>👑</Text>,
+            tabBarIcon:  ({ color }) => <Text style={{ fontSize: FONT_SIZE.title, color }}>👑</Text>,
           }}
         />
       )}
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
     position:        'absolute',
     top:             -4,
     right:           -8,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     borderRadius:    8,
     minWidth:        16,
     height:          16,
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   badgeText: {
-    color:      colors.background,
+    color:      COLORS.background,
     fontSize:   9,
     fontWeight: 'bold',
   },

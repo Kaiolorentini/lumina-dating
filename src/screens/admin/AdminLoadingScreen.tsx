@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, Animated,
   Dimensions, StatusBar,
 } from 'react-native';
-import { colors, fonts, spacing } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT , colors } from '../../theme/tokens';
 import ScreenContainer from '../../components/ScreenContainer';
 
 const { width, height } = Dimensions.get('window');
@@ -159,14 +159,14 @@ export default function AdminLoadingScreen({ onFinish }: Props) {
         step++;
         setCurrentStep(step);
         Animated.timing(progressAnim, {
-          toValue: (step / (STATUS_STEPS.length - 1)) * (width - spacing.xl * 2),
+          toValue: (step / (STATUS_STEPS.length - 1)) * (width - SPACING.xl * 2),
           duration: 500,
           useNativeDriver: false,
         }).start();
       } else {
         setCompletedSteps(prev => [...prev, step]);
         Animated.timing(progressAnim, {
-          toValue: width - spacing.xl * 2,
+          toValue: width - SPACING.xl * 2,
           duration: 500,
           useNativeDriver: false,
         }).start();
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     opacity: 0.15,
     zIndex: 1,
   },
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
     width: width * 0.7,
     height: width * 0.7,
     borderRadius: width * 0.35,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     opacity: 0.04,
     top: height * 0.1,
   },
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 20,
     height: 20,
-    borderColor: colors.gold,
+    borderColor: COLORS.gold,
     opacity: 0.6,
   },
   cornerTL: { top: 24, left: 24, borderTopWidth: 1.5, borderLeftWidth: 1.5 },
@@ -357,35 +357,35 @@ const styles = StyleSheet.create({
   content: {
     width: '100%',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: SPACING.xl,
   },
 
   crownIcon: {
     fontSize: 56,
-    marginBottom: spacing.sm,
+    marginBottom: SPACING.sm,
   },
 
   title: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xxl,
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.xxl,
     fontWeight: '900',
     letterSpacing: 8,
-    marginBottom: spacing.xs,
+    marginBottom: SPACING.xs,
   },
 
   titleUnderline: {
     width: 60,
     height: 1.5,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     opacity: 0.6,
-    marginBottom: spacing.xs,
+    marginBottom: SPACING.xs,
   },
 
   subtitle: {
-    color: colors.gray,
+    color: COLORS.textSecondary,
     fontSize: 9,
     letterSpacing: 3.5,
-    marginBottom: spacing.md,
+    marginBottom: SPACING.md,
   },
 
   // Divisor
@@ -393,16 +393,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    marginVertical: spacing.md,
-    gap: spacing.sm,
+    marginVertical: SPACING.md,
+    gap: SPACING.sm,
   },
   dividerLine: {
     flex: 1,
     height: 0.5,
-    backgroundColor: colors.grayDark,
+    backgroundColor: COLORS.border,
   },
   dividerDot: {
-    color: colors.gold,
+    color: COLORS.gold,
     fontSize: 8,
     opacity: 0.6,
   },
@@ -411,38 +411,38 @@ const styles = StyleSheet.create({
   stepsContainer: {
     width: '100%',
     gap: 6,
-    marginBottom: spacing.md,
+    marginBottom: SPACING.md,
   },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: SPACING.sm,
   },
   stepDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.grayDark,
+    backgroundColor: COLORS.border,
   },
   stepDotActive: {
-    backgroundColor: colors.gold,
-    shadowColor: colors.gold,
+    backgroundColor: COLORS.gold,
+    shadowColor: COLORS.gold,
     shadowOpacity: 0.8,
     shadowRadius: 4,
     elevation: 4,
   },
   stepDotCompleted: {
-    backgroundColor: colors.success,
+    backgroundColor: COLORS.success,
   },
   stepLabel: {
     color: '#333',
-    fontSize: fonts.sizes.xs,
+    fontSize: FONT_SIZE.xs,
     letterSpacing: 0.5,
     fontFamily: 'monospace' as any,
   },
   stepLabelActive: {
-    color: colors.gold,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontWeight: FONT_WEIGHT.bold,
   },
   stepLabelCompleted: {
     color: '#555',
@@ -454,12 +454,12 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: '#111',
     borderRadius: 1,
-    marginBottom: spacing.md,
+    marginBottom: SPACING.md,
     overflow: 'hidden',
   },
   progressFill: {
     height: 2,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     borderRadius: 1,
   },
   progressGlow: {
@@ -468,10 +468,10 @@ const styles = StyleSheet.create({
     top: -2,
     width: 12,
     height: 6,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     borderRadius: 3,
     opacity: 0.6,
-    shadowColor: colors.gold,
+    shadowColor: COLORS.gold,
     shadowOpacity: 1,
     shadowRadius: 6,
     elevation: 6,
@@ -482,44 +482,44 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#0D0D0D',
     borderWidth: 0.5,
-    borderColor: colors.gold + '40',
+    borderColor: COLORS.gold + '40',
     borderRadius: 4,
-    padding: spacing.md,
-    paddingTop: spacing.sm,
+    padding: SPACING.md,
+    paddingTop: SPACING.sm,
   },
   tipTopBar: {
     height: 1,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     opacity: 0.4,
-    marginBottom: spacing.sm,
+    marginBottom: SPACING.sm,
     width: 40,
   },
   tipHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
+    gap: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   tipIcon: {
-    fontSize: 22,
+    fontSize: FONT_SIZE.xxl,
   },
   tipCategoryLabel: {
-    color: colors.gold,
+    color: COLORS.gold,
     fontSize: 9,
     letterSpacing: 2,
-    fontWeight: 'bold',
+    fontWeight: FONT_WEIGHT.bold,
   },
   tipText: {
-    color: '#888',
-    fontSize: fonts.sizes.xs + 1,
+    color: colors.gray,
+    fontSize: FONT_SIZE.xs + 1,
     lineHeight: 18,
     letterSpacing: 0.3,
   },
   tipBottomBar: {
     height: 1,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     opacity: 0.2,
-    marginTop: spacing.sm,
+    marginTop: SPACING.sm,
     alignSelf: 'flex-end',
     width: 20,
   },
@@ -527,16 +527,16 @@ const styles = StyleSheet.create({
   // Rodapé
   footer: {
     position: 'absolute',
-    bottom: spacing.xl,
+    bottom: SPACING.xl,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: SPACING.sm,
   },
   footerDot: {
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     opacity: 0.4,
   },
   footerText: {

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { useAuth } from '../../context/AuthContext';
 import {
   Notification,
@@ -108,7 +108,7 @@ export default function NotificationsScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator color={colors.gold} size="large" />
+          <ActivityIndicator color={COLORS.gold} size="large" />
         </View>
       ) : notifications.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -134,7 +134,7 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
@@ -142,33 +142,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   markAllRead: {
-    color: colors.gold,
-    fontSize: fonts.sizes.sm,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.caption,
+    fontWeight: FONT_WEIGHT.bold,
   },
   notificationItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: spacing.lg,
-    gap: spacing.md,
-    backgroundColor: colors.background,
+    padding: SPACING.lg,
+    gap: SPACING.md,
+    backgroundColor: COLORS.background,
   },
   notificationItemUnread: {
-    backgroundColor: colors.gold + '11',
+    backgroundColor: COLORS.gold + '11',
   },
   iconContainer: {
     position: 'relative',
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.surface,
+    backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
   },
   icon: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.title,
   },
   unreadDot: {
     position: 'absolute',
@@ -177,49 +177,49 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: colors.gold,
+    backgroundColor: COLORS.gold,
     borderWidth: 2,
-    borderColor: colors.background,
+    borderColor: COLORS.background,
   },
   content: {
     flex: 1,
   },
   message: {
-    color: colors.gray,
-    fontSize: fonts.sizes.md,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.body,
     lineHeight: 22,
   },
   messageUnread: {
-    color: colors.white,
-    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    fontWeight: FONT_WEIGHT.bold,
   },
   time: {
-    color: colors.gray,
-    fontSize: fonts.sizes.xs,
-    marginTop: spacing.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.xs,
+    marginTop: SPACING.xs,
   },
   separator: {
     height: 1,
-    backgroundColor: colors.grayDark,
-    marginLeft: spacing.lg + 44 + spacing.md,
+    backgroundColor: COLORS.border,
+    marginLeft: SPACING.lg + 44 + SPACING.md,
   },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md,
+    gap: SPACING.md,
   },
   emptyIcon: {
     fontSize: 60,
   },
   emptyTitle: {
-    color: colors.white,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
   },
   emptySubtitle: {
-    color: colors.gray,
-    fontSize: fonts.sizes.md,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.body,
     textAlign: 'center',
   },
 });

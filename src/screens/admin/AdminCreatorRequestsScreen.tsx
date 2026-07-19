@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, Alert, RefreshControl, TextInput, Modal,
+  ActivityIndicator, Alert, RefreshControl, Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Button, Card, Input } from '../../components/ui';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha , colors } from '../../theme/tokens';
 import { useAuth } from '../../context/AuthContext';
 import { getCreatorRequests } from '../../services/marketplace/adminService';
 import { getUserById } from '../../services/marketplace/adminService';
@@ -124,9 +125,7 @@ export default function AdminCreatorRequestsScreen() {
     <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Solicitações de Criador</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -148,7 +147,7 @@ export default function AdminCreatorRequestsScreen() {
 
       {/* Conteúdo */}
       {loading ? (
-        <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
+        <ActivityIndicator color={COLORS.gold} style={{ flex: 1 }} />
       ) : error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorIcon}>⚠️</Text>
@@ -166,7 +165,7 @@ export default function AdminCreatorRequestsScreen() {
             <RefreshControl
               refreshing={false}
               onRefresh={loadRequests}
-              tintColor={colors.gold}
+              tintColor={COLORS.gold}
             />
           }
           ListEmptyComponent={
@@ -202,7 +201,7 @@ export default function AdminCreatorRequestsScreen() {
                     disabled={processing === item.id}
                   >
                     {processing === item.id ? (
-                      <ActivityIndicator color={colors.background} size="small" />
+                      <ActivityIndicator color={COLORS.background} size="small" />
                     ) : (
                       <Text style={styles.approveBtnText}>✅ Aprovar</Text>
                     )}
@@ -246,10 +245,8 @@ export default function AdminCreatorRequestsScreen() {
             <Text style={styles.modalSubtitle}>
               {rejectingRequest && (userNames[rejectingRequest.userId] || rejectingRequest.userId.slice(0, 16))}
             </Text>
-            <TextInput
-              style={styles.modalInput}
+            <Input
               placeholder="Informe o motivo da rejeição..."
-              placeholderTextColor={colors.gray}
               value={rejectReason}
               onChangeText={setRejectReason}
               multiline
@@ -257,18 +254,8 @@ export default function AdminCreatorRequestsScreen() {
               autoFocus
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setRejectModal(false)}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmBtn}
-                onPress={confirmReject}
-              >
-                <Text style={styles.modalConfirmBtnText}>Confirmar</Text>
-              </TouchableOpacity>
+              <Button label="Cancelar" variant="ghost" onPress={() => setRejectModal(false)} />
+              <Button label="Confirmar" variant="primary" onPress={confirmReject} />
             </View>
           </View>
         </View>
@@ -278,79 +265,63 @@ export default function AdminCreatorRequestsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.gold + '44',
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  tabs: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: colors.grayDark },
-  tab: { flex: 1, padding: spacing.md, alignItems: 'center' },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: colors.gold },
-  tabText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  tabTextActive: { color: colors.gold, fontWeight: 'bold' },
-  list: { padding: spacing.md },
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  tabs: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
+  tab: { flex: 1, padding: SPACING.md, alignItems: 'center' },
+  tabActive: { borderBottomWidth: 2, borderBottomColor: COLORS.gold },
+  tabText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  tabTextActive: { color: COLORS.gold, fontWeight: FONT_WEIGHT.bold },
+  list: { padding: SPACING.md },
   card: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
-    gap: spacing.xs,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.border, padding: SPACING.md, marginBottom: SPACING.md,
+    gap: SPACING.xs,
   },
-  cardName: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  cardId: { color: colors.gray, fontSize: fonts.sizes.xs },
-  cardDate: { color: colors.gray, fontSize: fonts.sizes.xs },
-  cardActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  cardName: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  cardId: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  cardDate: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  cardActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm },
   approveBtn: {
-    backgroundColor: colors.success + '22', borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.success, flex: 1, padding: spacing.sm, alignItems: 'center',
+    backgroundColor: COLORS.success + '22', borderRadius: BORDER_RADIUS.sm, borderWidth: 1,
+    borderColor: COLORS.success, flex: 1, padding: SPACING.sm, alignItems: 'center',
   },
-  approveBtnText: { color: colors.success, fontWeight: 'bold', fontSize: fonts.sizes.sm },
+  approveBtnText: { color: COLORS.success, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.caption },
   rejectBtn: {
-    backgroundColor: colors.error + '11', borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.error, flex: 1, padding: spacing.sm, alignItems: 'center',
+    backgroundColor: COLORS.error + '11', borderRadius: BORDER_RADIUS.sm, borderWidth: 1,
+    borderColor: COLORS.error, flex: 1, padding: SPACING.sm, alignItems: 'center',
   },
-  rejectBtnText: { color: colors.error, fontWeight: 'bold', fontSize: fonts.sizes.sm },
-  reason: { color: colors.error, fontSize: fonts.sizes.sm, marginTop: spacing.xs },
-  reviewedAt: { color: colors.gray, fontSize: fonts.sizes.xs },
+  rejectBtnText: { color: COLORS.error, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.caption },
+  reason: { color: COLORS.error, fontSize: FONT_SIZE.caption, marginTop: SPACING.xs },
+  reviewedAt: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
   errorContainer: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl,
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: SPACING.md, padding: SPACING.xl,
   },
   errorIcon: { fontSize: 48 },
-  errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center' },
+  errorText: { color: COLORS.error, fontSize: FONT_SIZE.body, textAlign: 'center' },
   retryBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.sm,
-    padding: spacing.md, paddingHorizontal: spacing.xl,
+    backgroundColor: COLORS.gold, borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.md, paddingHorizontal: SPACING.xl,
   },
-  retryBtnText: { color: colors.background, fontWeight: 'bold' },
-  empty: { flex: 1, alignItems: 'center', padding: spacing.xl, gap: spacing.md },
+  retryBtnText: { color: COLORS.background, fontWeight: FONT_WEIGHT.bold },
+  empty: { flex: 1, alignItems: 'center', padding: SPACING.xl, gap: SPACING.md },
   emptyIcon: { fontSize: 48 },
-  emptyText: { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center' },
+  emptyText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, textAlign: 'center' },
   // Modal
   modalOverlay: {
-    flex: 1, backgroundColor: '#00000088',
-    alignItems: 'center', justifyContent: 'center', padding: spacing.lg,
+    flex: 1, backgroundColor: alpha(colors.black, 0.53),
+    alignItems: 'center', justifyContent: 'center', padding: SPACING.lg,
   },
   modalContent: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.lg, width: '100%', gap: spacing.md,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.border, padding: SPACING.lg, width: '100%', gap: SPACING.md,
   },
-  modalTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  modalSubtitle: { color: colors.gray, fontSize: fonts.sizes.sm },
-  modalInput: {
-    backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.grayDark, color: colors.white, padding: spacing.md,
-    fontSize: fonts.sizes.md, textAlignVertical: 'top', minHeight: 80,
-  },
-  modalActions: { flexDirection: 'row', gap: spacing.sm },
-  modalCancelBtn: {
-    flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalCancelBtnText: { color: colors.white, fontWeight: 'bold' },
-  modalConfirmBtn: {
-    flex: 1, backgroundColor: colors.error, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalConfirmBtnText: { color: colors.white, fontWeight: 'bold' },
+  modalTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  modalSubtitle: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  modalActions: { flexDirection: 'row', gap: SPACING.sm },
 });

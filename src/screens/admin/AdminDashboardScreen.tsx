@@ -4,8 +4,9 @@ import {
   TouchableOpacity, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Button, Card, Input } from '../../components/ui';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
 import { useUserPermissions } from '../../hooks/useUserPermissions';
@@ -73,7 +74,7 @@ export default function AdminDashboardScreen() {
   if (guardLoading || blocked) {
     return (
       <ScreenContainer>
-        <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
+        <ActivityIndicator color={COLORS.gold} style={{ flex: 1 }} />
       </ScreenContainer>
     );
   }
@@ -85,9 +86,7 @@ export default function AdminDashboardScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Painel Admin</Text>
         <View style={styles.roleBadge}>
           <Text style={styles.roleBadgeText}>
@@ -98,7 +97,7 @@ export default function AdminDashboardScreen() {
 
       <ScrollView
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.gold} />
         }
         contentContainerStyle={styles.content}
       >
@@ -187,40 +186,39 @@ export default function AdminDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.gold + '44',
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
   roleBadge: {
-    backgroundColor: colors.gold + '22', borderRadius: borderRadius.full,
-    borderWidth: 1, borderColor: colors.gold, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2,
+    backgroundColor: COLORS.gold + '22', borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1, borderColor: COLORS.gold, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs / 2,
   },
-  roleBadgeText: { color: colors.gold, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  content: { padding: spacing.md },
+  roleBadgeText: { color: COLORS.gold, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+  content: { padding: SPACING.md },
   sectionTitle: {
-    color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold',
-    marginTop: spacing.md, marginBottom: spacing.sm,
+    color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold,
+    marginTop: SPACING.md, marginBottom: SPACING.sm,
     textTransform: 'uppercase', letterSpacing: 1,
   },
-  menuGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
+  menuGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.sm },
   menuCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, width: '47%', alignItems: 'center', gap: spacing.xs,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.border, padding: SPACING.md, width: '47%', alignItems: 'center', gap: SPACING.xs,
   },
-  menuIcon: { fontSize: 28 },
-  menuLabel: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  menuIcon: { fontSize: FONT_SIZE.hero },
+  menuLabel: { color: COLORS.textPrimary, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   metricCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, width: '47%', alignItems: 'center',
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.border, padding: SPACING.md, width: '47%', alignItems: 'center',
   },
-  metricCardHighlight: { borderColor: colors.gold + '88' },
-  metricIcon: { fontSize: 20, marginBottom: spacing.xs },
-  metricValue: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  metricLabel: { color: colors.gray, fontSize: fonts.sizes.xs, textAlign: 'center' },
-  metricArrow: { color: colors.gold, fontSize: fonts.sizes.lg, position: 'absolute', right: spacing.sm, top: spacing.sm },
+  metricCardHighlight: { borderColor: COLORS.gold + '88' },
+  metricIcon: { fontSize: FONT_SIZE.title, marginBottom: SPACING.xs },
+  metricValue: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  metricLabel: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, textAlign: 'center' },
+  metricArrow: { color: COLORS.gold, fontSize: FONT_SIZE.subtitle, position: 'absolute', right: SPACING.sm, top: SPACING.sm },
 });

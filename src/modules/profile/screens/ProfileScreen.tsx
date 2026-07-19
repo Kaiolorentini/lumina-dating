@@ -13,7 +13,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation }     from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../../theme';
+import { colors, fonts, spacing, borderRadius, alpha, FONT_SIZE } from '../../../theme';
 import { useAuth }           from '../../../context/AuthContext';
 import { useCoins }          from '../../../context/CoinsContext';
 import { useUserPermissions } from '../../../hooks/useUserPermissions';
@@ -123,7 +123,7 @@ export default function ProfileScreen() {
                 </View>
               )}
               <View style={styles.cameraIcon}>
-                <Text style={{ fontSize: 14 }}>📷</Text>
+                <Text style={{ fontSize: fonts.sizes.md }}>📷</Text>
               </View>
             </View>
           </TouchableOpacity>
@@ -343,21 +343,21 @@ const styles = StyleSheet.create({
   levelBadge:    { backgroundColor: colors.gold + '22', borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.gold, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, marginTop: spacing.xs },
   levelText:     { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   crystalsRow:   { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
-  crystalsText:  { color: '#B57BEE', fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  crystalsText:  { color: colors.secondaryLegacy, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   crystalsSep:   { color: colors.gray },
-  crystalsPremium: { color: '#FFD700', fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  crystalsPremium: { color: colors.goldLegacy, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   crystalsLabel: { color: colors.gray, fontSize: fonts.sizes.xs, marginTop: 2 },
-  xpCard:        { marginHorizontal: spacing.md, marginTop: spacing.md, backgroundColor: '#1A0A2E', borderRadius: borderRadius.lg, padding: spacing.lg, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)', gap: spacing.sm },
+  xpCard:        { marginHorizontal: spacing.md, marginTop: spacing.md, backgroundColor: colors.cardLegacy, borderRadius: borderRadius.lg, padding: spacing.lg, borderWidth: 1, borderColor: alpha(colors.secondaryLegacy, 0.3), gap: spacing.sm },
   xpCardHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   xpCardTitle:   { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  xpCardLink:    { color: '#B57BEE', fontSize: fonts.sizes.sm },
+  xpCardLink:    { color: colors.secondaryLegacy, fontSize: fonts.sizes.sm },
   treeRow:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  treeStageName: { color: '#B57BEE', fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  treeStageName: { color: colors.secondaryLegacy, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   treeNextStage: { color: colors.gray, fontSize: fonts.sizes.xs },
   section:       { marginHorizontal: spacing.md, marginTop: spacing.md, backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.grayDark, overflow: 'hidden' },
   sectionTitle:  { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, textTransform: 'uppercase', letterSpacing: 1, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark },
   infoRow:       { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark + '55' },
-  infoIcon:      { fontSize: 16, marginRight: spacing.sm, marginTop: 2 },
+  infoIcon:      { fontSize: fonts.sizes.lg, marginRight: spacing.sm, marginTop: 2 },
   infoContent:   { flex: 1 },
   infoLabel:     { color: colors.gray, fontSize: fonts.sizes.xs },
   infoValue:     { color: colors.white, fontSize: fonts.sizes.sm, marginTop: 2 },
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
   menuItem:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark + '55' },
   menuItemHighlight: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark + '55', backgroundColor: colors.gold + '11' },
   menuItemAdmin: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: colors.gold + '11' },
-  menuItemIcon:  { fontSize: 18, marginRight: spacing.sm },
+  menuItemIcon:  { fontSize: FONT_SIZE.xl, marginRight: spacing.sm },
   menuItemText:  { flex: 1, color: colors.white, fontSize: fonts.sizes.md },
   menuItemSubtext: { color: colors.gray, fontSize: fonts.sizes.xs, marginRight: spacing.xs },
   menuItemTextHighlight: { flex: 1, color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },

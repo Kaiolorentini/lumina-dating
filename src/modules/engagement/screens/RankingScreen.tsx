@@ -1,5 +1,5 @@
 // ============================================
-// LUMINA — RANKING SCREEN v5.1
+// LUMINA — RANKING SCREEN v5.2
 // src/modules/engagement/screens/RankingScreen.tsx
 //
 // Dois rankings: Social (competitivo) + Progressão (informativo)
@@ -19,17 +19,10 @@ import { useAuth }          from '../../../context/AuthContext';
 import { useRanking, RankingEntry } from '../hooks/useRanking';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { Card, EmptyState } from '../../../components/ui';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, RANK_COLORS, GRADIENTS } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
-
-const LEAGUE_COLORS: Record<string, string> = {
-  'Galáxia':     '#B57BEE',
-  'Constelação': '#FFD700',
-  'Ouro':        '#FFA500',
-  'Prata':       '#C0C0C0',
-  'Bronze':      '#CD7F32',
-};
 
 const POSITION_ICONS: Record<number, string> = {
   1: '🏆',
@@ -52,7 +45,7 @@ function RankingRow({
   isCurrentUser: boolean;
   onPress:       () => void;
 }) {
-  const leagueColor  = LEAGUE_COLORS[entry.league] ?? COLORS.textMuted;
+  const leagueColor  = RANK_COLORS[entry.league as keyof typeof RANK_COLORS] ?? COLORS.textMuted;
   const positionIcon = POSITION_ICONS[entry.position];
   const reward       = REWARDS[entry.position];
 
@@ -81,7 +74,7 @@ function RankingRow({
         <Image source={{ uri: entry.photoURL }} style={styles.avatar} />
       ) : (
         <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <Text style={{ fontSize: 18 }}>👤</Text>
+          <Text style={{ fontSize: FONT_SIZE.xl }}>👤</Text>
         </View>
       )}
 
@@ -164,7 +157,7 @@ export default function RankingScreen() {
           <>
             {/* Sua posição */}
             {data?.userPosition ? (
-              <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.userCard}>
+              <LinearGradient colors={GRADIENTS.faisca as [string, string]} style={styles.userCard}>
                 <Text style={styles.userCardLabel}>Sua posição</Text>
                 <Text style={styles.userPosition}>#{data.userPosition}</Text>
                 <Text style={styles.userXP}>{data.userXP} XP Social</Text>
@@ -175,7 +168,7 @@ export default function RankingScreen() {
                 )}
               </LinearGradient>
             ) : (
-              <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.userCard}>
+              <LinearGradient colors={GRADIENTS.faisca as [string, string]} style={styles.userCard}>
                 <Text style={styles.userCardLabel}>Você ainda não está no ranking</Text>
                 <Text style={styles.userHint}>
                   {data?.xpToTop50
@@ -195,10 +188,10 @@ export default function RankingScreen() {
                   { pos: '🥉 3º', reward: '30🔮' },
                   { pos: '4º–10º', reward: '20🔮' },
                 ].map((item, i) => (
-                  <View key={i} style={styles.rewardChip}>
+                  <Card key={i} padding={S.sm} style={{ alignItems: 'center', gap: 2, minWidth: '22%' }}>
                     <Text style={styles.rewardChipPos}>{item.pos}</Text>
                     <Text style={styles.rewardChipVal}>{item.reward}</Text>
-                  </View>
+                  </Card>
                 ))}
               </View>
             </View>
@@ -215,11 +208,11 @@ export default function RankingScreen() {
             ))}
 
             {top50.length === 0 && (
-              <View style={styles.empty}>
-                <Text style={styles.emptyIcon}>🏆</Text>
-                <Text style={styles.emptyTitle}>Nenhum dado ainda</Text>
-                <Text style={styles.emptySub}>Seja o primeiro a entrar no ranking!</Text>
-              </View>
+              <EmptyState
+                icon="🏆"
+                title="Nenhum dado ainda"
+                subtitle="Seja o primeiro a entrar no ranking!"
+              />
             )}
           </>
         )}
@@ -259,7 +252,7 @@ const styles = StyleSheet.create({
   tabTextActive: { color: COLORS.secondary, fontWeight: FONT_WEIGHT.bold },
 
   // Sua posição
-  userCard:      { margin: S.md, borderRadius: R.xl, padding: S.lg, alignItems: 'center', gap: S.xs, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  userCard:      { margin: S.md, borderRadius: R.xl, padding: S.lg, alignItems: 'center', gap: S.xs, borderWidth: 1, borderColor: COLORS.borderLight },
   userCardLabel: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textTransform: 'uppercase', letterSpacing: 1 },
   userPosition:  { color: COLORS.secondary, fontSize: 48, fontWeight: FONT_WEIGHT.extrabold },
   userXP:        { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.semibold },
@@ -269,32 +262,25 @@ const styles = StyleSheet.create({
   rewardsSection: { marginHorizontal: S.md, marginBottom: S.md },
   sectionTitle:   { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginBottom: S.sm },
   rewardsRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: S.sm },
-  rewardChip:     { backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.sm, alignItems: 'center', gap: 2, borderWidth: 1, borderColor: COLORS.border, minWidth: '22%' },
   rewardChipPos:  { color: COLORS.surface, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
   rewardChipVal:  { color: COLORS.secondary, fontSize: FONT_SIZE.xs },
 
   // Linhas
   row:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: S.md, paddingVertical: S.sm, gap: S.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  rowCurrent:   { backgroundColor: 'rgba(181,123,238,0.1)' },
-  rowTop3:      { backgroundColor: 'rgba(255,215,0,0.04)' },
+  rowCurrent:   { backgroundColor: COLORS.secondary + '1A' },
+  rowTop3:      { backgroundColor: COLORS.premium + '0A' },
   positionBox:  { width: 36, alignItems: 'center' },
-  positionIcon: { fontSize: 22 },
+  positionIcon: { fontSize: FONT_SIZE.xxl },
   positionNumber: { color: COLORS.textMuted, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  avatar:       { width: 40, height: 40, borderRadius: 20 },
+  avatar:       { width: 40, height: 40, borderRadius: BORDER_RADIUS.mlg },
   avatarPlaceholder: { backgroundColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
   info:         { flex: 1, gap: 2 },
   nameRow:      { flexDirection: 'row', alignItems: 'center', gap: S.xs },
   name:         { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, flex: 1 },
   leagueBadge:  { borderRadius: R.full, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 1 },
-  leagueText:   { fontSize: 9, fontWeight: FONT_WEIGHT.bold },
+  leagueText:   { fontSize: FONT_SIZE.overline, fontWeight: FONT_WEIGHT.bold },
   xp:           { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
   reward:       { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
-
-  // Empty
-  empty:      { alignItems: 'center', padding: S.xl * 2, gap: S.md },
-  emptyIcon:  { fontSize: 60 },
-  emptyTitle: { color: COLORS.surface, fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold },
-  emptySub:   { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center' },
 
   // Progressão
   progressoInfo:  { alignItems: 'center', padding: S.xl, gap: S.lg },

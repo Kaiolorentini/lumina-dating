@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, Animated, TouchableOpacity,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS, alpha } from '../theme/tokens';
 
 // ✅ Tipos expandidos com marketplace
 type NotificationType =
@@ -93,13 +93,13 @@ export default function InAppNotification({
       case 'withdrawal_paid':
       case 'creator_approved':
       case 'product_approved':
-        return colors.success + '88';
+        return alpha(COLORS.success, 0.53);
       case 'withdrawal_rejected':
-        return colors.error + '88';
+        return alpha(COLORS.error, 0.53);
       case 'refund_processed':
-        return colors.gray + '88';
+        return alpha(COLORS.textSecondary, 0.53);
       default:
-        return colors.gold + '66';
+        return alpha(COLORS.gold, 0.4);
     }
   }
 
@@ -140,14 +140,14 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     top: 50,
-    left: spacing.md,
-    right: spacing.md,
+    left: SPACING.md,
+    right: SPACING.md,
     zIndex: 9999,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: colors.gold + '66',
-    shadowColor: colors.gold,
+    borderColor: alpha(COLORS.gold, 0.4),
+    shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -157,33 +157,33 @@ const styles = StyleSheet.create({
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    gap: spacing.md,
+    padding: SPACING.md,
+    gap: SPACING.md,
   },
   iconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.gold + '22',
+    backgroundColor: alpha(COLORS.gold, 0.13),
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.gold + '44',
+    borderColor: alpha(COLORS.gold, 0.27),
   },
-  icon: { fontSize: 18 },
+  icon: { fontSize: FONT_SIZE.xl },
   textContainer: { flex: 1 },
   title: {
-    color: colors.white,
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
   },
   message: {
-    color: colors.gray,
-    fontSize: fonts.sizes.sm,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.caption,
     marginTop: 2,
   },
-  closeButton: { padding: spacing.xs },
-  closeText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  progressBar: { height: 2, backgroundColor: colors.grayDark },
-  progressFill: { height: 2, backgroundColor: colors.gold, width: '100%' },
+  closeButton: { padding: SPACING.xs },
+  closeText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  progressBar: { height: 2, backgroundColor: COLORS.border },
+  progressFill: { height: 2, backgroundColor: COLORS.gold, width: '100%' },
 });

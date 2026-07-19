@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { Product } from '../../shared/types/marketplace';
 
 interface ProductCardProps {
@@ -50,16 +50,16 @@ export const ProductCard = memo(function ProductCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
     overflow: 'hidden',
     width: '100%',
   },
   cardCompact: {
     width: 160,
-    marginRight: spacing.sm,
+    marginRight: SPACING.sm,
     marginBottom: 0,
   },
   cover: {
@@ -71,38 +71,38 @@ const styles = StyleSheet.create({
   },
   favoriteBtn: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.background + 'CC',
-    borderRadius: borderRadius.full,
-    padding: spacing.xs,
+    top: SPACING.sm,
+    right: SPACING.sm,
+    backgroundColor: COLORS.background + 'CC',
+    borderRadius: BORDER_RADIUS.full,
+    padding: SPACING.xs,
   },
-  favoriteIcon: { fontSize: 18 },
-  info: { padding: spacing.md },
+  favoriteIcon: { fontSize: FONT_SIZE.xl },
+  info: { padding: SPACING.md },
   title: {
-    color: colors.white,
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
-    marginBottom: spacing.xs,
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
+    marginBottom: SPACING.xs,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: SPACING.xs,
   },
   price: {
-    color: colors.gold,
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
   },
   rating: {
-    color: colors.gray,
-    fontSize: fonts.sizes.sm,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.caption,
   },
   category: {
-    color: colors.gray,
-    fontSize: fonts.sizes.sm,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.caption,
     textTransform: 'capitalize',
   },
 });

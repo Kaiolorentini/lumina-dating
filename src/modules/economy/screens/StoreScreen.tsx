@@ -21,7 +21,7 @@ import {
   getTransactions,
 } from '../../../services/coinsService';
 import {
-  COLORS, GRADIENTS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT,
+  COLORS, GRADIENTS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, colors, alpha,
 } from '../../../theme/tokens';
 import Header        from '../../../components/Header';
 import { Transaction } from '../../../shared/types';
@@ -115,7 +115,7 @@ export default function StoreScreen() {
       <Header title="Mercado de Cristais" showBack={true} showHome={true} />
 
       {/* SALDO */}
-      <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.walletCard}>
+      <LinearGradient colors={[colors.cardLegacy, '#2D1B4E']} style={styles.walletCard}>
         <Text style={styles.walletTitle}>✨ Cristais de Sintonia</Text>
         <View style={styles.walletRow}>
           <View style={styles.walletItem}>
@@ -292,11 +292,11 @@ const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
   container:           { flex: 1, backgroundColor: COLORS.background },
-  walletCard:          { margin: S.md, borderRadius: R.xl, padding: S.lg, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  walletCard:          { margin: S.md, borderRadius: R.xl, padding: S.lg, borderWidth: 1, borderColor: alpha(colors.secondaryLegacy, 0.3) },
   walletTitle:         { color: COLORS.secondary, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, textAlign: 'center', letterSpacing: 1, textTransform: 'uppercase', marginBottom: S.md },
   walletRow:           { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
   walletItem:          { alignItems: 'center', gap: S.xs, flex: 1 },
-  walletDivider:       { width: 1, height: 50, backgroundColor: 'rgba(181,123,238,0.3)' },
+  walletDivider:       { width: 1, height: 50, backgroundColor: alpha(colors.secondaryLegacy, 0.3) },
   crystalDot:          { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.primary },
   crystalDotPremium:   { backgroundColor: COLORS.premium },
   walletAmount:        { color: COLORS.surface, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold },
@@ -304,14 +304,14 @@ const styles = StyleSheet.create({
   walletItemLabel:     { color: COLORS.secondary, fontSize: FONT_SIZE.xs, textTransform: 'uppercase', letterSpacing: 0.5 },
   labelPremium:        { color: COLORS.premium },
   // Fragmentos
-  fragmentsBtn:        { marginTop: S.md, backgroundColor: 'rgba(123,47,190,0.15)', borderRadius: R.lg, padding: S.md, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(123,47,190,0.4)' },
+  fragmentsBtn:        { marginTop: S.md, backgroundColor: alpha(colors.primaryLegacy, 0.15), borderRadius: R.lg, padding: S.md, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: alpha(colors.primaryLegacy, 0.4) },
   fragmentsBtnText:    { color: COLORS.secondary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
   fragmentsBtnSub:     { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
-  historyBtn:          { marginTop: S.md, alignSelf: 'center', paddingHorizontal: S.md, paddingVertical: S.xs, borderRadius: R.full, borderWidth: 1, borderColor: 'rgba(181,123,238,0.4)' },
+  historyBtn:          { marginTop: S.md, alignSelf: 'center', paddingHorizontal: S.md, paddingVertical: S.xs, borderRadius: R.full, borderWidth: 1, borderColor: alpha(colors.secondaryLegacy, 0.4) },
   historyBtnText:      { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
   historyContainer:    { marginHorizontal: S.md, marginBottom: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.border },
   transactionItem:     { flexDirection: 'row', alignItems: 'center', paddingVertical: S.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border, gap: S.sm },
-  transactionIcon:     { fontSize: 18 },
+  transactionIcon:     { fontSize: FONT_SIZE.xl },
   transactionInfo:     { flex: 1 },
   transactionDesc:     { color: COLORS.surface, fontSize: FONT_SIZE.sm },
   transactionMeta:     { flexDirection: 'row', gap: S.sm, alignItems: 'center', marginTop: 2 },
@@ -321,12 +321,12 @@ const styles = StyleSheet.create({
   sectionTitle:        { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginTop: S.xl, marginBottom: S.xs },
   sectionSub:          { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginHorizontal: S.md, marginBottom: S.md },
   packageCard:         { marginHorizontal: S.md, marginBottom: S.sm, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  packageHighlighted:  { borderColor: COLORS.premium, backgroundColor: 'rgba(255,215,0,0.05)' },
+  packageHighlighted:  { borderColor: COLORS.premium, backgroundColor: alpha(colors.goldLegacy, 0.05) },
   badge:               { position: 'absolute', top: -10, left: S.md, backgroundColor: COLORS.premium, borderRadius: R.full, paddingHorizontal: S.sm, paddingVertical: 2 },
   badgeFirst:          { left: undefined, right: S.md, backgroundColor: COLORS.primary },
   badgeText:           { color: COLORS.background, fontSize: 9, fontWeight: FONT_WEIGHT.bold },
   packageLeft:         { flexDirection: 'row', alignItems: 'center', gap: S.md, flex: 1 },
-  packageIconBox:      { width: 48, height: 48, borderRadius: R.md, backgroundColor: 'rgba(123,47,190,0.2)', alignItems: 'center', justifyContent: 'center' },
+  packageIconBox:      { width: 48, height: 48, borderRadius: R.md, backgroundColor: alpha(colors.primaryLegacy, 0.2), alignItems: 'center', justifyContent: 'center' },
   packageEmoji:        { fontSize: 24 },
   packageLabel:        { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
   packageCoins:        { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
@@ -335,12 +335,12 @@ const styles = StyleSheet.create({
   packagePriceHL:      { color: COLORS.premium },
   marketGrid:          { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: S.md, gap: S.sm, marginBottom: S.md },
   marketItem:          { width: '47%', backgroundColor: COLORS.card, borderRadius: R.md, padding: S.md, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, gap: S.xs },
-  marketItemPremium:   { borderColor: 'rgba(255,215,0,0.3)', backgroundColor: 'rgba(255,215,0,0.03)' },
+  marketItemPremium:   { borderColor: alpha(colors.goldLegacy, 0.3), backgroundColor: alpha(colors.goldLegacy, 0.03) },
   marketIcon:          { fontSize: 26 },
   marketLabel:         { color: COLORS.surface, fontSize: FONT_SIZE.xs, textAlign: 'center', fontWeight: FONT_WEIGHT.medium },
   marketCost:          { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
   marketCostPremium:   { color: COLORS.premium },
-  galaxiaCard:         { margin: S.md, borderRadius: R.xl, padding: S.xl, borderWidth: 1, borderColor: 'rgba(123,47,190,0.5)' },
+  galaxiaCard:         { margin: S.md, borderRadius: R.xl, padding: S.xl, borderWidth: 1, borderColor: alpha(colors.primaryLegacy, 0.5) },
   galaxiaTitle:        { color: COLORS.surface, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center' },
   galaxiaPrice:        { color: COLORS.premium, fontSize: FONT_SIZE.hero, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center', marginTop: S.xs, marginBottom: S.lg },
   galaxiaBenefits:     { gap: S.sm, marginBottom: S.xl },

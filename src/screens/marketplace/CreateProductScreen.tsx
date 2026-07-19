@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, ActivityIndicator, Alert,
+  View, Text, StyleSheet, ScrollView,
+  ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { Button, Card, Input } from '../../components/ui';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha} from '../../theme/tokens';
 import { useAuth } from '../../context/AuthContext';
 import {
-  createProduct,
-  uploadProductCover,
-  uploadProductFile,
-  updateProduct,
-  submitProductForReview,
+  createProduct, uploadProductCover, uploadProductFile,
+  updateProduct, submitProductForReview,
 } from '../../services/marketplace/productService';
 import { ProductCategory } from '../../shared/types/marketplace';
 import ScreenContainer from '../../components/ScreenContainer';
@@ -28,12 +26,10 @@ const CATEGORIES: { label: string; value: ProductCategory }[] = [
 ];
 
 const TOTAL_STEPS = 5;
-
-// Limites por tipo de arquivo
 const SIZE_LIMITS: Record<string, number> = {
-  'image': 20 * 1024 * 1024,   // 20MB
-  'video': 500 * 1024 * 1024,  // 500MB
-  'application/pdf': 100 * 1024 * 1024, // 100MB
+  'image': 20 * 1024 * 1024,
+  'video': 500 * 1024 * 1024,
+  'application/pdf': 100 * 1024 * 1024,
 };
 
 function getMaxSize(mimeType: string): number {
@@ -64,23 +60,17 @@ function getFileIcon(mimeType: string): string {
 }
 
 interface SelectedFile {
-  uri: string;
-  name: string;
-  mimeType: string;
-  size: number;
+  uri: string; name: string; mimeType: string; size: number;
 }
 
 export default function CreateProductScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
-
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [productId, setProductId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadLabel, setUploadLabel] = useState('');
-
-  // Campos do produto
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<ProductCategory>('fotos');
@@ -88,562 +78,243 @@ export default function CreateProductScreen() {
   const [isFree, setIsFree] = useState(false);
   const [coverUri, setCoverUri] = useState<string | null>(null);
   const [tags, setTags] = useState('');
-
-  // Arquivos pagos
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
 
   function goNext() { setStep(s => Math.min(s + 1, TOTAL_STEPS)); }
-  function goBack() {
-    if (step === 1) navigation.goBack();
-    else setStep(s => s - 1);
-  }
+  function goBack() { if (step === 1) navigation.goBack(); else setStep(s => s - 1); }
 
-  // ============================================
-  // Pick cover image
-  // ============================================
   async function handlePickCover() {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.8 });
     if (!result.canceled) setCoverUri(result.assets[0].uri);
   }
 
-  // ============================================
-  // Pick paid file (DocumentPicker)
-  // ============================================
   async function handlePickFile() {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true, multiple: false });
       if (result.canceled) return;
-
       const asset = result.assets[0];
       const mimeType = asset.mimeType ?? 'application/octet-stream';
       const size = asset.size ?? 0;
       const maxSize = getMaxSize(mimeType);
-
-      // Validar MIME — rejeitar executáveis
       const blocked = ['application/x-msdownload', 'application/x-executable', 'text/x-shellscript'];
-      if (blocked.includes(mimeType)) {
-        Alert.alert('Arquivo não permitido', 'Este tipo de arquivo não é aceito.');
-        return;
-      }
-
-      // Validar tamanho
-      if (size > maxSize) {
-        Alert.alert(
-          'Arquivo muito grande',
-          `Limite para este tipo: ${formatBytes(maxSize)}.\nSeu arquivo: ${formatBytes(size)}.`
-        );
-        return;
-      }
-
-      // Evitar duplicata pelo nome
-      if (selectedFiles.some(f => f.name === asset.name)) {
-        Alert.alert('Arquivo já adicionado', `"${asset.name}" já está na lista.`);
-        return;
-      }
-
-      setSelectedFiles(prev => [...prev, {
-        uri: asset.uri,
-        name: asset.name,
-        mimeType,
-        size,
-      }]);
-    } catch {
-      Alert.alert('Erro', 'Não foi possível selecionar o arquivo.');
-    }
+      if (blocked.includes(mimeType)) { Alert.alert('Arquivo não permitido', 'Este tipo de arquivo não é aceito.'); return; }
+      if (size > maxSize) { Alert.alert('Arquivo muito grande', `Limite para este tipo: ${formatBytes(maxSize)}.\nSeu arquivo: ${formatBytes(size)}.`); return; }
+      if (selectedFiles.some(f => f.name === asset.name)) { Alert.alert('Arquivo já adicionado', `"${asset.name}" já está na lista.`); return; }
+      setSelectedFiles(prev => [...prev, { uri: asset.uri, name: asset.name, mimeType, size }]);
+    } catch { Alert.alert('Erro', 'Não foi possível selecionar o arquivo.'); }
   }
 
   function handleRemoveFile(index: number) {
-    Alert.alert(
-      'Remover arquivo?',
-      `"${selectedFiles[index].name}" será removido.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Remover', style: 'destructive',
-          onPress: () => setSelectedFiles(prev => prev.filter((_, i) => i !== index)),
-        },
-      ]
-    );
+    Alert.alert('Remover arquivo?', `"${selectedFiles[index].name}" será removido.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Remover', style: 'destructive', onPress: () => setSelectedFiles(prev => prev.filter((_, i) => i !== index)) },
+    ]);
   }
 
-  // ============================================
-  // Save draft + upload all
-  // ============================================
   async function handleSaveDraft() {
-    if (!user || !title.trim()) {
-      Alert.alert('Erro', 'Informe pelo menos o título.');
-      return;
-    }
-
+    if (!user || !title.trim()) { Alert.alert('Erro', 'Informe pelo menos o título.'); return; }
     setSaving(true);
     try {
       const parsedPrice = isFree ? 0 : parseFloat(price.replace(',', '.'));
-      if (!isFree && (isNaN(parsedPrice) || parsedPrice <= 0)) {
-        Alert.alert('Erro', 'Informe um preço válido.');
-        return;
-      }
-
-      // 1. Criar produto
+      if (!isFree && (isNaN(parsedPrice) || parsedPrice <= 0)) { Alert.alert('Erro', 'Informe um preço válido.'); return; }
       setUploadLabel('Criando produto...');
-      const id = await createProduct(user.uid, {
-        title: title.trim(),
-        description: description.trim(),
-        price: parsedPrice,
-        category,
-        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-      });
+      const id = await createProduct(user.uid, { title: title.trim(), description: description.trim(), price: parsedPrice, category, tags: tags.split(',').map(t => t.trim()).filter(Boolean) });
       setProductId(id);
-
-      // 2. Upload capa
       if (coverUri) {
         setUploadLabel('Enviando capa...');
-        const coverHandle = await uploadProductCover(id, coverUri, p => {
-          setUploadProgress(p.percentage);
-        });
+        const coverHandle = await uploadProductCover(id, coverUri, p => setUploadProgress(p.percentage));
         const coverResult = await coverHandle.promise;
-        if (coverResult.downloadURL) {
-          await updateProduct(id, user.uid, { coverImage: coverResult.downloadURL });
-        }
+        if (coverResult.downloadURL) await updateProduct(id, user.uid, { coverImage: coverResult.downloadURL });
       }
-
-      // 3. Upload arquivos pagos
       if (selectedFiles.length > 0) {
-        const uploadedFiles: Array<{
-          storagePath: string;
-          type: any;
-          name: string;
-          size: number;
-          mimeType: string;
-        }> = [];
-
+        const uploadedFiles: Array<{ storagePath: string; type: any; name: string; size: number; mimeType: string }> = [];
         for (let i = 0; i < selectedFiles.length; i++) {
           const file = selectedFiles[i];
           setUploadLabel(`Enviando arquivo ${i + 1}/${selectedFiles.length}: ${file.name}`);
           setUploadProgress(0);
-
-          const handle = await uploadProductFile(id, file.uri, file.name, p => {
-            setUploadProgress(p.percentage);
-          });
+          const handle = await uploadProductFile(id, file.uri, file.name, p => setUploadProgress(p.percentage));
           const result = await handle.promise;
-
-          uploadedFiles.push({
-            storagePath: result.storagePath,
-            type: getProductFileType(file.mimeType) as any,
-            name: file.name,
-            size: file.size,
-            mimeType: file.mimeType,
-          });
+          uploadedFiles.push({ storagePath: result.storagePath, type: getProductFileType(file.mimeType) as any, name: file.name, size: file.size, mimeType: file.mimeType });
         }
-
         await updateProduct(id, user.uid, { files: uploadedFiles });
       }
-
       Alert.alert('✅ Rascunho salvo!', 'Revise os dados e envie para aprovação.');
       goNext();
-    } catch (error: any) {
-      Alert.alert('Erro', error.message ?? 'Não foi possível salvar.');
-    } finally {
-      setSaving(false);
-      setUploadProgress(0);
-      setUploadLabel('');
-    }
+    } catch (error: any) { Alert.alert('Erro', error.message ?? 'Não foi possível salvar.'); } finally { setSaving(false); setUploadProgress(0); setUploadLabel(''); }
   }
 
-  // ============================================
-  // Submit for review
-  // ============================================
   async function handleSubmit() {
     if (!productId || !user) return;
     setSaving(true);
     try {
       await submitProductForReview(productId, user.uid);
-      Alert.alert(
-        '✅ Enviado para revisão!',
-        'Nossa equipe analisará seu produto em breve.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }],
-      );
-    } catch (error: any) {
-      Alert.alert('Erro', error.message ?? 'Não foi possível enviar para revisão.');
-    } finally {
-      setSaving(false);
-    }
+      Alert.alert('✅ Enviado para revisão!', 'Nossa equipe analisará seu produto em breve.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+    } catch (error: any) { Alert.alert('Erro', error.message ?? 'Não foi possível enviar para revisão.'); } finally { setSaving(false); }
   }
 
   return (
     <ScreenContainer>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={goBack}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={goBack} />
         <Text style={styles.headerTitle}>Novo Produto</Text>
         <Text style={styles.stepLabel}>{step}/{TOTAL_STEPS}</Text>
       </View>
-
-      {/* Progress bar */}
-      <View style={styles.progress}>
-        <View style={[styles.progressFill, { width: `${(step / TOTAL_STEPS) * 100}%` as any }]} />
-      </View>
+      <View style={styles.progress}><View style={[styles.progressFill, { width: `${(step / TOTAL_STEPS) * 100}%` as any }]} /></View>
 
       <ScrollView contentContainerStyle={styles.content}>
-
-        {/* ETAPA 1 — Informações */}
         {step === 1 && (
           <View>
             <Text style={styles.stepTitle}>Informações básicas</Text>
-
-            <Text style={styles.label}>Título *</Text>
-            <TextInput
-              style={styles.input}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Nome do seu produto"
-              placeholderTextColor={colors.gray}
-              maxLength={100}
-            />
-
-            <Text style={styles.label}>Descrição</Text>
-            <TextInput
-              style={[styles.input, styles.inputMultiline]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Descreva o que está vendendo..."
-              placeholderTextColor={colors.gray}
-              multiline
-              maxLength={1000}
-            />
-
+            <Input label="Título *" value={title} onChangeText={setTitle} placeholder="Nome do seu produto" maxLength={100} />
+            <Input label="Descrição" value={description} onChangeText={setDescription} placeholder="Descreva o que está vendendo..." multiline maxLength={1000} />
             <Text style={styles.label}>Categoria</Text>
             <View style={styles.categoryGrid}>
               {CATEGORIES.map(cat => (
-                <TouchableOpacity
+                <Button
                   key={cat.value}
-                  style={[styles.catChip, category === cat.value && styles.catChipActive]}
+                  label={cat.label}
+                  variant="ghost"
                   onPress={() => setCategory(cat.value)}
-                >
-                  <Text style={[styles.catChipText, category === cat.value && styles.catChipTextActive]}>
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
+                  style={{
+                    flex: 1, borderWidth: 1, alignItems: 'center',
+                    borderColor: category === cat.value ? COLORS.gold : COLORS.border,
+                    backgroundColor: category === cat.value ? alpha(COLORS.gold, 0.13) : COLORS.card,
+                  }}
+                  textStyle={{
+                    color: category === cat.value ? COLORS.gold : COLORS.textSecondary,
+                  }}
+                />
               ))}
             </View>
-
-            <Text style={styles.label}>Tags (separadas por vírgula)</Text>
-            <TextInput
-              style={styles.input}
-              value={tags}
-              onChangeText={setTags}
-              placeholder="ex: fotografia, natureza, arte"
-              placeholderTextColor={colors.gray}
-            />
-
-            <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
-              <Text style={styles.nextBtnText}>Próximo →</Text>
-            </TouchableOpacity>
+            <Input label="Tags (separadas por vírgula)" value={tags} onChangeText={setTags} placeholder="ex: fotografia, natureza, arte" />
+            <Button label="Próximo →" onPress={goNext} variant="primary" fullWidth />
           </View>
         )}
 
-        {/* ETAPA 2 — Arquivos pagos */}
         {step === 2 && (
           <View>
             <Text style={styles.stepTitle}>Arquivos do produto</Text>
-            <Text style={styles.stepSubtitle}>
-              Estes arquivos serão liberados após a compra.
-            </Text>
-
-            {/* Lista de arquivos selecionados */}
-            {selectedFiles.length > 0 ? (
+            <Text style={styles.stepSubtitle}>Estes arquivos serão liberados após a compra.</Text>
+            {selectedFiles.length > 0 && (
               <View style={styles.fileList}>
                 {selectedFiles.map((file, index) => (
-                  <View key={index} style={styles.fileItem}>
+                  <Card key={index} padding={SPACING.sm} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm }}>
                     <Text style={styles.fileIcon}>{getFileIcon(file.mimeType)}</Text>
-                    <View style={styles.fileInfo}>
-                      <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
-                      <Text style={styles.fileMeta}>{formatBytes(file.size)}</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.fileRemove}
-                      onPress={() => handleRemoveFile(index)}
-                    >
-                      <Text style={styles.fileRemoveText}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
+                    <View style={styles.fileInfo}><Text style={styles.fileName} numberOfLines={1}>{file.name}</Text><Text style={styles.fileMeta}>{formatBytes(file.size)}</Text></View>
+                    <Button label="✕" variant="ghost" onPress={() => handleRemoveFile(index)} />
+                  </Card>
                 ))}
               </View>
-            ) : null}
-
-            {/* Botão adicionar arquivo */}
-            <TouchableOpacity style={styles.uploadArea} onPress={handlePickFile}>
-              <Text style={styles.uploadIcon}>📎</Text>
-              <Text style={styles.uploadText}>
-                {selectedFiles.length > 0 ? 'Adicionar outro arquivo' : 'Selecionar arquivo'}
-              </Text>
-              <Text style={styles.uploadSubtext}>
-                PDF, imagens, vídeos, ZIP{'\n'}
-                Imagens: máx 20MB · PDF: 100MB · Vídeo: 500MB
-              </Text>
-            </TouchableOpacity>
-
-            {selectedFiles.length === 0 && (
-              <View style={styles.warningBox}>
-                <Text style={styles.warningText}>
-                  ⚠️ Pelo menos 1 arquivo é obrigatório para enviar para revisão.
-                </Text>
-              </View>
             )}
-
+            <Card padding={SPACING.lg} style={{ alignItems: 'center' }} onPress={handlePickFile}>
+              <Text style={styles.uploadIcon}>📎</Text>
+              <Text style={styles.uploadText}>{selectedFiles.length > 0 ? 'Adicionar outro arquivo' : 'Selecionar arquivo'}</Text>
+              <Text style={styles.uploadSubtext}>PDF, imagens, vídeos, ZIP{'\n'}Imagens: máx 20MB · PDF: 100MB · Vídeo: 500MB</Text>
+            </Card>
+            {selectedFiles.length === 0 && (
+              <Card padding={SPACING.md} style={{ borderWidth: 1, borderColor: alpha(COLORS.error, 0.27) }}>
+                <Text style={styles.warningText}>⚠️ Pelo menos 1 arquivo é obrigatório para enviar para revisão.</Text>
+              </Card>
+            )}
             <View style={styles.navRow}>
-              <TouchableOpacity style={styles.prevBtn} onPress={goBack}>
-                <Text style={styles.prevBtnText}>← Anterior</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
-                <Text style={styles.nextBtnText}>Próximo →</Text>
-              </TouchableOpacity>
+              <Button label="← Anterior" onPress={goBack} variant="ghost" />
+              <Button label="Próximo →" onPress={goNext} variant="primary" />
             </View>
           </View>
         )}
 
-        {/* ETAPA 3 — Capa */}
         {step === 3 && (
           <View>
             <Text style={styles.stepTitle}>Capa e prévias</Text>
-            <Text style={styles.stepSubtitle}>
-              A capa aparece no feed do marketplace.
-            </Text>
-
-            <TouchableOpacity style={styles.coverPicker} onPress={handlePickCover}>
-              {coverUri ? (
-                <Text style={styles.coverPickerSuccess}>✅ Capa selecionada</Text>
-              ) : (
-                <>
-                  <Text style={styles.uploadIcon}>🖼️</Text>
-                  <Text style={styles.uploadText}>Selecionar capa</Text>
-                  <Text style={styles.uploadSubtext}>Recomendado: 1200x900px · máx 20MB</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
+            <Text style={styles.stepSubtitle}>A capa aparece no feed do marketplace.</Text>
+            <Card padding={SPACING.lg} style={{ alignItems: 'center' }} onPress={handlePickCover}>
+              {coverUri ? <Text style={{ color: COLORS.success, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold }}>✅ Capa selecionada</Text> : <><Text style={styles.uploadIcon}>🖼️</Text><Text style={styles.uploadText}>Selecionar capa</Text><Text style={styles.uploadSubtext}>Recomendado: 1200x900px · máx 20MB</Text></>}
+            </Card>
             <View style={styles.navRow}>
-              <TouchableOpacity style={styles.prevBtn} onPress={goBack}>
-                <Text style={styles.prevBtnText}>← Anterior</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
-                <Text style={styles.nextBtnText}>Próximo →</Text>
-              </TouchableOpacity>
+              <Button label="← Anterior" onPress={goBack} variant="ghost" />
+              <Button label="Próximo →" onPress={goNext} variant="primary" />
             </View>
           </View>
         )}
 
-        {/* ETAPA 4 — Preço */}
         {step === 4 && (
           <View>
             <Text style={styles.stepTitle}>Preço</Text>
-
-            <TouchableOpacity
-              style={[styles.freeToggle, isFree && styles.freeToggleActive]}
-              onPress={() => setIsFree(!isFree)}
-            >
-              <Text style={styles.freeToggleText}>
-                {isFree ? '✅ Produto gratuito' : '⬜ Produto gratuito'}
-              </Text>
-            </TouchableOpacity>
-
+            <Button label={isFree ? '✅ Produto gratuito' : '⬜ Produto gratuito'} onPress={() => setIsFree(!isFree)} variant="ghost" fullWidth />
             {!isFree && (
-              <>
-                <Text style={styles.label}>Preço (R$)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={price}
-                  onChangeText={setPrice}
-                  placeholder="Ex: 29,90"
-                  placeholderTextColor={colors.gray}
-                  keyboardType="decimal-pad"
-                />
-              </>
+              <Input label="Preço (R$)" value={price} onChangeText={setPrice} placeholder="Ex: 29,90" keyboardType="decimal-pad" />
             )}
-
             <View style={styles.navRow}>
-              <TouchableOpacity style={styles.prevBtn} onPress={goBack}>
-                <Text style={styles.prevBtnText}>← Anterior</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
-                <Text style={styles.nextBtnText}>Próximo →</Text>
-              </TouchableOpacity>
+              <Button label="← Anterior" onPress={goBack} variant="ghost" />
+              <Button label="Próximo →" onPress={goNext} variant="primary" />
             </View>
           </View>
         )}
 
-        {/* ETAPA 5 — Revisão */}
         {step === 5 && (
           <View>
             <Text style={styles.stepTitle}>Revisão final</Text>
-
-            <View style={styles.reviewCard}>
+            <Card padding={SPACING.md}>
               <Text style={styles.reviewRow}>📝 Título: <Text style={styles.reviewValue}>{title || '—'}</Text></Text>
               <Text style={styles.reviewRow}>📁 Categoria: <Text style={styles.reviewValue}>{category}</Text></Text>
               <Text style={styles.reviewRow}>💰 Preço: <Text style={styles.reviewValue}>{isFree ? 'Grátis' : `R$ ${price}`}</Text></Text>
               <Text style={styles.reviewRow}>🖼️ Capa: <Text style={styles.reviewValue}>{coverUri ? 'Selecionada' : '⚠️ Não selecionada'}</Text></Text>
               <Text style={styles.reviewRow}>📦 Arquivos: <Text style={styles.reviewValue}>{selectedFiles.length} arquivo(s)</Text></Text>
-            </View>
-
-            {/* Upload progress */}
+            </Card>
             {saving && uploadProgress > 0 && (
-              <View>
-                <Text style={styles.uploadLabel}>{uploadLabel}</Text>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressBarFill, { width: `${uploadProgress}%` as any }]} />
-                </View>
-                <Text style={styles.progressText}>{uploadProgress}%</Text>
-              </View>
+              <View><Text style={styles.uploadLabel}>{uploadLabel}</Text><View style={styles.progressBar}><View style={[styles.progressBarFill, { width: `${uploadProgress}%` as any }]} /></View><Text style={styles.progressText}>{uploadProgress}%</Text></View>
             )}
-
             {saving && uploadProgress === 0 && uploadLabel !== '' && (
-              <View style={styles.savingRow}>
-                <ActivityIndicator color={colors.gold} size="small" />
-                <Text style={styles.savingText}>{uploadLabel}</Text>
-              </View>
+              <View style={styles.savingRow}><ActivityIndicator color={COLORS.gold} size="small" /><Text style={styles.savingText}>{uploadLabel}</Text></View>
             )}
-
-            <TouchableOpacity
-              style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
-              onPress={productId ? handleSubmit : handleSaveDraft}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color={colors.background} />
-              ) : (
-                <Text style={styles.saveBtnText}>
-                  {productId ? '🚀 Enviar para revisão' : '💾 Salvar e continuar'}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.prevBtn} onPress={goBack}>
-              <Text style={styles.prevBtnText}>← Anterior</Text>
-            </TouchableOpacity>
+            <Button label={productId ? '🚀 Enviar para revisão' : '💾 Salvar e continuar'} onPress={productId ? handleSubmit : handleSaveDraft} loading={saving} disabled={saving} variant="primary" fullWidth />
+            <Button label="← Anterior" onPress={goBack} variant="ghost" fullWidth />
           </View>
         )}
-
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
-  },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  stepLabel: { color: colors.gray, fontSize: fonts.sizes.sm },
-  progress: { height: 3, backgroundColor: colors.grayDark },
-  progressFill: { height: 3, backgroundColor: colors.gold },
-  content: { padding: spacing.md },
-  stepTitle: { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', marginBottom: spacing.sm },
-  stepSubtitle: { color: colors.gray, fontSize: fonts.sizes.md, marginBottom: spacing.md },
-  label: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.xs, marginTop: spacing.md },
-  input: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark, color: colors.white,
-    padding: spacing.md, fontSize: fonts.sizes.md,
-  },
-  inputMultiline: { height: 100, textAlignVertical: 'top' },
-  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
-  catChip: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark,
-  },
-  catChipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  catChipText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  catChipTextActive: { color: colors.background, fontWeight: 'bold' },
-  // File list
-  fileList: {
-    borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, marginBottom: spacing.md, overflow: 'hidden',
-  },
-  fileItem: {
-    flexDirection: 'row', alignItems: 'center', padding: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.grayDark, gap: spacing.sm,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingBottom: SPACING.md, borderBottomWidth: 0.5, borderBottomColor: alpha(COLORS.gold, 0.27) },
+  // backBtn removed — now uses Button
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  stepLabel: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  progress: { height: 3, backgroundColor: COLORS.border },
+  progressFill: { height: 3, backgroundColor: COLORS.gold },
+  content: { padding: SPACING.md },
+  stepTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.sm },
+  stepSubtitle: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, marginBottom: SPACING.md },
+  // input/inputMultiline/label removed — now uses Input
+  label: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, marginBottom: SPACING.xs, marginTop: SPACING.md },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.md },
+  // catChip/catChipActive/catChipText/catChipTextActive removed — now uses Button
+  fileList: { borderRadius: BORDER_RADIUS.lg, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.md, overflow: 'hidden' },
+  // fileItem removed — now uses Card
   fileIcon: { fontSize: 24 },
   fileInfo: { flex: 1 },
-  fileName: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  fileMeta: { color: colors.gray, fontSize: fonts.sizes.xs },
-  fileRemove: { padding: spacing.xs },
-  fileRemoveText: { color: colors.error, fontSize: fonts.sizes.md },
-  // Upload area
-  uploadArea: {
-    borderWidth: 2, borderColor: colors.grayDark, borderStyle: 'dashed',
-    borderRadius: borderRadius.md, padding: spacing.xl, alignItems: 'center', marginBottom: spacing.md,
-  },
-  uploadIcon: { fontSize: 40, marginBottom: spacing.sm },
-  uploadText: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', marginBottom: spacing.xs },
-  uploadSubtext: { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center', lineHeight: 20 },
-  warningBox: {
-    backgroundColor: colors.gold + '11', borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.gold + '44',
-    padding: spacing.md, marginBottom: spacing.md,
-  },
-  warningText: { color: colors.gold, fontSize: fonts.sizes.sm },
-  // Cover
-  coverPicker: {
-    borderWidth: 2, borderColor: colors.grayDark, borderStyle: 'dashed',
-    borderRadius: borderRadius.md, padding: spacing.xl, alignItems: 'center', marginBottom: spacing.md,
-  },
-  coverPickerSuccess: { color: colors.success ?? '#4CAF50', fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  // Price
-  freeToggle: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
-  },
-  freeToggleActive: { borderColor: colors.gold, backgroundColor: colors.gold + '11' },
-  freeToggleText: { color: colors.white, fontSize: fonts.sizes.md },
-  // Navigation
-  navRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
-  nextBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.md,
-    padding: spacing.md, flex: 1, alignItems: 'center', marginTop: spacing.md,
-  },
-  nextBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
-  prevBtn: {
-    backgroundColor: 'transparent', borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, flex: 1, alignItems: 'center', marginTop: spacing.md,
-  },
-  prevBtnText: { color: colors.gray, fontSize: fonts.sizes.md },
-  // Review
-  reviewCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark, padding: spacing.md, gap: spacing.sm, marginBottom: spacing.md,
-  },
-  reviewRow: { color: colors.gray, fontSize: fonts.sizes.md },
-  reviewValue: { color: colors.white, fontWeight: 'bold' },
-  // Upload progress
-  uploadLabel: { color: colors.gold, fontSize: fonts.sizes.sm, marginBottom: spacing.xs },
-  progressBar: {
-    height: 6, backgroundColor: colors.surface, borderRadius: borderRadius.full,
-    marginBottom: spacing.xs, overflow: 'hidden',
-  },
-  progressBarFill: { height: '100%', backgroundColor: colors.gold },
-  progressText: { color: colors.gray, fontSize: fonts.sizes.xs, textAlign: 'right', marginBottom: spacing.md },
-  savingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  savingText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  saveBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.md,
-    padding: spacing.md, alignItems: 'center', marginTop: spacing.md,
-  },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  fileName: { color: COLORS.textPrimary, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  fileMeta: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  // fileRemove/fileRemoveText removed — now uses Button
+  // uploadArea removed — now uses Card
+  uploadIcon: { fontSize: 40, marginBottom: SPACING.sm },
+  uploadText: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.xs },
+  uploadSubtext: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, textAlign: 'center', lineHeight: 20 },
+  warningText: { color: COLORS.gold, fontSize: FONT_SIZE.caption },
+  // coverPicker/coverPickerSuccess removed — now uses Card
+  // freeToggle/freeToggleActive/freeToggleText removed — now uses Button
+  navRow: { flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.md },
+  // nextBtn/nextBtnText removed — now uses Button
+  // prevBtn/prevBtnText removed — now uses Button
+  // reviewCard removed — now uses Card
+  reviewRow: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body },
+  reviewValue: { color: COLORS.textPrimary, fontWeight: FONT_WEIGHT.bold },
+  uploadLabel: { color: COLORS.gold, fontSize: FONT_SIZE.caption, marginBottom: SPACING.xs },
+  progressBar: { height: 6, backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.full, marginBottom: SPACING.xs, overflow: 'hidden' },
+  progressBarFill: { height: '100%', backgroundColor: COLORS.gold },
+  progressText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, textAlign: 'right', marginBottom: SPACING.md },
+  savingRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.md },
+  savingText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  // saveBtn/saveBtnDisabled/saveBtnText removed — now uses Button
 });

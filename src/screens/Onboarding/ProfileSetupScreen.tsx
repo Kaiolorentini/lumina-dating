@@ -1,5 +1,3 @@
-
-
 import {
   View,
   Text,
@@ -18,7 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
 import { saveProfile, uploadProfilePhoto, getProfile } from '../../services/profileService';
 import { RootStackParamList } from '../../navigation/types';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { Gender, Preference } from '../../types';
 import ScreenContainer from '../../components/ScreenContainer';
 
@@ -37,7 +35,6 @@ export default function ProfileSetupScreen() {
   const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
-  // Carrega dados existentes se estiver editando
   useEffect(() => {
     async function loadExistingProfile() {
       if (!user) return;
@@ -70,7 +67,6 @@ export default function ProfileSetupScreen() {
     { label: 'Todos', value: 'todos' },
   ];
 
-  // Abre a galeria do dispositivo para escolher foto
   async function handlePickPhoto() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -83,12 +79,11 @@ export default function ProfileSetupScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
-      base64: true, // ← retorna base64 para exibir no web
+      base64: true,
     });
 
     if (!result.canceled) {
       const asset = result.assets[0];
-      // Usa base64 para exibir a imagem no web
       if (asset.base64) {
         setPhotoURI(`data:image/jpeg;base64,${asset.base64}`);
       } else {
@@ -97,7 +92,6 @@ export default function ProfileSetupScreen() {
     }
   }
 
-  // Alterna preferência selecionada
   function togglePreference(pref: Preference) {
     if (preferences.includes(pref)) {
       setPreferences(preferences.filter(p => p !== pref));
@@ -106,7 +100,7 @@ export default function ProfileSetupScreen() {
     }
   }
 
-async function handleSave() {
+  async function handleSave() {
     if (!name || !age || !city || !state || !gender || preferences.length === 0) {
       setError('Preencha todos os campos obrigatórios');
       return;
@@ -119,10 +113,7 @@ async function handleSave() {
     try {
       setLoading(true);
       setError('');
-      console.log('💾 Salvando perfil...');
-
       if (user) {
-        // PASSO 1 — Salva perfil primeiro
         await saveProfile(user.uid, {
           uid: user.uid,
           email: user.email || '',
@@ -135,21 +126,16 @@ async function handleSave() {
           bio,
           createdAt: new Date(),
         });
-        console.log('✅ Perfil salvo no Firestore!');
 
-        // PASSO 2 — Upload da foto (opcional)
         if (photoURI) {
           try {
-            console.log('📤 Iniciando upload da foto...');
             const photoURL = await uploadProfilePhoto(user.uid, photoURI);
             await saveProfile(user.uid, { photoURL });
-            console.log('✅ Foto salva:', photoURL);
           } catch (uploadError) {
             console.warn('⚠️ Foto não enviada, continuando sem ela:', uploadError);
           }
         }
 
-        console.log('✅ Tudo salvo! Redirecionando...');
         setHasProfile(true);
 
         if (isEditing) {
@@ -157,16 +143,15 @@ async function handleSave() {
         }
       }
     } catch (err: any) {
-      console.error('❌ Erro ao salvar:', err?.message || err);
       setError(`Erro: ${err?.message || 'Tente novamente'}`);
     } finally {
       setLoading(false);
     }
   }
+
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.logo}>✦</Text>
           <Text style={styles.title}>Seu Perfil</Text>
@@ -175,7 +160,6 @@ async function handleSave() {
           </Text>
         </View>
 
-        {/* Foto */}
         <TouchableOpacity style={styles.photoContainer} onPress={handlePickPhoto}>
           {photoURI ? (
             <Image source={{ uri: photoURI }} style={styles.photo} />
@@ -187,63 +171,57 @@ async function handleSave() {
           )}
         </TouchableOpacity>
 
-        {/* Nome */}
         <Text style={styles.label}>Nome *</Text>
         <TextInput
           style={styles.input}
           placeholder="Seu nome"
-          placeholderTextColor={colors.gray}
+          placeholderTextColor={COLORS.textSecondary}
           value={name}
           onChangeText={setName}
         />
 
-        {/* Idade */}
         <Text style={styles.label}>Idade *</Text>
         <TextInput
           style={styles.input}
           placeholder="Sua idade"
-          placeholderTextColor={colors.gray}
+          placeholderTextColor={COLORS.textSecondary}
           value={age}
           onChangeText={setAge}
           keyboardType="numeric"
           maxLength={3}
         />
 
-        {/* Cidade */}
         <Text style={styles.label}>Cidade *</Text>
         <TextInput
           style={styles.input}
           placeholder="Sua cidade"
-          placeholderTextColor={colors.gray}
+          placeholderTextColor={COLORS.textSecondary}
           value={city}
           onChangeText={setCity}
         />
 
-        {/* Estado */}
         <Text style={styles.label}>Estado *</Text>
         <TextInput
           style={styles.input}
           placeholder="Ex: SP, RJ, MG"
-          placeholderTextColor={colors.gray}
+          placeholderTextColor={COLORS.textSecondary}
           value={state}
           onChangeText={setState}
           maxLength={2}
           autoCapitalize="characters"
         />
 
-        {/* Bio */}
         <Text style={styles.label}>Bio</Text>
         <TextInput
           style={[styles.input, styles.bioInput]}
           placeholder="Fale um pouco sobre você..."
-          placeholderTextColor={colors.gray}
+          placeholderTextColor={COLORS.textSecondary}
           value={bio}
           onChangeText={setBio}
           multiline
           maxLength={300}
         />
 
-        {/* Gênero */}
         <Text style={styles.label}>Gênero *</Text>
         <View style={styles.optionsRow}>
           {genderOptions.map(option => (
@@ -265,7 +243,6 @@ async function handleSave() {
           ))}
         </View>
 
-        {/* Preferências */}
         <Text style={styles.label}>Tenho interesse em *</Text>
         <View style={styles.optionsRow}>
           {preferenceOptions.map(option => (
@@ -287,17 +264,15 @@ async function handleSave() {
           ))}
         </View>
 
-        {/* Erro */}
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {/* Botão salvar */}
         <TouchableOpacity
           style={styles.button}
           onPress={handleSave}
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color={colors.background} />
+            <ActivityIndicator color={COLORS.background} />
           ) : (
             <Text style={styles.buttonText}>Salvar e continuar ✦</Text>
           )}
@@ -310,53 +285,49 @@ async function handleSave() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   scroll: {
-    padding: spacing.lg,
+    padding: SPACING.lg,
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
-    marginTop: spacing.lg,
+    marginBottom: SPACING.xl,
+    marginTop: SPACING.lg,
   },
   logo: {
-    fontSize: 36,
-    color: colors.gold,
+    fontSize: FONT_SIZE.display,
+    color: COLORS.gold,
   },
   title: {
-    fontSize: fonts.sizes.xxl,
-    color: colors.white,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZE.title,
+    color: COLORS.textPrimary,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 2,
-    marginTop: spacing.sm,
+    marginTop: SPACING.sm,
   },
   subtitle: {
-    fontSize: fonts.sizes.md,
-    color: colors.gray,
-    marginTop: spacing.xs,
+    fontSize: FONT_SIZE.body,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
     textAlign: 'center',
   },
   photoContainer: {
     alignSelf: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: SPACING.xl,
   },
   photo: {
     width: 120,
     height: 120,
     borderRadius: 60,
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: COLORS.gold,
   },
   photoPlaceholder: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.surface,
+    backgroundColor: COLORS.card,
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: COLORS.gold,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -364,25 +335,26 @@ const styles = StyleSheet.create({
     fontSize: 32,
   },
   photoText: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xs,
-    marginTop: spacing.xs,
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.overline,
+    marginTop: SPACING.xs,
   },
   label: {
-    color: colors.grayLight,
-    fontSize: fonts.sizes.sm,
-    marginBottom: spacing.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.caption,
+    marginBottom: SPACING.xs,
     letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   input: {
-    backgroundColor: colors.surface,
-    color: colors.white,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    fontSize: fonts.sizes.md,
+    backgroundColor: COLORS.card,
+    color: COLORS.textPrimary,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    fontSize: FONT_SIZE.body,
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
   },
   bioInput: {
     height: 100,
@@ -391,46 +363,46 @@ const styles = StyleSheet.create({
   optionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
   },
   optionButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.full,
     borderWidth: 1,
-    borderColor: colors.grayDark,
-    backgroundColor: colors.surface,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
   optionButtonActive: {
-    borderColor: colors.gold,
-    backgroundColor: colors.gold + '22',
+    borderColor: COLORS.gold,
+    backgroundColor: COLORS.gold + '22',
   },
   optionText: {
-    color: colors.gray,
-    fontSize: fonts.sizes.sm,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.caption,
   },
   optionTextActive: {
-    color: colors.gold,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontWeight: FONT_WEIGHT.bold,
   },
   error: {
-    color: colors.error,
-    fontSize: fonts.sizes.sm,
-    marginBottom: spacing.md,
+    color: COLORS.error,
+    fontSize: FONT_SIZE.caption,
+    marginBottom: SPACING.md,
     textAlign: 'center',
   },
   button: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
+    backgroundColor: COLORS.gold,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
     alignItems: 'center',
-    marginTop: spacing.sm,
+    marginTop: SPACING.sm,
   },
   buttonText: {
-    color: colors.background,
-    fontSize: fonts.sizes.lg,
-    fontWeight: 'bold',
+    color: COLORS.background,
+    fontSize: FONT_SIZE.subtitle,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 1,
   },
 });

@@ -7,10 +7,10 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS, alpha } from '../theme/tokens';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - spacing.lg * 2 - spacing.sm) / 2;
+const CARD_WIDTH = (width - SPACING.lg * 2 - SPACING.sm) / 2;
 
 export interface ProfileCardData {
   id: string;
@@ -55,48 +55,48 @@ export default function ProfileCard({ data, onPress }: Props) {
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
-    marginBottom: spacing.md,
+    marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
   },
   photo: {
     width: '100%',
     height: CARD_WIDTH * 1.3,
-    backgroundColor: colors.grayDark,
+    backgroundColor: COLORS.border,
   },
   sintoniaContainer: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.background + 'CC',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
+    top: SPACING.sm,
+    right: SPACING.sm,
+    backgroundColor: alpha(COLORS.background, 0.8),
+    borderRadius: BORDER_RADIUS.full,
+    paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
     alignItems: 'center',
   },
   sintoniaText: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xs,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.xs,
+    fontWeight: FONT_WEIGHT.bold,
   },
   sintoniaLabel: {
-    color: colors.gray,
+    color: COLORS.textSecondary,
     fontSize: 8,
   },
   info: {
-    padding: spacing.sm,
+    padding: SPACING.sm,
   },
   name: {
-    color: colors.white,
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
   },
   location: {
-    color: colors.gray,
-    fontSize: fonts.sizes.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.xs,
     marginTop: 2,
   },
 });

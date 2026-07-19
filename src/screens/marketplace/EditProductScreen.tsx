@@ -1,19 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { Button } from '../../components/ui';
 import { useNavigation } from '@react-navigation/native';
-import { colors, fonts, spacing } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT , alpha} from '../../theme/tokens';
 import ScreenContainer from '../../components/ScreenContainer';
 
-// Reutiliza a lógica do CreateProductScreen com dados pré-carregados
-// Implementação completa na revisão final da FASE 9
 export default function EditProductScreen() {
   const navigation = useNavigation();
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Editar Produto</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -27,16 +24,16 @@ export default function EditProductScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: alpha(COLORS.gold, 0.27),
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
+  // backBtn removed — now uses Button
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  icon: { fontSize: 64, marginBottom: spacing.md },
-  title: { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold' },
-  subtitle: { color: colors.gray, fontSize: fonts.sizes.md, marginTop: spacing.sm },
+  icon: { fontSize: 64, marginBottom: SPACING.md },
+  title: { color: COLORS.textPrimary, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold },
+  subtitle: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, marginTop: SPACING.sm },
 });

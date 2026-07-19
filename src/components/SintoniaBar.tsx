@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../theme/tokens';
 import { getSintoniaColor, getSintoniaLabel } from '../utils/sintoniaEngine';
 
 interface Props {
@@ -132,52 +132,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: SPACING.xs,
   },
   score: {
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
   },
   label: {
-    fontSize: fonts.sizes.sm,
+    fontSize: FONT_SIZE.caption,
   },
   barBackground: {
     height: 6,
-    backgroundColor: colors.grayDark,
-    borderRadius: borderRadius.full,
+    backgroundColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.full,
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
-    borderRadius: borderRadius.full,
+    borderRadius: BORDER_RADIUS.full,
   },
   breakdown: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
+    marginTop: SPACING.md,
+    gap: SPACING.sm,
   },
   breakdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: SPACING.sm,
   },
   breakdownLabel: {
-    color: colors.gray,
-    fontSize: fonts.sizes.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.xs,
     width: 100,
   },
   breakdownBarBg: {
     flex: 1,
     height: 4,
-    backgroundColor: colors.grayDark,
-    borderRadius: borderRadius.full,
+    backgroundColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.full,
     overflow: 'hidden',
   },
   breakdownBarFill: {
     height: '100%',
-    borderRadius: borderRadius.full,
+    borderRadius: BORDER_RADIUS.full,
   },
   breakdownValue: {
-    fontSize: fonts.sizes.xs,
+    fontSize: FONT_SIZE.xs,
     width: 35,
     textAlign: 'right',
   },

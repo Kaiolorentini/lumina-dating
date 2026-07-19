@@ -15,7 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDailyReward } from '../modules/engagement/hooks/useDailyReward';
 import { useCoins }       from '../context/CoinsContext';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../theme/tokens';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT , colors , alpha } from '../theme/tokens';
 
 interface Props {
   uid:       string;
@@ -57,7 +57,7 @@ export default function DailyRewardModal({ uid, visible, onClose }: Props) {
     >
       <View style={styles.overlay}>
         <LinearGradient
-          colors={['#1A0A2E', '#2D1B4E']}
+          colors={[colors.cardLegacy, '#2D1B4E']}
           style={styles.card}
         >
           {loading ? (
@@ -124,7 +124,7 @@ const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
   overlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: S.xl },
-  card:          { width: '100%', borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.4)' },
+  card:          { width: '100%', borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: alpha(colors.secondaryLegacy, 0.4) },
   icon:          { fontSize: 64 },
   title:         { color: COLORS.surface, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center' },
   subtitle:      { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textTransform: 'uppercase', letterSpacing: 1 },

@@ -1,249 +1,246 @@
 // ============================================
-// LUMINA — PROGRESSIVE GALLERY v5.1
+// LUMINA — PROGRESSIVE GALLERY v5.4
 // src/components/ProgressiveGallery.tsx
-//
-// CORREÇÕES:
-// - wallet.coins → coinsGratuitos + coinsPremium
-// - spend(cost, desc) → spend(feature) — REGRA 3B
-// - onContentUnlocked restaurado via engagementService
 // ============================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, Image, StyleSheet, TouchableOpacity,
-  Dimensions, ActivityIndicator, Alert,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Animated,
+  Dimensions,
+  ScrollView,
+  ActivityIndicator,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../theme';
-import {
-  CONTENT_LEVELS, ContentAccess,
-  getContentAccess, unlockLevel3,
-  getLockMessage,
-} from '../services/progressiveContentService';
-import { useCoins }            from '../context/CoinsContext';
-import { onContentUnlocked }   from '../services/engagementService';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS, alpha } from '../theme/tokens';
+import { useAuth } from '../context/AuthContext';
 
-const { width }    = Dimensions.get('window');
-const PHOTO_SIZE   = (width - spacing.lg * 4 - spacing.sm) / 2;
+const { width } = Dimensions.get('window');
+const PHOTO_SIZE = (width - SPACING.lg * 4 - SPACING.sm) / 2;
 
-interface Props {
-  userId:    string;
-  profileId: string;
-  sintonia:  number;
-  gallery:   string[];
+interface LevelData {
+  id: string;
+  number: number;
+  treeIcon: string;
+  treeName: string;
+  requirementXP: number;
+  description: string;
 }
 
-function splitGallery(gallery: string[]) {
-  return {
-    level1: gallery.slice(0, 1),
-    level2: gallery.slice(1, 3),
-    level3: gallery.slice(3),
-  };
+const LEVELS_DATA: LevelData[] = [
+  { id: 'semente', number: 1, treeIcon: '🌱', treeName: 'Semente', requirementXP: 0, description: 'O início da jornada' },
+  { id: 'brotinho', number: 2, treeIcon: '🌿', treeName: 'Brotinho', requirementXP: 100, description: 'Primeiras conexões' },
+  { id: 'arvore', number: 3, treeIcon: '🌳', treeName: 'Árvore', requirementXP: 500, description: 'Raízes firmes' },
+  { id: 'flor', number: 4, treeIcon: '🌸', treeName: 'Flor', requirementXP: 1500, description: 'Beleza desabrochando' },
+  { id: 'fruto', number: 5, treeIcon: '🍎', treeName: 'Fruto', requirementXP: 3000, description: 'Colheita de Sintonia' },
+  { id: 'bosque', number: 6, treeIcon: '🌲', treeName: 'Bosque', requirementXP: 6000, description: 'Comunidade crescendo' },
+  { id: 'floresta', number: 7, treeIcon: '🌳', treeName: 'Floresta', requirementXP: 10000, description: 'Ecossistema próprio' },
+  { id: 'selva', number: 8, treeIcon: '🌴', treeName: 'Selva', requirementXP: 20000, description: 'Vida abundante' },
+  { id: 'mundo', number: 9, treeIcon: '🌍', treeName: 'Mundo', requirementXP: 50000, description: 'Impacto global' },
+  { id: 'galaxia', number: 10, treeIcon: '🪐', treeName: 'Galáxia', requirementXP: 100000, description: 'Sintonia infinita' },
+];
+
+function LevelIcon({ level, size = 28 }: { level: number; size?: number }) {
+  const icons = ['🌱', '🌿', '🌳', '🌸', '🍎', '🌲', '🌳', '🌴', '🌍', '🪐'];
+  return <Text style={{ fontSize: size }}>{icons[level - 1] ?? '🌱'}</Text>;
 }
 
-export default function ProgressiveGallery({ userId, profileId, sintonia, gallery }: Props) {
-  const { wallet, spend } = useCoins();
-  const [access, setAccess]     = useState<ContentAccess>({ level1: true, level2: false, level3: false });
-  const [loading, setLoading]   = useState(true);
-  const [unlocking, setUnlocking] = useState(false);
+export default function ProgressiveGallery() {
+  const { user } = useAuth();
+  const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userXP, setUserXP] = useState(0);
+  const [animatingLevel, setAnimatingLevel] = useState<string | null>(null);
+  const scaleAnims = useRef<Record<string, Animated.Value>>({}).current;
 
-  const { level1, level2, level3 } = splitGallery(gallery);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  useEffect(() => { loadAccess(); }, [sintonia]);
+  useEffect(() => {
+    LEVELS_DATA.forEach(l => {
+      scaleAnims[l.id] = new Animated.Value(1);
+    });
+  }, []);
 
-  async function loadAccess() {
+  async function loadData() {
+    if (!user) return;
     try {
-      const result = await getContentAccess(userId, profileId, sintonia);
-      setAccess(result);
-    } catch (error) {
-      console.error('[ProgressiveGallery] Erro ao carregar acesso:', error);
+      // Mock: replace with actual getUnlockedLevels when service exists
+      const unlocked: string[] = [];
+      const xp = 0;
+      setUnlockedIds(unlocked);
+      setUserXP(xp);
+    } catch (e) {
+      console.error('[ProgressiveGallery] Erro:', e);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleUnlockLevel3() {
-    const cost = CONTENT_LEVELS.LEVEL_3.coinsCost || 100;
-
-    // v5.1: total de cristais disponíveis
-    const totalCoins = (wallet?.coinsGratuitos ?? 0) + (wallet?.coinsPremium ?? 0);
-
-    if (totalCoins < cost) {
-      Alert.alert(
-        '✨ Cristais insuficientes',
-        `Você precisa de ${cost} Cristais de Sintonia para desbloquear.\n\nVocê tem ${totalCoins} cristais.`,
-        [{ text: 'OK' }]
-      );
-      return;
+  async function handleUnlock(level: LevelData) {
+    if (!user || unlockedIds.includes(level.id)) return;
+    setAnimatingLevel(level.id);
+    try {
+      // Mock: replace with actual unlockLevel when service exists
+      console.log('[ProgressiveGallery] Unlock:', level.id);
+      setUnlockedIds(prev => [...prev, level.id]);
+    } catch (e) {
+      console.error('[ProgressiveGallery] Erro ao desbloquear:', e);
+    } finally {
+      setTimeout(() => setAnimatingLevel(null), 1500);
     }
+  }
 
-    Alert.alert(
-      '👑 Desbloquear conteúdo exclusivo',
-      `Usar ${cost} Cristais de Sintonia para desbloquear a galeria exclusiva?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Desbloquear',
-          onPress: async () => {
-            try {
-              setUnlocking(true);
-              // REGRA 3B: envia feature, não valor
-              const success = await spend('REVEAL_VISITORS', `unlock_level3_${userId}_${profileId}`);
-              if (success) {
-                await unlockLevel3(userId, profileId);
-                setAccess(prev => ({ ...prev, level3: true }));
-                await onContentUnlocked(userId, profileId, 3);
-                Alert.alert('✅ Desbloqueado!', 'Galeria exclusiva liberada!');
-              }
-            } catch (error) {
-              Alert.alert('Erro', 'Não foi possível desbloquear.');
-            } finally {
-              setUnlocking(false);
-            }
-          },
-        },
-      ]
+  function renderLevel(level: LevelData, index: number) {
+    const unlocked = unlockedIds.includes(level.id);
+    const canUnlock = userXP >= level.requirementXP && !unlocked;
+    const anim = scaleAnims[level.id];
+
+    return (
+      <TouchableOpacity
+        key={level.id}
+        style={styles.levelCard}
+        onPress={() => canUnlock && handleUnlock(level)}
+        disabled={!canUnlock}
+        activeOpacity={0.9}
+      >
+        <Animated.View style={[styles.imageWrapper, animatingLevel === level.id && styles.pulseAnim, { transform: [{ scale: anim }] }]}>
+          <Image
+            source={require('../assets/gallery/placeholder.jpg')}
+            style={[styles.image, !unlocked && styles.imageLocked]}
+            blurRadius={unlocked ? 0 : 15}
+            resizeMode="cover"
+          />
+          {!unlocked && (
+            <View style={styles.lockOverlay}>
+              <Text style={styles.lockIcon}>🔒</Text>
+            </View>
+          )}
+          {animatingLevel === level.id && (
+            <View style={styles.unlockEffect}>
+              <Text style={styles.unlockIcon}>✨</Text>
+              <Text style={styles.unlockText}>DESBLOQUEADO!</Text>
+            </View>
+          )}
+        </Animated.View>
+
+        <View style={styles.info}>
+          <View style={styles.iconRow}>
+            <LevelIcon level={level.number} size={28} />
+            <Text style={[styles.treeName, unlocked ? styles.treeNameUnlocked : {}]}>{level.treeIcon} {level.treeName}</Text>
+          </View>
+          <Text style={[styles.description, unlocked ? styles.descriptionUnlocked : {}]}>{level.description}</Text>
+          <View style={styles.bottomRow}>
+            {unlocked ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>DESBLOQUEADO</Text>
+              </View>
+            ) : canUnlock ? (
+              <TouchableOpacity style={styles.unlockButton} onPress={() => handleUnlock(level)}>
+                <Text style={styles.unlockButtonText}>🔓 Desbloquear</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.badge}>
+                <Text style={styles.badgeTextLocked}>XP necessário: {level.requirementXP}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
     );
   }
 
-  if (loading) return (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator color={colors.gold} />
-    </View>
-  );
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator color={COLORS.gold} size="large" />
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      {/* NÍVEL 1 */}
-      <LevelHeader level={1} label={CONTENT_LEVELS.LEVEL_1.label} icon={CONTENT_LEVELS.LEVEL_1.icon} unlocked={true} />
-      <View style={styles.grid}>
-        {level1.map((uri, i) => <PhotoItem key={i} uri={uri} unlocked={true} />)}
+    <View style={styles.levelCard}>
+      <View style={styles.header}>
+        <Text style={styles.headerLabel}>Sua Árvore da Sintonia</Text>
+        <Text style={styles.headerXP}>✨ {userXP.toLocaleString()} XP total</Text>
       </View>
 
-      {/* NÍVEL 2 */}
-      <LevelHeader
-        level={2} label={CONTENT_LEVELS.LEVEL_2.label}
-        icon={access.level2 ? '⚡' : '🔒'} unlocked={access.level2}
-        description={access.level2 ? 'Desbloqueado pela sua Sintonia!' : getLockMessage(2, sintonia)}
-      />
-      {!access.level2 && <SintoniaProgress current={sintonia} required={CONTENT_LEVELS.LEVEL_2.minSintonia} />}
-      <View style={styles.grid}>
-        {level2.map((uri, i) => <PhotoItem key={i} uri={uri} unlocked={access.level2} />)}
-      </View>
-
-      {/* NÍVEL 3 */}
-      <LevelHeader
-        level={3} label={CONTENT_LEVELS.LEVEL_3.label}
-        icon={access.level3 ? '👑' : '🔒'} unlocked={access.level3}
-        description={access.level3 ? 'Conteúdo exclusivo desbloqueado!' : getLockMessage(3, sintonia)}
-      />
-      <View style={styles.grid}>
-        {level3.map((uri, i) => <PhotoItem key={i} uri={uri} unlocked={access.level3} />)}
-      </View>
-
-      {!access.level3 && (
-        <TouchableOpacity
-          style={[styles.unlockButton, sintonia < CONTENT_LEVELS.LEVEL_3.minSintonia && styles.unlockButtonDisabled]}
-          onPress={handleUnlockLevel3}
-          disabled={unlocking || sintonia < CONTENT_LEVELS.LEVEL_3.minSintonia}
-        >
-          {unlocking ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <>
-              <Text style={styles.unlockButtonIcon}>👑</Text>
-              <View style={styles.unlockButtonContent}>
-                <Text style={styles.unlockButtonText}>
-                  {sintonia < CONTENT_LEVELS.LEVEL_3.minSintonia
-                    ? `Precisa de ${CONTENT_LEVELS.LEVEL_3.minSintonia}% de Sintonia`
-                    : 'Desbloquear galeria exclusiva'}
-                </Text>
-                <Text style={styles.unlockButtonSub}>
-                  {sintonia < CONTENT_LEVELS.LEVEL_3.minSintonia
-                    ? `Sua Sintonia: ${sintonia.toFixed(0)}%`
-                    : `✨ ${CONTENT_LEVELS.LEVEL_3.coinsCost} Cristais`}
-                </Text>
-              </View>
-            </>
-          )}
-        </TouchableOpacity>
-      )}
+      <ScrollView
+        contentContainerStyle={styles.grid}
+        showsVerticalScrollIndicator={false}
+      >
+        {LEVELS_DATA.map((level, i) => renderLevel(level, i))}
+      </ScrollView>
     </View>
   );
 }
-
-function PhotoItem({ uri, unlocked }: { uri: string; unlocked: boolean }) {
-  return (
-    <View style={photoStyles.container}>
-      <Image source={{ uri }} style={[photoStyles.image, !unlocked && photoStyles.imageBlurred]} blurRadius={unlocked ? 0 : 25} />
-      {!unlocked && <View style={photoStyles.overlay}><Text style={photoStyles.lockIcon}>🔒</Text></View>}
-    </View>
-  );
-}
-
-function LevelHeader({ level, label, icon, unlocked, description }: { level: number; label: string; icon: string; unlocked: boolean; description?: string }) {
-  return (
-    <View style={levelStyles.container}>
-      <View style={levelStyles.left}>
-        <Text style={levelStyles.icon}>{icon}</Text>
-        <View>
-          <Text style={levelStyles.label}>Nível {level} — {label}</Text>
-          {description && <Text style={[levelStyles.description, { color: unlocked ? colors.success : colors.gray }]}>{description}</Text>}
-        </View>
-      </View>
-      <View style={[levelStyles.badge, { backgroundColor: unlocked ? colors.success + '22' : colors.grayDark }]}>
-        <Text style={[levelStyles.badgeText, { color: unlocked ? colors.success : colors.gray }]}>
-          {unlocked ? 'Liberado' : 'Bloqueado'}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function SintoniaProgress({ current, required }: { current: number; required: number }) {
-  const progress = Math.min(current / required, 1);
-  return (
-    <View style={progressStyles.container}>
-      <View style={progressStyles.barBg}>
-        <View style={[progressStyles.barFill, { width: `${progress * 100}%` }]} />
-      </View>
-      <Text style={progressStyles.text}>{current.toFixed(0)}% / {required}% necessário</Text>
-    </View>
-  );
-}
-
-const photoStyles = StyleSheet.create({
-  container:    { width: PHOTO_SIZE, height: PHOTO_SIZE * 1.2, borderRadius: borderRadius.sm, overflow: 'hidden', position: 'relative' },
-  image:        { width: '100%', height: '100%' },
-  imageBlurred: { opacity: 0.5 },
-  overlay:      { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#0D0D0D88', alignItems: 'center', justifyContent: 'center' },
-  lockIcon:     { fontSize: 28 },
-});
-
-const levelStyles = StyleSheet.create({
-  container:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm, marginTop: spacing.md },
-  left:        { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
-  icon:        { fontSize: 20 },
-  label:       { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  description: { fontSize: fonts.sizes.xs, marginTop: 2 },
-  badge:       { borderRadius: borderRadius.full, paddingHorizontal: spacing.sm, paddingVertical: 2 },
-  badgeText:   { fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-});
-
-const progressStyles = StyleSheet.create({
-  container: { marginBottom: spacing.sm, gap: spacing.xs },
-  barBg:     { height: 6, backgroundColor: colors.grayDark, borderRadius: borderRadius.full, overflow: 'hidden' },
-  barFill:   { height: '100%', backgroundColor: colors.gold, borderRadius: borderRadius.full },
-  text:      { color: colors.gray, fontSize: fonts.sizes.xs, textAlign: 'right' },
-});
 
 const styles = StyleSheet.create({
-  container:            { gap: spacing.xs },
-  loadingContainer:     { padding: spacing.lg, alignItems: 'center' },
-  grid:                 { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  unlockButton:         { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.gold, borderRadius: borderRadius.md, padding: spacing.md, gap: spacing.md, marginTop: spacing.sm },
-  unlockButtonDisabled: { backgroundColor: colors.grayDark },
-  unlockButtonIcon:     { fontSize: 24 },
-  unlockButtonContent:  { flex: 1 },
-  unlockButtonText:     { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
-  unlockButtonSub:      { color: colors.background + 'AA', fontSize: fonts.sizes.xs, marginTop: 2 },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+  },
+  headerLabel: { color: COLORS.gold, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold, letterSpacing: 1 },
+  headerXP: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  grid: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, gap: SPACING.sm },
+  levelCard: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE * 1.2,
+    borderRadius: BORDER_RADIUS.sm,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  imageWrapper: { width: '100%', height: PHOTO_SIZE * 0.7, position: 'relative' },
+  image: { width: '100%', height: '100%' },
+  imageLocked: { opacity: 0.4 },
+  lockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: alpha(COLORS.background, 0.53),
+  },
+  lockIcon: { fontSize: FONT_SIZE.hero },
+  unlockEffect: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: alpha(COLORS.gold, 0.27),
+  },
+  unlockIcon: { fontSize: 32 },
+  unlockText: { color: COLORS.gold, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, marginTop: 2 },
+  pulseAnim: { transform: [{ scale: 1.05 }] },
+  info: { padding: SPACING.sm, gap: SPACING.xs },
+  iconRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
+  treeName: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  treeNameUnlocked: { color: COLORS.gold },
+  description: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  descriptionUnlocked: { color: COLORS.success },
+  bottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SPACING.xs },
+  badge: { backgroundColor: alpha(COLORS.gold, 0.13), borderRadius: BORDER_RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs / 2, borderWidth: 1, borderColor: COLORS.gold },
+  badgeText: { color: COLORS.gold, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+  badgeTextLocked: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  unlockButton: { backgroundColor: COLORS.gold, borderRadius: BORDER_RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs / 2 },
+  unlockButtonText: { color: COLORS.background, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
 });

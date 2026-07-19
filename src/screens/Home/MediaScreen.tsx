@@ -10,7 +10,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { useAuth } from '../../context/AuthContext';
 import MediaCard from '../../components/MediaCard';
 import {
@@ -79,7 +79,7 @@ export default function MediaScreen() {
           'image',
           userProfile.name || user.email || 'Usuário',
           userProfile.photoURL || 'https://randomuser.me/api/portraits/women/1.jpg',
-          true // bloqueado por padrão
+          true
         );
         setMediaItems(prev => [newItem, ...prev]);
       } catch (error) {
@@ -103,7 +103,6 @@ export default function MediaScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <Header
         title="Mídia Exclusiva"
         showBack={false}
@@ -115,7 +114,7 @@ export default function MediaScreen() {
             disabled={uploading}
           >
             {uploading ? (
-              <ActivityIndicator color={colors.background} size="small" />
+              <ActivityIndicator color={COLORS.background} size="small" />
             ) : (
               <Text style={styles.uploadButtonText}>+ Publicar</Text>
             )}
@@ -123,7 +122,6 @@ export default function MediaScreen() {
         }
       />
 
-      {/* Banner informativo */}
       <View style={styles.banner}>
         <Text style={styles.bannerIcon}>🔒</Text>
         <Text style={styles.bannerText}>
@@ -131,10 +129,9 @@ export default function MediaScreen() {
         </Text>
       </View>
 
-      {/* Grid de mídia */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator color={colors.gold} size="large" />
+          <ActivityIndicator color={COLORS.gold} size="large" />
           <Text style={styles.loadingText}>Carregando mídia...</Text>
         </View>
       ) : (
@@ -144,7 +141,7 @@ export default function MediaScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={colors.gold}
+              tintColor={COLORS.gold}
             />
           }
         >
@@ -184,57 +181,57 @@ export default function MediaScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.md,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.md,
   },
   title: {
-    fontSize: fonts.sizes.xl,
-    color: colors.gold,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZE.title,
+    color: COLORS.gold,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 2,
   },
   uploadButton: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    backgroundColor: COLORS.gold,
+    borderRadius: BORDER_RADIUS.full,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     minWidth: 90,
     alignItems: 'center',
   },
   uploadButtonDisabled: {
-    backgroundColor: colors.grayDark,
+    backgroundColor: COLORS.border,
   },
   uploadButtonText: {
-    color: colors.background,
-    fontWeight: 'bold',
-    fontSize: fonts.sizes.sm,
+    color: COLORS.background,
+    fontWeight: FONT_WEIGHT.bold,
+    fontSize: FONT_SIZE.caption,
   },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
     borderWidth: 1,
-    borderColor: colors.gold + '44',
-    gap: spacing.sm,
+    borderColor: COLORS.gold + '44',
+    gap: SPACING.sm,
   },
   bannerIcon: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.title,
   },
   bannerText: {
     flex: 1,
-    color: colors.gray,
-    fontSize: fonts.sizes.sm,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.caption,
     lineHeight: 18,
   },
   loadingContainer: {
@@ -242,51 +239,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 80,
-    gap: spacing.md,
+    gap: SPACING.md,
   },
   loadingText: {
-    color: colors.gray,
-    fontSize: fonts.sizes.md,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.body,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    gap: SPACING.sm,
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 80,
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
+    paddingHorizontal: SPACING.xl,
+    gap: SPACING.md,
   },
   emptyIcon: {
     fontSize: 60,
   },
   emptyTitle: {
-    color: colors.white,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
     textAlign: 'center',
   },
   emptySubtitle: {
-    color: colors.gray,
-    fontSize: fonts.sizes.md,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.body,
     textAlign: 'center',
     lineHeight: 22,
   },
   emptyButton: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    marginTop: spacing.sm,
+    backgroundColor: COLORS.gold,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    marginTop: SPACING.sm,
   },
   emptyButtonText: {
-    color: colors.background,
-    fontWeight: 'bold',
-    fontSize: fonts.sizes.md,
+    color: COLORS.background,
+    fontWeight: FONT_WEIGHT.bold,
+    fontSize: FONT_SIZE.body,
   },
 });

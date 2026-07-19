@@ -15,17 +15,9 @@ import { useAuth }           from '../../../context/AuthContext';
 import { useAchievements, Achievement, Collection, AchievementRarity } from '../hooks/useAchievements';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, RARITY_COLORS, RANK_COLORS } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
-
-const RARITY_COLORS: Record<AchievementRarity, string> = {
-  COMMON:    '#AAAAAA',
-  RARE:      '#56CCF2',
-  EPIC:      '#B57BEE',
-  LEGENDARY: '#FFD700',
-  MYTHIC:    '#FF6B9D',
-};
 
 const RARITY_LABELS: Record<AchievementRarity, string> = {
   COMMON:    'Comum',
@@ -36,15 +28,15 @@ const RARITY_LABELS: Record<AchievementRarity, string> = {
 };
 
 const TIER_COLORS = {
-  BRONZE: '#CD7F32',
-  SILVER: '#C0C0C0',
-  GOLD:   '#FFD700',
+  BRONZE: RANK_COLORS.bronze,
+  SILVER: RANK_COLORS.prata,
+  GOLD:   RANK_COLORS.ouro,
 };
 
 type Tab = 'conquistas' | 'colecoes';
 
 function AchievementCard({ ach }: { ach: Achievement }) {
-  const color   = RARITY_COLORS[ach.rarity];
+  const color   = RARITY_COLORS[ach.rarity.toLowerCase() as keyof typeof RARITY_COLORS] || COLORS.textMuted;
   const pct     = ach.target > 1 ? Math.min(ach.progress / ach.target, 1) : (ach.unlocked ? 1 : 0);
   const isHidden = ach.hidden && !ach.unlocked;
 
@@ -218,10 +210,10 @@ export default function AchievementsScreen() {
     </View>
   );
 }
-
+ 
 const S = SPACING;
 const R = BORDER_RADIUS;
-
+ 
 const styles = StyleSheet.create({
   container:  { flex: 1, backgroundColor: COLORS.background },
   center:     { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -233,43 +225,43 @@ const styles = StyleSheet.create({
   tabText:    { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
   tabTextActive: { color: COLORS.secondary, fontWeight: FONT_WEIGHT.bold },
   filterScroll: { paddingHorizontal: S.md, paddingVertical: S.sm },
-  filterChip:  { backgroundColor: COLORS.card, borderRadius: R.full, paddingHorizontal: S.md, paddingVertical: S.xs, marginRight: S.sm, borderWidth: 1, borderColor: COLORS.border },
+  filterChip:  { backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.full, paddingHorizontal: S.md, paddingVertical: S.xs, marginRight: S.sm, borderWidth: 1, borderColor: COLORS.border },
   filterChipActive: { borderColor: COLORS.secondary, backgroundColor: COLORS.secondary + '22' },
   filterText:  { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
   filterTextActive: { color: COLORS.secondary, fontWeight: FONT_WEIGHT.bold },
   list:       { padding: S.md, gap: S.sm },
 
   // Achievement Card
-  achCard:    { flexDirection: 'row', backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, gap: S.md, borderWidth: 1, opacity: 0.7 },
+  achCard:    { flexDirection: 'row', backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.lg, padding: S.md, gap: S.md, borderWidth: 1, opacity: 0.7 },
   achCardUnlocked: { opacity: 1 },
-  achIcon:    { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  achIconText: { fontSize: 24 },
-  achInfo:    { flex: 1, gap: 4 },
+  achIcon:    { width: 44, height: 44, borderRadius: BORDER_RADIUS.mlg, alignItems: 'center', justifyContent: 'center' },
+  achIconText: { fontSize: FONT_SIZE.xl },
+  achInfo:    { flex: 1, gap: S.xs },
   achHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   achTitle:   { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
   achTitleLocked: { color: COLORS.textMuted },
   achRarity:  { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold },
   achDesc:    { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, lineHeight: 16 },
   achProgress: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  achProgressBar: { flex: 1, height: 4, backgroundColor: COLORS.border, borderRadius: R.full, overflow: 'hidden' },
-  achProgressFill: { height: '100%', borderRadius: R.full },
+  achProgressBar: { flex: 1, height: 4, backgroundColor: COLORS.border, borderRadius: BORDER_RADIUS.full, overflow: 'hidden' },
+  achProgressFill: { height: '100%', borderRadius: BORDER_RADIUS.full },
   achProgressText: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, width: 40, textAlign: 'right' },
   achUnlocked: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
 
   // Collection Card
-  colCard:    { borderRadius: R.xl, overflow: 'hidden', borderWidth: 1 },
+  colCard:    { borderRadius: BORDER_RADIUS.xl, overflow: 'hidden', borderWidth: 1 },
   colCardDone: {},
   colInner:   { padding: S.lg, gap: S.sm },
   colHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  colIcon:    { fontSize: 32 },
-  colTierBadge: { borderRadius: R.full, borderWidth: 1, paddingHorizontal: S.sm, paddingVertical: 2 },
+  colIcon:    { fontSize: FONT_SIZE.xxl },
+  colTierBadge: { borderRadius: BORDER_RADIUS.full, borderWidth: 1, paddingHorizontal: S.sm, paddingVertical: 2 },
   colTierText:  { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.extrabold },
   colTitle:   { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.extrabold },
   colDesc:    { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
-  colProgressBar: { height: 6, backgroundColor: COLORS.border, borderRadius: R.full, overflow: 'hidden' },
-  colProgressFill: { height: '100%', borderRadius: R.full },
+  colProgressBar: { height: 6, backgroundColor: COLORS.border, borderRadius: BORDER_RADIUS.full, overflow: 'hidden' },
+  colProgressFill: { height: '100%', borderRadius: BORDER_RADIUS.full },
   colProgress: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
-  colReward:  { gap: 4 },
+  colReward:  { gap: S.xs },
   colRewardText: { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
   colDone:    { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center', marginTop: S.xs },
 });

@@ -1,20 +1,13 @@
-// ============================================
-// PAYMENT SETUP SCREEN — chave Pix (saque manual)
-//
-// O criador informa a chave Pix onde recebe os saques.
-// O admin transfere manualmente e marca o saque como pago.
-// (Substituiu o antigo wizard de Wallet ID Asaas.)
-// ============================================
-
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, ScrollView,
+  ActivityIndicator, Alert,
 } from 'react-native';
+import { Button, Card, Input } from '../../components/ui';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT , alpha} from '../../theme/tokens';
 import { RootStackParamList } from '../../navigation/types';
 import {
   saveCreatorPixKey,
@@ -33,7 +26,6 @@ const KEY_TYPES: { type: PixKeyType; label: string; placeholder: string; keyboar
   { type: 'random', label: 'Aleatória', placeholder: 'xxxxxxxx-xxxx-...',         keyboard: 'default' },
 ];
 
-// Máscaras leves conforme o tipo
 function maskCpf(v: string): string {
   const d = v.replace(/\D/g, '').slice(0, 11);
   if (d.length <= 3) return d;
@@ -114,7 +106,7 @@ export default function PaymentSetupScreen() {
   if (loading) {
     return (
       <ScreenContainer style={{ justifyContent: 'center' }}>
-        <ActivityIndicator color={colors.gold} />
+        <ActivityIndicator color={COLORS.gold} />
       </ScreenContainer>
     );
   }
@@ -124,9 +116,7 @@ export default function PaymentSetupScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Configurar recebimento</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -140,40 +130,43 @@ export default function PaymentSetupScreen() {
         </Text>
 
         {configured && maskedKey && (
-          <View style={styles.configuredBox}>
+          <Card padding={SPACING.md} style={{ borderWidth: 1, borderColor: alpha(COLORS.gold, 0.27) }}>
             <Text style={styles.configuredLabel}>Chave atual ({activeType.label})</Text>
             <Text style={styles.configuredValue}>{maskedKey}</Text>
             <Text style={styles.configuredHint}>Você pode alterar preenchendo abaixo.</Text>
-          </View>
+          </Card>
         )}
 
         <Text style={styles.fieldLabel}>Tipo de chave</Text>
         <View style={styles.typeRow}>
           {KEY_TYPES.map(kt => (
-            <TouchableOpacity
+            <Button
               key={kt.type}
-              style={[styles.typeBtn, keyType === kt.type && styles.typeBtnActive]}
+              label={kt.label}
+              variant="ghost"
               onPress={() => switchType(kt.type)}
-            >
-              <Text style={[styles.typeBtnText, keyType === kt.type && styles.typeBtnTextActive]}>
-                {kt.label}
-              </Text>
-            </TouchableOpacity>
+              style={{
+                flex: 1, borderWidth: 1, alignItems: 'center',
+                borderColor: keyType === kt.type ? COLORS.gold : COLORS.border,
+                backgroundColor: keyType === kt.type ? alpha(COLORS.gold, 0.13) : COLORS.card,
+              }}
+              textStyle={{
+                color: keyType === kt.type ? COLORS.gold : COLORS.textSecondary,
+              }}
+            />
           ))}
         </View>
 
         <Text style={styles.fieldLabel}>Sua chave Pix ({activeType.label})</Text>
-        <TextInput
-          style={styles.input}
+        <Input
           value={keyValue}
           onChangeText={handleChange}
           placeholder={activeType.placeholder}
-          placeholderTextColor={colors.gray}
           keyboardType={activeType.keyboard}
           autoCapitalize="none"
         />
 
-        <View style={styles.infoBox}>
+        <Card padding={SPACING.md} style={{ marginBottom: SPACING.md }}>
           <Text style={styles.infoTitle}>Como funciona o saque?</Text>
           <Text style={styles.infoText}>
             Suas vendas acumulam saldo na sua carteira do Lumina. Quando quiser,
@@ -184,85 +177,54 @@ export default function PaymentSetupScreen() {
             🔒 Sua chave Pix é usada apenas para pagar seus saques. Nunca é exibida
             para outros usuários nem compartilhada sem sua permissão.
           </Text>
-        </View>
+        </Card>
 
-        <TouchableOpacity
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+        <Button
+          label={configured ? 'Atualizar chave Pix' : 'Salvar chave Pix'}
           onPress={handleSave}
+          loading={saving}
           disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <Text style={styles.saveButtonText}>
-              {configured ? 'Atualizar chave Pix' : 'Salvar chave Pix'}
-            </Text>
-          )}
-        </TouchableOpacity>
+          variant="primary"
+          fullWidth
+        />
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: alpha(COLORS.gold, 0.27),
   },
-  backButton: { width: 40, alignItems: 'center' },
-  backButtonText: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  content: { padding: spacing.lg, paddingBottom: spacing.xl },
-  emoji: { fontSize: 56, textAlign: 'center', marginVertical: spacing.md },
+  // backButton/backButtonText removed — now uses Button
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  content: { padding: SPACING.lg, paddingBottom: SPACING.xl },
+  emoji: { fontSize: 56, textAlign: 'center', marginVertical: SPACING.md },
   title: {
-    color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold',
-    textAlign: 'center', marginBottom: spacing.sm,
+    color: COLORS.textPrimary, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold,
+    textAlign: 'center', marginBottom: SPACING.sm,
   },
   subtitle: {
-    color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center',
-    lineHeight: 22, marginBottom: spacing.lg,
+    color: COLORS.textSecondary, fontSize: FONT_SIZE.body, textAlign: 'center',
+    lineHeight: 22, marginBottom: SPACING.lg,
   },
-  configuredBox: {
-    backgroundColor: colors.gold + '11', borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.gold + '44',
-    padding: spacing.md, marginBottom: spacing.lg, alignItems: 'center', gap: 2,
-  },
-  configuredLabel: { color: colors.gray, fontSize: fonts.sizes.sm },
-  configuredValue: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  configuredHint: { color: colors.gray, fontSize: fonts.sizes.xs, marginTop: spacing.xs },
+  // configuredBox removed — now uses Card
+  configuredLabel: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  configuredValue: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  configuredHint: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, marginTop: SPACING.xs },
   fieldLabel: {
-    color: colors.grayLight, fontSize: fonts.sizes.sm,
-    marginBottom: spacing.xs, marginTop: spacing.sm, letterSpacing: 1,
+    color: COLORS.textSecondary, fontSize: FONT_SIZE.caption,
+    marginBottom: SPACING.xs, marginTop: SPACING.sm, letterSpacing: 1,
   },
-  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  typeBtn: {
-    flexGrow: 1, flexBasis: '22%', paddingVertical: spacing.sm, alignItems: 'center',
-    borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.grayDark,
-    backgroundColor: colors.surface,
-  },
-  typeBtnActive: { borderColor: colors.gold, backgroundColor: colors.gold + '22' },
-  typeBtnText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  typeBtnTextActive: { color: colors.gold, fontWeight: 'bold' },
-  input: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.gold + '66',
-    padding: spacing.md, color: colors.white, fontSize: fonts.sizes.md,
-    marginBottom: spacing.md,
-  },
-  infoBox: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark,
-    padding: spacing.md, marginBottom: spacing.lg, gap: spacing.sm,
-  },
-  infoTitle: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  infoText: { color: colors.gray, fontSize: fonts.sizes.xs, lineHeight: 18 },
-  privacyText: { color: colors.grayLight, fontSize: fonts.sizes.xs, lineHeight: 18, marginTop: spacing.xs },
-  saveButton: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.md,
-    padding: spacing.md, alignItems: 'center',
-  },
-  saveButtonDisabled: { opacity: 0.5 },
-  saveButtonText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.sm },
+  // typeBtn/typeBtnActive/typeBtnText/typeBtnTextActive removed — now uses Button
+  // input removed — now uses Input
+  // infoBox removed — now uses Card
+  infoTitle: { color: COLORS.gold, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  infoText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, lineHeight: 18 },
+  privacyText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, lineHeight: 18, marginTop: SPACING.xs },
+  // saveButton/saveButtonDisabled/saveButtonText removed — now uses Button
 });

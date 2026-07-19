@@ -22,7 +22,7 @@ interface Props {
 
 export default function VisitedProfileCard({ data, visitCount, rank, onPress }: Props) {
   function getRankColor(): string {
-    if (rank === 1) return '#FFD700'; // Ouro
+    if (rank === 1) return colors.goldLegacy; // Ouro
     if (rank === 2) return '#C0C0C0'; // Prata
     if (rank === 3) return '#CD7F32'; // Bronze
     return colors.gold;
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rankText: {
-    fontSize: 16,
+    fontSize: fonts.sizes.lg,
   },
   visitsBadge: {
     position: 'absolute',

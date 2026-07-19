@@ -6,7 +6,7 @@ import {
   Animated,
   TouchableOpacity,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS, alpha } from '../theme/tokens';
 
 interface Props {
   message: string;
@@ -44,31 +44,31 @@ export default function NotificationBanner({ message, icon, onPress }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    borderRadius: borderRadius.md,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.gold + '44',
-    backgroundColor: colors.surface,
+    borderColor: alpha(COLORS.gold, 0.27),
+    backgroundColor: COLORS.card,
   },
   inner: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    gap: spacing.sm,
+    padding: SPACING.md,
+    gap: SPACING.sm,
   },
   icon: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.title,
   },
   message: {
     flex: 1,
-    color: colors.white,
-    fontSize: fonts.sizes.sm,
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.caption,
   },
   arrow: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
   },
 });

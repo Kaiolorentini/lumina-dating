@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { colors, fonts, spacing, borderRadius, alpha } from '../../theme';
 import { getWithdrawals } from '../../services/marketplace/adminService';
 import app from '../../core/firebase';
 import { Withdrawal } from '../../shared/types/marketplace';
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
+  backBtn: { color: colors.gold, fontSize: fonts.sizes.xxl },
   headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   tabs: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: colors.grayDark },
   tab: { flex: 1, padding: spacing.sm, alignItems: 'center' },
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', padding: spacing.xl },
   emptyText: { color: colors.gray, fontSize: fonts.sizes.md },
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    flex: 1, backgroundColor: colors.overlay,
     justifyContent: 'center', padding: spacing.md,
   },
   modalContent: {

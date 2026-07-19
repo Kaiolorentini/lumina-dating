@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 
 // ============================================
 // ERROR SCREEN — COMPARTILHADO
@@ -40,35 +40,35 @@ export default function ErrorScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.md,
+    padding: SPACING.xl,
+    gap: SPACING.md,
   },
   icon: { fontSize: 60 },
   title: {
-    color: colors.white,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
     textAlign: 'center',
   },
   message: {
-    color: colors.gray,
-    fontSize: fonts.sizes.md,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.body,
     textAlign: 'center',
     lineHeight: 22,
   },
   button: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    marginTop: spacing.sm,
+    backgroundColor: COLORS.gold,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    marginTop: SPACING.sm,
   },
   buttonText: {
-    color: colors.background,
-    fontWeight: 'bold',
-    fontSize: fonts.sizes.md,
+    color: COLORS.background,
+    fontWeight: FONT_WEIGHT.bold,
+    fontSize: FONT_SIZE.body,
   },
 });

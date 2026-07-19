@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ViewStyle, ScrollView, ScrollViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '../theme';
+import { COLORS } from '../theme/tokens';
 
 interface Props {
   children: React.ReactNode;
@@ -18,7 +18,7 @@ export default function ScreenContainer({
   const insets = useSafeAreaInsets();
   const containerStyle: ViewStyle = {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: COLORS.background,
     paddingTop: noTop ? 0 : insets.top,
     paddingBottom: noBottom ? 0 : insets.bottom,
     ...style,
@@ -26,7 +26,7 @@ export default function ScreenContainer({
 
   if (scroll) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
         <ScrollView
           contentContainerStyle={containerStyle}
           keyboardShouldPersistTaps="handled"

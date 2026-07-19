@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { Button, Card, Input } from '../../components/ui';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { getAdminMetrics, listenToAdminMetrics } from '../../services/marketplace/adminService';
 import { AdminMetrics } from '../../shared/types/marketplace';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
@@ -38,7 +39,7 @@ interface StatProps {
 }
 
 function Stat({ label, value, highlight, danger, warn }: StatProps) {
-  const color = danger ? colors.error : warn ? colors.gold : highlight ? colors.success : colors.white;
+  const color = danger ? COLORS.error : warn ? COLORS.gold : highlight ? COLORS.success : COLORS.textPrimary;
   return (
     <View style={styles.stat}>
       <Text style={styles.statLabel}>{label}</Text>
@@ -89,19 +90,17 @@ export default function AdminReportsScreen() {
     <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Relatórios</Text>
         <View style={{ width: 40 }} />
       </View>
 
       {loading ? (
-        <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
+        <ActivityIndicator color={COLORS.gold} style={{ flex: 1 }} />
       ) : !exists || !metrics ? (
         <ScrollView
           contentContainerStyle={styles.emptyWrap}
-          refreshControl={<RefreshControl refreshing={false} onRefresh={reload} tintColor={colors.gold} />}
+          refreshControl={<RefreshControl refreshing={false} onRefresh={reload} tintColor={COLORS.gold} />}
         >
           <Text style={styles.emptyIcon}>📊</Text>
           <Text style={styles.emptyTitle}>Ainda não há métricas</Text>
@@ -112,7 +111,7 @@ export default function AdminReportsScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={false} onRefresh={reload} tintColor={colors.gold} />}
+          refreshControl={<RefreshControl refreshing={false} onRefresh={reload} tintColor={COLORS.gold} />}
         >
           {/* Financeiro — destaque */}
           <View style={styles.heroCard}>
@@ -184,39 +183,38 @@ export default function AdminReportsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.gold + '44',
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  content: { padding: spacing.md, paddingBottom: spacing.xl },
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  content: { padding: SPACING.md, paddingBottom: SPACING.xl },
   heroCard: {
-    backgroundColor: colors.gold + '11', borderRadius: borderRadius.lg,
-    borderWidth: 1, borderColor: colors.gold + '44',
-    padding: spacing.lg, alignItems: 'center', marginBottom: spacing.md,
+    backgroundColor: COLORS.gold + '11', borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.gold + '44',
+    padding: SPACING.lg, alignItems: 'center', marginBottom: SPACING.md,
   },
-  heroLabel: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  heroValue: { color: colors.white, fontSize: 34, fontWeight: 'bold', marginVertical: spacing.xs },
-  heroSub: { color: colors.gray, fontSize: fonts.sizes.sm },
+  heroLabel: { color: COLORS.gold, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  heroValue: { color: COLORS.textPrimary, fontSize: 34, fontWeight: FONT_WEIGHT.bold, marginVertical: SPACING.xs },
+  heroSub: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
   sectionTitle: {
-    color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold',
-    marginTop: spacing.md, marginBottom: spacing.sm,
+    color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold,
+    marginTop: SPACING.md, marginBottom: SPACING.sm,
   },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   stat: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark,
-    padding: spacing.md, flexGrow: 1, flexBasis: '45%', minWidth: '45%',
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.border,
+    padding: SPACING.md, flexGrow: 1, flexBasis: '45%', minWidth: '45%',
   },
-  statLabel: { color: colors.gray, fontSize: fonts.sizes.xs },
-  statValue: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', marginTop: 2 },
-  statHighlight: { fontSize: fonts.sizes.xl },
-  updatedAt: { color: colors.gray, fontSize: fonts.sizes.xs, marginTop: spacing.md, textAlign: 'center' },
-  emptyWrap: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.md },
+  statLabel: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  statValue: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold, marginTop: 2 },
+  statHighlight: { fontSize: FONT_SIZE.title },
+  updatedAt: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, marginTop: SPACING.md, textAlign: 'center' },
+  emptyWrap: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl, gap: SPACING.md },
   emptyIcon: { fontSize: 56 },
-  emptyTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  emptyText: { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center', lineHeight: 22 },
+  emptyTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  emptyText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, textAlign: 'center', lineHeight: 22 },
 });

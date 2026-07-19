@@ -7,7 +7,7 @@ import {
   Dimensions,
   Image,
 } from 'react-native';
-import { colors, fonts, spacing } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha} from '../../theme/tokens';
 
 const { width, height } = Dimensions.get('window');
 export const LOADING_DURATION = 7000;
@@ -50,7 +50,6 @@ export default function AppLoadingScreen() {
       useNativeDriver: false,
     }).start();
 
-    // Incrementa 1% a cada 70ms = 100% em 7000ms exatos
     let currentPercent = 0;
     const percentInterval = setInterval(() => {
       currentPercent += 1;
@@ -164,7 +163,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width,
     height,
-    backgroundColor: '#0D0D0D',
+    backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -173,67 +172,67 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    gap: spacing.lg,
+    paddingHorizontal: SPACING.xl,
+    gap: SPACING.lg,
   },
   logoContainer: {
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: SPACING.xs,
   },
   logoImage: {
     width: 100,
     height: 100,
   },
   appName: {
-    fontSize: fonts.sizes.xxxl,
-    color: colors.white,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZE.display,
+    color: COLORS.textPrimary,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 6,
   },
   appTagline: {
-    fontSize: fonts.sizes.sm,
-    color: colors.gold,
+    fontSize: FONT_SIZE.caption,
+    color: COLORS.gold,
     letterSpacing: 4,
   },
   divider: {
     width: 60,
     height: 1,
-    backgroundColor: colors.gold + '66',
+    backgroundColor: alpha(COLORS.gold, 0.4),
   },
   featuresContainer: {
     width: '100%',
-    gap: spacing.sm,
+    gap: SPACING.sm,
   },
   featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: spacing.md,
+    gap: SPACING.md,
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
     borderWidth: 1,
-    borderColor: colors.gold + '22',
+    borderColor: alpha(COLORS.gold, 0.13),
   },
   featureIcon: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.title,
     width: 28,
     textAlign: 'center',
   },
   featureText: {
-    color: colors.white,
-    fontSize: fonts.sizes.md,
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.body,
     flex: 1,
   },
   frase: {
-    color: colors.gold,
-    fontSize: fonts.sizes.sm,
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.caption,
     textAlign: 'center',
     letterSpacing: 1,
     fontStyle: 'italic',
   },
   progressContainer: {
     width: '100%',
-    gap: spacing.xs,
+    gap: SPACING.xs,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -241,27 +240,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   progressLabel: {
-    color: colors.gray,
-    fontSize: fonts.sizes.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.overline,
     letterSpacing: 2,
   },
   progressPercent: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xs,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.overline,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 1,
   },
   progressBg: {
     width: '100%',
     height: 6,
-    backgroundColor: colors.grayDark,
-    borderRadius: 3,
+    backgroundColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.sm,
     overflow: 'hidden',
   },
   progressFill: {
     height: 6,
-    backgroundColor: colors.gold,
-    borderRadius: 3,
+    backgroundColor: COLORS.gold,
+    borderRadius: BORDER_RADIUS.sm,
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
@@ -270,13 +269,13 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.white,
+    backgroundColor: COLORS.textPrimary,
     opacity: 0.8,
   },
   footer: {
-    color: colors.gray + '88',
-    fontSize: fonts.sizes.xs,
+    color: alpha(COLORS.textSecondary, 0.67),
+    fontSize: FONT_SIZE.overline,
     letterSpacing: 2,
-    marginBottom: spacing.xl,
+    marginBottom: SPACING.xl,
   },
 });

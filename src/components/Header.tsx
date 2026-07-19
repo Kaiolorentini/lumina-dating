@@ -8,7 +8,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing } from '../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from '../theme/tokens';
 import { RootStackParamList } from '../navigation/types';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -28,19 +28,15 @@ export default function Header({
 }: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavProp>();
-
   const canGoBack = navigation.canGoBack();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
-      {/* Lado esquerdo — Voltar */}
+    <View style={[styles.container, { paddingTop: insets.top + SPACING.md }]}>
       <View style={styles.left}>
         {showBack && (
           <TouchableOpacity
             style={styles.button}
-            onPress={() => {
-              if (canGoBack) navigation.goBack();
-            }}
+            onPress={() => { if (canGoBack) navigation.goBack(); }}
             activeOpacity={0.7}
           >
             <Text style={styles.backIcon}>‹</Text>
@@ -49,18 +45,14 @@ export default function Header({
         )}
       </View>
 
-      {/* Centro — Título */}
       <View style={styles.center}>
         {title ? (
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
+          <Text style={styles.title} numberOfLines={1}>{title}</Text>
         ) : (
           <Text style={styles.logo}>✦ Lumina</Text>
         )}
       </View>
 
-      {/* Lado direito — Home ou elemento customizado */}
       <View style={styles.right}>
         {rightElement ? rightElement : showHome && !canGoBack && (
           <TouchableOpacity
@@ -81,11 +73,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.background,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    backgroundColor: COLORS.background,
     borderBottomWidth: 1,
-    borderBottomColor: colors.grayDark,
+    borderBottomColor: COLORS.border,
   },
   left: {
     width: 80,
@@ -103,33 +95,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    padding: spacing.xs,
+    padding: SPACING.xs,
   },
   backIcon: {
-    color: colors.gold,
-    fontSize: 28,
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.hero,
     fontWeight: 'bold',
     lineHeight: 30,
   },
   backText: {
-    color: colors.gold,
-    fontSize: fonts.sizes.sm,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.bold,
   },
   homeIcon: {
-    color: colors.gold,
-    fontSize: 22,
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.xxl,
   },
   logo: {
-    color: colors.gold,
-    fontSize: fonts.sizes.lg,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 2,
   },
   title: {
-    color: colors.white,
-    fontSize: fonts.sizes.lg,
-    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 1,
   },
 });

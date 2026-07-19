@@ -12,7 +12,7 @@ import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { useAuth }        from '../../context/AuthContext';
 import { useCoins }       from '../../context/CoinsContext';
 import { useVisits }      from '../../hooks/useVisits';
@@ -28,6 +28,8 @@ import { getMostVisitedProfileCards } from '../../services/mostVisitedService';
 import { getMostVisitedProfiles, registrarVisita } from '../../services/visitsService';
 import { NativeStackNavigationProp }  from '@react-navigation/native-stack';
 import { RootStackParamList }         from '../../navigation/types';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
 
 type Tab = 'perfis' | 'emalta' | 'conversas';
 
@@ -117,9 +119,7 @@ export default function HomeScreen({ navigation }: Props) {
           <TouchableOpacity style={styles.bellButton} onPress={() => navigation.navigate('Notifications')}>
             <Text style={styles.bellIcon}>🔔</Text>
             {unreadCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-              </View>
+              <Badge label={unreadCount > 9 ? '9+' : `${unreadCount}`} variant="premium" size="sm" style={styles.badge} />
             )}
           </TouchableOpacity>
         </View>
@@ -173,7 +173,7 @@ export default function HomeScreen({ navigation }: Props) {
         {/* Perfis */}
         {activeTab === 'perfis' && (
           loadingProfiles ? (
-            <View style={styles.loadingContainer}><ActivityIndicator color={colors.gold} size="large" /></View>
+            <View style={styles.loadingContainer}><ActivityIndicator color={COLORS.gold} size="large" /></View>
           ) : realProfiles.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>👤</Text>
@@ -193,7 +193,7 @@ export default function HomeScreen({ navigation }: Props) {
         {activeTab === 'emalta' && (
           loadingVisited ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator color={colors.gold} size="large" />
+              <ActivityIndicator color={COLORS.gold} size="large" />
               <Text style={styles.loadingText}>🔥 Carregando perfis em alta...</Text>
             </View>
           ) : mostVisited.length === 0 ? (
@@ -222,9 +222,7 @@ export default function HomeScreen({ navigation }: Props) {
             <Text style={styles.emptyIcon}>💬</Text>
             <Text style={styles.emptyTitle}>Suas conversas</Text>
             <Text style={styles.emptySubtitle}>Conecte-se com perfis e inicie conversas reais!</Text>
-            <TouchableOpacity style={styles.discoverButton} onPress={() => navigation.navigate('Sintonias' as any)}>
-              <Text style={styles.discoverButtonText}>✨ Ver Sintonias</Text>
-            </TouchableOpacity>
+            <Button label="✨ Ver Sintonias" onPress={() => navigation.navigate('Sintonias' as any)} variant="primary" size="md" />
           </View>
         )}
 
@@ -235,40 +233,38 @@ export default function HomeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: colors.background },
-  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.md },
-  logo:         { fontSize: fonts.sizes.xl, color: colors.gold, fontWeight: 'bold', letterSpacing: 2 },
-  headerRight:  { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  coinsButton:  { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: borderRadius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderWidth: 1, borderColor: colors.gold + '44', gap: 4 },
-  coinsIcon:    { fontSize: 14 },
-  coinsText:    { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  bellButton:   { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.grayDark, position: 'relative' },
-  bellIcon:     { fontSize: 20 },
-  badge:        { position: 'absolute', top: -4, right: -4, backgroundColor: colors.gold, borderRadius: borderRadius.full, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: colors.background },
-  badgeText:    { color: colors.background, fontSize: 10, fontWeight: 'bold' },
-  faiscaBanner: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.xs, backgroundColor: '#2D1B4E', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: '#7B2FBE', gap: spacing.sm },
-  faiscaIcon:   { fontSize: 28 },
+  container:    { flex: 1, backgroundColor: COLORS.background },
+  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, paddingTop: SPACING.xl, paddingBottom: SPACING.md },
+  logo:         { fontSize: FONT_SIZE.title, color: COLORS.gold, fontWeight: FONT_WEIGHT.bold, letterSpacing: 2 },
+  headerRight:  { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  coinsButton:  { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: SPACING.xs, borderWidth: 1, borderColor: COLORS.gold + '44', gap: 4 },
+  coinsIcon:    { fontSize: FONT_SIZE.body },
+  coinsText:    { color: COLORS.gold, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  bellButton:   { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border, position: 'relative' },
+  bellIcon:     { fontSize: FONT_SIZE.title },
+  badge:        { position: 'absolute', top: -4, right: -4, borderRadius: BORDER_RADIUS.full, borderWidth: 2, borderColor: COLORS.background },
+  faiscaBanner: { flexDirection: 'row', alignItems: 'center', marginHorizontal: SPACING.lg, marginTop: SPACING.sm, marginBottom: SPACING.xs, backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.accent + '66', gap: SPACING.sm },
+  faiscaIcon:   { fontSize: FONT_SIZE.hero },
   faiscaInfo:   { flex: 1 },
-  faiscaTitle:  { color: '#B57BEE', fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  faiscaSub:    { color: '#888', fontSize: fonts.sizes.xs, marginTop: 2 },
-  faiscaArrow:  { color: '#7B2FBE', fontSize: 24, fontWeight: 'bold' },
-  notifications: { paddingTop: spacing.xs },
-  tabsWrapper:  { backgroundColor: colors.background, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.grayDark },
-  tabs:         { paddingHorizontal: spacing.lg, gap: spacing.sm },
-  tab:          { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark, backgroundColor: colors.surface },
-  tabActive:    { borderColor: colors.gold, backgroundColor: colors.gold + '22' },
-  tabIcon:      { fontSize: 14 },
-  tabLabel:     { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  tabLabelActive: { color: colors.gold },
-  grid:         { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
-  mostVisitedBanner:     { marginHorizontal: spacing.lg, marginTop: spacing.md, marginBottom: spacing.sm, backgroundColor: colors.gold + '22', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.gold + '44' },
-  mostVisitedBannerText: { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', textAlign: 'center', letterSpacing: 1 },
-  loadingContainer: { paddingTop: 80, alignItems: 'center', gap: spacing.md },
-  loadingText:  { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingHorizontal: spacing.xl, gap: spacing.md },
+  faiscaTitle:  { color: COLORS.accent, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  faiscaSub:    { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, marginTop: 2 },
+  faiscaArrow:  { color: COLORS.accent, fontSize: 24, fontWeight: FONT_WEIGHT.bold },
+  notifications: { paddingTop: SPACING.xs },
+  tabsWrapper:  { backgroundColor: COLORS.background, paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  tabs:         { paddingHorizontal: SPACING.lg, gap: SPACING.sm },
+  tab:          { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.full, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
+  tabActive:    { borderColor: COLORS.gold, backgroundColor: COLORS.gold + '22' },
+  tabIcon:      { fontSize: FONT_SIZE.body },
+  tabLabel:     { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  tabLabelActive: { color: COLORS.gold },
+  grid:         { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, gap: SPACING.sm },
+  mostVisitedBanner:     { marginHorizontal: SPACING.lg, marginTop: SPACING.md, marginBottom: SPACING.sm, backgroundColor: COLORS.gold + '22', borderRadius: BORDER_RADIUS.md, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.gold + '44' },
+  mostVisitedBannerText: { color: COLORS.gold, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, textAlign: 'center', letterSpacing: 1 },
+  loadingContainer: { paddingTop: 80, alignItems: 'center', gap: SPACING.md },
+  loadingText:  { color: COLORS.gold, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingHorizontal: SPACING.xl, gap: SPACING.md },
   emptyIcon:    { fontSize: 60 },
-  emptyTitle:   { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', textAlign: 'center' },
-  emptySubtitle: { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center', lineHeight: 22 },
-  discoverButton: { backgroundColor: colors.gold, borderRadius: borderRadius.sm, paddingHorizontal: spacing.xl, paddingVertical: spacing.md, marginTop: spacing.sm },
-  discoverButtonText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  emptyTitle:   { color: COLORS.textPrimary, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
+  emptySubtitle: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, textAlign: 'center', lineHeight: 22 },
+
 });

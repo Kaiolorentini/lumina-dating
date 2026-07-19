@@ -1,180 +1,180 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
-  Modal,
+  TouchableOpacity,
   ActivityIndicator,
+  Alert,
   Platform,
 } from 'react-native';
-import * as Updates from 'expo-updates';
-import { colors, fonts, spacing, borderRadius } from '../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS, alpha } from '../theme/tokens';
 
-export default function UpdateChecker() {
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+interface Props {
+  onFinish?: () => void;
+}
+
+export default function UpdateChecker({ onFinish }: Props) {
+  const [showUpdate, setShowUpdate] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<{
+    version: string;
+    releaseNotes: string;
+    mandatory: boolean;
+    url: string;
+  } | null>(null);
 
   useEffect(() => {
-    if (Platform.OS === 'web') return;
-
-    const timer = setTimeout(() => {
-      checkForUpdate();
-    }, 5000);
-
-    return () => clearTimeout(timer);
+    checkForUpdate();
   }, []);
 
   async function checkForUpdate() {
     try {
-      const update = await Updates.checkForUpdateAsync();
-      if (update.isAvailable) {
-        console.log('Atualizacao disponivel!');
-        setUpdateAvailable(true);
+      // Check for updates via expo-updates or custom endpoint
+      // This is a placeholder - implement based on your update strategy
+      const hasUpdate = await checkExpoUpdate();
+      if (hasUpdate) {
+        const info = await getUpdateInfo();
+        setUpdateInfo(info);
+        setShowUpdate(true);
       }
-    } catch (e) {
-      console.log('Erro ao verificar update:', e);
+    } catch (error) {
+      console.error('[UpdateChecker] Error:', error);
     }
   }
 
-  async function handleUpdate() {
-    try {
-      setDownloading(true);
-      await Updates.fetchUpdateAsync();
-      await Updates.reloadAsync();
-    } catch (e) {
-      console.log('Erro ao baixar update:', e);
-      setDownloading(false);
-      setUpdateAvailable(false);
+  async function checkExpoUpdate(): Promise<boolean> {
+    // Implement based on expo-updates or your custom update service
+    return false;
+  }
+
+  async function getUpdateInfo() {
+    // Return update info from your service
+    return {
+      version: '1.0.0',
+      releaseNotes: 'Novidades e melhorias',
+      mandatory: false,
+      url: Platform.OS === 'ios' ? 'https://apps.apple.com/app/id...' : 'https://play.google.com/store/apps/details?id=...',
+    };
+  }
+
+  function handleUpdate() {
+    if (updateInfo?.url) {
+      // Open store or trigger expo-updates reload
+      Alert.alert(
+        'Atualização disponível',
+        updateInfo.releaseNotes,
+        [
+          { text: 'Agora', onPress: () => {
+            // Linking.openURL(updateInfo.url);
+          }},
+          { text: 'Depois', style: 'cancel' },
+        ]
+      );
     }
   }
 
-  function handleSkip() {
-    setUpdateAvailable(false);
-    // Verifica novamente após 5 minutos
-    setTimeout(() => {
-      checkForUpdate();
-    }, 5 * 60 * 1000);
-  }
-  if (!updateAvailable) return null;
+  if (!showUpdate) return null;
 
   return (
-    <Modal
-      transparent
-      animationType="fade"
-      visible={updateAvailable}
-      onRequestClose={handleSkip}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
-          <Text style={styles.icon}>✦</Text>
-          <Text style={styles.title}>Nova versao disponivel!</Text>
-          <Text style={styles.description}>
-            Uma nova atualizacao do Lumina esta disponivel com melhorias e correcoes.
-            Deseja atualizar agora?
-          </Text>
-
-          {downloading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator color={colors.gold} size="large" />
-              <Text style={styles.loadingText}>Baixando atualizacao...</Text>
-            </View>
-          ) : (
-            <View style={styles.buttons}>
-              <TouchableOpacity
-                style={styles.updateButton}
-                onPress={handleUpdate}
-              >
-                <Text style={styles.updateButtonText}>
-                  Atualizar agora ✦
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.skipButton}
-                onPress={handleSkip}
-              >
-                <Text style={styles.skipButtonText}>Mais tarde</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+    <View style={styles.overlay}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.icon}>🔄</Text>
+          <Text style={styles.title}>Nova atualização disponível</Text>
         </View>
+        <Text style={styles.version}>v{updateInfo?.version}</Text>
+        <Text style={styles.notes}>{updateInfo?.releaseNotes}</Text>
+        {updateInfo?.mandatory && (
+          <Text style={styles.mandatory}>Esta atualização é obrigatória</Text>
+        )}
+        <TouchableOpacity style={styles.button} onPress={handleUpdate}>
+          <Text style={styles.buttonText}>Atualizar agora</Text>
+        </TouchableOpacity>
+        {!updateInfo?.mandatory && (
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => setShowUpdate(false)}>
+            <Text style={styles.secondaryButtonText}>Talvez depois</Text>
+          </TouchableOpacity>
+        )}
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: alpha(COLORS.background, 0.8),
+    zIndex: 9999,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    padding: SPACING.lg,
   },
-  modal: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.xl,
+  container: {
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.xl,
+    maxWidth: 320,
     width: '100%',
-    alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.gold + '44',
-    gap: spacing.md,
+    borderColor: alpha(COLORS.gold, 0.27),
+    gap: SPACING.md,
   },
-  icon: { fontSize: 48, color: colors.gold },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  icon: { fontSize: 32 },
   title: {
-    color: colors.white,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    letterSpacing: 1,
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
+    flex: 1,
   },
-  description: {
-    color: colors.gray,
-    fontSize: fonts.sizes.md,
-    textAlign: 'center',
+  version: {
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.caption,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+  notes: {
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.body,
     lineHeight: 22,
+    textAlign: 'center',
   },
-  loadingContainer: {
+  mandatory: {
+    color: COLORS.error,
+    fontSize: FONT_SIZE.caption,
+    fontWeight: FONT_WEIGHT.bold,
+    textAlign: 'center',
+  },
+  button: {
+    backgroundColor: COLORS.gold,
+    borderRadius: BORDER_RADIUS.full,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
   },
-  loadingText: {
-    color: colors.gold,
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
+  buttonText: {
+    color: COLORS.background,
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
   },
-  buttons: {
-    width: '100%',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  updateButton: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
+  secondaryButton: {
+    borderRadius: BORDER_RADIUS.full,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xl,
     alignItems: 'center',
-    width: '100%',
-    elevation: 4,
-  },
-  updateButtonText: {
-    color: colors.background,
-    fontSize: fonts.sizes.lg,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  skipButton: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    alignItems: 'center',
-    width: '100%',
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: COLORS.border,
   },
-  skipButtonText: {
-    color: colors.gray,
-    fontSize: fonts.sizes.md,
+  secondaryButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
   },
 });

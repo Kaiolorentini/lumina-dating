@@ -6,7 +6,7 @@ import {
   Animated,
   TouchableOpacity,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../theme/tokens';
 
 interface Props {
   visitasHoje: number;
@@ -69,39 +69,39 @@ export default function VisitsBanner({ visitasHoje, onPress }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    borderRadius: borderRadius.md,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: colors.gold,
-    backgroundColor: colors.surface,
+    borderColor: COLORS.gold,
+    backgroundColor: COLORS.card,
     overflow: 'hidden',
   },
   inner: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    gap: spacing.md,
+    padding: SPACING.md,
+    gap: SPACING.md,
   },
   icon: {
-    fontSize: 28,
+    fontSize: FONT_SIZE.hero,
   },
   content: {
     flex: 1,
   },
   message: {
-    color: colors.white,
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
   },
   sub: {
-    color: colors.gray,
-    fontSize: fonts.sizes.xs,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZE.xs,
     marginTop: 2,
   },
   arrow: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
+    color: COLORS.gold,
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
   },
 });

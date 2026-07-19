@@ -184,7 +184,7 @@ export default function HomeScreen({ navigation }: Props) {
         {/* 0 — Faísca do Destino */}
         <TouchableOpacity
           style={styles.faiscaBanner}
-          onPress={() => navigation.navigate('Faisca' as any)}
+          onPress={() => navigation.navigate('Faisca')}
           activeOpacity={0.85}
         >
           <Text style={styles.faiscaIcon}>⚡</Text>
@@ -197,20 +197,20 @@ export default function HomeScreen({ navigation }: Props) {
 
         {/* 1 — Carta do Destino */}
         <DestinyCardBanner
-          onPress={() => navigation.navigate('DestinyCard' as any)}
+          onPress={() => navigation.navigate('DestinyCard')}
         />
 
         {/* 2 — Missões */}
         <MissionsBanner
           completedCount={0}
           totalCount={3}
-          onPress={() => navigation.navigate('Missions' as any)}
+          onPress={() => navigation.navigate('Missions')}
         />
 
         {/* 3 — Cofre de Sintonia */}
         <TouchableOpacity
           style={styles.vaultBanner}
-          onPress={() => navigation.navigate('Vault' as any)}
+          onPress={() => navigation.navigate('Vault')}
           activeOpacity={0.85}
         >
           <Text style={styles.vaultIcon}>🗝️</Text>
@@ -311,27 +311,27 @@ const styles = StyleSheet.create({
   logo:         { fontSize: fonts.sizes.xl, color: colors.gold, fontWeight: 'bold', letterSpacing: 2 },
   headerRight:  { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   coinsButton:  { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: borderRadius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderWidth: 1, borderColor: colors.gold + '44', gap: 4 },
-  coinsIcon:    { fontSize: 14 },
+  coinsIcon:    { fontSize: fonts.sizes.md },
   coinsText:    { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   bellButton:   { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.grayDark, position: 'relative' },
-  bellIcon:     { fontSize: 20 },
+  bellIcon:     { fontSize: fonts.sizes.xl },
   badge:        { position: 'absolute', top: -4, right: -4, backgroundColor: colors.gold, borderRadius: borderRadius.full, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: colors.background },
-  badgeText:    { color: colors.background, fontSize: 10, fontWeight: 'bold' },
+  badgeText:    { color: colors.background, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
 
   // Faísca
-  faiscaBanner: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.xs, backgroundColor: '#2D1B4E', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: '#7B2FBE', gap: spacing.sm },
-  faiscaIcon:   { fontSize: 28 },
+  faiscaBanner: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.xs, backgroundColor: '#2D1B4E', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.primaryLegacy, gap: spacing.sm },
+  faiscaIcon:   { fontSize: fonts.sizes.xxl },
   faiscaInfo:   { flex: 1 },
-  faiscaTitle:  { color: '#B57BEE', fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  faiscaSub:    { color: '#888', fontSize: fonts.sizes.xs, marginTop: 2 },
-  faiscaArrow:  { color: '#7B2FBE', fontSize: 24, fontWeight: 'bold' },
+  faiscaTitle:  { color: colors.secondaryLegacy, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  faiscaSub:    { color: colors.gray, fontSize: fonts.sizes.xs, marginTop: 2 },
+  faiscaArrow:  { color: colors.primaryLegacy, fontSize: 24, fontWeight: 'bold' },
 
   // Cofre
   vaultBanner:  { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.xs, marginBottom: spacing.xs, backgroundColor: '#1A0A0A', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: '#8B6914', gap: spacing.sm },
-  vaultIcon:    { fontSize: 28 },
+  vaultIcon:    { fontSize: fonts.sizes.xxl },
   vaultInfo:    { flex: 1 },
-  vaultTitle:   { color: '#FFD700', fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  vaultSub:     { color: '#888', fontSize: fonts.sizes.xs, marginTop: 2 },
+  vaultTitle:   { color: colors.goldLegacy, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  vaultSub:     { color: colors.gray, fontSize: fonts.sizes.xs, marginTop: 2 },
   vaultArrow:   { color: '#8B6914', fontSize: 24, fontWeight: 'bold' },
 
   notifications: { paddingTop: spacing.xs },
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   tabs:         { paddingHorizontal: spacing.lg, gap: spacing.sm },
   tab:          { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark, backgroundColor: colors.surface },
   tabActive:    { borderColor: colors.gold, backgroundColor: colors.gold + '22' },
-  tabIcon:      { fontSize: 14 },
+  tabIcon:      { fontSize: fonts.sizes.md },
   tabLabel:     { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   tabLabelActive: { color: colors.gold },
   grid:         { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },

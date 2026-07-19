@@ -9,7 +9,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet,
   ActivityIndicator, Animated, ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,7 +20,8 @@ import { useCoins }        from '../../../context/CoinsContext';
 import { useFaisca, FaiscaTier } from '../hooks/useFaisca';
 import { RootStackParamList }    from '../../../navigation/types';
 import Header from '../../../components/Header';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { Button, Card } from '../../../components/ui';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, GRADIENTS, RARITY_COLORS } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -37,31 +38,31 @@ const TIER_CONFIG: Record<FaiscaTier, {
     icon:      '✨',
     label:     'Faísca Comum',
     color:     COLORS.secondary,
-    gradient:  ['#1A0A2E', '#2D1B4E'],
+    gradient:  [GRADIENTS.faisca[0], GRADIENTS.faisca[1]],
     message:   'Uma faísca acendeu seu caminho.',
     particles: '✦ ✦ ✦',
   },
   rare: {
     icon:      '⚡',
     label:     'Faísca Rara',
-    color:     '#56CCF2',
-    gradient:  ['#0A1A2E', '#1B3D4E'],
+    color:     RARITY_COLORS.rare,
+    gradient:  [GRADIENTS.faiscaTier.rare[0], GRADIENTS.faiscaTier.rare[1]],
     message:   'Energia cósmica encontrou você!',
     particles: '⚡ ✦ ⚡',
   },
   epic: {
     icon:      '💜',
     label:     'Faísca Épica',
-    color:     '#B57BEE',
-    gradient:  ['#2A0A4E', '#4E1B7E'],
+    color:     RARITY_COLORS.epic,
+    gradient:  [GRADIENTS.faiscaTier.epic[0], GRADIENTS.faiscaTier.epic[1]],
     message:   'O universo está do seu lado hoje!',
     particles: '💜 ✨ 💜',
   },
   legendary: {
     icon:      '👑',
     label:     'LENDÁRIA!',
-    color:     '#FFD700',
-    gradient:  ['#2E1A00', '#4E3200'],
+    color:     RARITY_COLORS.legendary,
+    gradient:  [GRADIENTS.faiscaTier.legendary[0], GRADIENTS.faiscaTier.legendary[1]],
     message:   '✦ Evento Raro — Conte para alguém! ✦',
     particles: '👑 ✨ 👑',
   },
@@ -192,12 +193,13 @@ export default function FaiscaScreen() {
 
           <Text style={styles.particles}>{cfg.particles}</Text>
 
-          <TouchableOpacity
-            style={[styles.continueBtn, { backgroundColor: cfg.color }]}
+          <Button
+            label="Continuar explorando ✦"
             onPress={() => navigation.navigate('MainTabs')}
-          >
-            <Text style={styles.continueBtnText}>Continuar explorando ✦</Text>
-          </TouchableOpacity>
+            variant="primary"
+            style={{ backgroundColor: cfg.color, marginTop: S.sm }}
+            textStyle={{ color: COLORS.background }}
+          />
         </LinearGradient>
       </View>
     );
@@ -209,7 +211,7 @@ export default function FaiscaScreen() {
       <Header title="Faísca do Destino" showBack={true} showHome={true} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.heroCard}>
+        <LinearGradient colors={[GRADIENTS.faisca[0], GRADIENTS.faisca[1]]} style={styles.heroCard}>
           <Text style={styles.heroIcon}>
             {alreadyClaimed ? '✅' : '⚡'}
           </Text>
@@ -234,7 +236,7 @@ export default function FaiscaScreen() {
 
         {/* Tabela de probabilidades */}
         <Text style={styles.sectionTitle}>Possíveis Prêmios</Text>
-        <View style={styles.probabilityTable}>
+        <Card padding={0} style={{ overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginHorizontal: S.md, marginBottom: S.lg }}>
           {[
             { value: 2,  prob: '60%', tier: 'common',    icon: '✨', label: 'Comum'    },
             { value: 5,  prob: '25%', tier: 'common',    icon: '✨', label: 'Incomum'  },
@@ -255,13 +257,13 @@ export default function FaiscaScreen() {
               ]}>
                 {row.prob}
               </Text>
-            </View>
-          ))}
-        </View>
+              </View>
+            ))}
+          </Card>
 
         {/* Histórico */}
         {status && status.claimsCount > 0 && (
-          <View style={styles.statsCard}>
+          <Card padding={S.lg} style={{ marginHorizontal: S.md, marginBottom: S.lg, borderWidth: 1, borderColor: COLORS.border }}>
             <Text style={styles.statsTitle}>Seu histórico</Text>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
@@ -281,7 +283,7 @@ export default function FaiscaScreen() {
                 <Text style={styles.statLabel}>Média/dia</Text>
               </View>
             </View>
-          </View>
+          </Card>
         )}
 
         <View style={{ height: 120 }} />
@@ -290,18 +292,15 @@ export default function FaiscaScreen() {
       {/* Botão fixo */}
       {!alreadyClaimed && (
         <View style={styles.claimContainer}>
-          <TouchableOpacity
-            style={[styles.claimBtn, claiming && styles.claimBtnDisabled]}
+          <Button
+            icon={<Text style={{ fontSize: FONT_SIZE.lg }}>⚡</Text>}
+            label="Acender Faísca"
             onPress={handleClaim}
+            loading={claiming}
             disabled={claiming}
-            activeOpacity={0.85}
-          >
-            {claiming ? (
-              <ActivityIndicator color={COLORS.background} />
-            ) : (
-              <Text style={styles.claimBtnText}>⚡ Acender Faísca</Text>
-            )}
-          </TouchableOpacity>
+            variant="primary"
+            fullWidth
+          />
         </View>
       )}
 
@@ -331,26 +330,24 @@ const styles = StyleSheet.create({
   center:       { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // Hero
-  heroCard:     { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  heroCard:     { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: COLORS.borderLight },
   heroIcon:     { fontSize: 56 },
   heroTitle:    { color: COLORS.surface, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center' },
   heroSubtitle: { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center' },
-  mysteryBox:   { backgroundColor: 'rgba(181,123,238,0.15)', borderRadius: R.lg, padding: S.md, alignItems: 'center', gap: S.xs, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)', width: '100%' },
+  mysteryBox:   { backgroundColor: COLORS.secondary + '26', borderRadius: R.lg, padding: S.md, alignItems: 'center', gap: S.xs, borderWidth: 1, borderColor: COLORS.borderLight, width: '100%' },
   mysteryIcon:  { fontSize: 32 },
   mysteryText:  { color: COLORS.secondary, fontSize: FONT_SIZE.sm, textAlign: 'center', fontWeight: FONT_WEIGHT.medium },
 
   // Tabela
   sectionTitle:    { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginTop: S.lg, marginBottom: S.sm },
-  probabilityTable: { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg },
   probRow:         { flexDirection: 'row', alignItems: 'center', padding: S.md, borderBottomWidth: 1, borderBottomColor: COLORS.border, gap: S.sm },
-  probRowLegendary: { backgroundColor: 'rgba(255,215,0,0.05)' },
-  probIcon:        { fontSize: 20, width: 28 },
+  probRowLegendary: { backgroundColor: COLORS.premium + '0D' },
+  probIcon:        { fontSize: FONT_SIZE.title, width: 28 },
   probLabel:       { color: COLORS.surface, fontSize: FONT_SIZE.sm, flex: 1, fontWeight: FONT_WEIGHT.medium },
   probValue:       { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, width: 60, textAlign: 'right' },
   probChance:      { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, width: 36, textAlign: 'right' },
 
   // Stats
-  statsCard:    { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg },
   statsTitle:   { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginBottom: S.md },
   statsRow:     { flexDirection: 'row', justifyContent: 'space-around' },
   statItem:     { alignItems: 'center', gap: S.xs },
@@ -359,10 +356,7 @@ const styles = StyleSheet.create({
 
   // Botão
   claimContainer:     { position: 'absolute', bottom: 0, left: 0, right: 0, padding: S.md, backgroundColor: COLORS.background, borderTopWidth: 1, borderTopColor: COLORS.border },
-  claimBtn:           { backgroundColor: COLORS.primary, borderRadius: R.lg, paddingVertical: S.md, alignItems: 'center' },
-  claimBtnDisabled:   { opacity: 0.6 },
-  claimBtnText:       { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, letterSpacing: 0.5 },
-  alreadyClaimedBadge: { backgroundColor: 'rgba(76,175,80,0.1)', borderRadius: R.lg, paddingVertical: S.md, alignItems: 'center', borderWidth: 1, borderColor: COLORS.success, gap: S.xs },
+  alreadyClaimedBadge: { backgroundColor: COLORS.success + '1A', borderRadius: R.lg, paddingVertical: S.md, alignItems: 'center', borderWidth: 1, borderColor: COLORS.success, gap: S.xs },
   alreadyClaimedText: { color: COLORS.success, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.semibold },
   alreadyClaimedSub:  { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
 
@@ -370,15 +364,13 @@ const styles = StyleSheet.create({
   revealContainer:    { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl, gap: S.lg },
   particles:          { fontSize: 24, letterSpacing: 8 },
   iconContainer:      { position: 'relative', alignItems: 'center', justifyContent: 'center', width: 140, height: 140 },
-  iconGlow:           { position: 'absolute', width: 140, height: 140, borderRadius: 70 },
+  iconGlow:           { position: 'absolute', width: 140, height: 140, borderRadius: BORDER_RADIUS.full },
   mainIcon:           { fontSize: 80 },
   tierLabel:          { fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold, letterSpacing: 2, textTransform: 'uppercase' },
   crystalDisplay:     { alignItems: 'center', gap: S.xs },
   crystalAmount:      { fontSize: FONT_SIZE.hero, fontWeight: FONT_WEIGHT.extrabold },
   crystalLabel:       { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textTransform: 'uppercase', letterSpacing: 1 },
   emotionalMessage:   { fontSize: FONT_SIZE.md, textAlign: 'center', fontStyle: 'italic' },
-  legendaryBanner:    { backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.premium },
+  legendaryBanner:    { backgroundColor: COLORS.premium + '1A', borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.premium },
   legendaryText:      { color: COLORS.premium, fontSize: FONT_SIZE.sm, textAlign: 'center', lineHeight: 20 },
-  continueBtn:        { borderRadius: R.lg, paddingVertical: S.md, paddingHorizontal: S.xl, marginTop: S.sm },
-  continueBtnText:    { color: COLORS.background, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
 });

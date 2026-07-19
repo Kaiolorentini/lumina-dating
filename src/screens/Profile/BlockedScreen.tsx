@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   Image,
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { Button, Card, EmptyState } from '../../components/ui';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from '../../theme/tokens';
 import { useAuth } from '../../context/AuthContext';
 import { Block, getBloqueados, desbloquearUsuario } from '../../services/blockService';
 import Header from '../../components/Header';
@@ -19,9 +19,7 @@ export default function BlockedScreen() {
   const [blocked, setBlocked] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadBlocked();
-  }, []);
+  useEffect(() => { loadBlocked(); }, []);
 
   async function loadBlocked() {
     if (!user) return;
@@ -32,25 +30,21 @@ export default function BlockedScreen() {
 
   async function handleUnblock(block: Block) {
     if (!user) return;
-    Alert.alert(
-      'Desbloquear',
-      `Deseja desbloquear ${block.blockedName}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Desbloquear',
-          onPress: async () => {
-            await desbloquearUsuario(user.uid, block.blockedId);
-            setBlocked(prev => prev.filter(b => b.id !== block.id));
-          },
+    Alert.alert('Desbloquear', `Deseja desbloquear ${block.blockedName}?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Desbloquear',
+        onPress: async () => {
+          await desbloquearUsuario(user.uid, block.blockedId);
+          setBlocked(prev => prev.filter(b => b.id !== block.id));
         },
-      ]
-    );
+      },
+    ]);
   }
 
   function renderBlock({ item }: { item: Block }) {
     return (
-      <View style={styles.blockItem}>
+      <Card padding={SPACING.lg} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md }}>
         {item.blockedPhoto ? (
           <Image source={{ uri: item.blockedPhoto }} style={styles.avatar} />
         ) : (
@@ -62,13 +56,8 @@ export default function BlockedScreen() {
           <Text style={styles.blockName}>{item.blockedName}</Text>
           <Text style={styles.blockText}>Bloqueado</Text>
         </View>
-        <TouchableOpacity
-          style={styles.unblockButton}
-          onPress={() => handleUnblock(item)}
-        >
-          <Text style={styles.unblockButtonText}>Desbloquear</Text>
-        </TouchableOpacity>
-      </View>
+        <Button label="Desbloquear" variant="ghost" onPress={() => handleUnblock(item)} textStyle={{ color: COLORS.gold, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold }} />
+      </Card>
     );
   }
 
@@ -78,13 +67,10 @@ export default function BlockedScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator color={colors.gold} size="large" />
+          <ActivityIndicator color={COLORS.gold} size="large" />
         </View>
       ) : blocked.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>✦</Text>
-          <Text style={styles.emptyTitle}>Nenhum usuário bloqueado</Text>
-        </View>
+        <EmptyState icon="✦" title="Nenhum usuário bloqueado" />
       ) : (
         <FlatList
           data={blocked}
@@ -99,69 +85,16 @@ export default function BlockedScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  blockItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: colors.grayDark,
-  },
-  avatarPlaceholder: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarIcon: { fontSize: 22 },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // blockItem removed — now uses Card
+  avatar: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, borderColor: COLORS.border },
+  avatarPlaceholder: { width: 52, height: 52, borderRadius: 26, backgroundColor: COLORS.card, alignItems: 'center', justifyContent: 'center' },
+  avatarIcon: { fontSize: FONT_SIZE.xxl },
   blockInfo: { flex: 1 },
-  blockName: {
-    color: colors.white,
-    fontSize: fonts.sizes.lg,
-    fontWeight: 'bold',
-  },
-  blockText: { color: colors.error, fontSize: fonts.sizes.sm, marginTop: 2 },
-  unblockButton: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.gold,
-  },
-  unblockButtonText: {
-    color: colors.gold,
-    fontSize: fonts.sizes.sm,
-    fontWeight: 'bold',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.grayDark,
-    marginLeft: spacing.lg + 52 + spacing.md,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  emptyIcon: { fontSize: 60, color: colors.gold },
-  emptyTitle: {
-    color: colors.white,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
-  },
+  blockName: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  blockText: { color: COLORS.error, fontSize: FONT_SIZE.caption, marginTop: 2 },
+  // unblockButton/unblockButtonText removed — now uses Button
+  // emptyContainer/Icon/Title removed — now uses EmptyState
+  separator: { height: 1, backgroundColor: COLORS.border, marginLeft: SPACING.lg + 52 + SPACING.md },
 });

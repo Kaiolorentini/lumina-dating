@@ -18,7 +18,7 @@ import { useAuth }          from '../../../context/AuthContext';
 import { usePremiumTools }  from '../hooks/usePremiumTools';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT , colors , alpha } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -33,11 +33,11 @@ function formatTime(ms: number): string {
 
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; color: string }> = {
-    LOCKED:   { label: 'Bloqueado',   color: '#888'    },
-    READY:    { label: 'Disponível',  color: '#A8E063' },
-    ACTIVE:   { label: 'Ativo',       color: '#56CCF2' },
-    EXPIRED:  { label: 'Expirado',    color: '#888'    },
-    COOLDOWN: { label: 'Cooldown',    color: '#FFD700' },
+    LOCKED:   { label: 'Bloqueado',   color: colors.gray    },
+    READY:    { label: 'Disponível',  color: colors.successLegacy },
+    ACTIVE:   { label: 'Ativo',       color: colors.info },
+    EXPIRED:  { label: 'Expirado',    color: colors.gray    },
+    COOLDOWN: { label: 'Cooldown',    color: colors.goldLegacy },
   };
   const cfg = config[status] ?? config.LOCKED;
   return (
@@ -116,7 +116,7 @@ export default function PremiumToolsScreen() {
 
         {/* ── FERTILIZANTE DA SINTONIA ── */}
         <LinearGradient
-          colors={fertilizer?.isActive ? ['#0A1A0A', '#1B3B1B'] : ['#1A0A2E', '#2D1B4E']}
+          colors={fertilizer?.isActive ? ['#0A1A0A', '#1B3B1B'] : [colors.cardLegacy, '#2D1B4E']}
           style={styles.toolCard}
         >
           <View style={styles.toolHeader}>
@@ -173,7 +173,7 @@ export default function PremiumToolsScreen() {
 
         {/* ── TURBO SINTONIA ── */}
         <LinearGradient
-          colors={turbo?.isActive ? ['#0A0A1A', '#1B1B3B'] : ['#1A0A2E', '#2D1B4E']}
+          colors={turbo?.isActive ? ['#0A0A1A', '#1B1B3B'] : [colors.cardLegacy, '#2D1B4E']}
           style={styles.toolCard}
         >
           <View style={styles.toolHeader}>
@@ -255,12 +255,12 @@ const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: COLORS.background },
   center:       { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  manifesto:    { margin: S.md, backgroundColor: 'rgba(123,47,190,0.1)', borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: 'rgba(123,47,190,0.3)' },
+  manifesto:    { margin: S.md, backgroundColor: alpha(colors.primaryLegacy, 0.1), borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: alpha(colors.primaryLegacy, 0.3) },
   manifestoText: { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center', lineHeight: 20 },
 
-  toolCard:     { margin: S.md, borderRadius: R.xl, padding: S.lg, gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  toolCard:     { margin: S.md, borderRadius: R.xl, padding: S.lg, gap: S.md, borderWidth: 1, borderColor: alpha(colors.secondaryLegacy, 0.3) },
   toolHeader:   { flexDirection: 'row', alignItems: 'center', gap: S.md },
-  toolIcon:     { fontSize: 36 },
+  toolIcon:     { fontSize: FONT_SIZE.display },
   toolInfo:     { flex: 1 },
   toolName:     { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
   toolDesc:     { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, marginTop: 2 },
@@ -268,13 +268,13 @@ const styles = StyleSheet.create({
   statusBadge:  { borderRadius: R.full, borderWidth: 1, paddingHorizontal: S.sm, paddingVertical: 2 },
   statusText:   { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
 
-  activeInfo:   { backgroundColor: 'rgba(86,204,242,0.1)', borderRadius: R.lg, padding: S.md, alignItems: 'center', gap: S.xs },
+  activeInfo:   { backgroundColor: alpha(colors.info, 0.1), borderRadius: R.lg, padding: S.md, alignItems: 'center', gap: S.xs },
   activeLabel:  { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
-  activeTime:   { color: '#56CCF2', fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold },
+  activeTime:   { color: colors.info, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold },
   activeMult:   { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
 
-  cooldownInfo: { backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: R.lg, padding: S.sm, alignItems: 'center' },
-  cooldownText: { color: '#FFD700', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
+  cooldownInfo: { backgroundColor: alpha(colors.goldLegacy, 0.1), borderRadius: R.lg, padding: S.sm, alignItems: 'center' },
+  cooldownText: { color: colors.goldLegacy, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
 
   toolDetails:  { gap: S.xs },
   toolDetail:   { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, lineHeight: 18 },
@@ -284,8 +284,8 @@ const styles = StyleSheet.create({
   activateBtnText: { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
 
   buyBtn:       { alignItems: 'center', paddingVertical: S.sm },
-  buyBtnText:   { color: '#FFD700', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
+  buyBtnText:   { color: colors.goldLegacy, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
 
-  errorCard:    { marginHorizontal: S.md, backgroundColor: 'rgba(255,107,107,0.1)', borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: '#FF6B6B' },
-  errorText:    { color: '#FF6B6B', fontSize: FONT_SIZE.sm, textAlign: 'center' },
+  errorCard:    { marginHorizontal: S.md, backgroundColor: alpha(colors.errorLegacy, 0.1), borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: colors.errorLegacy },
+  errorText:    { color: colors.errorLegacy, fontSize: FONT_SIZE.sm, textAlign: 'center' },
 });

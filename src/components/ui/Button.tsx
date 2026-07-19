@@ -1,14 +1,5 @@
-// ============================================
-// LUMINA — BUTTON COMPONENT
-// src/components/ui/Button.tsx
-//
-// Botão base do Design System.
-// Variantes: primary, secondary, premium, ghost, danger
-// ============================================
-
 import React from 'react';
 import {
-  TouchableOpacity,
   Text,
   StyleSheet,
   ActivityIndicator,
@@ -16,6 +7,7 @@ import {
   TextStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { AnimatedPressable } from './AnimatedPressable';
 import {
   COLORS,
   GRADIENTS,
@@ -24,7 +16,7 @@ import {
   SPACING,
   BORDER_RADIUS,
   SHADOWS,
-  ANIMATION,
+  alpha,
 } from '../../theme/tokens';
 
 type ButtonVariant = 'primary' | 'secondary' | 'premium' | 'ghost' | 'danger';
@@ -56,7 +48,6 @@ export function Button({
   textStyle,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
-
   const sizeStyles = SIZE_STYLES[size];
   const variantConfig = VARIANT_CONFIG[variant];
 
@@ -64,7 +55,7 @@ export function Button({
     const gradient = variant === 'premium' ? GRADIENTS.premium : GRADIENTS.primary;
 
     return (
-      <TouchableOpacity
+      <AnimatedPressable
         onPress={onPress}
         disabled={isDisabled}
         activeOpacity={0.85}
@@ -73,7 +64,7 @@ export function Button({
           sizeStyles.container,
           fullWidth && styles.fullWidth,
           isDisabled && styles.disabled,
-          variant === 'premium' ? SHADOWS.premium : SHADOWS.primary,
+          variant === 'premium' ? SHADOWS.premium : SHADOWS.level1,
           style,
         ]}
       >
@@ -92,19 +83,23 @@ export function Button({
             </>
           )}
         </LinearGradient>
-      </TouchableOpacity>
+      </AnimatedPressable>
     );
   }
 
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={onPress}
       disabled={isDisabled}
       activeOpacity={0.85}
       style={[
         styles.base,
         sizeStyles.container,
-        { backgroundColor: variantConfig.bg, borderColor: variantConfig.border, borderWidth: variantConfig.borderWidth },
+        {
+          backgroundColor: variantConfig.bg,
+          borderColor: variantConfig.border,
+          borderWidth: variantConfig.borderWidth,
+        },
         fullWidth && styles.fullWidth,
         isDisabled && styles.disabled,
         style,
@@ -120,22 +115,22 @@ export function Button({
           </Text>
         </>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
 const SIZE_STYLES = {
   sm: {
     container: { height: 36, paddingHorizontal: SPACING.md, borderRadius: BORDER_RADIUS.md },
-    text:      { fontSize: FONT_SIZE.sm },
+    text:      { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
   },
   md: {
     container: { height: 48, paddingHorizontal: SPACING.lg, borderRadius: BORDER_RADIUS.lg },
-    text:      { fontSize: FONT_SIZE.md },
+    text:      { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
   },
   lg: {
     container: { height: 56, paddingHorizontal: SPACING.xl, borderRadius: BORDER_RADIUS.xl },
-    text:      { fontSize: FONT_SIZE.lg },
+    text:      { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
   },
 };
 
@@ -147,10 +142,10 @@ const VARIANT_CONFIG = {
     textColor:   COLORS.surface,
   },
   secondary: {
-    bg:          'rgba(123, 47, 190, 0.15)',
-    border:      COLORS.primary,
+    bg:          alpha(COLORS.accent, 0.12),
+    border:      COLORS.accent,
     borderWidth: 1,
-    textColor:   COLORS.secondary,
+    textColor:   COLORS.accent,
   },
   premium: {
     bg:          COLORS.premium,
@@ -160,12 +155,12 @@ const VARIANT_CONFIG = {
   },
   ghost: {
     bg:          'transparent',
-    border:      'rgba(181, 123, 238, 0.4)',
+    border:      alpha(COLORS.accent, 0.35),
     borderWidth: 1,
-    textColor:   COLORS.secondary,
+    textColor:   COLORS.accent,
   },
   danger: {
-    bg:          'rgba(255, 23, 68, 0.15)',
+    bg:          alpha(COLORS.error, 0.12),
     border:      COLORS.error,
     borderWidth: 1,
     textColor:   COLORS.error,
@@ -188,9 +183,8 @@ const styles = StyleSheet.create({
     width:          '100%',
   },
   text: {
-    fontWeight:  FONT_WEIGHT.bold,
-    color:       COLORS.surface,
     letterSpacing: 0.3,
+    color:         COLORS.surface,
   },
   fullWidth: {
     width: '100%',

@@ -4,8 +4,9 @@ import {
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Button, Card, Input } from '../../components/ui';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { RootStackParamList } from '../../navigation/types';
 import { getProducts } from '../../services/marketplace/productService';
 import { getUserById } from '../../services/marketplace/adminService';
@@ -78,9 +79,7 @@ export default function AdminProductsModerationScreen() {
     <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Moderação de Produtos</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -102,7 +101,7 @@ export default function AdminProductsModerationScreen() {
 
       {/* Conteúdo */}
       {loading ? (
-        <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
+        <ActivityIndicator color={COLORS.gold} style={{ flex: 1 }} />
       ) : error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorIcon}>⚠️</Text>
@@ -120,7 +119,7 @@ export default function AdminProductsModerationScreen() {
             <RefreshControl
               refreshing={false}
               onRefresh={loadProducts}
-              tintColor={colors.gold}
+              tintColor={COLORS.gold}
             />
           }
           ListEmptyComponent={
@@ -167,52 +166,51 @@ export default function AdminProductsModerationScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.gold + '44',
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  tabs: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: colors.grayDark },
-  tab: { flex: 1, padding: spacing.md, alignItems: 'center' },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: colors.gold },
-  tabText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  tabTextActive: { color: colors.gold, fontWeight: 'bold' },
-  list: { padding: spacing.md },
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  tabs: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
+  tab: { flex: 1, padding: SPACING.md, alignItems: 'center' },
+  tabActive: { borderBottomWidth: 2, borderBottomColor: COLORS.gold },
+  tabText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  tabTextActive: { color: COLORS.gold, fontWeight: FONT_WEIGHT.bold },
+  list: { padding: SPACING.md },
   card: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
-    gap: spacing.xs,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.border, padding: SPACING.md, marginBottom: SPACING.md,
+    gap: SPACING.xs,
   },
-  cardTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  cardTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
   cardMetaRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
-  cardCategory: { color: colors.gold, fontSize: fonts.sizes.xs, textTransform: 'capitalize' },
-  cardPrice: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  cardOwner: { color: colors.gray, fontSize: fonts.sizes.xs },
-  cardDate: { color: colors.gray, fontSize: fonts.sizes.xs },
+  cardCategory: { color: COLORS.gold, fontSize: FONT_SIZE.xs, textTransform: 'capitalize' },
+  cardPrice: { color: COLORS.textPrimary, fontSize: FONT_SIZE.caption, fontWeight: FONT_WEIGHT.bold },
+  cardOwner: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  cardDate: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
   reasonBox: {
-    marginTop: spacing.xs, padding: spacing.sm,
-    backgroundColor: colors.error + '11', borderRadius: borderRadius.sm,
-    borderLeftWidth: 2, borderLeftColor: colors.error,
+    marginTop: SPACING.xs, padding: SPACING.sm,
+    backgroundColor: COLORS.error + '11', borderRadius: BORDER_RADIUS.sm,
+    borderLeftWidth: 2, borderLeftColor: COLORS.error,
   },
-  reasonLabel: { color: colors.error, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  reasonText: { color: colors.white, fontSize: fonts.sizes.sm, marginTop: 2 },
-  tapHint: { color: colors.gold, fontSize: fonts.sizes.xs, marginTop: spacing.xs, alignSelf: 'flex-end' },
+  reasonLabel: { color: COLORS.error, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+  reasonText: { color: COLORS.textPrimary, fontSize: FONT_SIZE.caption, marginTop: 2 },
+  tapHint: { color: COLORS.gold, fontSize: FONT_SIZE.xs, marginTop: SPACING.xs, alignSelf: 'flex-end' },
   errorContainer: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl,
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: SPACING.md, padding: SPACING.xl,
   },
   errorIcon: { fontSize: 48 },
-  errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center' },
+  errorText: { color: COLORS.error, fontSize: FONT_SIZE.body, textAlign: 'center' },
   retryBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.sm,
-    padding: spacing.md, paddingHorizontal: spacing.xl,
+    backgroundColor: COLORS.gold, borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.md, paddingHorizontal: SPACING.xl,
   },
-  retryBtnText: { color: colors.background, fontWeight: 'bold' },
-  empty: { flex: 1, alignItems: 'center', padding: spacing.xl, gap: spacing.md },
+  retryBtnText: { color: COLORS.background, fontWeight: FONT_WEIGHT.bold },
+  empty: { flex: 1, alignItems: 'center', padding: SPACING.xl, gap: SPACING.md },
   emptyIcon: { fontSize: 48 },
-  emptyText: { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center' },
+  emptyText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, textAlign: 'center' },
 });

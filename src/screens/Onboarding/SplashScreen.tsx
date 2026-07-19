@@ -7,7 +7,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, fonts, spacing } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from '../../theme/tokens';
 
 const { width, height } = Dimensions.get('window');
 
@@ -41,7 +41,7 @@ export default function SplashScreen() {
 
   return (
     <LinearGradient
-      colors={['#0D0D0D', '#1A1A1A', '#0D0D0D']}
+      colors={[COLORS.background, COLORS.surface, COLORS.background]}
       style={styles.container}
     >
       <View style={styles.content}>
@@ -61,9 +61,7 @@ export default function SplashScreen() {
         <Animated.Text
           style={[
             styles.subtitle,
-            {
-              opacity: subtitleAnim,
-            },
+            { opacity: subtitleAnim },
           ]}
         >
           Conexões que brilham
@@ -73,9 +71,7 @@ export default function SplashScreen() {
       <Animated.Text
         style={[
           styles.tagline,
-          {
-            opacity: subtitleAnim,
-          },
+          { opacity: subtitleAnim },
         ]}
       >
         AI Dating
@@ -98,30 +94,30 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: SPACING.md,
   },
   logo: {
     fontSize: 60,
-    color: colors.gold,
-    marginBottom: spacing.sm,
+    color: COLORS.gold,
+    marginBottom: SPACING.sm,
   },
   title: {
-    fontSize: fonts.sizes.xxxl,
-    color: colors.white,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZE.display,
+    color: COLORS.textPrimary,
+    fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 6,
   },
   subtitle: {
-    fontSize: fonts.sizes.lg,
-    color: colors.gold,
+    fontSize: FONT_SIZE.title,
+    color: COLORS.gold,
     letterSpacing: 3,
-    marginTop: spacing.sm,
+    marginTop: SPACING.sm,
   },
   tagline: {
     position: 'absolute',
-    bottom: spacing.xxl,
-    fontSize: fonts.sizes.sm,
-    color: colors.gray,
+    bottom: SPACING.xxl,
+    fontSize: FONT_SIZE.caption,
+    color: COLORS.textSecondary,
     letterSpacing: 4,
   },
 });

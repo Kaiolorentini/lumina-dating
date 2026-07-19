@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput,
+  TouchableOpacity, ActivityIndicator, Alert, Modal,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { Button, Card, Input } from '../../components/ui';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha , colors } from '../../theme/tokens';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
 import { useUserPermissions } from '../../hooks/useUserPermissions';
@@ -103,7 +104,7 @@ export default function AdminUserDetailScreen() {
   if (loading) {
     return (
       <ScreenContainer style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={colors.gold} />
+        <ActivityIndicator color={COLORS.gold} />
       </ScreenContainer>
     );
   }
@@ -113,9 +114,7 @@ export default function AdminUserDetailScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Detalhes do Usuário</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -127,7 +126,7 @@ export default function AdminUserDetailScreen() {
           <Text style={styles.field}>Email: <Text style={styles.value}>{profile?.email ?? '—'}</Text></Text>
           <Text style={styles.field}>UID: <Text style={styles.value}>{userId}</Text></Text>
           <Text style={styles.field}>Role: <Text style={styles.value}>{(profile as any)?.role ?? 'user'}</Text></Text>
-          <Text style={styles.field}>Status: <Text style={[styles.value, isBlocked && { color: colors.error }]}>
+          <Text style={styles.field}>Status: <Text style={[styles.value, isBlocked && { color: COLORS.error }]}>
             {isBlocked ? '🚫 Bloqueado' : '✅ Ativo'}
           </Text></Text>
           {isBlocked && (
@@ -150,7 +149,7 @@ export default function AdminUserDetailScreen() {
           <View style={styles.actionsCard}>
             <Text style={styles.cardTitle}>⚡ Ações</Text>
             {processing ? (
-              <ActivityIndicator color={colors.gold} />
+              <ActivityIndicator color={COLORS.gold} />
             ) : isBlocked ? (
               <TouchableOpacity style={styles.unblockBtn} onPress={handleUnblock}>
                 <Text style={styles.unblockBtnText}>✅ Desbloquear usuário</Text>
@@ -175,10 +174,8 @@ export default function AdminUserDetailScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>🚫 Bloquear usuário</Text>
             <Text style={styles.modalSubtitle}>{profile?.name ?? userId.slice(0, 16)}</Text>
-            <TextInput
-              style={styles.modalInput}
+            <Input
               placeholder="Informe o motivo do bloqueio..."
-              placeholderTextColor={colors.gray}
               value={blockReason}
               onChangeText={setBlockReason}
               multiline
@@ -186,9 +183,7 @@ export default function AdminUserDetailScreen() {
               autoFocus
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setBlockModal(false)}>
-                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
-              </TouchableOpacity>
+              <Button label="Cancelar" variant="ghost" onPress={() => setBlockModal(false)} />
               <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmBlock}>
                 <Text style={styles.modalConfirmBtnText}>Bloquear</Text>
               </TouchableOpacity>
@@ -201,61 +196,50 @@ export default function AdminUserDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.gold + '44',
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  content: { padding: spacing.md },
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  content: { padding: SPACING.md },
   card: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.border, padding: SPACING.md, marginBottom: SPACING.md,
   },
   actionsCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.error + '44', padding: spacing.md, marginBottom: spacing.md,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.error + '44', padding: SPACING.md, marginBottom: SPACING.md,
   },
-  cardTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', marginBottom: spacing.sm },
-  field: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.xs },
-  value: { color: colors.white },
+  cardTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.sm },
+  field: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, marginBottom: SPACING.xs },
+  value: { color: COLORS.textPrimary },
   blockBtn: {
-    backgroundColor: colors.error + '22', borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.error, padding: spacing.md, alignItems: 'center',
+    backgroundColor: COLORS.error + '22', borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.error, padding: SPACING.md, alignItems: 'center',
   },
-  blockBtnText: { color: colors.error, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  blockBtnText: { color: COLORS.error, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.body },
   unblockBtn: {
-    backgroundColor: colors.success + '22', borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.success, padding: spacing.md, alignItems: 'center',
+    backgroundColor: COLORS.success + '22', borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.success, padding: SPACING.md, alignItems: 'center',
   },
-  unblockBtnText: { color: colors.success, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  unblockBtnText: { color: COLORS.success, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.body },
   // Modal
   modalOverlay: {
-    flex: 1, backgroundColor: '#00000088',
-    alignItems: 'center', justifyContent: 'center', padding: spacing.lg,
+    flex: 1, backgroundColor: alpha(colors.black, 0.53),
+    alignItems: 'center', justifyContent: 'center', padding: SPACING.lg,
   },
   modalContent: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.lg, width: '100%', gap: spacing.md,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.border, padding: SPACING.lg, width: '100%', gap: SPACING.md,
   },
-  modalTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  modalSubtitle: { color: colors.gray, fontSize: fonts.sizes.sm },
-  modalInput: {
-    backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.grayDark, color: colors.white, padding: spacing.md,
-    fontSize: fonts.sizes.md, textAlignVertical: 'top', minHeight: 80,
-  },
-  modalActions: { flexDirection: 'row', gap: spacing.sm },
-  modalCancelBtn: {
-    flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalCancelBtnText: { color: colors.white, fontWeight: 'bold' },
+  modalTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  modalSubtitle: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  modalActions: { flexDirection: 'row', gap: SPACING.sm },
   modalConfirmBtn: {
-    flex: 1, backgroundColor: colors.error, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
+    flex: 1, backgroundColor: COLORS.error, borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.md, alignItems: 'center',
   },
-  modalConfirmBtnText: { color: colors.white, fontWeight: 'bold' },
+  modalConfirmBtnText: { color: COLORS.textPrimary, fontWeight: FONT_WEIGHT.bold },
 });

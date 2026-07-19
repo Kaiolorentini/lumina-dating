@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Animated,
+  ActivityIndicator, Animated,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { useNavigation }   from '@react-navigation/native';
@@ -16,7 +16,8 @@ import { useCoins }        from '../../../context/CoinsContext';
 import { useFragments }    from '../hooks/useFragments';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { Button, Card } from '../../../components/ui';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, GRADIENTS } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -89,7 +90,7 @@ export default function FragmentsScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
 
         {/* Hero */}
-        <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.hero}>
+        <LinearGradient colors={[GRADIENTS.faisca[0], GRADIENTS.faisca[1]]} style={styles.hero}>
           <Text style={styles.heroIcon}>🔮</Text>
           <Text style={styles.heroFragments}>{fragments}</Text>
           <Text style={styles.heroLabel}>Fragmentos de Sintonia</Text>
@@ -143,36 +144,28 @@ export default function FragmentsScreen() {
           )}
 
           {cooldownActive && cooldownLeft > 0 && !converted && (
-            <View style={styles.cooldownCard}>
+            <Card padding={S.md} style={{ flexDirection: 'row', alignItems: 'center', gap: S.sm, borderWidth: 1, borderColor: COLORS.border }}>
               <Text style={styles.cooldownIcon}>⏳</Text>
               <Text style={styles.cooldownText}>
                 Próxima conversão em {formatCooldown(cooldownLeft)}
               </Text>
-            </View>
+            </Card>
           )}
 
           <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-            <TouchableOpacity
-              style={[styles.convertBtn, (!canConvert || converting) && styles.convertBtnDisabled]}
+            <Button
+              icon={<Text style={{ fontSize: FONT_SIZE.lg }}>🔮</Text>}
+              label={canConvert
+                ? `Converter ${crystalsAvailable * fragmentsNeeded} fragmentos`
+                : fragments < fragmentsNeeded
+                  ? `Faltam ${fragmentsNeeded - fragments} fragmentos`
+                  : 'Aguarde o cooldown'}
               onPress={handleConvert}
+              loading={converting}
               disabled={!canConvert || converting}
-              activeOpacity={0.85}
-            >
-              {converting ? (
-                <ActivityIndicator color={COLORS.background} />
-              ) : (
-                <>
-                  <Text style={styles.convertBtnIcon}>🔮</Text>
-                  <Text style={styles.convertBtnText}>
-                    {canConvert
-                      ? `Converter ${crystalsAvailable * fragmentsNeeded} fragmentos`
-                      : fragments < fragmentsNeeded
-                        ? `Faltam ${fragmentsNeeded - fragments} fragmentos`
-                        : 'Aguarde o cooldown'}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
+              variant="primary"
+              fullWidth
+            />
           </Animated.View>
 
           {error && <Text style={styles.errorText}>{error}</Text>}
@@ -180,7 +173,7 @@ export default function FragmentsScreen() {
 
         {/* Como ganhar */}
         <Text style={styles.sectionTitle}>Como ganhar Fragmentos</Text>
-        <View style={styles.infoList}>
+        <Card padding={0} style={{ marginHorizontal: S.md, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg }}>
           {[
             { icon: '📋', text: 'Completar missões diárias',  value: '10–15 🔮' },
             { icon: '👁️', text: 'Receber visitas no perfil',   value: '+1 🔮'    },
@@ -193,16 +186,16 @@ export default function FragmentsScreen() {
               <Text style={styles.infoItemValue}>{item.value}</Text>
             </View>
           ))}
-        </View>
+        </Card>
 
         {/* Regras */}
-        <View style={styles.rulesCard}>
+        <Card padding={S.lg} style={{ marginHorizontal: S.md, borderWidth: 1, borderColor: COLORS.border, gap: S.sm }}>
           <Text style={styles.rulesTitle}>⚠️ Regras importantes</Text>
           <Text style={styles.rulesText}>• Cooldown de 24h entre conversões</Text>
           <Text style={styles.rulesText}>• Máximo de 5 cristais por conversão</Text>
           <Text style={styles.rulesText}>• Fragmentos expiram 10% a cada 7 dias sem converter</Text>
           <Text style={styles.rulesText}>• Fragmentos não são compráveis — apenas ganháveis</Text>
-        </View>
+        </Card>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -216,7 +209,7 @@ const R = BORDER_RADIUS;
 const styles = StyleSheet.create({
   container:         { flex: 1, backgroundColor: COLORS.background },
   center:            { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  hero:              { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  hero:              { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: COLORS.borderLight },
   heroIcon:          { fontSize: 56 },
   heroFragments:     { color: COLORS.secondary, fontSize: 64, fontWeight: FONT_WEIGHT.extrabold, lineHeight: 70 },
   heroLabel:         { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textTransform: 'uppercase', letterSpacing: 1 },
@@ -228,33 +221,26 @@ const styles = StyleSheet.create({
   progressFill:      { height: '100%', backgroundColor: COLORS.secondary, borderRadius: R.full },
   progressReady:     { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
   balanceRow:        { flexDirection: 'row', justifyContent: 'center' },
-  balancePill:       { flexDirection: 'row', alignItems: 'center', gap: S.xs, backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: R.full, paddingHorizontal: S.lg, paddingVertical: S.sm, borderWidth: 1, borderColor: 'rgba(255,215,0,0.3)' },
-  balanceIcon:       { fontSize: 16 },
-  balanceValue:      { color: '#FFD700', fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.extrabold },
+  balancePill:       { flexDirection: 'row', alignItems: 'center', gap: S.xs, backgroundColor: COLORS.premium + '1A', borderRadius: R.full, paddingHorizontal: S.lg, paddingVertical: S.sm, borderWidth: 1, borderColor: COLORS.premium + '4D' },
+  balanceIcon:       { fontSize: FONT_SIZE.subtitle },
+  balanceValue:      { color: COLORS.premium, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.extrabold },
   balanceLabel:      { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
-  convertedCard:     { marginHorizontal: S.md, marginBottom: S.md, backgroundColor: 'rgba(181,123,238,0.15)', borderRadius: R.lg, padding: S.lg, alignItems: 'center', gap: S.xs, borderWidth: 1, borderColor: COLORS.secondary },
-  convertedIcon:     { fontSize: 36 },
+  convertedCard:     { marginHorizontal: S.md, marginBottom: S.md, backgroundColor: COLORS.secondary + '26', borderRadius: R.lg, padding: S.lg, alignItems: 'center', gap: S.xs, borderWidth: 1, borderColor: COLORS.secondary },
+  convertedIcon:     { fontSize: FONT_SIZE.display },
   convertedText:     { color: COLORS.secondary, fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.extrabold },
   convertedSub:      { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
   convertSection:    { marginHorizontal: S.md, gap: S.md, marginBottom: S.lg },
   convertTitle:      { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
   convertFormula:    { color: COLORS.textMuted, fontSize: FONT_SIZE.md, textAlign: 'center' },
   convertAvailable:  { color: COLORS.secondary, fontSize: FONT_SIZE.sm, textAlign: 'center', fontWeight: FONT_WEIGHT.semibold },
-  cooldownCard:      { flexDirection: 'row', alignItems: 'center', gap: S.sm, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.border },
   cooldownIcon:      { fontSize: 24 },
   cooldownText:      { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
-  convertBtn:        { backgroundColor: COLORS.primary, borderRadius: R.lg, paddingVertical: S.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: S.sm },
-  convertBtnDisabled: { opacity: 0.4 },
-  convertBtnIcon:    { fontSize: 20 },
-  convertBtnText:    { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  errorText:         { color: '#FF6B6B', fontSize: FONT_SIZE.sm, textAlign: 'center' },
+  errorText:         { color: COLORS.error, fontSize: FONT_SIZE.sm, textAlign: 'center' },
   sectionTitle:      { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginBottom: S.sm },
-  infoList:          { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg },
   infoItem:          { flexDirection: 'row', alignItems: 'center', padding: S.md, gap: S.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  infoItemIcon:      { fontSize: 22, width: 32 },
+  infoItemIcon:      { fontSize: FONT_SIZE.xxl, width: 32 },
   infoItemText:      { flex: 1, color: COLORS.surface, fontSize: FONT_SIZE.sm },
   infoItemValue:     { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
-  rulesCard:         { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.sm, borderWidth: 1, borderColor: COLORS.border },
   rulesTitle:        { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginBottom: S.xs },
   rulesText:         { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },
 });

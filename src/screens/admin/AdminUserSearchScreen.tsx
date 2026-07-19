@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, FlatList,
+  View, Text, StyleSheet, FlatList,
   TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Button, Card, Input } from '../../components/ui';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { RootStackParamList } from '../../navigation/types';
 import { getUserById, searchUsers } from '../../services/marketplace/adminService';
 import { UserProfile } from '../../shared/types';
@@ -42,27 +43,23 @@ export default function AdminUserSearchScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Buscar Usuário</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.searchRow}>
-        <TextInput
-          style={styles.input}
+        <Input
           value={search}
           onChangeText={setSearch}
           placeholder="UID, nome ou email..."
-          placeholderTextColor={colors.gray}
           onSubmitEditing={handleSearch}
           returnKeyType="search"
           autoCapitalize="none"
         />
         <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={loading}>
           {loading
-            ? <ActivityIndicator color={colors.background} size="small" />
+            ? <ActivityIndicator color={COLORS.background} size="small" />
             : <Text style={styles.searchBtnText}>🔍</Text>
           }
         </TouchableOpacity>
@@ -105,41 +102,36 @@ export default function AdminUserSearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: COLORS.gold + '44',
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  searchRow: { flexDirection: 'row', padding: spacing.md, gap: spacing.sm },
-  input: {
-    flex: 1, backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, color: colors.white, padding: spacing.md, fontSize: fonts.sizes.md,
-  },
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  searchRow: { flexDirection: 'row', padding: SPACING.md, gap: SPACING.sm },
   searchBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.md,
-    padding: spacing.md, alignItems: 'center', justifyContent: 'center', width: 50,
+    backgroundColor: COLORS.gold, borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md, alignItems: 'center', justifyContent: 'center', width: 50,
   },
-  searchBtnText: { fontSize: 18 },
-  list: { padding: spacing.md },
+  searchBtnText: { fontSize: FONT_SIZE.xl },
+  list: { padding: SPACING.md },
   userCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.sm,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, borderWidth: 1,
+    borderColor: COLORS.border, padding: SPACING.md, marginBottom: SPACING.sm,
     flexDirection: 'row', alignItems: 'center',
   },
   userInfo: { flex: 1 },
-  userName: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  userEmail: { color: colors.gray, fontSize: fonts.sizes.sm },
-  userUid: { color: colors.grayDark, fontSize: fonts.sizes.xs },
-  userMeta: { alignItems: 'center', gap: spacing.xs },
+  userName: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold },
+  userEmail: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  userUid: { color: COLORS.border, fontSize: FONT_SIZE.xs },
+  userMeta: { alignItems: 'center', gap: SPACING.xs },
   blockedBadge: {
-    backgroundColor: colors.error + '22', borderRadius: borderRadius.full, borderWidth: 1,
-    borderColor: colors.error, paddingHorizontal: spacing.xs, paddingVertical: 2,
+    backgroundColor: COLORS.error + '22', borderRadius: BORDER_RADIUS.full, borderWidth: 1,
+    borderColor: COLORS.error, paddingHorizontal: SPACING.xs, paddingVertical: 2,
   },
-  blockedText: { color: colors.error, fontSize: fonts.sizes.xs },
-  arrow: { color: colors.gold, fontSize: fonts.sizes.xl },
-  empty: { alignItems: 'center', padding: spacing.xl },
-  emptyText: { color: colors.gray, fontSize: fonts.sizes.md },
+  blockedText: { color: COLORS.error, fontSize: FONT_SIZE.xs },
+  arrow: { color: COLORS.gold, fontSize: FONT_SIZE.title },
+  empty: { alignItems: 'center', padding: SPACING.xl },
+  emptyText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body },
 });

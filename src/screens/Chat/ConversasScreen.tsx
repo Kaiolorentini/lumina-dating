@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,24 +9,19 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from '../../theme/tokens';
 import { useAuth } from '../../context/AuthContext';
 import { RootStackParamList } from '../../navigation/types';
 import Header from '../../components/Header';
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  getDoc,
-  doc,
-} from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { COLLECTIONS } from '../../core/constants';
 import { generateChatId } from '../../modules/chat/services/messageService';
 import { getConexoesAceitas } from '../../modules/profile/services/requestsService';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { Button } from '../../components/ui/Button';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -51,7 +46,6 @@ export default function ConversasScreen() {
   useEffect(() => {
     loadConversas();
     return () => {
-      // Limpa todos os listeners ao desmontar
       unsubscribersRef.current.forEach(unsub => unsub());
       unsubscribersRef.current = [];
     };
@@ -59,8 +53,6 @@ export default function ConversasScreen() {
 
   async function loadConversas() {
     if (!user) return;
-
-    // Limpa listeners antigos antes de recarregar
     unsubscribersRef.current.forEach(unsub => unsub());
     unsubscribersRef.current = [];
 
@@ -69,14 +61,10 @@ export default function ConversasScreen() {
       const previews: UserChatPreview[] = [];
 
       for (const conexao of conexoes) {
-        const otherUserId = conexao.fromUserId === user.uid
-          ? conexao.toUserId
-          : conexao.fromUserId;
-
+        const otherUserId = conexao.fromUserId === user.uid ? conexao.toUserId : conexao.fromUserId;
         const chatId = generateChatId(user.uid, otherUserId);
         const chatRef = doc(db, COLLECTIONS.CHATS, chatId);
         const chatSnap = await getDoc(chatRef);
-
         const otherUserRef = doc(db, COLLECTIONS.USERS, otherUserId);
         const otherUserSnap = await getDoc(otherUserRef);
         const otherUser = otherUserSnap.data();
@@ -86,12 +74,8 @@ export default function ConversasScreen() {
             userId: otherUserId,
             userName: otherUser.name || 'Usuario',
             userPhoto: otherUser.photoURL || '',
-            lastMessage: chatSnap.exists()
-              ? chatSnap.data()?.lastMessage || 'Sem mensagens'
-              : 'Iniciar conversa',
-            lastMessageTime: chatSnap.exists()
-              ? chatSnap.data()?.lastMessageTime?.toDate() || null
-              : null,
+            lastMessage: chatSnap.exists() ? chatSnap.data()?.lastMessage || 'Sem mensagens' : 'Iniciar conversa',
+            lastMessageTime: chatSnap.exists() ? chatSnap.data()?.lastMessageTime?.toDate() || null : null,
             unread: false,
             unreadCount: 0,
           });
@@ -106,24 +90,15 @@ export default function ConversasScreen() {
 
       setChats(previews);
 
-      // Escuta mensagens não lidas em tempo real com cleanup
       previews.forEach(chat => {
         const chatId = generateChatId(user.uid, chat.userId);
         const messagesRef = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
-        const unreadQ = query(
-          messagesRef,
-          where('read', '==', false),
-          where('senderId', '==', chat.userId)
-        );
-
+        const unreadQ = query(messagesRef, where('read', '==', false), where('senderId', '==', chat.userId));
         const unsub = onSnapshot(unreadQ, snap => {
           setChats(prev => prev.map(c =>
-            c.userId === chat.userId
-              ? { ...c, unreadCount: snap.size, unread: snap.size > 0 }
-              : c
+            c.userId === chat.userId ? { ...c, unreadCount: snap.size, unread: snap.size > 0 } : c
           ));
         });
-
         unsubscribersRef.current.push(unsub);
       });
 
@@ -157,11 +132,7 @@ export default function ConversasScreen() {
     return (
       <TouchableOpacity
         style={styles.chatItem}
-        onPress={() => navigation.navigate('UserChat', {
-          userId: item.userId,
-          userName: item.userName,
-          userPhoto: item.userPhoto,
-        })}
+        onPress={() => navigation.navigate('UserChat', { userId: item.userId, userName: item.userName, userPhoto: item.userPhoto })}
         activeOpacity={0.8}
       >
         <View style={styles.avatarContainer}>
@@ -169,9 +140,7 @@ export default function ConversasScreen() {
             <Image source={{ uri: item.userPhoto }} style={styles.avatar} />
           ) : (
             <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarLetter}>
-                {item.userName.charAt(0).toUpperCase()}
-              </Text>
+              <Text style={styles.avatarLetter}>{item.userName.charAt(0).toUpperCase()}</Text>
             </View>
           )}
           {item.unread && <View style={styles.onlineDot} />}
@@ -179,31 +148,14 @@ export default function ConversasScreen() {
 
         <View style={styles.chatInfo}>
           <View style={styles.chatHeader}>
-            <Text style={[
-              styles.userName,
-              item.unread && styles.userNameUnread,
-            ]}>
-              {item.userName}
-            </Text>
-            <Text style={styles.time}>
-              {formatTime(item.lastMessageTime)}
-            </Text>
+            <Text style={[styles.userName, item.unread && styles.userNameUnread]}>{item.userName}</Text>
+            <Text style={styles.time}>{formatTime(item.lastMessageTime)}</Text>
           </View>
           <View style={styles.chatFooter}>
-            <Text
-              style={[
-                styles.lastMessage,
-                item.unread && styles.lastMessageUnread,
-              ]}
-              numberOfLines={1}
-            >
-              {item.lastMessage}
-            </Text>
+            <Text style={[styles.lastMessage, item.unread && styles.lastMessageUnread]} numberOfLines={1}>{item.lastMessage}</Text>
             {item.unreadCount > 0 && (
               <View style={styles.unreadBadge}>
-                <Text style={styles.unreadBadgeText}>
-                  {item.unreadCount > 9 ? '9+' : item.unreadCount}
-                </Text>
+                <Text style={styles.unreadBadgeText}>{item.unreadCount > 9 ? '9+' : item.unreadCount}</Text>
               </View>
             )}
           </View>
@@ -218,36 +170,24 @@ export default function ConversasScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator color={colors.gold} size="large" />
+          <ActivityIndicator color={COLORS.gold} size="large" />
           <Text style={styles.loadingText}>Carregando conversas...</Text>
         </View>
       ) : chats.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>💬</Text>
-          <Text style={styles.emptyTitle}>Nenhuma conversa ainda</Text>
-          <Text style={styles.emptySubtitle}>
-            Conecte-se com outros usuarios para comecar a conversar!
-          </Text>
-          <TouchableOpacity
-            style={styles.discoverButton}
-            onPress={() => navigation.navigate('MainTabs')}
-          >
-            <Text style={styles.discoverButtonText}>Descobrir perfis</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          icon="💬"
+          title="Nenhuma conversa ainda"
+          subtitle="Conecte-se com outros usuarios para comecar a conversar!"
+          actionLabel="Descobrir perfis"
+          onAction={() => navigation.navigate('MainTabs')}
+        />
       ) : (
         <FlatList
           data={chats}
           keyExtractor={item => item.userId}
           renderItem={renderChat}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.gold}
-            />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.gold} />}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       )}
@@ -256,131 +196,24 @@ export default function ConversasScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  loadingText: { color: colors.gray, fontSize: fonts.sizes.md },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
-  },
-  emptyIcon: { fontSize: 64 },
-  emptyTitle: {
-    color: colors.white,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    color: colors.gray,
-    fontSize: fonts.sizes.md,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  discoverButton: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    marginTop: spacing.sm,
-  },
-  discoverButtonText: {
-    color: colors.background,
-    fontWeight: 'bold',
-    fontSize: fonts.sizes.md,
-  },
-  chatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: SPACING.md },
+  loadingText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body },
+  chatItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, gap: SPACING.md, backgroundColor: COLORS.background },
   avatarContainer: { position: 'relative' },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2,
-    borderColor: colors.gold,
-  },
-  avatarPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarLetter: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xl,
-    fontWeight: 'bold',
-  },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: colors.gold,
-    borderWidth: 2,
-    borderColor: colors.background,
-  },
+  avatar: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderColor: COLORS.gold },
+  avatarPlaceholder: { width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.card, borderWidth: 2, borderColor: COLORS.gold, alignItems: 'center', justifyContent: 'center' },
+  avatarLetter: { color: COLORS.gold, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold },
+  onlineDot: { position: 'absolute', bottom: 2, right: 2, width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.gold, borderWidth: 2, borderColor: COLORS.background },
   chatInfo: { flex: 1 },
-  chatHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  userName: {
-    color: colors.white,
-    fontSize: fonts.sizes.lg,
-    fontWeight: 'bold',
-  },
-  userNameUnread: { color: colors.gold },
-  time: { color: colors.gray, fontSize: fonts.sizes.xs },
-  chatFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  lastMessage: {
-    color: colors.gray,
-    fontSize: fonts.sizes.sm,
-    flex: 1,
-  },
-  lastMessageUnread: { color: colors.white, fontWeight: 'bold' },
-  unreadBadge: {
-    backgroundColor: colors.gold,
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    marginLeft: spacing.sm,
-  },
-  unreadBadgeText: {
-    color: colors.background,
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.grayDark,
-    marginLeft: spacing.lg + 56 + spacing.md,
-  },
+  chatHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  userName: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  userNameUnread: { color: COLORS.gold },
+  time: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  chatFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  lastMessage: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption, flex: 1 },
+  lastMessageUnread: { color: COLORS.textPrimary, fontWeight: FONT_WEIGHT.bold },
+  unreadBadge: { backgroundColor: COLORS.gold, borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, marginLeft: SPACING.sm },
+  unreadBadgeText: { color: COLORS.background, fontSize: FONT_SIZE.overline, fontWeight: FONT_WEIGHT.bold },
+  separator: { height: 1, backgroundColor: COLORS.border, marginLeft: SPACING.lg + 56 + SPACING.md },
 });

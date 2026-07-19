@@ -19,7 +19,7 @@ import {
 import { LinearGradient }  from 'expo-linear-gradient';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useCoins }        from '../context/CoinsContext';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../theme/tokens';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT , colors , alpha } from '../theme/tokens';
 
 const functions = getFunctions();
 
@@ -60,8 +60,8 @@ const TRIGGER_CONFIG: Record<TriggerType, {
   quase_sintonia: {
     icon:          '💜',
     title:         'Quase Sintonia',
-    color:         '#B57BEE',
-    gradient:      ['#1A0A2E', '#2D1B4E'],
+    color:         colors.secondaryLegacy,
+    gradient:      [colors.cardLegacy, '#2D1B4E'],
     message:       'Esta pessoa tem alta compatibilidade com você. Será que é especial?',
     revealFeature: 'REVEAL_QUASE_SINTONIA',
     isPremium:     false,
@@ -69,7 +69,7 @@ const TRIGGER_CONFIG: Record<TriggerType, {
   sintonia_perdida: {
     icon:          '💔',
     title:         'Sintonia Perdida',
-    color:         '#FF6B6B',
+    color:         colors.errorLegacy,
     gradient:      ['#2E0A0A', '#4E1B1B'],
     message:       'Uma conexão especial não voltou. Talvez ainda dê tempo...',
     revealFeature: 'REVEAL_SINTONIA_PERDIDA',
@@ -78,7 +78,7 @@ const TRIGGER_CONFIG: Record<TriggerType, {
   pensou_em_voce: {
     icon:          '✨',
     title:         'Pensou em Você',
-    color:         '#FFD700',
+    color:         colors.goldLegacy,
     gradient:      ['#2E2A0A', '#4E441B'],
     message:       'Esta pessoa visitou seu perfil 3 vezes hoje. Está pensando em você!',
     revealFeature: 'REVEAL_VISITORS',
@@ -87,7 +87,7 @@ const TRIGGER_CONFIG: Record<TriggerType, {
   cofre_cheio: {
     icon:          '🗝️',
     title:         'Cofre Cheio',
-    color:         '#56CCF2',
+    color:         colors.info,
     gradient:      ['#0A1A2E', '#1B3D4E'],
     message:       'Você tem fragmentos esperando para virar cristais!',
   },
@@ -288,7 +288,7 @@ const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
   overlay:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', alignItems: 'center', justifyContent: 'center', padding: S.xl },
-  card:             { width: '100%', borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  card:             { width: '100%', borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: alpha(colors.secondaryLegacy, 0.3) },
   icon:             { fontSize: 56 },
   title:            { fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center' },
   sintoniaChip:     { borderRadius: R.full, borderWidth: 1, paddingHorizontal: S.lg, paddingVertical: S.xs },
@@ -309,9 +309,9 @@ const styles = StyleSheet.create({
   // Sem saldo
   semSaldoContainer: { alignItems: 'center', gap: S.sm, width: '100%' },
   semSaldoText:     { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center', lineHeight: 20 },
-  comprarBtn:       { width: '100%', backgroundColor: '#FFD700', borderRadius: R.lg, paddingVertical: S.md, alignItems: 'center' },
+  comprarBtn:       { width: '100%', backgroundColor: colors.goldLegacy, borderRadius: R.lg, paddingVertical: S.md, alignItems: 'center' },
   comprarBtnText:   { color: COLORS.background, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.extrabold },
-  premiumNote:      { color: '#FF6B6B', fontSize: FONT_SIZE.xs, textAlign: 'center' },
+  premiumNote:      { color: colors.errorLegacy, fontSize: FONT_SIZE.xs, textAlign: 'center' },
 
   // Perfil revelado
   revealedProfile:  { alignItems: 'center', gap: S.md },

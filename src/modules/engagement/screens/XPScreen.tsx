@@ -8,7 +8,7 @@
 import React, { useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Animated,
+  ActivityIndicator, Animated,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { useNavigation }   from '@react-navigation/native';
@@ -18,16 +18,17 @@ import { useXP }           from '../hooks/useXP';
 import XPBar               from '../../../components/XPBar';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { Card } from '../../../components/ui';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, GRADIENTS , colors } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 const TREE_GRADIENTS: Record<number, [string, string]> = {
-  0: ['#0A1A0A', '#1B2E1B'],
-  1: ['#0A1A0A', '#1B3B1B'],
-  2: ['#1A0A2E', '#2D1B4E'],
-  3: ['#1A1A0A', '#2E2D1B'],
-  4: ['#1A0A2E', '#4E1B7E'],
+  0: GRADIENTS.treeStages[0] as unknown as [string, string],
+  1: GRADIENTS.treeStages[1] as unknown as [string, string],
+  2: GRADIENTS.treeStages[2] as unknown as [string, string],
+  3: GRADIENTS.treeStages[3] as unknown as [string, string],
+  4: GRADIENTS.treeStages[4] as unknown as [string, string],
 };
 
 const XP_ACTIONS_DISPLAY = [
@@ -123,7 +124,7 @@ export default function XPScreen() {
         </LinearGradient>
 
         {/* Nível e XP global */}
-        <View style={styles.levelCard}>
+        <Card padding={S.lg} style={{ marginHorizontal: S.md, gap: S.md, borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg }}>
           <Text style={styles.sectionTitle}>Seu Nível</Text>
           <XPBar
             level={status?.level ?? 1}
@@ -137,11 +138,11 @@ export default function XPScreen() {
               XP hoje: {status?.xpToday ?? 0}/{status?.dailyMax ?? 300}
             </Text>
           </View>
-        </View>
+        </Card>
 
         {/* Estágios da Árvore */}
         <Text style={styles.sectionTitle}>Estágios da Árvore</Text>
-        <View style={styles.stagesContainer}>
+        <Card padding={0} style={{ marginHorizontal: S.md, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg }}>
           {TREE_STAGES_DISPLAY.map(stage => {
             const isCompleted = treeStage >= stage.stage;
             const isCurrent   = treeStage === stage.stage;
@@ -165,11 +166,11 @@ export default function XPScreen() {
               </View>
             );
           })}
-        </View>
+        </Card>
 
         {/* Como ganhar XP */}
         <Text style={styles.sectionTitle}>Como ganhar XP</Text>
-        <View style={styles.actionsContainer}>
+        <Card padding={0} style={{ marginHorizontal: S.md, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg }}>
           {XP_ACTIONS_DISPLAY.map((item, i) => (
             <View key={i} style={styles.actionRow}>
               <Text style={styles.actionIcon}>{item.icon}</Text>
@@ -183,16 +184,16 @@ export default function XPScreen() {
               </View>
             </View>
           ))}
-        </View>
+        </Card>
 
         {/* Info Fertilizante */}
-        <View style={styles.fertCard}>
+        <Card padding={S.lg} style={{ marginHorizontal: S.md, gap: S.sm, borderWidth: 1, borderColor: colors.successLegacy + '44' }}>
           <Text style={styles.fertTitle}>🌱 Fertilizante da Sintonia</Text>
           <Text style={styles.fertDesc}>
             Disponível com Cristais Premium. Ativa +50% de XP (global e da árvore) por 24h.
             Não afeta Fragmentos, Cristais ou Cofre.
           </Text>
-        </View>
+        </Card>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -208,7 +209,7 @@ const styles = StyleSheet.create({
   center:      { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // Árvore
-  treeCard:    { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  treeCard:    { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: COLORS.borderLight },
   treeCardLabel: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textTransform: 'uppercase', letterSpacing: 1 },
   treeIcon:    { fontSize: 80 },
   treeName:    { color: COLORS.surface, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold },
@@ -219,42 +220,38 @@ const styles = StyleSheet.create({
   treeProgressValue:   { color: COLORS.secondary, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
   treeProgressBar:     { height: 8, backgroundColor: COLORS.border, borderRadius: R.full, overflow: 'hidden' },
   treeProgressFill:    { height: '100%', backgroundColor: COLORS.secondary, borderRadius: R.full },
-  fertBadge:   { backgroundColor: 'rgba(168,224,99,0.15)', borderRadius: R.full, paddingHorizontal: S.lg, paddingVertical: S.xs, borderWidth: 1, borderColor: '#A8E063' },
-  fertText:    { color: '#A8E063', fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+  fertBadge:   { backgroundColor: colors.successLegacy + '26', borderRadius: R.full, paddingHorizontal: S.lg, paddingVertical: S.xs, borderWidth: 1, borderColor: colors.successLegacy },
+  fertText:    { color: colors.successLegacy, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
 
   // Nível
-  levelCard:   { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.md, borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg },
   xpTodayRow:  { flexDirection: 'row', justifyContent: 'flex-end' },
   xpTodayText: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
 
   // Estágios
   sectionTitle:      { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginBottom: S.sm },
-  stagesContainer:   { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg },
   stageRow:          { flexDirection: 'row', alignItems: 'center', padding: S.md, gap: S.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  stageRowCompleted: { backgroundColor: 'rgba(76,175,80,0.05)' },
-  stageRowCurrent:   { backgroundColor: 'rgba(181,123,238,0.1)' },
-  stageIcon:         { fontSize: 28, width: 36 },
+  stageRowCompleted: { backgroundColor: COLORS.success + '0D' },
+  stageRowCurrent:   { backgroundColor: COLORS.secondary + '1A' },
+  stageIcon:         { fontSize: FONT_SIZE.hero, width: 36 },
   stageInfo:         { flex: 1 },
   stageName:         { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
   stageNameCompleted:{ color: COLORS.success },
   stageReward:       { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
   stageXP:           { alignItems: 'flex-end', gap: 2 },
   stageXPText:       { color: COLORS.secondary, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
-  stageDone:         { fontSize: 14 },
+  stageDone:         { fontSize: FONT_SIZE.body },
 
   // Ações
-  actionsContainer:  { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg },
   actionRow:         { flexDirection: 'row', alignItems: 'center', padding: S.md, gap: S.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  actionIcon:        { fontSize: 22, width: 30 },
+  actionIcon:        { fontSize: FONT_SIZE.xxl, width: 30 },
   actionInfo:        { flex: 1 },
   actionLabel:       { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
   actionNote:        { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
   actionRewards:     { alignItems: 'flex-end', gap: 2 },
   actionXP:          { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
-  actionTreeXP:      { color: '#A8E063', fontSize: FONT_SIZE.xs },
+  actionTreeXP:      { color: colors.successLegacy, fontSize: FONT_SIZE.xs },
 
   // Fertilizante
-  fertCard:    { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.sm, borderWidth: 1, borderColor: '#A8E063' + '44' },
-  fertTitle:   { color: '#A8E063', fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
+  fertTitle:   { color: colors.successLegacy, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
   fertDesc:    { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },
 });

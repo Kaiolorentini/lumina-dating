@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Alert,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { Button, Card } from '../../components/ui';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT , alpha} from '../../theme/tokens';
 import { useAuth } from '../../context/AuthContext';
 import { useCreatorRequests } from '../../hooks/useCreatorRequests';
 import { createCreatorRequest, cancelCreatorRequest } from '../../services/marketplace/creatorService';
@@ -55,88 +56,78 @@ export default function CreatorRequestScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle}>Ser Criador</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
-          <ActivityIndicator color={colors.gold} />
+          <ActivityIndicator color={COLORS.gold} />
         ) : isApproved ? (
-          <View style={styles.statusCard}>
+          <Card padding={SPACING.lg} style={{ alignItems: 'center', marginBottom: SPACING.lg }}>
             <Text style={styles.statusIcon}>✅</Text>
             <Text style={styles.statusTitle}>Você já é um criador!</Text>
             <Text style={styles.statusText}>Acesse "Meus Produtos" para começar a publicar.</Text>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.actionBtnText}>Ir para Meus Produtos</Text>
-            </TouchableOpacity>
-          </View>
+            <Button label="Ir para Meus Produtos" onPress={() => navigation.goBack()} variant="primary" fullWidth style={{ marginTop: SPACING.md }} />
+          </Card>
         ) : isPending ? (
-          <View style={styles.statusCard}>
+          <Card padding={SPACING.lg} style={{ alignItems: 'center', marginBottom: SPACING.lg }}>
             <Text style={styles.statusIcon}>⏳</Text>
             <Text style={styles.statusTitle}>Solicitação em análise</Text>
             <Text style={styles.statusText}>
               Nossa equipe analisará sua solicitação em breve.
             </Text>
-            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
-              <Text style={styles.cancelBtnText}>Cancelar solicitação</Text>
-            </TouchableOpacity>
-          </View>
+            <Button label="Cancelar solicitação" onPress={handleCancel} variant="ghost" textStyle={{ color: COLORS.error }} fullWidth style={{ marginTop: SPACING.md }} />
+          </Card>
         ) : isRejected ? (
-          <View style={styles.statusCard}>
+          <Card padding={SPACING.lg} style={{ alignItems: 'center', marginBottom: SPACING.lg }}>
             <Text style={styles.statusIcon}>❌</Text>
             <Text style={styles.statusTitle}>Solicitação rejeitada</Text>
             {request?.rejectionReason && (
               <Text style={styles.statusText}>Motivo: {request.rejectionReason}</Text>
             )}
             <Text style={styles.statusText}>Você pode enviar uma nova solicitação.</Text>
-          </View>
+          </Card>
         ) : null}
 
         {(!request || isRejected) && (
           <>
             <Text style={styles.sectionTitle}>O que você pode fazer como criador</Text>
-            <View style={styles.benefitsCard}>
+            <Card padding={SPACING.md}>
               <Text style={styles.benefit}>📦 Publicar produtos digitais</Text>
               <Text style={styles.benefit}>💰 Ganhar 80% de cada venda</Text>
               <Text style={styles.benefit}>📊 Ver analytics dos produtos</Text>
               <Text style={styles.benefit}>💳 Sacar via Pix</Text>
               <Text style={styles.benefit}>⭐ Receber avaliações</Text>
-            </View>
+            </Card>
 
             <Text style={styles.sectionTitle}>Termos e condições</Text>
-            <View style={styles.termsCard}>
+            <Card padding={SPACING.md}>
               <Text style={styles.termsText}>
                 • Apenas conteúdo original é permitido{'\n'}
                 • Plágio resulta em banimento permanente{'\n'}
                 • A Lumina retém 20% de comissão por venda{'\n'}
                 • Você é responsável pelo conteúdo publicado
               </Text>
-            </View>
+            </Card>
 
-            <TouchableOpacity
-              style={[styles.checkBox, accepted && styles.checkBoxActive]}
+            <Button
+              label={accepted ? '✅ Aceito os termos e condições' : '⬜ Aceito os termos e condições'}
               onPress={() => setAccepted(!accepted)}
-            >
-              <Text style={styles.checkBoxText}>
-                {accepted ? '✅' : '⬜'} Aceito os termos e condições
-              </Text>
-            </TouchableOpacity>
+              variant="ghost"
+              fullWidth
+              style={{ marginBottom: SPACING.md }}
+            />
 
-            <TouchableOpacity
-              style={[styles.submitBtn, (!accepted || submitting) && styles.submitBtnDisabled]}
+            <Button
+              label="🚀 Solicitar acesso como criador"
               onPress={handleSubmit}
+              loading={submitting}
               disabled={!accepted || submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color={colors.background} />
-              ) : (
-                <Text style={styles.submitBtnText}>🚀 Solicitar acesso como criador</Text>
-              )}
-            </TouchableOpacity>
+              variant="primary"
+              fullWidth
+            />
           </>
         )}
       </ScrollView>
@@ -145,53 +136,20 @@ export default function CreatorRequestScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: alpha(COLORS.gold, 0.27),
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  content: { padding: spacing.md },
-  statusCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.lg, alignItems: 'center', marginBottom: spacing.lg,
-  },
-  statusIcon: { fontSize: 64, marginBottom: spacing.md },
-  statusTitle: { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', marginBottom: spacing.sm },
-  statusText: { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center' },
-  sectionTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', marginBottom: spacing.sm, marginTop: spacing.md },
-  benefitsCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, gap: spacing.sm, marginBottom: spacing.md,
-  },
-  benefit: { color: colors.white, fontSize: fonts.sizes.md },
-  termsCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
-  },
-  termsText: { color: colors.gray, fontSize: fonts.sizes.md, lineHeight: 24 },
-  checkBox: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
-  },
-  checkBoxActive: { borderColor: colors.gold, backgroundColor: colors.gold + '11' },
-  checkBoxText: { color: colors.white, fontSize: fonts.sizes.md },
-  submitBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.md,
-    padding: spacing.md, alignItems: 'center',
-  },
-  submitBtnDisabled: { opacity: 0.5 },
-  submitBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
-  actionBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.md,
-    padding: spacing.md, alignItems: 'center', marginTop: spacing.md, width: '100%',
-  },
-  actionBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
-  cancelBtn: {
-    backgroundColor: 'transparent', borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.error, padding: spacing.md, alignItems: 'center', marginTop: spacing.md, width: '100%',
-  },
-  cancelBtnText: { color: colors.error, fontSize: fonts.sizes.md },
+  // backBtn removed — now uses Button
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
+  content: { padding: SPACING.md },
+  statusIcon: { fontSize: 64, marginBottom: SPACING.md },
+  statusTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.sm },
+  statusText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, textAlign: 'center' },
+  sectionTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.sm, marginTop: SPACING.md },
+  benefit: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body },
+  termsText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, lineHeight: 24 },
+  // statusCard/benefitsCard/termsCard/checkBox/submitBtn/actionBtn/cancelBtn removed — now uses Card/Button
 });

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image,
-  TouchableOpacity, ActivityIndicator, Alert, Dimensions, TextInput,
+  ActivityIndicator, Alert, Dimensions,
 } from 'react-native';
+import { Button, Card, Input } from '../../components/ui';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha} from '../../theme/tokens';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
 import { useFavorites } from '../../hooks/useFavorites';
@@ -75,7 +76,6 @@ export default function ProductDetailScreen() {
       return;
     }
 
-    // Produto gratuito
     if (product?.isFree) {
       setBuying(true);
       try {
@@ -94,7 +94,6 @@ export default function ProductDetailScreen() {
       return;
     }
 
-    // Produto pago — createAsaasPayment
     setBuying(true);
     try {
       const functions = getFunctions(app, 'us-central1');
@@ -115,7 +114,6 @@ export default function ProductDetailScreen() {
     } catch (error: any) {
       const msg: string = error.message ?? '';
 
-      // Sale pendente já existe — ir para checkout sem QR (usuário deve usar checkoutUrl)
       if (msg.includes('CheckoutUrl:')) {
         Alert.alert(
           '⚠️ Pagamento pendente',
@@ -140,7 +138,7 @@ export default function ProductDetailScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator color={colors.gold} size="large" />
+        <ActivityIndicator color={COLORS.gold} size="large" />
       </View>
     );
   }
@@ -154,13 +152,9 @@ export default function ProductDetailScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
+        <Button label="‹" variant="ghost" onPress={() => navigation.goBack()} />
         <Text style={styles.headerTitle} numberOfLines={1}>{product.title}</Text>
-        <TouchableOpacity onPress={() => toggleFavorite(productId)}>
-          <Text style={styles.favoriteBtn}>{isFavorited ? '❤️' : '🤍'}</Text>
-        </TouchableOpacity>
+        <Button label={isFavorited ? '❤️' : '🤍'} variant="ghost" onPress={() => toggleFavorite(productId)} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -245,50 +239,28 @@ export default function ProductDetailScreen() {
 
       <View style={styles.footer}>
         {isOwner ? (
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => navigation.navigate('EditProduct', { productId })}
-          >
-            <Text style={styles.editButtonText}>✏️ Editar produto</Text>
-          </TouchableOpacity>
+          <Button label="✏️ Editar produto" onPress={() => navigation.navigate('EditProduct', { productId })} variant="ghost" fullWidth />
         ) : hasAccess ? (
-          <TouchableOpacity
-            style={styles.buyButton}
-            onPress={() => navigation.navigate('ContentViewer', {
-              productId,
-              purchaseId: `${user?.uid}_${productId}`,
-            })}
-          >
-            <Text style={styles.buyButtonText}>📂 Abrir conteúdo</Text>
-          </TouchableOpacity>
+          <Button label="📂 Abrir conteúdo" onPress={() => navigation.navigate('ContentViewer', { productId, purchaseId: `${user?.uid}_${productId}` })} variant="primary" fullWidth />
         ) : (
           <>
             {!product.isFree && (
-              <View style={styles.couponRow}>
-                <TextInput
-                  style={styles.couponInput}
-                  placeholder="Cupom de desconto (opcional)"
-                  placeholderTextColor={colors.gray}
-                  value={couponCode}
-                  onChangeText={t => setCouponCode(t.toUpperCase())}
-                  autoCapitalize="characters"
-                  editable={!buying}
-                />
-              </View>
+              <Input
+                placeholder="Cupom de desconto (opcional)"
+                value={couponCode}
+                onChangeText={t => setCouponCode(t.toUpperCase())}
+                autoCapitalize="characters"
+                editable={!buying}
+              />
             )}
-            <TouchableOpacity
-              style={[styles.buyButton, buying && styles.buyButtonDisabled]}
+            <Button
+              label={product.isFree ? '🎁 Obter grátis' : `💳 Comprar — R$ ${product.price.toFixed(2)}`}
               onPress={handleBuy}
+              loading={buying}
               disabled={buying}
-            >
-              {buying ? (
-                <ActivityIndicator color={colors.background} />
-              ) : (
-                <Text style={styles.buyButtonText}>
-                  {product.isFree ? '🎁 Obter grátis' : `💳 Comprar — R$ ${product.price.toFixed(2)}`}
-                </Text>
-              )}
-            </TouchableOpacity>
+              variant="primary"
+              fullWidth
+            />
           </>
         )}
       </View>
@@ -297,62 +269,46 @@ export default function ProductDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  loadingContainer: { flex: 1, backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderBottomWidth: 0.5, borderBottomColor: alpha(COLORS.gold, 0.27),
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
-  headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', flex: 1, textAlign: 'center' },
-  favoriteBtn: { fontSize: 22 },
+  // backBtn removed — now uses Button
+  headerTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, flex: 1, textAlign: 'center' },
+  // favoriteBtn removed — now uses Button
   image: { width, height: 280 },
-  dots: { flexDirection: 'row', justifyContent: 'center', padding: spacing.sm, gap: spacing.xs },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.grayDark },
-  dotActive: { backgroundColor: colors.gold, width: 16 },
-  content: { padding: spacing.md },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
-  title: { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', flex: 1, marginRight: spacing.md },
-  price: { color: colors.gold, fontSize: fonts.sizes.xl, fontWeight: 'bold' },
-  ratingRow: { marginBottom: spacing.sm },
-  ratingText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.md },
+  dots: { flexDirection: 'row', justifyContent: 'center', padding: SPACING.sm, gap: SPACING.xs },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.border },
+  dotActive: { backgroundColor: COLORS.gold, width: 16 },
+  content: { padding: SPACING.md },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.sm },
+  title: { color: COLORS.textPrimary, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold, flex: 1, marginRight: SPACING.md },
+  price: { color: COLORS.gold, fontSize: FONT_SIZE.title, fontWeight: FONT_WEIGHT.bold },
+  ratingRow: { marginBottom: SPACING.sm },
+  ratingText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs, marginBottom: SPACING.md },
   chip: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2,
-    borderWidth: 1, borderColor: colors.grayDark,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.full,
+    paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs / 2,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  chipText: { color: colors.gray, fontSize: fonts.sizes.xs },
-  sectionTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', marginTop: spacing.md, marginBottom: spacing.sm },
-  description: { color: colors.gray, fontSize: fonts.sizes.md, lineHeight: 22 },
-  filesInfo: { gap: spacing.xs },
-  filesText: { color: colors.gray, fontSize: fonts.sizes.md },
+  chipText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  sectionTitle: { color: COLORS.textPrimary, fontSize: FONT_SIZE.body, fontWeight: FONT_WEIGHT.bold, marginTop: SPACING.md, marginBottom: SPACING.sm },
+  description: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body, lineHeight: 22 },
+  filesInfo: { gap: SPACING.xs },
+  filesText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.body },
   reviewCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    padding: spacing.md, marginBottom: spacing.sm,
-    borderWidth: 1, borderColor: colors.grayDark,
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md, marginBottom: SPACING.sm,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  reviewRating: { fontSize: 14, marginBottom: spacing.xs },
-  reviewComment: { color: colors.gray, fontSize: fonts.sizes.sm },
-  footer: { padding: spacing.md, borderTopWidth: 0.5, borderTopColor: colors.grayDark },
-  couponRow: { marginBottom: spacing.sm },
-  couponInput: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark,
-    color: colors.white, padding: spacing.md,
-    fontSize: fonts.sizes.md, letterSpacing: 1,
-  },
-  buyButton: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.md,
-    padding: spacing.md, alignItems: 'center',
-  },
-  buyButtonDisabled: { opacity: 0.6 },
-  buyButtonText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
-  editButton: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    padding: spacing.md, alignItems: 'center',
-    borderWidth: 1, borderColor: colors.gold,
-  },
-  editButtonText: { color: colors.gold, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  reviewRating: { fontSize: FONT_SIZE.body, marginBottom: SPACING.xs },
+  reviewComment: { color: COLORS.textSecondary, fontSize: FONT_SIZE.caption },
+  footer: { padding: SPACING.md, borderTopWidth: 0.5, borderTopColor: COLORS.border },
+  // couponRow/couponInput removed — now uses Input
+  // buyButton/buyButtonDisabled/buyButtonText removed — now uses Button
+  // editButton/editButtonText removed — now uses Button
 });
