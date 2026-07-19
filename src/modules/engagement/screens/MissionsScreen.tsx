@@ -19,6 +19,7 @@ import { useCoins }         from '../../../context/CoinsContext';
 import { useMissions, CommonMission, SpecialMission } from '../hooks/useMissions';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
+import { useAppFeedback } from '../../../hooks/useAppFeedback';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT , colors , alpha } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -117,12 +118,7 @@ export default function MissionsScreen() {
   const { user }   = useAuth();
   const { refreshWallet } = useCoins();
   const { data, loading, error, progressing, progressMission, refresh } = useMissions(user?.uid);
-  const [toast, setToast] = useState<string | null>(null);
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
-  }
+  const { success: notifySuccess, info: notifyInfo } = useAppFeedback();
 
   // Navegação + progressão por tipo de missão
   async function handleMissionPress(missionId: string, type: string) {
@@ -151,14 +147,14 @@ export default function MissionsScreen() {
     if (!result) return;
 
     if (result.duplicate) {
-      showToast('Já contamos esse perfil hoje!');
+      notifyInfo('Já contamos esse perfil hoje!');
       return;
     }
 
     if (result.completed) {
       await refreshWallet();
-      if (result.fragments > 0) showToast(`+${result.fragments} 🔮 Fragmentos!`);
-      if (result.crystals  > 0) showToast(`+${result.crystals} ✨ Cristal(is) Gratuito(s)!`);
+      if (result.fragments > 0) notifySuccess(`+${result.fragments} 🔮 Fragmentos!`);
+      if (result.crystals  > 0) notifySuccess(`+${result.crystals} ✨ Cristal(is) Gratuito(s)!`);
     }
   }
 
@@ -197,13 +193,6 @@ export default function MissionsScreen() {
   return (
     <View style={styles.container}>
       <Header title="Missões do Dia" showBack={true} showHome={true} />
-
-      {/* Toast */}
-      {toast && (
-        <View style={styles.toast}>
-          <Text style={styles.toastText}>{toast}</Text>
-        </View>
-      )}
 
       <ScrollView showsVerticalScrollIndicator={false}>
 

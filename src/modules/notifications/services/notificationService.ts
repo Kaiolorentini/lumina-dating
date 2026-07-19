@@ -63,7 +63,8 @@ export async function createNotification(
 
 export function listenToNotifications(
   userId:   string,
-  onUpdate: (notifications: AppNotification[]) => void
+  onUpdate: (notifications: AppNotification[]) => void,
+  onError?: (error: any) => void
 ): () => void {
   const q = query(
     collection(db, COLLECTIONS.NOTIFICATIONS),
@@ -84,7 +85,7 @@ export function listenToNotifications(
       dados:     d.data().dados ?? undefined,
     }));
     onUpdate(notifications);
-  });
+  }, onError);
 }
 
 export async function markAsRead(notificationId: string): Promise<void> {

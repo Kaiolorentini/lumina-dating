@@ -12,10 +12,11 @@ import {
   Modal, View, Text, StyleSheet,
   TouchableOpacity, ActivityIndicator,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDailyReward } from '../modules/engagement/hooks/useDailyReward';
 import { useCoins }       from '../context/CoinsContext';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT , colors , alpha } from '../theme/tokens';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT , colors , alpha, GLASS } from '../theme/tokens';
 
 interface Props {
   uid:       string;
@@ -55,7 +56,7 @@ export default function DailyRewardModal({ uid, visible, onClose }: Props) {
       animationType="fade"
       statusBarTranslucent
     >
-      <View style={styles.overlay}>
+      <BlurView intensity={GLASS.blur.heavy} tint="dark" style={styles.overlay}>
         <LinearGradient
           colors={[colors.cardLegacy, '#2D1B4E']}
           style={styles.card}
@@ -114,7 +115,7 @@ export default function DailyRewardModal({ uid, visible, onClose }: Props) {
             </>
           )}
         </LinearGradient>
-      </View>
+      </BlurView>
     </Modal>
   );
 }
@@ -123,7 +124,7 @@ const S = SPACING;
 const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
-  overlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: S.xl },
+  overlay:       { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl },
   card:          { width: '100%', borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: alpha(colors.secondaryLegacy, 0.4) },
   icon:          { fontSize: 64 },
   title:         { color: COLORS.surface, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center' },

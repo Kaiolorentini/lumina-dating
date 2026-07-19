@@ -1,9 +1,10 @@
 import React, { memo } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, StyleSheet,
+  View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../../theme/tokens';
 import { Product } from '../../shared/types/marketplace';
+import { ImageWithFallback } from '../ui';
 
 interface ProductCardProps {
   product: Product;
@@ -21,14 +22,21 @@ export const ProductCard = memo(function ProductCard({
       style={[styles.card, compact && styles.cardCompact]}
       onPress={onPress}
       activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={`Ver produto ${product.title}, ${product.isFree ? 'grátis' : 'R$ ' + product.price.toFixed(2)}`}
     >
-      <Image
+      <ImageWithFallback
         source={{ uri: product.coverImage || 'https://via.placeholder.com/300' }}
+        fallbackIcon="🛍️"
         style={[styles.cover, compact && styles.coverCompact]}
-        resizeMode="cover"
       />
       {onFavorite && (
-        <TouchableOpacity style={styles.favoriteBtn} onPress={onFavorite}>
+        <TouchableOpacity
+          style={styles.favoriteBtn}
+          onPress={onFavorite}
+          accessibilityRole="button"
+          accessibilityLabel={isFavorited ? `Remover ${product.title} dos favoritos` : `Favoritar ${product.title}`}
+        >
           <Text style={styles.favoriteIcon}>{isFavorited ? '❤️' : '🤍'}</Text>
         </TouchableOpacity>
       )}

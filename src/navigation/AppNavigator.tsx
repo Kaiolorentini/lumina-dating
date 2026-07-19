@@ -36,6 +36,8 @@ import { listenToNotifications } from '../modules/notifications/services/notific
 import { generateChatId } from '../modules/chat/services/messageService';
 import InAppNotification from '../components/InAppNotification';
 import { usePushNotifications } from '../modules/notifications/hooks/usePushNotifications';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { OfflineBanner } from '../components/OfflineBanner';
 import PaymentSetupScreen from '../screens/marketplace/PaymentSetupScreen';
 import MarketplaceHomeScreen from '../screens/marketplace/MarketplaceHomeScreen';
 import ProductDetailScreen from '../screens/marketplace/ProductDetailScreen';
@@ -256,7 +258,7 @@ function TabNavigator() {
 // ============================================
 function MainStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="MainTabs"              component={TabNavigator} />
       <Stack.Screen name="RealProfile"           component={RealProfileScreen} />
       <Stack.Screen name="UserChat"              component={UserChatScreen} />
@@ -442,6 +444,8 @@ function AppContent() {
 // ROOT
 // ============================================
 export default function AppNavigator() {
+  const { isOffline } = useNetworkStatus();
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
@@ -449,6 +453,7 @@ export default function AppNavigator() {
           <NavigationContainer ref={navigationRef}>
             <AppContent />
           </NavigationContainer>
+          <OfflineBanner visible={isOffline} />
         </CoinsProvider>
       </AuthProvider>
     </SafeAreaProvider>

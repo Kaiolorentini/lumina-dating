@@ -211,6 +211,8 @@ service cloud.firestore {
       );
       allow list: if resource.data.status == 'approved' &&
         resource.data.isDeleted != true;
+      allow list: if isAuthenticated() &&
+        resource.data.ownerId == request.auth.uid;
       allow list: if isAdmin();
       allow create: if isCreator() && isMarketplaceEnabled() &&
         request.resource.data.ownerId == request.auth.uid &&

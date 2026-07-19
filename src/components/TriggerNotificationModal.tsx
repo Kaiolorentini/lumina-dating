@@ -16,10 +16,11 @@ import {
   Modal, View, Text, StyleSheet,
   TouchableOpacity, ActivityIndicator, Image,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useCoins }        from '../context/CoinsContext';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT , colors , alpha } from '../theme/tokens';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT , colors , alpha, GLASS } from '../theme/tokens';
 
 const functions = getFunctions();
 
@@ -158,7 +159,7 @@ export default function TriggerNotificationModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View style={styles.overlay}>
+      <BlurView intensity={GLASS.blur.heavy} tint="dark" style={styles.overlay}>
         <LinearGradient colors={cfg.gradient} style={styles.card}>
 
           {/* Ícone + Título */}
@@ -278,7 +279,7 @@ export default function TriggerNotificationModal({
           </TouchableOpacity>
 
         </LinearGradient>
-      </View>
+      </BlurView>
     </Modal>
   );
 }
@@ -287,7 +288,7 @@ const S = SPACING;
 const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
-  overlay:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', alignItems: 'center', justifyContent: 'center', padding: S.xl },
+  overlay:          { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl },
   card:             { width: '100%', borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: alpha(colors.secondaryLegacy, 0.3) },
   icon:             { fontSize: 56 },
   title:            { fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center' },

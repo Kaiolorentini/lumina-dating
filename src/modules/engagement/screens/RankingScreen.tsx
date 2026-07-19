@@ -9,7 +9,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Image,
+  TouchableOpacity, ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import { LinearGradient }   from 'expo-linear-gradient';
@@ -19,7 +19,7 @@ import { useAuth }          from '../../../context/AuthContext';
 import { useRanking, RankingEntry } from '../hooks/useRanking';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
-import { Card, EmptyState } from '../../../components/ui';
+import { Card, EmptyState, ImageWithFallback, ErrorState } from '../../../components/ui';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, RANK_COLORS, GRADIENTS } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -58,6 +58,8 @@ function RankingRow({
       ]}
       onPress={onPress}
       activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={`${entry.position}º lugar: ${entry.displayName}, ${entry.socialXP} XP Social`}
     >
       {/* Posição */}
       <View style={styles.positionBox}>
@@ -71,7 +73,7 @@ function RankingRow({
 
       {/* Avatar */}
       {entry.photoURL ? (
-        <Image source={{ uri: entry.photoURL }} style={styles.avatar} />
+        <ImageWithFallback source={{ uri: entry.photoURL }} fallbackIcon="👤" style={styles.avatar} />
       ) : (
         <View style={[styles.avatar, styles.avatarPlaceholder]}>
           <Text style={{ fontSize: FONT_SIZE.xl }}>👤</Text>
@@ -125,6 +127,19 @@ export default function RankingScreen() {
 
   const top50 = data?.top50 ?? [];
 
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Header title="Ranking Semanal" showBack={true} showHome={true} />
+        <ErrorState
+          onRetry={refresh}
+          title="Falha ao carregar"
+          message={typeof error === 'string' ? error : 'Não foi possível carregar o ranking.'}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Header title="Ranking Semanal" showBack={true} showHome={true} />
@@ -134,6 +149,8 @@ export default function RankingScreen() {
         <TouchableOpacity
           style={[styles.tab, activeTab === 'social' && styles.tabActive]}
           onPress={() => setActiveTab('social')}
+          accessibilityRole="button"
+          accessibilityLabel="Aba Ranking Social"
         >
           <Text style={[styles.tabText, activeTab === 'social' && styles.tabTextActive]}>
             🏆 Social
@@ -142,6 +159,8 @@ export default function RankingScreen() {
         <TouchableOpacity
           style={[styles.tab, activeTab === 'progresso' && styles.tabActive]}
           onPress={() => setActiveTab('progresso')}
+          accessibilityRole="button"
+          accessibilityLabel="Aba Ranking de Progressão"
         >
           <Text style={[styles.tabText, activeTab === 'progresso' && styles.tabTextActive]}>
             📈 Progressão

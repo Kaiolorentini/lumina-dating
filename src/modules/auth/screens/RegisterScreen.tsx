@@ -24,7 +24,7 @@ export default function RegisterScreen({ navigation }: Props) {
     email, setEmail,
     password, setPassword,
     confirmPassword, setConfirmPassword,
-    loading, error,
+    loading, error, fieldErrors,
     submit,
   } = useRegisterForm();
 
@@ -54,7 +54,7 @@ export default function RegisterScreen({ navigation }: Props) {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              error={error}
+              error={fieldErrors.email}
             />
 
             <Input
@@ -63,6 +63,7 @@ export default function RegisterScreen({ navigation }: Props) {
               value={password}
               onChangeText={setPassword}
               secureTextEntry
+              error={fieldErrors.password}
             />
 
             <Input
@@ -71,6 +72,7 @@ export default function RegisterScreen({ navigation }: Props) {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
+              error={fieldErrors.confirmPassword}
             />
 
             <Button

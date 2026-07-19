@@ -21,6 +21,7 @@ import { AppNotification }   from '../../../shared/types';
 import { formatRelativeTime } from '../../../shared/utils';
 import Header                from '../../../components/Header';
 import TriggerNotificationModal, { TriggerType } from '../../../components/TriggerNotificationModal';
+import { ErrorState }        from '../../../components/ui';
 import { RootStackParamList } from '../../../navigation/types';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -42,7 +43,7 @@ export default function NotificationsScreen() {
   const { user }   = useAuth();
   const {
     notifications, unreadCount,
-    loading, markRead, markAllRead,
+    loading, error, reload, markRead, markAllRead,
   } = useNotifications(user?.uid);
 
   // Estado do modal de gatilho
@@ -101,6 +102,8 @@ export default function NotificationsScreen() {
         ]}
         onPress={() => handleNotificationPress(item)}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={item.read ? item.message : `Nova notificação: ${item.message}`}
       >
         <View style={[
           styles.iconContainer,
@@ -153,6 +156,8 @@ export default function NotificationsScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator color={colors.gold} size="large" />
         </View>
+      ) : error ? (
+        <ErrorState onRetry={reload} title="Falha ao carregar" message="Não foi possível carregar suas notificações." />
       ) : notifications.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🔔</Text>

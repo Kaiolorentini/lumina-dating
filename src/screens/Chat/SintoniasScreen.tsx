@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Image, ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { Button, Card, EmptyState } from '../../components/ui';
+import { Button, Card, EmptyState, ImageWithFallback, ErrorState } from '../../components/ui';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,12 +33,14 @@ export default function SintoniasScreen() {
   const insets = useSafeAreaInsets();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => { loadConnections(); }, [user]);
 
   async function loadConnections() {
     if (!user) return;
+    setError(false);
     try {
       const conexoes = await getConexoesAceitas(user.uid);
       const blocked = await getBloqueados(user.uid);
@@ -56,6 +58,7 @@ export default function SintoniasScreen() {
       setConnections(result);
     } catch (error) {
       console.error('Erro ao carregar conexoes:', error);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -70,9 +73,15 @@ export default function SintoniasScreen() {
   function renderConnection({ item }: { item: Connection }) {
     return (
       <Card padding={SPACING.md} style={styles.card}>
-        <TouchableOpacity style={styles.profileArea} onPress={() => navigation.navigate('RealProfile', { userId: item.userId })} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.profileArea}
+          onPress={() => navigation.navigate('RealProfile', { userId: item.userId })}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Ver perfil de ${item.userName}`}
+        >
           {item.userPhoto ? (
-            <Image source={{ uri: item.userPhoto }} style={styles.avatar} />
+            <ImageWithFallback source={{ uri: item.userPhoto }} fallbackIcon="👤" style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
               <Text style={styles.avatarLetter}>{item.userName.charAt(0).toUpperCase()}</Text>
@@ -97,6 +106,8 @@ export default function SintoniasScreen() {
           <ActivityIndicator color={COLORS.gold} size="large" />
           <Text style={styles.loadingText}>Carregando conexoes...</Text>
         </View>
+      ) : error ? (
+        <ErrorState onRetry={loadConnections} message="Não foi possível carregar suas conexões." />
       ) : connections.length === 0 ? (
         <EmptyState
           icon="💫"

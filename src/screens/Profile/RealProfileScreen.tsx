@@ -6,13 +6,11 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
-  Alert,
   Dimensions,
-  Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, Card } from '../../components/ui';
+import { Button, Card, ConfirmSheet } from '../../components/ui';
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha} from '../../theme/tokens';
 import { useAuth } from '../../context/AuthContext';
 import { getProfile } from '../../services/profileService';
@@ -28,6 +26,7 @@ import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../../services/firebase';
 import { Badge } from '../../components/ui/Badge';
+import { useAppFeedback } from '../../hooks/useAppFeedback';
 
 const { width, height } = Dimensions.get('window');
 const functions = getFunctions();
@@ -51,6 +50,8 @@ export default function RealProfileScreen() {
   const [sending, setSending] = useState(false);
   const [liked, setLiked] = useState(false);
   const [liking, setLiking] = useState(false);
+  const [confirmBlock, setConfirmBlock] = useState(false);
+  const { success: notifySuccess, error: notifyError } = useAppFeedback();
 
   useEffect(() => { loadData(); }, []);
 
@@ -93,40 +94,21 @@ export default function RealProfileScreen() {
     try {
       await enviarSolicitacao(user.uid, currentProfile.name, currentProfile.photoURL, targetUserId, targetProfile.name);
       setRequestSent(true);
-      Alert.alert('✦ Solicitação enviada!', `Aguarde ${targetProfile.name} aceitar.`);
+      notifySuccess(`✦ Solicitação enviada! Aguarde ${targetProfile.name} aceitar.`);
     } catch {
-      Alert.alert('Erro', 'Não foi possível enviar a solicitação.');
+      notifyError('Não foi possível enviar a solicitação.');
     } finally {
       setSending(false);
     }
   }
 
-  async function handleBlock() {
+  async function confirmBlockUser() {
     if (!user || !targetProfile) return;
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm(`Deseja bloquear ${targetProfile.name}?`);
-      if (confirmed) {
-        await bloquearUsuario(user.uid, targetUserId, targetProfile.name, targetProfile.photoURL);
-        setBlocked(true);
-        navigation.goBack();
-      }
-    } else {
-      Alert.alert('⚠️ Bloquear usuário', `Deseja bloquear ${targetProfile.name}?`, [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Bloquear', style: 'destructive', onPress: async () => {
-          await bloquearUsuario(user.uid, targetUserId, targetProfile.name, targetProfile.photoURL);
-          setBlocked(true);
-          navigation.goBack();
-        }},
-      ]);
-    }
-  }
-
-  async function checkAlreadyLiked(uid: string, targetUid: string): Promise<boolean> {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const likeId = `${uid}_${targetUid}_${todayStr}`;
-    const likeDoc = await getDoc(doc(db, 'likes', likeId));
-    return likeDoc.exists();
+    await bloquearUsuario(user.uid, targetUserId, targetProfile.name, targetProfile.photoURL);
+    setBlocked(true);
+    setConfirmBlock(false);
+    notifySuccess(`Você bloqueou ${targetProfile.name}`);
+    setTimeout(() => navigation.goBack(), 600);
   }
 
   async function handleLike() {
@@ -137,14 +119,22 @@ export default function RealProfileScreen() {
       const likeId = `${user.uid}_${targetUserId}_${todayStr}`;
       await setDoc(doc(db, 'likes', likeId), { likerUid: user.uid, targetUid: targetUserId, date: todayStr, createdAt: serverTimestamp() });
       setLiked(true);
+      notifySuccess('❤️ Curtida enviada!');
       const processLike = httpsCallable(functions, 'onProfileLike');
       processLike({ likerUid: user.uid, targetUid: targetUserId }).catch(err => console.warn('[RealProfileScreen] onProfileLike falhou:', err));
     } catch {
-      Alert.alert('Erro', 'Não foi possível registrar a curtida.');
+      notifyError('Não foi possível registrar a curtida.');
       setLiked(false);
     } finally {
       setLiking(false);
     }
+  }
+
+  async function checkAlreadyLiked(uid: string, targetUid: string): Promise<boolean> {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const likeId = `${uid}_${targetUid}_${todayStr}`;
+    const likeDoc = await getDoc(doc(db, 'likes', likeId));
+    return likeDoc.exists();
   }
 
   function getSintoniaLabel(): string {
@@ -183,7 +173,7 @@ export default function RealProfileScreen() {
         showBack={true}
         showHome={true}
         rightElement={
-          <Button label="🚫" variant="ghost" onPress={handleBlock} />
+          <Button label="🚫" variant="ghost" onPress={() => setConfirmBlock(true)} accessibilityLabel={`Bloquear ${targetProfile?.name || 'usuário'}`} />
         }
       />
 
@@ -292,6 +282,16 @@ export default function RealProfileScreen() {
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
+
+      <ConfirmSheet
+        visible={confirmBlock}
+        onClose={() => setConfirmBlock(false)}
+        title="⚠️ Bloquear usuário"
+        message={`Deseja bloquear ${targetProfile?.name}? Vocês não se verão mais e nenhuma mensagem será trocada.`}
+        confirmLabel="Bloquear"
+        confirmVariant="danger"
+        onConfirm={confirmBlockUser}
+      />
     </View>
   );
 }

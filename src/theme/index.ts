@@ -257,6 +257,7 @@ export const fonts = {
 
 export const FONT_SIZE = {
   // Semântico (novo)
+  tiny: 8,
   overline: 10,
   caption: 12,
   body: 14,
@@ -326,6 +327,32 @@ export const BORDER_RADIUS = {
 
 // ============ SHADOWS ============
 
+// ============ GLASS / BACKDROP ============
+
+/** Tokens para efeito glassmorphism — usado em modais, bottom sheets, overlays */
+export const GLASS = {
+  /** Intensidade de blur (iOS: blurRadius, Android: precisa de biblioteca) */
+  blur: {
+    subtle: 8,
+    medium: 16,
+    heavy: 30,
+  },
+  /** Cores de overlay para backdrop (sobreposição semi-transparente) */
+  overlay: 'rgba(13, 13, 15, 0.6)',
+  overlayHeavy: 'rgba(13, 13, 15, 0.8)',
+  overlayLight: 'rgba(13, 13, 15, 0.4)',
+  /** Tintas para superfície glass — usadas com BlurView ou sobreposição */
+  tint: 'rgba(255, 255, 255, 0.05)',
+  tintLight: 'rgba(255, 255, 255, 0.03)',
+  tintHeavy: 'rgba(255, 255, 255, 0.08)',
+  /** Borda sutil para superfícies glass */
+  border: 'rgba(255, 255, 255, 0.08)',
+  /** Borda mais forte (contraste) */
+  borderStrong: 'rgba(255, 255, 255, 0.15)',
+} as const;
+
+// ============ SHADOWS / ELEVATION ============
+
 export const SHADOWS = {
   none: {
     shadowColor: 'transparent',
@@ -334,6 +361,7 @@ export const SHADOWS = {
     shadowRadius: 0,
     elevation: 0,
   },
+  /** Cards e superfícies elevadas sutis */
   level1: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -341,6 +369,7 @@ export const SHADOWS = {
     shadowRadius: 4,
     elevation: 4,
   },
+  /** Cards em destaque, modais */
   level2: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -348,6 +377,7 @@ export const SHADOWS = {
     shadowRadius: 8,
     elevation: 8,
   },
+  /** Modais, bottom sheets, cards hero */
   level3: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
@@ -355,6 +385,24 @@ export const SHADOWS = {
     shadowRadius: 12,
     elevation: 12,
   },
+  /** Dropdowns, tooltips, FAB */
+  level4: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 16,
+  },
+  /** Toast, alerts no topo */
+  level5: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.6,
+    shadowRadius: 28,
+    elevation: 24,
+  },
+
+  // === Glow / colored shadows ===
   premium: {
     shadowColor: '#D4AF37',
     shadowOffset: { width: 0, height: 4 },
@@ -368,6 +416,13 @@ export const SHADOWS = {
     shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 12,
+  },
+  accent: {
+    shadowColor: '#8A6CFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
   },
 
   // Backward-compat tokens.ts
@@ -392,6 +447,69 @@ export const SHADOWS = {
     shadowRadius: 16,
     elevation: 16,
   },
+} as const;
+
+// ============ ELEVATION — NÍVEIS DE CARD ============
+
+/** Níveis de elevação para cards — substitui o padrão `borderWidth: 1` */
+export const ELEVATION = {
+  /** Card sem borda nem sombra — conteúdo puro */
+  none: {
+    borderWidth: 0,
+    ...SHADOWS.none,
+  },
+  /** Card sutil — apenas borda fina, sem sombra */
+  flat: {
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    ...SHADOWS.none,
+  },
+  /** Card padrão — borda + sombra leve (substitui surface card antigo) */
+  low: {
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    ...SHADOWS.level1,
+  },
+  /** Card em destaque — sem borda, sombra média (substitui card com `borderColor: #444`) */
+  medium: {
+    borderWidth: 0,
+    ...SHADOWS.level2,
+  },
+  /** Card hero — sem borda, sombra forte */
+  high: {
+    borderWidth: 0,
+    ...SHADOWS.level3,
+  },
+  /** Card premium — glow gold */
+  premium: {
+    borderWidth: 0,
+    ...SHADOWS.premium,
+  },
+  /** Card glow roxo (gamificação) */
+  accent: {
+    borderWidth: 0,
+    ...SHADOWS.accent,
+  },
+} as const;
+
+// ============ PRESS ANIMATION ============
+
+export const PRESS = {
+  /** Fator de escala ao pressionar */
+  scale: 0.97,
+  scaleHeavy: 0.94,
+  /** Opacidade ao pressionar */
+  opacity: 0.85,
+  /** Spring config para animações de entrada */
+  spring: {
+    damping: 15,
+    stiffness: 200,
+    mass: 0.8,
+  } as const,
+  /** Timing config para fade */
+  fade: {
+    duration: 200,
+  } as const,
 } as const;
 
 // ============ ANIMATION ============
@@ -434,6 +552,8 @@ export type FontSizeKey = keyof typeof fonts.sizes;
 export type FontSizeUKey = keyof typeof FONT_SIZE;
 export type FontWeightKey = keyof typeof FONT_WEIGHT;
 export type ShadowKey = keyof typeof SHADOWS;
+export type ElevationKey = keyof typeof ELEVATION;
+export type GlassKey = keyof typeof GLASS;
 export type AnimationKey = keyof typeof ANIMATION;
 export type IconSizeKey = keyof typeof ICON_SIZE;
 

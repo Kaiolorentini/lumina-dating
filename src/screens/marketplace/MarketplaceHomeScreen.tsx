@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList,
   RefreshControl, ActivityIndicator,
 } from 'react-native';
-import { Button, Input } from '../../components/ui';
+import { Button, Input, ErrorState } from '../../components/ui';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha} from '../../theme/tokens';
@@ -23,7 +23,7 @@ export default function MarketplaceHomeScreen() {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
   const filters = useMemo(() => ({ status: 'approved' as const }), []);
-  const { products, loading, loadingMore, hasMore, loadMore, refresh } = useProducts(filters);
+  const { products, loading, loadingMore, hasMore, error, loadMore, refresh } = useProducts(filters);
   const { favoriteIds, toggleFavorite } = useFavorites(user?.uid);
 
   const filteredProducts = useMemo(() => {
@@ -63,6 +63,8 @@ export default function MarketplaceHomeScreen() {
             </View>
           ))}
         </View>
+      ) : error ? (
+        <ErrorState onRetry={refresh} title="Falha ao carregar" message={typeof error === 'string' ? error : 'Não foi possível carregar o marketplace.'} />
       ) : (
         <FlatList
           data={filteredProducts}

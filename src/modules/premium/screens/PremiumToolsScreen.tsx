@@ -9,7 +9,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Alert,
+  TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { useNavigation }   from '@react-navigation/native';
@@ -18,6 +18,8 @@ import { useAuth }          from '../../../context/AuthContext';
 import { usePremiumTools }  from '../hooks/usePremiumTools';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
+import { ConfirmSheet } from '../../../components/ui';
+import { useAppFeedback } from '../../../hooks/useAppFeedback';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT , colors , alpha } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -54,40 +56,30 @@ export default function PremiumToolsScreen() {
     fertilizer, turbo, loading, activating, error,
     activateFertilizer, activateTurbo, refresh,
   } = usePremiumTools(user?.uid);
+  const { success: notifySuccess, error: notifyError } = useAppFeedback();
+  const [confirmTool, setConfirmTool] = useState<'FERTILIZER' | 'TURBO' | null>(null);
 
-  async function handleActivateFertilizer() {
-    Alert.alert(
-      '🌱 Ativar Fertilizante?',
-      `Gasta ${fertilizer?.cost ?? 80} Cristais Premium.\n+50% XP por 24 horas.\n\nNão pode ser cancelado.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Ativar',
-          onPress: async () => {
-            const ok = await activateFertilizer();
-            if (ok) Alert.alert('✅ Ativado!', 'Fertilizante da Sintonia ativo por 24h.');
-          },
+  const confirmConfig = confirmTool === 'FERTILIZER'
+    ? {
+        title: '🌱 Ativar Fertilizante?',
+        message: `Gasta ${fertilizer?.cost ?? 80} Cristais Premium.\n+50% XP por 24 horas.\n\nNão pode ser cancelado.`,
+        confirmLabel: 'Ativar',
+        onConfirm: async () => {
+          const ok = await activateFertilizer();
+          if (ok) notifySuccess('✅ Fertilizante da Sintonia ativo por 24h.');
+          else notifyError('Não foi possível ativar. Verifique seus Cristais Premium.');
         },
-      ]
-    );
-  }
-
-  async function handleActivateTurbo() {
-    Alert.alert(
-      '⚡ Ativar Turbo?',
-      `Gasta ${turbo?.cost ?? 120} Cristais Premium.\nBoost de visibilidade por 30 minutos.\n\nNão garante aparecer — apenas aumenta a chance.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Ativar',
-          onPress: async () => {
-            const ok = await activateTurbo();
-            if (ok) Alert.alert('✅ Ativado!', 'Turbo Sintonia ativo por 30 minutos.');
-          },
+      }
+    : {
+        title: '⚡ Ativar Turbo?',
+        message: `Gasta ${turbo?.cost ?? 120} Cristais Premium.\nBoost de visibilidade por 30 minutos.\n\nNão garante aparecer — apenas aumenta a chance.`,
+        confirmLabel: 'Ativar',
+        onConfirm: async () => {
+          const ok = await activateTurbo();
+          if (ok) notifySuccess('✅ Turbo Sintonia ativo por 30 minutos.');
+          else notifyError('Não foi possível ativar. Verifique seus Cristais Premium.');
         },
-      ]
-    );
-  }
+      };
 
   if (loading) {
     return (
@@ -149,7 +141,7 @@ export default function PremiumToolsScreen() {
                 styles.activateBtn,
                 (fertilizer?.status === 'LOCKED' || activating === 'FERTILIZER') && styles.activateBtnDisabled,
               ]}
-              onPress={handleActivateFertilizer}
+              onPress={() => setConfirmTool('FERTILIZER')}
               disabled={fertilizer?.status === 'LOCKED' || activating === 'FERTILIZER'}
             >
               {activating === 'FERTILIZER'
@@ -214,7 +206,7 @@ export default function PremiumToolsScreen() {
                 styles.activateBtn,
                 (turbo?.status === 'LOCKED' || activating === 'TURBO') && styles.activateBtnDisabled,
               ]}
-              onPress={handleActivateTurbo}
+              onPress={() => setConfirmTool('TURBO')}
               disabled={turbo?.status === 'LOCKED' || activating === 'TURBO'}
             >
               {activating === 'TURBO'
@@ -244,6 +236,16 @@ export default function PremiumToolsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <ConfirmSheet
+        visible={confirmTool !== null}
+        onClose={() => setConfirmTool(null)}
+        title={confirmTool ? confirmConfig.title : ''}
+        message={confirmTool ? confirmConfig.message : ''}
+        confirmLabel={confirmTool ? confirmConfig.confirmLabel : 'Ativar'}
+        confirmVariant="primary"
+        onConfirm={confirmTool ? confirmConfig.onConfirm : () => {}}
+      />
     </View>
   );
 }

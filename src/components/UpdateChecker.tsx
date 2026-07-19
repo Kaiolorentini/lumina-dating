@@ -1,180 +1,177 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Platform,
+  Linking,
 } from 'react-native';
+import * as Updates from 'expo-updates';
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS, alpha } from '../theme/tokens';
+import { Button } from './ui/Button';
 
-interface Props {
-  onFinish?: () => void;
-}
+/**
+ * UpdateChecker — Integração real com EAS Update (expo-updates).
+ *
+ * Fluxo:
+ *  1. No mount, verifica se há update OTA (checkForUpdateAsync).
+ *  2. Se houver, baixa em segundo plano (fetchUpdateAsync) sem bloquear o app.
+ *  3. Mostra um banner discreto "Atualização pronta — toque para aplicar".
+ *  4. Ao tocar, recarrega o bundle (reloadAsync).
+ *
+ * Em dev (expo start / dev-client) o expo-updates é no-op, então o fluxo
+ * de teste visual é feito pelo botão manual abaixo.
+ */
+export default function UpdateChecker() {
+  const [checking, setChecking] = useState(false);
+  const [updateReady, setUpdateReady] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>('');
+  const isEmbedded = Updates.isEmbeddedLaunch || !Updates.createdAt;
+  const isDevClient = __DEV__ && Updates.isEmbeddedLaunch;
 
-export default function UpdateChecker({ onFinish }: Props) {
-  const [showUpdate, setShowUpdate] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState<{
-    version: string;
-    releaseNotes: string;
-    mandatory: boolean;
-    url: string;
-  } | null>(null);
+  const checkAndFetch = async () => {
+    setChecking(true);
+    setLastError(null);
+    setStatus('Verificando...');
+    try {
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        setStatus('Update disponível — baixando...');
+        await Updates.fetchUpdateAsync();
+        setUpdateReady(true);
+        setStatus(isDevClient
+          ? 'Update baixado (dev-client não recarrega OTA — use build de preview/produção)'
+          : 'Update pronto — reinicie o app');
+      } else {
+        setStatus('Nenhum update disponível');
+      }
+    } catch (e: any) {
+      setLastError(e?.message ?? 'Falha ao verificar atualização');
+      setStatus('Erro na verificação');
+    } finally {
+      setChecking(false);
+    }
+  };
 
   useEffect(() => {
-    checkForUpdate();
+    // Verificação automática só em build release (não dev).
+    if (!__DEV__) {
+      checkAndFetch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function checkForUpdate() {
+  async function applyUpdate() {
     try {
-      // Check for updates via expo-updates or custom endpoint
-      // This is a placeholder - implement based on your update strategy
-      const hasUpdate = await checkExpoUpdate();
-      if (hasUpdate) {
-        const info = await getUpdateInfo();
-        setUpdateInfo(info);
-        setShowUpdate(true);
-      }
-    } catch (error) {
-      console.error('[UpdateChecker] Error:', error);
+      await Updates.reloadAsync();
+    } catch (e: any) {
+      setLastError(e?.message ?? 'Falha ao aplicar atualização');
     }
   }
 
-  async function checkExpoUpdate(): Promise<boolean> {
-    // Implement based on expo-updates or your custom update service
-    return false;
-  }
-
-  async function getUpdateInfo() {
-    // Return update info from your service
-    return {
-      version: '1.0.0',
-      releaseNotes: 'Novidades e melhorias',
-      mandatory: false,
-      url: Platform.OS === 'ios' ? 'https://apps.apple.com/app/id...' : 'https://play.google.com/store/apps/details?id=...',
-    };
-  }
-
-  function handleUpdate() {
-    if (updateInfo?.url) {
-      // Open store or trigger expo-updates reload
-      Alert.alert(
-        'Atualização disponível',
-        updateInfo.releaseNotes,
-        [
-          { text: 'Agora', onPress: () => {
-            // Linking.openURL(updateInfo.url);
-          }},
-          { text: 'Depois', style: 'cancel' },
-        ]
-      );
+  async function openStore() {
+    const url =
+      Platform.OS === 'ios'
+        ? 'https://apps.apple.com/app/id...'
+        : 'https://play.google.com/store/apps/details?id=com.lumina.dating';
+    try {
+      await Linking.openURL(url);
+    } catch {
+      /* noop */
     }
   }
-
-  if (!showUpdate) return null;
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.icon}>🔄</Text>
-          <Text style={styles.title}>Nova atualização disponível</Text>
-        </View>
-        <Text style={styles.version}>v{updateInfo?.version}</Text>
-        <Text style={styles.notes}>{updateInfo?.releaseNotes}</Text>
-        {updateInfo?.mandatory && (
-          <Text style={styles.mandatory}>Esta atualização é obrigatória</Text>
-        )}
-        <TouchableOpacity style={styles.button} onPress={handleUpdate}>
-          <Text style={styles.buttonText}>Atualizar agora</Text>
-        </TouchableOpacity>
-        {!updateInfo?.mandatory && (
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => setShowUpdate(false)}>
-            <Text style={styles.secondaryButtonText}>Talvez depois</Text>
+    <>
+      {updateReady && (
+        <View style={styles.banner} accessibilityRole="alert">
+          <View style={styles.bannerContent}>
+            <Text style={styles.bannerIcon}>🔄</Text>
+            <View style={styles.bannerTextWrap}>
+              <Text style={styles.bannerTitle}>Atualização pronta</Text>
+              <Text style={styles.bannerSub}>Toque para aplicar as melhorias</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.bannerButton} onPress={applyUpdate} accessibilityRole="button" accessibilityLabel="Aplicar atualização">
+            <Text style={styles.bannerButtonText}>Reiniciar</Text>
           </TouchableOpacity>
-        )}
-      </View>
-    </View>
+        </View>
+      )}
+
+      {/* Painel de teste visual / QA — útil para validar OTA sem subir build */}
+      {__DEV__ && (
+        <View style={styles.qaPanel} accessibilityRole="alert">
+          <Text style={styles.qaTitle}>🔧 Teste OTA (dev)</Text>
+          <Text style={styles.qaMeta}>
+            {isEmbedded ? 'Launch: embedded' : 'Launch: OTA'} · runtime {Updates.runtimeVersion ?? 'n/a'}
+          </Text>
+          {status ? <Text style={styles.qaStatus}>{status}</Text> : null}
+          {lastError && <Text style={styles.qaError}>{lastError}</Text>}
+          {updateReady && (
+            <Button label="Recarregar OTA" variant="success" size="sm" onPress={applyUpdate} />
+          )}
+          <View style={styles.qaButtons}>
+            <Button label="Verificar OTA" variant="secondary" size="sm" loading={checking} onPress={checkAndFetch} />
+            <Button label="Abrir loja" variant="ghost" size="sm" onPress={openStore} />
+          </View>
+          <Text style={styles.qaHint}>
+            {isDevClient
+              ? 'Dev-client não aplica OTA automaticamente. Instale o build de preview/produção para receber o update de verdade.'
+              : 'Em produção, updates baixam automático e mostram banner.'}
+          </Text>
+        </View>
+      )}
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  banner: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    backgroundColor: alpha(COLORS.background, 0.8),
     zIndex: 9999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: SPACING.lg,
-  },
-  container: {
-    backgroundColor: COLORS.card,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.xl,
-    maxWidth: 320,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: alpha(COLORS.gold, 0.27),
-    gap: SPACING.md,
-  },
-  header: {
+    backgroundColor: COLORS.gold,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    justifyContent: 'space-between',
+    paddingTop: SPACING.lg,
   },
-  icon: { fontSize: 32 },
-  title: {
-    color: COLORS.textPrimary,
-    fontSize: FONT_SIZE.title,
-    fontWeight: FONT_WEIGHT.bold,
-    flex: 1,
-  },
-  version: {
-    color: COLORS.gold,
-    fontSize: FONT_SIZE.caption,
-    fontWeight: FONT_WEIGHT.bold,
-  },
-  notes: {
-    color: COLORS.textSecondary,
-    fontSize: FONT_SIZE.body,
-    lineHeight: 22,
-    textAlign: 'center',
-  },
-  mandatory: {
-    color: COLORS.error,
-    fontSize: FONT_SIZE.caption,
-    fontWeight: FONT_WEIGHT.bold,
-    textAlign: 'center',
-  },
-  button: {
-    backgroundColor: COLORS.gold,
+  bannerContent: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, flex: 1 },
+  bannerIcon: { fontSize: 20 },
+  bannerTextWrap: { flex: 1 },
+  bannerTitle: { color: COLORS.background, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  bannerSub: { color: COLORS.background, fontSize: FONT_SIZE.xs, opacity: 0.85 },
+  bannerButton: {
+    backgroundColor: COLORS.background,
     borderRadius: BORDER_RADIUS.full,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.xl,
-    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
   },
-  buttonText: {
-    color: COLORS.background,
-    fontSize: FONT_SIZE.body,
-    fontWeight: FONT_WEIGHT.bold,
+  bannerButtonText: { color: COLORS.gold, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+
+  qaPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9998,
+    backgroundColor: alpha(COLORS.card, 0.96),
+    borderTopWidth: 1,
+    borderTopColor: alpha(COLORS.gold, 0.27),
+    padding: SPACING.md,
+    gap: SPACING.xs,
   },
-  secondaryButton: {
-    borderRadius: BORDER_RADIUS.full,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.xl,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  secondaryButtonText: {
-    color: COLORS.textSecondary,
-    fontSize: FONT_SIZE.body,
-    fontWeight: FONT_WEIGHT.bold,
-  },
+  qaTitle: { color: COLORS.gold, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  qaMeta: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs },
+  qaStatus: { color: COLORS.gold, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.medium },
+  qaError: { color: COLORS.error, fontSize: FONT_SIZE.xs },
+  qaButtons: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.xs },
+  qaHint: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: SPACING.xs },
 });

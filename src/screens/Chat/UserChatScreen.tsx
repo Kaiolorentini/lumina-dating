@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, KeyboardAvoidingView, Platform,
-  Alert, Image,
+  Image, ActivityIndicator,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -11,8 +11,9 @@ import { useAuth } from '../../context/AuthContext';
 import { sendMessage, listenToMessages, Message } from '../../services/chatService';
 import Header from '../../components/Header';
 import { RootStackParamList } from '../../navigation/types';
-import { bloquearUsuario, estaBloqueado } from '../../services/blockService';
+import { bloquearUsuario, desbloquearUsuario, estaBloqueado } from '../../services/blockService';
 import { Button } from '../../components/ui/Button';
+import { useAppFeedback } from '../../hooks/useAppFeedback';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -29,7 +30,9 @@ export default function UserChatScreen() {
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
   const [blocked, setBlocked] = useState(false);
+  const [sending, setSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const { error: notifyError, success: notifySuccess } = useAppFeedback();
 
   useEffect(() => {
     checkBlocked();
@@ -47,22 +50,32 @@ export default function UserChatScreen() {
   }
 
   async function handleSend() {
-    if (!inputText.trim() || !user) return;
+    if (!inputText.trim() || !user || sending) return;
     const text = inputText.trim();
     setInputText('');
-    await sendMessage(chatId, text, user.uid, user.email || 'Você');
+    setSending(true);
+    try {
+      await sendMessage(chatId, text, user.uid, user.email || 'Você');
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (e: any) {
+      setInputText(text);
+      notifyError('Não foi possível enviar. Verifique sua conexão.');
+    } finally {
+      setSending(false);
+    }
   }
 
   async function handleBlock() {
     if (!user) return;
-    Alert.alert('🚫 Bloquear usuário', `Deseja bloquear ${targetUserName}? Você não receberá mais mensagens.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Bloquear', style: 'destructive', onPress: async () => {
-        await bloquearUsuario(user.uid, targetUserId, targetUserName, targetUserPhoto);
-        setBlocked(true);
-        navigation.goBack();
-      }},
-    ]);
+    await bloquearUsuario(user.uid, targetUserId, targetUserName, targetUserPhoto);
+    setBlocked(true);
+    notifySuccess(`Você bloqueou ${targetUserName}`, {
+      label: 'Desfazer',
+      onPress: async () => {
+        await desbloquearUsuario(user.uid, targetUserId);
+        setBlocked(false);
+      },
+    });
   }
 
   function formatTime(date: Date): string {
@@ -86,7 +99,9 @@ export default function UserChatScreen() {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Header title={targetUserName} showBack={true} showHome={true} rightElement={
-        <TouchableOpacity onPress={handleBlock}><Text style={styles.blockIcon}>🚫</Text></TouchableOpacity>
+        <TouchableOpacity onPress={handleBlock} accessibilityRole="button" accessibilityLabel={`Bloquear ${targetUserName}`} style={styles.blockButton}>
+          <Text style={styles.blockIcon}>🚫</Text>
+        </TouchableOpacity>
       } />
       {blocked ? (
         <View style={styles.blockedContainer}>
@@ -120,8 +135,12 @@ export default function UserChatScreen() {
               multiline
               maxLength={500}
             />
-            <TouchableOpacity style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]} onPress={handleSend} disabled={!inputText.trim()}>
-              <Text style={styles.sendIcon}>➤</Text>
+            <TouchableOpacity style={[styles.sendButton, (!inputText.trim() || sending) && styles.sendButtonDisabled]} onPress={handleSend} disabled={!inputText.trim() || sending}>
+              {sending ? (
+                <ActivityIndicator color={COLORS.background} size="small" />
+              ) : (
+                <Text style={styles.sendIcon}>➤</Text>
+              )}
             </TouchableOpacity>
           </View>
         </>
@@ -133,6 +152,7 @@ export default function UserChatScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   blockIcon: { fontSize: FONT_SIZE.title },
+  blockButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   blockedContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: SPACING.md },
   blockedIcon: { fontSize: 60 },
   blockedText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.subtitle },
@@ -153,7 +173,7 @@ const styles = StyleSheet.create({
   inputContainer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, backgroundColor: COLORS.card, borderTopWidth: 1, borderTopColor: COLORS.border, gap: SPACING.sm },
   input: { flex: 1, backgroundColor: COLORS.background, color: COLORS.textPrimary, borderRadius: BORDER_RADIUS.lg, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, fontSize: FONT_SIZE.body, borderWidth: 1, borderColor: COLORS.border, maxHeight: 100 },
   sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.gold, alignItems: 'center', justifyContent: 'center' },
-  sendButtonDisabled: { backgroundColor: COLORS.border },
+  sendButtonDisabled: { backgroundColor: COLORS.border, opacity: 0.5 },
   sendIcon: { color: COLORS.background, fontSize: FONT_SIZE.subtitle, fontWeight: FONT_WEIGHT.bold },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: SPACING.md },
   emptyIcon: { fontSize: 60 },

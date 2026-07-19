@@ -25,6 +25,7 @@ import { UserProfile }       from '../../../shared/types';
 import { RootStackParamList } from '../../../navigation/types';
 import Header                from '../../../components/Header';
 import XPBar                 from '../../../components/XPBar';
+import { ProfileSkeleton }   from '../../../components/ui';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -99,8 +100,9 @@ export default function ProfileScreen() {
   }
 
   if (loading) return (
-    <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
-      <ActivityIndicator color={colors.gold} />
+    <View style={styles.container}>
+      <Header title="Meu Perfil" showBack={false} />
+      <ProfileSkeleton />
     </View>
   );
 
@@ -333,14 +335,14 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: colors.background },
   scrollContent: { paddingBottom: spacing.xl * 2 },
-  photoSection:  { alignItems: 'center', paddingVertical: spacing.xl },
-  photoContainer: { width: 100, height: 100, borderRadius: 50, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.gold },
-  photo:         { width: 100, height: 100, borderRadius: 50 },
-  photoPlaceholder: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center' },
-  photoPlaceholderText: { fontSize: 40 },
-  cameraIcon:    { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.gold, borderRadius: 12, padding: 4 },
+  photoSection:  { alignItems: 'center', paddingVertical: spacing.xl, paddingTop: spacing.lg },
+  photoContainer: { width: 104, height: 104, borderRadius: 52, backgroundColor: alpha(colors.gold, 0.08), alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: alpha(colors.gold, 0.4) },
+  photo:         { width: 96, height: 96, borderRadius: 48 },
+  photoPlaceholder: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' },
+  photoPlaceholderText: { fontSize: 36 },
+  cameraIcon:    { position: 'absolute', bottom: 2, right: 2, backgroundColor: colors.gold, borderRadius: 14, padding: 6, borderWidth: 2, borderColor: colors.background },
   name:          { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', marginTop: spacing.md },
-  levelBadge:    { backgroundColor: colors.gold + '22', borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.gold, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, marginTop: spacing.xs },
+  levelBadge:    { backgroundColor: alpha(colors.gold, 0.1), borderRadius: borderRadius.full, borderWidth: 1, borderColor: alpha(colors.gold, 0.3), paddingHorizontal: spacing.sm, paddingVertical: 3, marginTop: spacing.xs },
   levelText:     { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   crystalsRow:   { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   crystalsText:  { color: colors.secondaryLegacy, fontSize: fonts.sizes.md, fontWeight: 'bold' },
@@ -354,25 +356,25 @@ const styles = StyleSheet.create({
   treeRow:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   treeStageName: { color: colors.secondaryLegacy, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   treeNextStage: { color: colors.gray, fontSize: fonts.sizes.xs },
-  section:       { marginHorizontal: spacing.md, marginTop: spacing.md, backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.grayDark, overflow: 'hidden' },
-  sectionTitle:  { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, textTransform: 'uppercase', letterSpacing: 1, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark },
-  infoRow:       { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark + '55' },
+  section:       { marginHorizontal: spacing.md, marginTop: spacing.md, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: borderRadius.md, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },
+  sectionTitle:  { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, textTransform: 'uppercase', letterSpacing: 1, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  infoRow:       { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)' },
   infoIcon:      { fontSize: fonts.sizes.lg, marginRight: spacing.sm, marginTop: 2 },
   infoContent:   { flex: 1 },
   infoLabel:     { color: colors.gray, fontSize: fonts.sizes.xs },
   infoValue:     { color: colors.white, fontSize: fonts.sizes.sm, marginTop: 2 },
-  editButton:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark + '55', backgroundColor: colors.gold + '11' },
+  editButton:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)', backgroundColor: alpha(colors.gold, 0.04) },
   editButtonText: { flex: 1, color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   editButtonArrow: { color: colors.gold, fontSize: fonts.sizes.xl },
-  menuItem:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark + '55' },
-  menuItemHighlight: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark + '55', backgroundColor: colors.gold + '11' },
-  menuItemAdmin: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: colors.gold + '11' },
+  menuItem:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)' },
+  menuItemHighlight: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)', backgroundColor: alpha(colors.gold, 0.04) },
+  menuItemAdmin: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: alpha(colors.gold, 0.04) },
   menuItemIcon:  { fontSize: FONT_SIZE.xl, marginRight: spacing.sm },
   menuItemText:  { flex: 1, color: colors.white, fontSize: fonts.sizes.md },
   menuItemSubtext: { color: colors.gray, fontSize: fonts.sizes.xs, marginRight: spacing.xs },
   menuItemTextHighlight: { flex: 1, color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   menuItemTextAdmin: { flex: 1, color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  menuItemArrow: { color: colors.gray, fontSize: fonts.sizes.xl },
-  logoutButton:  { margin: spacing.md, marginTop: spacing.lg, backgroundColor: colors.error + '22', borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.error, padding: spacing.md, alignItems: 'center' },
+  menuItemArrow: { color: 'rgba(255,255,255,0.2)', fontSize: fonts.sizes.xl },
+  logoutButton:  { margin: spacing.md, marginTop: spacing.lg, backgroundColor: alpha(colors.error, 0.08), borderRadius: borderRadius.md, borderWidth: 1, borderColor: alpha(colors.error, 0.3), padding: spacing.md, alignItems: 'center' },
   logoutText:    { color: colors.error, fontSize: fonts.sizes.md, fontWeight: 'bold' },
 });

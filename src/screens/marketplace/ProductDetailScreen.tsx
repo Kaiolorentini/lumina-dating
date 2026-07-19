@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image,
-  ActivityIndicator, Alert, Dimensions,
+  ActivityIndicator, Dimensions,
 } from 'react-native';
-import { Button, Card, Input } from '../../components/ui';
+import { Button, Card, Input, ConfirmSheet } from '../../components/ui';
+import { useAppFeedback } from '../../hooks/useAppFeedback';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS , alpha} from '../../theme/tokens';
@@ -41,6 +42,8 @@ export default function ProductDetailScreen() {
   const { marketplaceEnabled } = useAppSettings();
   const { isBlocked } = useUserPermissions(user?.uid);
   const [hasAccess, setHasAccess] = useState(false);
+  const [confirmBuy, setConfirmBuy] = useState(false);
+  const { success: notifySuccess, error: notifyError } = useAppFeedback();
 
   useEffect(() => {
     loadProduct();
@@ -58,7 +61,7 @@ export default function ProductDetailScreen() {
       const p = await getProduct(productId);
       setProduct(p);
     } catch {
-      Alert.alert('Erro', 'Produto não encontrado');
+      notifyError('Produto não encontrado');
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -68,11 +71,11 @@ export default function ProductDetailScreen() {
   async function handleBuy() {
     if (!user) return;
     if (isBlocked) {
-      Alert.alert('Conta bloqueada', 'Você não pode fazer compras.');
+      notifyError('Conta bloqueada. Você não pode fazer compras.');
       return;
     }
     if (!marketplaceEnabled) {
-      Alert.alert('Indisponível', 'Marketplace temporariamente indisponível.');
+      notifyError('Marketplace temporariamente indisponível.');
       return;
     }
 
@@ -84,16 +87,21 @@ export default function ProductDetailScreen() {
         const result = await createFree({ productId }) as any;
         if (result.data.success) {
           setHasAccess(true);
-          Alert.alert('✅ Produto desbloqueado!', 'Você já pode acessar o conteúdo.');
+          notifySuccess('✅ Produto desbloqueado! Você já pode acessar o conteúdo.');
         }
       } catch (error: any) {
-        Alert.alert('Erro', error.message ?? 'Não foi possível obter o produto.');
+        notifyError(error.message ?? 'Não foi possível obter o produto.');
       } finally {
         setBuying(false);
       }
       return;
     }
 
+    setConfirmBuy(true);
+  }
+
+  async function confirmPurchase() {
+    if (!user) return;
     setBuying(true);
     try {
       const functions = getFunctions(app, 'us-central1');
@@ -115,21 +123,17 @@ export default function ProductDetailScreen() {
       const msg: string = error.message ?? '';
 
       if (msg.includes('CheckoutUrl:')) {
-        Alert.alert(
-          '⚠️ Pagamento pendente',
-          'Você já possui um pagamento em andamento para este produto. Finalize-o antes de iniciar um novo.',
-          [{ text: 'OK' }]
-        );
+        notifyError('⚠️ Pagamento pendente. Finalize o pagamento em andamento antes de iniciar um novo.');
         return;
       }
 
       if (msg.includes('já possui')) {
         setHasAccess(true);
-        Alert.alert('✅', 'Você já possui este produto!');
+        notifySuccess('✅ Você já possui este produto!');
         return;
       }
 
-      Alert.alert('Erro ao iniciar pagamento', error.message ?? 'Tente novamente.');
+      notifyError(error.message ?? 'Erro ao iniciar pagamento. Tente novamente.');
     } finally {
       setBuying(false);
     }
@@ -248,7 +252,7 @@ export default function ProductDetailScreen() {
               <Input
                 placeholder="Cupom de desconto (opcional)"
                 value={couponCode}
-                onChangeText={t => setCouponCode(t.toUpperCase())}
+                onChangeText={(t: string) => setCouponCode(t.toUpperCase())}
                 autoCapitalize="characters"
                 editable={!buying}
               />
@@ -260,6 +264,14 @@ export default function ProductDetailScreen() {
               disabled={buying}
               variant="primary"
               fullWidth
+            />
+            <ConfirmSheet
+              visible={confirmBuy && !product.isFree}
+              onClose={() => setConfirmBuy(false)}
+              title="💳 Confirmar compra"
+              message={`Deseja comprar "${product?.title}" por R$ ${product?.price.toFixed(2)}?${couponCode.trim() ? '\nCupom aplicado: ' + couponCode.trim().toUpperCase() : ''}`}
+              confirmLabel="Comprar agora"
+              onConfirm={confirmPurchase}
             />
           </>
         )}

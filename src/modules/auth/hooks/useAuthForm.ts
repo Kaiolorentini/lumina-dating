@@ -48,24 +48,34 @@ export function useRegisterForm({ onSuccess }: UseAuthFormProps = {}) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
 
-  function validate(): string | null {
-    if (!email || !password || !confirmPassword) return 'Preencha todos os campos';
-    if (!email.includes('@')) return 'Digite um e-mail valido';
-    if (password.length < 6) return 'Senha deve ter pelo menos 6 caracteres';
-    if (password !== confirmPassword) return 'As senhas nao coincidem';
-    return null;
+  function validate(): { general: string | null; fields: typeof fieldErrors } {
+    const fields: typeof fieldErrors = {};
+    if (!email) fields.email = 'Informe seu e-mail';
+    else if (!email.includes('@')) fields.email = 'Digite um e-mail válido';
+    if (!password) fields.password = 'Crie uma senha';
+    else if (password.length < 6) fields.password = 'Mínimo 6 caracteres';
+    if (!confirmPassword) fields.confirmPassword = 'Repita a senha';
+    else if (password !== confirmPassword) fields.confirmPassword = 'As senhas não coincidem';
+
+    const general = Object.values(fields).some(Boolean)
+      ? 'Corrija os campos em destaque'
+      : null;
+    return { general, fields };
   }
 
   async function submit() {
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
+    const { general, fields } = validate();
+    if (general) {
+      setError(general);
+      setFieldErrors(fields);
       return;
     }
     try {
       setLoading(true);
       setError('');
+      setFieldErrors({});
       await signUp(email, password);
       onSuccess?.();
     } catch (err: any) {
@@ -80,6 +90,6 @@ export function useRegisterForm({ onSuccess }: UseAuthFormProps = {}) {
     email, setEmail,
     password, setPassword,
     confirmPassword, setConfirmPassword,
-    loading, error, submit,
+    loading, error, fieldErrors, submit,
   };
 }

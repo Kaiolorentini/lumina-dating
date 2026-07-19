@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Text,
   StyleSheet,
   ActivityIndicator,
   ViewStyle,
   TextStyle,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from './AnimatedPressable';
@@ -19,7 +20,7 @@ import {
   alpha,
 } from '../../theme/tokens';
 
-type ButtonVariant = 'primary' | 'secondary' | 'premium' | 'ghost' | 'danger';
+type ButtonVariant = 'primary' | 'secondary' | 'premium' | 'ghost' | 'danger' | 'success';
 type ButtonSize    = 'sm' | 'md' | 'lg';
 
 interface ButtonProps {
@@ -33,6 +34,7 @@ interface ButtonProps {
   icon?:      React.ReactNode;
   style?:     ViewStyle;
   textStyle?: TextStyle;
+  accessibilityLabel?: string;
 }
 
 export function Button({
@@ -46,25 +48,38 @@ export function Button({
   icon,
   style,
   textStyle,
+  accessibilityLabel,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
   const sizeStyles = SIZE_STYLES[size];
   const variantConfig = VARIANT_CONFIG[variant];
 
-  if (variant === 'primary' || variant === 'premium') {
-    const gradient = variant === 'premium' ? GRADIENTS.premium : GRADIENTS.primary;
+  const a11y = {
+    accessibilityRole: 'button' as const,
+    accessibilityLabel: accessibilityLabel || label,
+    accessibilityState: { disabled: isDisabled, busy: loading },
+  };
+
+  if (variant === 'primary' || variant === 'premium' || variant === 'success') {
+    const gradient =
+      variant === 'premium' ? GRADIENTS.premium :
+      variant === 'success' ? GRADIENTS.success :
+      GRADIENTS.primary;
 
     return (
       <AnimatedPressable
         onPress={onPress}
         disabled={isDisabled}
         activeOpacity={0.85}
+        accessibilityRole={a11y.accessibilityRole}
+        accessibilityLabel={a11y.accessibilityLabel}
+        accessibilityState={a11y.accessibilityState}
         style={[
           styles.base,
           sizeStyles.container,
           fullWidth && styles.fullWidth,
           isDisabled && styles.disabled,
-          variant === 'premium' ? SHADOWS.premium : SHADOWS.level1,
+          variant === 'premium' ? SHADOWS.premium : variant === 'success' ? SHADOWS.premium : SHADOWS.level1,
           style,
         ]}
       >
@@ -92,6 +107,9 @@ export function Button({
       onPress={onPress}
       disabled={isDisabled}
       activeOpacity={0.85}
+      accessibilityRole={a11y.accessibilityRole}
+      accessibilityLabel={a11y.accessibilityLabel}
+      accessibilityState={a11y.accessibilityState}
       style={[
         styles.base,
         sizeStyles.container,
@@ -164,6 +182,12 @@ const VARIANT_CONFIG = {
     border:      COLORS.error,
     borderWidth: 1,
     textColor:   COLORS.error,
+  },
+  success: {
+    bg:          'transparent',
+    border:      'transparent',
+    borderWidth: 0,
+    textColor:   COLORS.surface,
   },
 };
 

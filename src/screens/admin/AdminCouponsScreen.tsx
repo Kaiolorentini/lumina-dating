@@ -402,7 +402,7 @@ export default function AdminCouponsScreen() {
               <Input
                 placeholder="PROMO10"
                 value={fCode}
-                onChangeText={t => setFCode(t.toUpperCase())}
+                onChangeText={(t: string) => setFCode(t.toUpperCase())}
                 autoCapitalize="characters"
               />
 

@@ -19,7 +19,7 @@ import {
   TouchableOpacity, Image, ActivityIndicator,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, fonts, spacing, borderRadius } from '../../../theme';
+import { colors, fonts, spacing, borderRadius, alpha } from '../../../theme';
 import { RootStackParamList } from '../../../navigation/types';
 import { ProfileCardData }    from '../../../shared/types';
 import ProfileCard            from '../../../components/ProfileCard';
@@ -307,56 +307,56 @@ export default function HomeScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: colors.background },
-  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.md },
+  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.md, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.05)' },
   logo:         { fontSize: fonts.sizes.xl, color: colors.gold, fontWeight: 'bold', letterSpacing: 2 },
   headerRight:  { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  coinsButton:  { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: borderRadius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderWidth: 1, borderColor: colors.gold + '44', gap: 4 },
-  coinsIcon:    { fontSize: fonts.sizes.md },
+  coinsButton:  { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: borderRadius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderWidth: 1, borderColor: alpha(colors.gold, 0.3), gap: 4 },
+  coinsIcon:    { fontSize: fonts.sizes.sm },
   coinsText:    { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  bellButton:   { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.grayDark, position: 'relative' },
-  bellIcon:     { fontSize: fonts.sizes.xl },
+  bellButton:   { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.04)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  bellIcon:     { fontSize: fonts.sizes.lg },
   badge:        { position: 'absolute', top: -4, right: -4, backgroundColor: colors.gold, borderRadius: borderRadius.full, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: colors.background },
   badgeText:    { color: colors.background, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
 
   // Faísca
-  faiscaBanner: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.xs, backgroundColor: '#2D1B4E', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.primaryLegacy, gap: spacing.sm },
+  faiscaBanner: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: spacing.xs, backgroundColor: 'rgba(45,27,78,0.6)', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: alpha(colors.primaryLegacy, 0.4), gap: spacing.sm },
   faiscaIcon:   { fontSize: fonts.sizes.xxl },
   faiscaInfo:   { flex: 1 },
   faiscaTitle:  { color: colors.secondaryLegacy, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   faiscaSub:    { color: colors.gray, fontSize: fonts.sizes.xs, marginTop: 2 },
-  faiscaArrow:  { color: colors.primaryLegacy, fontSize: 24, fontWeight: 'bold' },
+  faiscaArrow:  { color: alpha(colors.primaryLegacy, 0.6), fontSize: 24, fontWeight: 'bold' },
 
   // Cofre
-  vaultBanner:  { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.xs, marginBottom: spacing.xs, backgroundColor: '#1A0A0A', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: '#8B6914', gap: spacing.sm },
+  vaultBanner:  { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.xs, marginBottom: spacing.xs, backgroundColor: 'rgba(26,10,10,0.6)', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: alpha(colors.goldLegacy, 0.25), gap: spacing.sm },
   vaultIcon:    { fontSize: fonts.sizes.xxl },
   vaultInfo:    { flex: 1 },
   vaultTitle:   { color: colors.goldLegacy, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   vaultSub:     { color: colors.gray, fontSize: fonts.sizes.xs, marginTop: 2 },
-  vaultArrow:   { color: '#8B6914', fontSize: 24, fontWeight: 'bold' },
+  vaultArrow:   { color: alpha(colors.goldLegacy, 0.5), fontSize: 24, fontWeight: 'bold' },
 
   notifications: { paddingTop: spacing.xs },
-  tabsWrapper:  { backgroundColor: colors.background, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.grayDark },
+  tabsWrapper:  { backgroundColor: colors.background, paddingVertical: spacing.sm, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.05)' },
   tabs:         { paddingHorizontal: spacing.lg, gap: spacing.sm },
-  tab:          { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark, backgroundColor: colors.surface },
-  tabActive:    { borderColor: colors.gold, backgroundColor: colors.gold + '22' },
-  tabIcon:      { fontSize: fonts.sizes.md },
+  tab:          { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(255,255,255,0.03)' },
+  tabActive:    { borderColor: colors.gold, backgroundColor: alpha(colors.gold, 0.1) },
+  tabIcon:      { fontSize: fonts.sizes.sm },
   tabLabel:     { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   tabLabelActive: { color: colors.gold },
   grid:         { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
-  mostVisitedBanner:     { marginHorizontal: spacing.lg, marginTop: spacing.md, marginBottom: spacing.sm, backgroundColor: colors.gold + '22', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.gold + '44' },
+  mostVisitedBanner:     { marginHorizontal: spacing.lg, marginTop: spacing.md, marginBottom: spacing.sm, backgroundColor: alpha(colors.gold, 0.06), borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: alpha(colors.gold, 0.2) },
   mostVisitedBannerText: { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', textAlign: 'center', letterSpacing: 1 },
   loadingContainer: { paddingTop: 80, alignItems: 'center' },
   loadingText:  { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingHorizontal: spacing.xl, gap: spacing.md },
-  emptyIcon:    { fontSize: 60 },
+  emptyIcon:    { fontSize: 48 },
   emptyTitle:   { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', textAlign: 'center' },
   emptySubtitle: { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center', lineHeight: 22 },
-  chatItem:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.grayDark, gap: spacing.md },
-  chatAvatar:   { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: colors.gold },
-  chatAvatarPlaceholder: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.gold, alignItems: 'center', justifyContent: 'center' },
+  chatItem:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.05)', gap: spacing.md },
+  chatAvatar:   { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: alpha(colors.gold, 0.4) },
+  chatAvatarPlaceholder: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 2, borderColor: alpha(colors.gold, 0.4), alignItems: 'center', justifyContent: 'center' },
   chatAvatarLetter: { color: colors.gold, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   chatInfo:     { flex: 1 },
   chatName:     { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   chatLastMessage: { color: colors.gray, fontSize: fonts.sizes.sm, marginTop: 2 },
-  chatArrow:    { color: colors.gray, fontSize: fonts.sizes.xl },
+  chatArrow:    { color: 'rgba(255,255,255,0.2)', fontSize: fonts.sizes.xl },
 });

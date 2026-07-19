@@ -27,6 +27,8 @@ import Header        from '../../../components/Header';
 import { Transaction } from '../../../shared/types';
 import { formatRelativeTime } from '../../../shared/utils';
 import { RootStackParamList } from '../../../navigation/types';
+import { useAppFeedback } from '../../../hooks/useAppFeedback';
+import { ConfirmSheet } from '../../../components/ui/ConfirmSheet';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -54,11 +56,13 @@ export default function StoreScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
   const { wallet, loading } = useCoins();
+  const { success, error: notifyError } = useAppFeedback();
 
   const [purchasing,     setPurchasing]     = useState<string | null>(null);
   const [transactions,   setTransactions]   = useState<Transaction[]>([]);
   const [showHistory,    setShowHistory]    = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [confirmPkg,     setConfirmPkg]     = useState<string | null>(null);
 
   const handlePurchase = useCallback(async (packageId: string) => {
     if (!user) return;
@@ -68,32 +72,35 @@ export default function StoreScreen() {
     const isFirst      = !wallet?.firstPurchaseDone && pkg.isFirstPurchasePkg;
     const totalDisplay = isFirst ? pkg.total + 100 : pkg.total;
 
-    Alert.alert(
-      '✨ Confirmar compra',
-      `${pkg.label}\n${totalDisplay} Cristais Premium\n${pkg.priceLabel}${isFirst ? '\n\n🎁 +100 bônus de primeira compra!' : ''}`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Comprar agora',
-          onPress: async () => {
-            try {
-              setPurchasing(packageId);
-              const result = await initiatePurchase(packageId);
-              if (result.success && result.checkoutUrl) {
-                Alert.alert('🔗 Pagamento', 'Redirecionando para o pagamento seguro.');
-              } else {
-                Alert.alert('Erro', result.error ?? 'Não foi possível iniciar o pagamento.');
-              }
-            } catch {
-              Alert.alert('Erro', 'Não foi possível completar a compra.');
-            } finally {
-              setPurchasing(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmPkg(packageId);
   }, [user, wallet]);
+
+  const confirmPurchase = useCallback(async () => {
+    if (!confirmPkg) return;
+    const packageId = confirmPkg;
+    try {
+      setPurchasing(packageId);
+      const result = await initiatePurchase(packageId);
+      if (result.success && result.checkoutUrl) {
+        success('Redirecionando para o pagamento seguro...');
+      } else {
+        notifyError(result.error ?? 'Não foi possível iniciar o pagamento.');
+      }
+    } catch {
+      notifyError('Não foi possível completar a compra.');
+    } finally {
+      setPurchasing(null);
+    }
+  }, [confirmPkg, success, notifyError]);
+
+  const purchaseMessage = useCallback(() => {
+    if (!confirmPkg) return '';
+    const pkg = COIN_PACKAGES_DISPLAY.find((p: typeof COIN_PACKAGES_DISPLAY[number]) => p.id === confirmPkg);
+    if (!pkg) return '';
+    const isFirst      = !wallet?.firstPurchaseDone && pkg.isFirstPurchasePkg;
+    const totalDisplay = isFirst ? pkg.total + 100 : pkg.total;
+    return `${pkg.label}\n${totalDisplay} Cristais Premium\n${pkg.priceLabel}${isFirst ? '\n\n🎁 +100 bônus de primeira compra!' : ''}`;
+  }, [confirmPkg, wallet]);
 
   const handleShowHistory = useCallback(async () => {
     if (!user) return;
@@ -283,6 +290,15 @@ export default function StoreScreen() {
       </LinearGradient>
 
       <View style={{ height: 40 }} />
+
+      <ConfirmSheet
+        visible={confirmPkg !== null}
+        onClose={() => setConfirmPkg(null)}
+        title="✨ Confirmar compra"
+        message={purchaseMessage()}
+        confirmLabel="Comprar agora"
+        onConfirm={confirmPurchase}
+      />
     </ScrollView>
   );
 }

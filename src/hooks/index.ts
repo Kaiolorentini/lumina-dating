@@ -1,14 +1,17 @@
-// ============================================
-// HOOKS — BARREL EXPORT
-// ============================================
-export * from './useAppSettings';
-export * from './useUserPermissions';
-export * from './useProducts';
-export * from './useCreatorRequests';
-export * from './useReviews';
-export * from './useFavorites';
-export * from './usePurchases';
-export * from './useCreatorWallet';
-export * from './useEngagement';
-export * from './useNotifications';
-export * from './useVisits';
+export * from './animation';
+
+export { useFadeIn } from './useFadeIn';
+export { useAppSettings } from './useAppSettings';
+export { useCreatorRequests } from './useCreatorRequests';
+export { useCreatorWallet } from './useCreatorWallet';
+export { useEngagement } from './useEngagement';
+export { useFavorites } from './useFavorites';
+export { useNotifications } from './useNotifications';
+export { usePressAnimation } from './usePressAnimation';
+export { useProducts } from './useProducts';
+export { useAdminGuard } from './useAdminGuard';
+export { useFavoriteProducts } from './useFavoriteProducts';
+export { usePurchases } from './usePurchases';
+export { useReviews } from './useReviews';
+export { useUserPermissions } from './useUserPermissions';
+export { useVisits } from './useVisits';
