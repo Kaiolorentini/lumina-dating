@@ -156,7 +156,7 @@ export default function AdminSalesScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={false} onRefresh={loadSales} tintColor={colors.gold} />
+            <RefreshControl refreshing={loading} onRefresh={loadSales} tintColor={colors.gold} />
           }
           onEndReachedThreshold={0.4}
           onEndReached={loadMore}
@@ -246,7 +246,6 @@ export default function AdminSalesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: spacing.md, paddingBottom: spacing.md,

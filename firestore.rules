@@ -318,10 +318,9 @@ service cloud.firestore {
         ]);
       allow delete: if false;
 
-      match /shards/{shardId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isNotBlocked();
-      }
+      // A subcollection products/{id}/shards não existe — todo o
+      // código de analytics escreve em productAnalytics/{id}/shards.
+      // A rule aberta aqui era porta para uma collection fantasma.
     }
 
     // ============================================
@@ -538,7 +537,18 @@ match /coinsPurchases/{docId} {
 
       match /shards/{shardId} {
         allow read: if isAuthenticated();
-        allow create, update: if isAuthenticated() && isNotBlocked();
+        // Escrita direta do cliente é intencional: uma CF por view
+        // custaria uma invocação a cada abertura de produto, e estes
+        // contadores são informativos — não movem ranking nem dinheiro.
+        // O hasOnly impede escrita arbitrária no documento; não impede
+        // quem insista em chamar o incremento muitas vezes.
+        // Se um dia views influenciarem posição no marketplace, isto
+        // precisa virar Cloud Function.
+        allow create: if isAuthenticated() && isNotBlocked() &&
+          request.resource.data.keys().hasOnly(['views', 'downloads', 'favorites']);
+        allow update: if isAuthenticated() && isNotBlocked() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['views', 'downloads', 'favorites']);
         allow delete: if false;
       }
     }
