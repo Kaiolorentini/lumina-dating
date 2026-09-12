@@ -199,7 +199,12 @@ async function checkCollections(uid: string, unlockedAchievements: string[]): Pr
       }
 
       if (col.reward.badge) {
-        t.set(userRef, { [`progression.unlockedItems.badge_${col.reward.badge}`]: true }, { merge: true });
+        // Campo literal + prefixo duplicado — o catálogo de coleções
+        // já entrega 'badge_social_prata'. Virava 'badge_badge_social_prata'
+        // numa chave fora de progression, e o app nunca via o badge.
+        t.set(userRef, {
+          progression: { unlockedItems: { [col.reward.badge]: true } },
+        }, { merge: true });
       }
 
       t.set(notifRef.doc(), {

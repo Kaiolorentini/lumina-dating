@@ -137,11 +137,16 @@ export const grantPrestigePoints = functions.onCall(
         });
 
         // Desbloqueia aura e título (apenas cosmético)
+        // set() com chave contendo ponto cria campo LITERAL na raiz.
+        // Só update() aninha. Como este set usa merge (o doc pode não
+        // ter progression ainda), a forma correta é o objeto aninhado.
         t.set(db.collection('users').doc(uid), {
-          [`progression.unlockedAuras.${newStage.auraAsset}`]: true,
-          [`progression.availableTitles`]: FieldValue.arrayUnion(newStage.title),
-          [`progression.prestigeStage`]:   newStage.stage,
-          [`progression.prestigeName`]:    newStage.name,
+          progression: {
+            unlockedAuras:   { [newStage.auraAsset]: true },
+            availableTitles: FieldValue.arrayUnion(newStage.title),
+            prestigeStage:   newStage.stage,
+            prestigeName:    newStage.name,
+          },
         }, { merge: true });
 
         // REGRA 10: analytics

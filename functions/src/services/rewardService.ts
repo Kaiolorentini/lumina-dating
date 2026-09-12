@@ -48,14 +48,19 @@ export async function grantTreeStageReward(
   }
   // badge e frame: armazenados no perfil do usuário
   else if (reward.type === 'badge' || reward.type === 'frame') {
+    // Objeto aninhado — set() com ponto cria campo literal.
     t.set(db.collection('users').doc(uid), {
-      [`progression.unlockedItems.${reward.type}_${reward.value}`]: true,
+      progression: {
+        unlockedItems: { [`${reward.type}_${reward.value}`]: true },
+      },
     }, { merge: true });
   }
   // animation: flag de desbloqueio
   else if (reward.type === 'animation') {
     t.set(db.collection('users').doc(uid), {
-      [`progression.unlockedAnimations.${reward.value}`]: true,
+      progression: {
+        unlockedAnimations: { [reward.value]: true },
+      },
     }, { merge: true });
   }
 }

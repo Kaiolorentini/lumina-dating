@@ -146,8 +146,12 @@ export const progressWeeklyChallenge = functions.onCall(
       }
 
       if (earned.badge) {
+        // Campo literal + prefixo 'badge_' duplicado (o catálogo
+        // já traz). Gerava 'badge_badge_x' num campo fora de progression.
         t.set(db.collection('users').doc(uid), {
-          [`progression.unlockedItems.badge_${earned.badge}`]: true,
+          progression: {
+            unlockedItems: { [earned.badge]: true },
+          },
         }, { merge: true });
       }
 

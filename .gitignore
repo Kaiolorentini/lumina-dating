@@ -41,3 +41,6 @@ yarn-error.*
 /android
 
 scripts/serviceAccountKey.json
+
+firebase-debug.log
+firestore-debug.log
