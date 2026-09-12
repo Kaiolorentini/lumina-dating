@@ -412,9 +412,13 @@ function AppContent() {
     </Stack.Navigator>
   );
 
+  // Nome DIFERENTE de 'ProfileSetup' (que existe na MainStack).
+  // Com o mesmo nome nas duas árvores, o React Navigation preservava
+  // a rota ativa na troca e o app reabria o formulário de perfil —
+  // vazio, porque a rota da MainStack tem initialParams editMode: true.
   if (!hasProfile) return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+      <Stack.Screen name="ProfileOnboarding" component={ProfileSetupScreen} />
     </Stack.Navigator>
   );
 

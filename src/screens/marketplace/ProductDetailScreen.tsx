@@ -18,6 +18,7 @@ import { Product } from '../../shared/types/marketplace';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../core/firebase';
 import ScreenContainer from '../../components/ScreenContainer';
+import CpfPromptModal from '../../components/CpfPromptModal';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProductDetail'>;
@@ -33,6 +34,9 @@ export default function ProductDetailScreen() {
   const [buying, setBuying] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
   const [couponCode, setCouponCode] = useState('');
+  // Produto pago aguardando CPF. Produto gratuito não passa por aqui:
+  // sem cobrança no Asaas, não há CPF a informar.
+  const [awaitingCpf, setAwaitingCpf] = useState(false);
 
   const { favoriteIds, toggleFavorite } = useFavorites(user?.uid);
   const { reviews } = useReviews(productId, user?.uid);
@@ -94,7 +98,16 @@ export default function ProductDetailScreen() {
       return;
     }
 
-    // Produto pago — createAsaasPayment
+    // Produto pago — o CPF é exigido pelo Asaas para gerar a
+    // cobrança, então pedimos antes de chamar a CF.
+    setAwaitingCpf(true);
+  }
+
+  function handleCpfCancel() {
+    setAwaitingCpf(false);
+  }
+
+  async function handleCpfConfirm(cpfDigits: string) {
     setBuying(true);
     try {
       const functions = getFunctions(app, 'us-central1');
@@ -103,8 +116,11 @@ export default function ProductDetailScreen() {
       const result = await createPayment({
         productId,
         paymentMethod: 'pix',
+        cpf: cpfDigits,
         ...(trimmedCoupon && { couponCode: trimmedCoupon }),
       }) as any;
+
+      setAwaitingCpf(false);
 
       navigation.navigate('Checkout', {
         saleId: result.data.saleId,
@@ -117,6 +133,7 @@ export default function ProductDetailScreen() {
 
       // Sale pendente já existe — ir para checkout sem QR (usuário deve usar checkoutUrl)
       if (msg.includes('CheckoutUrl:')) {
+        setAwaitingCpf(false);
         Alert.alert(
           '⚠️ Pagamento pendente',
           'Você já possui um pagamento em andamento para este produto. Finalize-o antes de iniciar um novo.',
@@ -126,6 +143,7 @@ export default function ProductDetailScreen() {
       }
 
       if (msg.includes('já possui')) {
+        setAwaitingCpf(false);
         setHasAccess(true);
         Alert.alert('✅', 'Você já possui este produto!');
         return;
@@ -292,6 +310,13 @@ export default function ProductDetailScreen() {
           </>
         )}
       </View>
+
+      <CpfPromptModal
+        visible={awaitingCpf}
+        loading={buying}
+        onConfirm={handleCpfConfirm}
+        onCancel={handleCpfCancel}
+      />
     </ScreenContainer>
   );
 }

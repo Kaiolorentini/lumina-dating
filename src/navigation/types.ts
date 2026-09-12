@@ -8,6 +8,9 @@ export type RootStackParamList = {
   Login:        undefined;
   Register:     undefined;
   ProfileSetup: { editMode?: boolean } | undefined;
+  /** Onboarding — árvore separada, nome distinto de ProfileSetup para
+   *  o React Navigation não preservar estado ao trocar de árvore. */
+  ProfileOnboarding: undefined;
   MainTabs:      undefined;
   RealProfile:   { userId: string };
   UserChat:      { userId: string; userName: string; userPhoto: string };
