@@ -115,3 +115,17 @@ export {
   getDestaqueRegionalStatus,
 } from './premium/destaqueRegionalService';
 export { registerProfileVisit } from './engagement/registerProfileVisit';
+// ============================================
+// Functions que estavam em produção sem export aqui.
+// Sem a linha, todo `firebase deploy --only functions`
+// propunha DELETAR: cupons, resolução de fraude, chave PIX
+// do criador, URL de moderação e os dois triggers.
+// ============================================
+export { resolveFraudFlag }        from './admin/resolveFraudFlag';
+export { getModeratorFileUrl }     from './admin/getModeratorFileUrl';
+export { createCoupon }            from './marketplace/coupons/createCoupon';
+export { updateCoupon }            from './marketplace/coupons/updateCoupon';
+export { toggleCoupon }            from './marketplace/coupons/toggleCoupon';
+export { saveCreatorPixKey }       from './payments/saveCreatorPixKey';
+export { onWithdrawalCreated }     from './triggers/onWithdrawalCreated';
+export { onCreatorRequestCreated } from './triggers/onCreatorRequestCreated';
