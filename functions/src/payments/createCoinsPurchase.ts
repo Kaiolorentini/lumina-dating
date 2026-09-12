@@ -133,10 +133,10 @@ export const createCoinsPurchase = onCall(
       customer = await findOrCreateCustomer({
         name:              userData.name  ?? 'Usuário Lumina',
         email:             userData.email ?? '',
-        // CPF vem do cliente a cada compra e não é persistido.
-        // Fallback em userData.cpf cobre a transição — sai depois
-        // que o campo for limpo da base.
-        cpfCnpj:           cpf ? assertValidCpf(cpf) : (userData.cpf ?? undefined),
+        // CPF vem do cliente a cada compra e não é persistido em
+        // lugar nenhum. O campo users/{uid}.cpf foi eliminado da
+        // base — não há fallback, e não deve haver.
+        cpfCnpj:           assertValidCpf(cpf),
         externalReference: uid,
       });
     } catch (err: any) {
