@@ -303,11 +303,7 @@ export default function StoreScreen() {
         ? `${destaque.city}, ${destaque.state}`
         : 'sua região';
 
-      const audiencia = destaque?.usersInRegion
-        ? `\n\nHá ${destaque.usersInRegion} pessoas cadastradas na sua região.`
-        : '';
-
-     // Mostrar a audiência real antes da compra vale mais que
+      // Mostrar a audiência real antes da compra vale mais que
       // qualquer piso que a gente escolha: em região cheia o
       // número vende, em região vazia ele evita o arrependimento.
       const audiencia = typeof destaque?.usersInRegion === 'number'

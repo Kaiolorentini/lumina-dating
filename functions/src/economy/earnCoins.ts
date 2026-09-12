@@ -20,7 +20,7 @@
 
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { DAILY_LIMITS, FRAGMENTS } from '../config/economy';
+import { DAILY_LIMITS } from '../config/economy';
 import { auditLogFinanceiro, AuditTipo } from '../utils/auditLogFinanceiro';
 
 export type EarnCoinsOrigin =

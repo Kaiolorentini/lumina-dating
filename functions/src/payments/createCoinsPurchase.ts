@@ -17,6 +17,7 @@ import {
   createPixPayment,
   formatDueDate,
 }                               from '../utils/asaasClient';
+import { assertValidCpf }       from '../utils/validateCpf';
 
 const db = admin.firestore();
 
@@ -80,7 +81,7 @@ export const createCoinsPurchase = onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Não autenticado.');
 
-    const { packageId } = request.data as { packageId: string };
+    const { packageId, cpf } = request.data as { packageId: string; cpf?: string };
     if (!packageId || !PACKAGES[packageId]) {
       throw new HttpsError('invalid-argument', 'Pacote inválido.');
     }
@@ -132,7 +133,10 @@ export const createCoinsPurchase = onCall(
       customer = await findOrCreateCustomer({
         name:              userData.name  ?? 'Usuário Lumina',
         email:             userData.email ?? '',
-        cpfCnpj:           userData.cpf   ?? undefined,
+        // CPF vem do cliente a cada compra e não é persistido.
+        // Fallback em userData.cpf cobre a transição — sai depois
+        // que o campo for limpo da base.
+        cpfCnpj:           cpf ? assertValidCpf(cpf) : (userData.cpf ?? undefined),
         externalReference: uid,
       });
     } catch (err: any) {

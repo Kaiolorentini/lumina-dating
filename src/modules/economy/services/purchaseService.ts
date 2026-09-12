@@ -1,8 +1,13 @@
-// ============================================
-// LUMINA — PURCHASE SERVICE v5.2
+﻿// ============================================
+// LUMINA — PURCHASE SERVICE v5.3
 // src/modules/economy/services/purchaseService.ts
 //
-// v5.2: initiatePurchase agora chama createCoinsPurchase
+// v5.3: initiatePurchase recebe o CPF do chamador.
+// O CPF é pedido no momento da compra (CpfPromptModal),
+// trafega app → Cloud Function → Asaas e NÃO é persistido
+// em lugar nenhum. LGPD, minimização (Art. 6º, III).
+//
+// v5.2: initiatePurchase chama createCoinsPurchase
 // (CF dedicada para cristais) em vez de createAsaasPayment
 // (CF do marketplace de produtos).
 // ============================================
@@ -75,10 +80,12 @@ export const COIN_PACKAGES_DISPLAY: CoinPackageDisplay[] = [
   },
 ];
 
-// v5.2 — chama createCoinsPurchase (CF dedicada para cristais)
 // Retorna { saleId, checkoutUrl, pixQrCode, pixCopyPaste }
-// para navegar ao CheckoutScreen existente
-export async function initiatePurchase(packageId: string): Promise<{
+// para navegar ao CheckoutScreen existente.
+export async function initiatePurchase(
+  packageId: string,
+  cpf: string,
+): Promise<{
   success:       boolean;
   saleId?:       string;
   checkoutUrl?:  string;
@@ -87,12 +94,13 @@ export async function initiatePurchase(packageId: string): Promise<{
   error?:        string;
 }> {
   try {
+    // CPF trafega app → CF → Asaas e não é persistido em lugar nenhum.
     const fn = httpsCallable<
-      { packageId: string },
+      { packageId: string; cpf: string },
       { saleId: string; checkoutUrl: string; pixQrCode: string; pixCopyPaste: string }
     >(functions, 'createCoinsPurchase');
 
-    const result = await fn({ packageId });
+    const result = await fn({ packageId, cpf });
     return {
       success:      true,
       saleId:       result.data.saleId,
@@ -101,7 +109,13 @@ export async function initiatePurchase(packageId: string): Promise<{
       pixCopyPaste: result.data.pixCopyPaste,
     };
   } catch (error: unknown) {
-    console.error('[purchaseService] initiatePurchase error:', error);
-    return { success: false, error: 'Erro ao iniciar pagamento.' };
+    // HttpsError do backend traz mensagem acionável (CPF inválido,
+    // pendência de chargeback, pacote inexistente). Descartá-la
+    // deixaria o usuário sem saber o que corrigir.
+    const message = error instanceof Error && error.message
+      ? error.message
+      : 'Erro ao iniciar pagamento.';
+    console.error('[purchaseService] initiatePurchase error:', message);
+    return { success: false, error: message };
   }
 }

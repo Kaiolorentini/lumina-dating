@@ -13,6 +13,7 @@ import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { calculateCommission } from "../utils/calculateCommission";
 import { buildPurchasePricing } from "../utils/buildPurchasePricing";
 import { createAuditLog } from "../utils/auditLog";
+import { assertValidCpf } from "../utils/validateCpf";
 import {
   findOrCreateCustomer,
   createPixPayment,
@@ -29,10 +30,11 @@ export const createAsaasPayment = onCall(
 
     await assertUserNotBlocked(uid);
 
-    const { productId, paymentMethod, couponCode } = request.data as {
+    const { productId, paymentMethod, couponCode, cpf } = request.data as {
       productId: string;
       paymentMethod: "pix" | "credit_card";
       couponCode?: string;
+      cpf?: string;
     };
 
     if (!productId) throw new HttpsError("invalid-argument", "productId obrigatório");
@@ -154,7 +156,10 @@ export const createAsaasPayment = onCall(
     const customer = await findOrCreateCustomer({
       name: userData.name ?? "Usuário Lumina",
       email: userData.email ?? `${uid}@lumina.app`,
-      cpfCnpj: userData.cpf,
+      // CPF vem do cliente a cada compra e não é persistido.
+      // Fallback em userData.cpf cobre a transição — sai depois
+      // que o campo for limpo da base.
+      cpfCnpj: cpf ? assertValidCpf(cpf) : userData.cpf,
       externalReference: uid,
     });
 

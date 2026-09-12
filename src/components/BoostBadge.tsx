@@ -42,7 +42,6 @@ import {
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import {
-  COLORS,
   SPACING,
   BORDER_RADIUS,
   FONT_SIZE,
@@ -146,6 +145,9 @@ function subscribeToPulse(): void {
 function unsubscribeFromPulse(): void {
   subscriberCount = Math.max(0, subscriberCount - 1);
   if (subscriberCount > 0) return;
+
+  // Contador zerado: garante que nenhum loop órfão sobreviva
+  // (Fast Refresh pode desmontar sem passar pelo cleanup).
 
   if (sharedLoop) {
     sharedLoop.stop();
