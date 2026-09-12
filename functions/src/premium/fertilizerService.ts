@@ -78,10 +78,23 @@ export const activateFertilizer = functions.onCall(
       }, { merge: true });
 
       // 2. Ativa no perfil
+      //
+      // OBRIGATÓRIO objeto aninhado. set() com chave contendo ponto
+      // cria campo LITERAL "progression.arvore.fertilizanteAtivo" na
+      // raiz do documento — e todos os leitores (xp.ts, XPService,
+      // emotionalTriggers, getFertilizerStatus abaixo) acessam
+      // progression.arvore.* aninhado. O usuário pagava 80 premium,
+      // não recebia o bônus, e o guard de "já ativo" também não via
+      // nada: dava para recomprar sem limite.
+      // (update() aninharia sozinho; set(merge) não.)
       t.set(userRef, {
-        'progression.arvore.fertilizanteAtivo':    true,
-        'progression.arvore.fertilizanteExpiraEm': admin.firestore.Timestamp.fromDate(expiresAt),
-        'progression.arvore.fertilizanteVersion':  PREMIUM_VERSIONS.FERTILIZER,
+        progression: {
+          arvore: {
+            fertilizanteAtivo:    true,
+            fertilizanteExpiraEm: admin.firestore.Timestamp.fromDate(expiresAt),
+            fertilizanteVersion:  PREMIUM_VERSIONS.FERTILIZER,
+          },
+        },
       }, { merge: true });
 
       // 3. Economy Ledger

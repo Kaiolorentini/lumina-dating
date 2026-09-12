@@ -62,13 +62,13 @@ export const checkAchievements = functions.onCall(
       if (!ach) continue;
       if (unlocked.includes(achId)) continue;
 
-      await db.runTransaction(async (t) => {
+      const didUnlock = await db.runTransaction(async (t) => {
         const freshDoc  = await t.get(userRef);
         const freshData = freshDoc.data() ?? {};
         const freshUnlocked: string[] = freshData.achievements?.unlocked ?? [];
         const freshProgress: Record<string, number> = freshData.achievements?.progress ?? {};
 
-        if (freshUnlocked.includes(achId)) return;
+        if (freshUnlocked.includes(achId)) return false;
 
         // v5.3: recalcula com dados frescos da transação
         const freshCurrent = isAbsolute
@@ -79,7 +79,7 @@ export const checkAchievements = functions.onCall(
           achievements: { progress: { [achId]: freshCurrent } },
         }, { merge: true });
 
-        if (freshCurrent < ach.target) return;
+        if (freshCurrent < ach.target) return false;
 
         t.set(userRef, {
           achievements: {
@@ -138,15 +138,20 @@ export const checkAchievements = functions.onCall(
           }, { merge: true });
         }
 
-        newlyUnlocked.push(achId);
-
         t.set(db.collection('achievementAnalytics').doc(), {
           uid, achievementId: achId, category: ach.category,
           rarity: ach.rarity, timestamp: FieldValue.serverTimestamp(),
         });
+
+        // Sinaliza pelo RETORNO da transaction, não por efeito
+        // colateral: o Firestore pode reexecutar o callback em caso
+        // de contenção, e um push() aqui duplicaria o id na lista
+        // devolvida ao app.
+        return true;
       });
 
-      if (newlyUnlocked.includes(achId)) {
+      if (didUnlock === true) {
+        newlyUnlocked.push(achId);
         await checkCollections(uid, [...unlocked, ...newlyUnlocked]);
       }
     }
@@ -217,7 +222,14 @@ async function checkCollections(uid: string, unlockedAchievements: string[]): Pr
       }
 
       if (col.reward.badge) {
-        t.set(userRef, { [`progression.unlockedItems.badge_${col.reward.badge}`]: true }, { merge: true });
+        // Dois bugs num só: set() com string contendo ponto cria
+        // campo LITERAL "progression.unlockedItems.badge_x" em vez de
+        // aninhar, e o prefixo 'badge_' era duplicado — o catálogo
+        // já traz ('badge_social_prata' virava 'badge_badge_social_prata').
+        // O checkAchievements acima já fazia certo; aqui ficou para trás.
+        t.set(userRef, {
+          progression: { unlockedItems: { [col.reward.badge]: true } },
+        }, { merge: true });
       }
 
       t.set(notifRef.doc(), {
