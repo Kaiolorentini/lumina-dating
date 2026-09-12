@@ -3,9 +3,15 @@
   "compilerOptions": {
     "strict": true
   },
+  // functions/ tem tsconfig próprio: Node 22, libs de servidor,
+  // noUnusedLocals. Compilar junto com o app (React Native) mistura
+  // os targets — pode mascarar erro de um lado ou gerar falso
+  // positivo do outro. Type-check do backend: cd functions && npx tsc --noEmit
   "exclude": [
     "my-app",
     "dist",
-    "node_modules"
+    "node_modules",
+    "functions",
+    "scripts"
   ]
 }
