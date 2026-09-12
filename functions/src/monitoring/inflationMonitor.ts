@@ -49,8 +49,15 @@ export const takeDailyEconomySnapshot = onSchedule(
     region:   'us-central1',
   },
   async () => {
-    const db    = admin.firestore();
-    const today = new Date().toISOString().slice(0, 10);
+    const db = admin.firestore();
+
+    // toISOString() devolve UTC. Às 23:55 de Brasília o UTC já é
+    // 02:55 do dia seguinte — o snapshot era gravado com a data
+    // errada e agregava uma janela que ainda não tinha começado.
+    // 'en-CA' formata como YYYY-MM-DD, que é o id usado na collection.
+    const today = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+    });
 
     console.log(`[inflationMonitor] Snapshot do dia: ${today}`);
 

@@ -44,7 +44,16 @@ function saleStatusInfo(sale: Sale): { label: string; color: string } {
   }
 }
 
-function methodLabel(method: string): string {
+// Sales de coins_purchase não têm productId nem sellerId real
+// ('lumina_platform'), então qualquer .slice() direto quebra a lista
+// inteira via CellRenderer. Um helper centraliza o guard.
+function shortId(id: string | undefined, len: number): string {
+  if (!id) return '—';
+  return id.length > len ? `${id.slice(0, len)}...` : id;
+}
+
+function methodLabel(method: string | undefined): string {
+  if (!method) return '—';
   if (method === 'pix') return 'PIX';
   if (method === 'credit_card') return 'Cartão';
   if (method === 'free') return 'Grátis';
@@ -64,15 +73,19 @@ export default function AdminSalesScreen() {
 
   const resolveNames = useCallback(async (list: Sale[]) => {
     const ids = new Set<string>();
-    list.forEach(s => { ids.add(s.buyerId); ids.add(s.sellerId); });
+    list.forEach(s => {
+      if (s.buyerId)  ids.add(s.buyerId);
+      // 'lumina_platform' é a própria plataforma, não um usuário
+      if (s.sellerId && s.sellerId !== 'lumina_platform') ids.add(s.sellerId);
+    });
     const names: Record<string, string> = {};
     await Promise.all(
       Array.from(ids).map(async id => {
         try {
           const p = await getUserById(id);
-          names[id] = p?.name ?? id.slice(0, 10) + '...';
+          names[id] = p?.name ?? shortId(id, 10);
         } catch {
-          names[id] = id.slice(0, 10) + '...';
+          names[id] = shortId(id, 10);
         }
       })
     );
@@ -169,7 +182,7 @@ export default function AdminSalesScreen() {
             return (
               <View style={styles.card}>
                 <View style={styles.cardTop}>
-                  <Text style={styles.cardId}>Venda #{item.id.slice(0, 8)}</Text>
+                  <Text style={styles.cardId}>Venda #{shortId(item.id, 8)}</Text>
                   <View style={[styles.statusBadge, { borderColor: status.color }]}>
                     <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
                   </View>
@@ -200,14 +213,20 @@ export default function AdminSalesScreen() {
 
                 {/* Partes */}
                 <Text style={styles.party}>
-                  🛒 Comprador: <Text style={styles.partyValue}>{userNames[item.buyerId] ?? item.buyerId.slice(0, 10) + '...'}</Text>
+                  🛒 Comprador: <Text style={styles.partyValue}>{userNames[item.buyerId] ?? shortId(item.buyerId, 10)}</Text>
                 </Text>
                 <Text style={styles.party}>
-                  🎨 Vendedor: <Text style={styles.partyValue}>{userNames[item.sellerId] ?? item.sellerId.slice(0, 10) + '...'}</Text>
+                  🎨 Vendedor: <Text style={styles.partyValue}>
+                    {item.sellerId === 'lumina_platform'
+                      ? 'Lumina (cristais)'
+                      : userNames[item.sellerId] ?? shortId(item.sellerId, 10)}
+                  </Text>
                 </Text>
-                <Text style={styles.party}>
-                  📦 Produto: <Text style={styles.partyValue}>{item.productId.slice(0, 14)}...</Text>
-                </Text>
+                {item.productId ? (
+                  <Text style={styles.party}>
+                    📦 Produto: <Text style={styles.partyValue}>{shortId(item.productId, 14)}</Text>
+                  </Text>
+                ) : null}
 
                 {/* Método + datas */}
                 <View style={styles.footerRow}>
