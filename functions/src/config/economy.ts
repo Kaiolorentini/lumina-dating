@@ -196,7 +196,7 @@ export const COIN_PACKAGES = {
     coinsPremium:       100,
     bonus:              0,
     firstPurchaseBonus: 100,  // dobra na primeira compra (1x por conta)
-    priceValue:         4.99,
+    priceValue:         5.00,
     packAsset:          'pack-iniciante',  // assets/premium/pack-iniciante.png
   },
   popular: {

@@ -11,7 +11,6 @@ import { getCoupons } from '../../services/marketplace/adminService';
 import { Coupon, CouponDiscountType } from '../../shared/types/marketplace';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
 import app from '../../core/firebase';
-import ScreenContainer from '../../components/ScreenContainer';
 
 type FilterTab = 'all' | 'active' | 'expired' | 'inactive';
 const FILTER_TABS: FilterTab[] = ['all', 'active', 'expired', 'inactive'];
@@ -277,7 +276,7 @@ export default function AdminCouponsScreen() {
   const filtered = coupons.filter(c => couponMatchesFilter(c, filter));
 
   return (
-    <ScreenContainer>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -508,7 +507,7 @@ export default function AdminCouponsScreen() {
           </View>
         </View>
       </Modal>
-    </ScreenContainer>
+    </View>
   );
 }
 
@@ -516,7 +515,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },

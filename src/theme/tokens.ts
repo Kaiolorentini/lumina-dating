@@ -2,9 +2,12 @@
 // LUMINA — DESIGN TOKENS
 // src/theme/tokens.ts
 //
-// Fonte única de verdade para cores, espaçamentos,
-// tipografia e sombras. Nunca usar valores hardcoded
-// nas telas — sempre importar daqui.
+// TEMA PREMIUM (roxo sobre azul-escuro).
+// Escopo: Loja, Galáxia Plus, Mercado Cósmico, telas Premium.
+//
+// ⚠️ NÃO é fonte única de verdade do app inteiro — src/theme/index.ts
+// é o tema clássico (dourado) usado na Home, Perfil e Chat.
+// Os dois convivem por escopo. Nunca misturar no mesmo componente.
 // ============================================
 
 export const COLORS = {

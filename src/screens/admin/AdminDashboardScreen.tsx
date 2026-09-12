@@ -144,6 +144,12 @@ export default function AdminDashboardScreen() {
             <Text style={styles.menuIcon}>📊</Text>
             <Text style={styles.menuLabel}>Relatórios</Text>
           </TouchableOpacity>
+          {isSuperAdmin && (
+            <TouchableOpacity style={styles.menuCard} onPress={() => navigation.navigate('AdminInflation')}>
+              <Text style={styles.menuIcon}>📈</Text>
+              <Text style={styles.menuLabel}>Economia</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>Configurações</Text>

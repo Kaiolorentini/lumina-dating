@@ -9,7 +9,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
@@ -17,6 +17,7 @@ import { RootStackParamList } from '../../../navigation/types';
 import { Gender, Preference } from '../../../shared/types';
 import { useProfileSetup } from '../hooks/useProfileSetup';
 import ScreenContainer from '../../../components/ScreenContainer';
+import LocationSelector from '../../../components/LocationSelector';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -45,8 +46,8 @@ export default function ProfileSetupScreen() {
   const {
     name, setName,
     age, setAge,
-    city, setCity,
-    state, setState,
+    city, state,
+    selectEstado, selectMunicipio,
     bio, setBio,
     cpf, setCpf,
     gender, setGender,
@@ -56,20 +57,16 @@ export default function ProfileSetupScreen() {
     save,
   } = useProfileSetup({ editMode });
 
+  // O AppNavigator renderiza a stack condicionalmente por
+  // hasProfile (linha ~406). Mudar o flag já troca a árvore —
+  // o reset manual disparava ANTES do re-render, quando
+  // 'MainTabs' ainda não existia, e o React Navigation
+  // respondia "action RESET was not handled by any navigator".
   useEffect(() => {
     if (isEditing && !editMode) {
-      console.log('Perfil ja existe, redirecionando...');
       setHasProfile(true);
-      setTimeout(() => {
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'MainTabs' }],
-          })
-        );
-      }, 100);
     }
-  }, [isEditing]);
+  }, [isEditing, editMode, setHasProfile]);
 
   async function handleSave() {
     const success = await save();
@@ -84,14 +81,10 @@ export default function ProfileSetupScreen() {
 
   function handleContinue() {
     if (continuing) return;
+    // continuing mantém o spinner durante a troca da árvore
+    // de navegação, que é o que efetivamente leva à Home.
     setContinuing(true);
     setHasProfile(true);
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'MainTabs' }],
-      })
-    );
   }
 
   if (saved) {
@@ -116,7 +109,7 @@ export default function ProfileSetupScreen() {
           )}
         </TouchableOpacity>
         <View style={styles.successFeatures}>
-          <Text style={styles.successFeature}>10 Modelos IA esperando por voce</Text>
+          <Text style={styles.successFeature}>Pessoas reais da sua regiao</Text>
           <Text style={styles.successFeature}>Sistema de Sintonia exclusivo</Text>
           <Text style={styles.successFeature}>Chat em tempo real</Text>
           <Text style={styles.successFeature}>Perfis compativeis com voce</Text>
@@ -169,24 +162,11 @@ export default function ProfileSetupScreen() {
           maxLength={3}
         />
 
-        <Text style={styles.label}>Cidade *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Sua cidade"
-          placeholderTextColor={colors.gray}
-          value={city}
-          onChangeText={setCity}
-        />
-
-        <Text style={styles.label}>Estado *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex: SP, RJ, MG"
-          placeholderTextColor={colors.gray}
-          value={state}
-          onChangeText={setState}
-          maxLength={2}
-          autoCapitalize="characters"
+        <LocationSelector
+          state={state}
+          city={city}
+          onSelectEstado={selectEstado}
+          onSelectMunicipio={selectMunicipio}
         />
 
         <Text style={styles.label}>Bio</Text>

@@ -15,6 +15,9 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../core/firebase';
 import { Purchase } from '../../shared/types/marketplace';
 import ScreenContainer from '../../components/ScreenContainer';
+import CoinsPurchasesTab from './CoinsPurchasesTab';
+
+type PurchaseTab = 'content' | 'coins';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -23,6 +26,7 @@ export default function MyPurchasesScreen() {
   const { user } = useAuth();
   const { purchases, loading, loadMore, hasMore, loadingMore, refresh } = usePurchases(user?.uid);
   const [requestingRefund, setRequestingRefund] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<PurchaseTab>('content');
 
   // Modal de reembolso (cross-platform — substitui Alert.prompt iOS-only)
   const [refundModal, setRefundModal] = useState(false);
@@ -138,7 +142,33 @@ export default function MyPurchasesScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {loading ? (
+      {/* Conteúdos e Cristais são coisas diferentes: uma é a
+          biblioteca que o usuário acessa, outra é histórico
+          financeiro que ele consulta. Separadas, não mescladas. */}
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'content' && styles.tabActive]}
+          onPress={() => setActiveTab('content')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tabText, activeTab === 'content' && styles.tabTextActive]}>
+            📦 Conteúdos
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'coins' && styles.tabActive]}
+          onPress={() => setActiveTab('coins')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tabText, activeTab === 'coins' && styles.tabTextActive]}>
+            💎 Cristais
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'coins' ? (
+        <CoinsPurchasesTab uid={user?.uid} />
+      ) : loading ? (
         <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
       ) : (
         <FlatList
@@ -213,6 +243,24 @@ const styles = StyleSheet.create({
   backBtn: { color: colors.gold, fontSize: 28 },
   headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   listContent: { padding: spacing.md },
+  tabs: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.grayDark,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+  },
+  tabActive:     { borderColor: colors.gold, backgroundColor: colors.gold + '22' },
+  tabText:       { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  tabTextActive: { color: colors.gold },
   card: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md,
     borderWidth: 1, borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,

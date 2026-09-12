@@ -32,9 +32,6 @@ export { onRejectWithdrawal }       from "./wallet/onRejectWithdrawal";
 export { onMarkWithdrawalPaid }     from "./wallet/onMarkWithdrawalPaid";
 export { blockUser }                from "./users/blockUser";
 export { unblockUser }              from "./users/unblockUser";
-export { getModeratorFileUrl } from "./admin/getModeratorFileUrl";
-export { resolveFraudFlag } from "./admin/resolveFraudFlag";
-
 
 // ============================================
 // FASE 6B — Com Asaas
@@ -43,6 +40,7 @@ export { createAsaasPayment }       from "./payments/createAsaasPayment";
 export { approveRefund }            from "./payments/approveRefund";
 export { verifyAsaasWallet }        from "./payments/verifyAsaasWallet";
 export { onAsaasWebhook }           from "./payments/onAsaasWebhook";
+export { createCoinsPurchase } from "./payments/createCoinsPurchase";
 
 // ============================================
 // CONTEÚDO PROTEGIDO
@@ -72,7 +70,7 @@ export { updateTrustScore }         from "./security/trustScore";
 export { registerRankingEvent, resetWeeklyRanking } from "./economy/weeklyRanking";
 
 // Monitoramento
-export { takeDailyEconomySnapshot } from "./monitoring/inflationMonitor";
+export { takeDailyEconomySnapshot, getEconomySnapshots } from "./monitoring/inflationMonitor";
 
 // recompensa diaria
 export { claimDailyReward, getDailyRewardStatus } from './engagement/dailyReward';
@@ -95,6 +93,8 @@ export { registerRankingXP, getRanking, freezeRanking, rewardRanking, resetRanki
 export { grantPrestigePoints, getPrestigeStatus, checkPrestigeTimeMarcos } from './engagement/prestige';
 export { activateFertilizer, getFertilizerStatus } from './premium/fertilizerService';
 export { activateTurbo, getTurboStatus }            from './premium/turboService';
+export { activateImpulso, getImpulsoStatus }        from './premium/impulsoService';
+export { revealVisitors, getVisitorsStatus }        from './premium/visitorsService';
 export { getWeeklyChallenge, progressWeeklyChallenge, resetWeeklyChallenges } from './premium/weeklyChallengeService';
                     
 export { onMessageReply } from './engagement/messageReply';
@@ -108,15 +108,10 @@ export { getDashboardSnapshot } from './gamification/dashboard/getDashboardSnaps
 export { processGameEvent } from './gamification/GamificationEngine';
 export { onProfileLike } from './engagement/profileLike';
 export { gamificationHealthCheck } from './gamification/health/healthCheck';
-
-export { createCoupon } from "./marketplace/coupons/createCoupon";
-export { updateCoupon } from "./marketplace/coupons/updateCoupon";
-export { toggleCoupon } from "./marketplace/coupons/toggleCoupon";
-
-// ============================================
-// TRIGGERS — notificação de admin
-// ============================================
-export { onCreatorRequestCreated } from "./triggers/onCreatorRequestCreated";
-export { onWithdrawalCreated } from "./triggers/onWithdrawalCreated";
 export { onProductPending } from "./triggers/onProductPending";
-export { saveCreatorPixKey } from "./payments/saveCreatorPixKey";
+export { onAchievementTrigger } from "./triggers/onAchievementTrigger";
+export {
+  activateDestaqueRegional,
+  getDestaqueRegionalStatus,
+} from './premium/destaqueRegionalService';
+export { registerProfileVisit } from './engagement/registerProfileVisit';

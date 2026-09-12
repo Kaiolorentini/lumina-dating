@@ -18,7 +18,7 @@ import { useCoins }       from '../../context/CoinsContext';
 import { useVisits }      from '../../hooks/useVisits';
 import { useNotifications } from '../../hooks/useNotifications';
 import ProfileCard          from '../../components/ProfileCard';
-import { ProfileCardData }  from '../../components/ProfileCard';
+import { ProfileCardData }  from '../../shared/types';
 import VisitedProfileCard   from '../../components/VisitedProfileCard';
 import VisitsBanner         from '../../components/VisitsBanner';
 import DestinyCardBanner    from '../../components/DestinyCardBanner';

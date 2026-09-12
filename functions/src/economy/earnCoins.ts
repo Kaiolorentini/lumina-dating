@@ -2,27 +2,48 @@
 // LUMINA — EARN COINS (CRISTAIS GRATUITOS)
 // functions/src/economy/earnCoins.ts
 //
-// REGRA 1: Nenhum crédito client-side.
-// REGRA 2: runTransaction() obrigatório.
-// REGRA 3: Idempotência por uid+data+tipo.
-// REGRA 4: Limite diário e mensal server-side.
-// REGRA 6: Timestamps sempre server-side.
+// v5.1 — Alinhado com novos parâmetros econômicos
+//
+// REGRA 1:  Nenhum crédito client-side.
+// REGRA 2:  runTransaction() obrigatório.
+// REGRA 3:  Idempotência por uid+data+tipo.
+// REGRA 4:  Limite diário e mensal server-side.
+// REGRA 6:  Timestamps sempre server-side.
 // REGRA 15: auditLog em toda movimentação.
+//
+// NOVO v5.1:
+// - Missões comuns pagam FRAGMENTOS, não cristais
+// - Apenas missões especiais (raras) pagam cristais
+// - Reset diário de dailyCristaisGratuitos verificado server-side
+// - Fragmentos com expiração parcial controlada aqui
 // ============================================
 
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { DAILY_LIMITS } from '../config/economy';
+import { DAILY_LIMITS, FRAGMENTS } from '../config/economy';
 import { auditLogFinanceiro, AuditTipo } from '../utils/auditLogFinanceiro';
 
 export type EarnCoinsOrigin =
   | 'LOGIN_DIARIO'
   | 'FAISCA_DESTINO'
-  | 'MISSAO_COMPLETA'
+  | 'MISSAO_ESPECIAL'      // apenas missões raras (1-2/semana) pagam cristais
   | 'CONQUISTA'
   | 'COFRE_SAQUE'
   | 'FRAGMENTOS_CONVERSAO'
-  | 'PRESTIGIO_BONUS';
+  | 'PRESTIGIO_BONUS'
+  | 'GALAXIA_PLUS_MENSAL'; // crédito da assinatura mensal
+
+// Origens que NÃO pagam cristais — pagam fragmentos
+// Missões comuns, visitas, curtidas → earnFragments (não earnCoins)
+export const GRATUITO_ORIGINS: EarnCoinsOrigin[] = [
+  'LOGIN_DIARIO',
+  'FAISCA_DESTINO',
+  'MISSAO_ESPECIAL',
+  'CONQUISTA',
+  'COFRE_SAQUE',
+  'FRAGMENTOS_CONVERSAO',
+  'PRESTIGIO_BONUS',
+];
 
 interface EarnCoinsRequest {
   origin:         EarnCoinsOrigin;
@@ -45,6 +66,9 @@ export const earnCoins = onCall(
       throw new HttpsError('invalid-argument', 'Valor inválido.');
     }
 
+    // Galáxia Plus mensal credita Premium, não Gratuito
+    const isPremiumCredit = origin === 'GALAXIA_PLUS_MENSAL';
+
     const db             = admin.firestore();
     const walletRef      = db.collection('wallets').doc(uid);
     const idempotencyRef = db.collection('earnIdempotency').doc(idempotencyKey);
@@ -56,7 +80,6 @@ export const earnCoins = onCall(
           t.get(idempotencyRef),
         ]);
 
-        // Admin SDK: .exists é propriedade booleana (sem parênteses)
         if (idempotencySnap.exists) {
           throw new HttpsError('already-exists', 'Recompensa já resgatada.');
         }
@@ -67,48 +90,59 @@ export const earnCoins = onCall(
 
         const wallet = walletSnap.data()!;
 
-        // Teto diário
-        const currentDailyTotal = wallet.dailyCristaisGratuitos ?? 0;
-        if (currentDailyTotal >= DAILY_LIMITS.CRYSTALS_GRATUITOS_MAX) {
-          throw new HttpsError('resource-exhausted', 'Limite diário atingido.');
+        // Reset diário verificado server-side
+        const today        = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const walletDay    = wallet.diaAtual ?? '';
+        const dailyTotal   = walletDay === today
+          ? (wallet.dailyCristaisGratuitos ?? 0)
+          : 0; // reset automático se dia mudou
+
+        // Teto diário (apenas para Gratuitos)
+        if (!isPremiumCredit && dailyTotal >= DAILY_LIMITS.CRYSTALS_GRATUITOS_MAX) {
+          throw new HttpsError('resource-exhausted', 'Limite diário de cristais gratuitos atingido.');
         }
 
-        // Teto mensal
-        const currentMonth      = new Date().toISOString().slice(0, 7);
-        const walletMonth       = wallet.mesAtual ?? '';
-        const currentMonthly    = walletMonth === currentMonth
+        // Teto mensal (apenas para Gratuitos)
+        const currentMonth   = new Date().toISOString().slice(0, 7);
+        const walletMonth    = wallet.mesAtual ?? '';
+        const monthlyTotal   = walletMonth === currentMonth
           ? (wallet.cristaisGratuitosMensais ?? 0)
           : 0;
 
-        if (currentMonthly >= DAILY_LIMITS.CRYSTALS_GRATUITOS_MONTHLY_MAX) {
-          throw new HttpsError('resource-exhausted', 'Limite mensal atingido.');
+        if (!isPremiumCredit && monthlyTotal >= DAILY_LIMITS.CRYSTALS_GRATUITOS_MONTHLY_MAX) {
+          throw new HttpsError('resource-exhausted', 'Limite mensal de cristais gratuitos atingido.');
         }
 
-        // Garante que não ultrapassa o teto diário
-        const safeAmount = Math.min(
-          amount,
-          DAILY_LIMITS.CRYSTALS_GRATUITOS_MAX - currentDailyTotal
-        );
+        // Garante que não ultrapassa teto diário
+        const safeAmount = isPremiumCredit
+          ? amount
+          : Math.min(amount, DAILY_LIMITS.CRYSTALS_GRATUITOS_MAX - dailyTotal);
 
         const prevGratuitos = wallet.coinsGratuitos ?? 0;
         const prevPremium   = wallet.coinsPremium   ?? 0;
-        const newGratuitos  = prevGratuitos + safeAmount;
-        const newMonthly    = currentMonthly + safeAmount;
+        const newGratuitos  = isPremiumCredit ? prevGratuitos : prevGratuitos + safeAmount;
+        const newPremium    = isPremiumCredit ? prevPremium + safeAmount : prevPremium;
+        const now           = admin.firestore.FieldValue.serverTimestamp();
 
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const walletUpdate: Record<string, unknown> = {
+          totalEarned: admin.firestore.FieldValue.increment(safeAmount),
+          mesAtual:    currentMonth,
+          diaAtual:    today,
+          updatedAt:   now,
+        };
 
-        t.update(walletRef, {
-          coinsGratuitos:           newGratuitos,
-          totalEarned:              admin.firestore.FieldValue.increment(safeAmount),
-          dailyCristaisGratuitos:   admin.firestore.FieldValue.increment(safeAmount),
-          cristaisGratuitosMensais: newMonthly,
-          mesAtual:                 currentMonth,
-          updatedAt:                now,
-        });
+        if (isPremiumCredit) {
+          walletUpdate.coinsPremium = newPremium;
+        } else {
+          walletUpdate.coinsGratuitos              = newGratuitos;
+          walletUpdate.dailyCristaisGratuitos      = admin.firestore.FieldValue.increment(safeAmount);
+          walletUpdate.cristaisGratuitosMensais    = monthlyTotal + safeAmount;
+        }
+
+        t.update(walletRef, walletUpdate);
 
         t.set(idempotencyRef, {
-          uid,
-          origin,
+          uid, origin,
           amount: safeAmount,
           createdAt: now,
         });
@@ -116,17 +150,21 @@ export const earnCoins = onCall(
         auditLogFinanceiro({
           uid,
           tipo:                    origin as AuditTipo,
-          coinTipo:                'gratuito',
+          coinTipo:                isPremiumCredit ? 'premium' : 'gratuito',
           valor:                   safeAmount,
           origem:                  origin,
           saldoAnteriorGratuito:   prevGratuitos,
           saldoAnteriorPremium:    prevPremium,
           saldoPosteriorGratuito:  newGratuitos,
-          saldoPosteriorPremium:   prevPremium,
-          metadata:                { idempotencyKey },
+          saldoPosteriorPremium:   newPremium,
+          metadata:                { idempotencyKey, isPremiumCredit },
         }, t);
 
-        return { amount: safeAmount, newBalance: newGratuitos };
+        return {
+          amount:             safeAmount,
+          newBalanceGratuitos: newGratuitos,
+          newBalancePremium:   newPremium,
+        };
       });
 
       return { success: true, ...result };

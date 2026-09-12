@@ -1,29 +1,29 @@
 // ============================================
-// LUMINA — TREE COMPATIBILITY ADAPTER v1.1
-// functions/src/gamification/compatibility/adapters/TreeCompatibilityAdapter.ts
+// LUMINA — PRESTIGE COMPATIBILITY ADAPTER v1.1
+// functions/src/gamification/compatibility/adapters/PrestigeCompatibilityAdapter.ts
 // SPRINT 1C — v1.1: corrige tipo de retorno com spread.
 // ============================================
 
 import { CompatibilityAdapter } from '../CompatibilityAdapter';
 import { CompareParams }        from '../ICompatibilityAdapter';
-import { calculateTree, TreeCalculatorInput } from '../../calculators/TreeCalculator';
+import { calculatePrestige, PrestigeCalculatorInput } from '../../calculators/PrestigeCalculator';
 import { registerCompatibilityAdapter } from '../CompatibilityRegistry';
 
-class TreeCompatibilityAdapterImpl extends CompatibilityAdapter {
-  readonly system = 'TREE' as const;
+class PrestigeCompatibilityAdapterImpl extends CompatibilityAdapter {
+  readonly system = 'PRESTIGE' as const;
 
   canHandle(legacyActionKey: string): boolean {
     return legacyActionKey === 'CREATE_SINTONIA';
   }
 
   async simulate(params: CompareParams): Promise<Record<string, unknown> | null> {
-    const input  = params.calculatorInput as unknown as TreeCalculatorInput;
-    const output = calculateTree(input);
+    const input  = params.calculatorInput as unknown as PrestigeCalculatorInput;
+    const output = calculatePrestige(input);
     return output ? { ...output } : null;
   }
 }
 
-const instance = new TreeCompatibilityAdapterImpl();
+const instance = new PrestigeCompatibilityAdapterImpl();
 registerCompatibilityAdapter(instance);
 
-export { instance as TreeCompatibilityAdapter };
+export { instance as PrestigeCompatibilityAdapter };

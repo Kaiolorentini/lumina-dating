@@ -161,6 +161,15 @@ export const MissionService = {
         missionId:       missionIdParam,
         missionCategory: result.missionCategory ?? 'MISSION',
       });
+
+      // v5.3 — conquista COMPLETE_MISSION (fire-and-forget)
+      db.collection('achievementTriggers').add({
+        uid,
+        action:       'COMPLETE_MISSION',
+        currentValue: 1,
+        processedAt:  null,
+        timestamp:    FieldValue.serverTimestamp(),
+      }).catch(() => {});
     }
 
     return result;

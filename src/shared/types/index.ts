@@ -15,6 +15,11 @@ export interface UserProfile {
   age: number;
   city: string;
   state: string;
+  /** Código IBGE do município, 7 dígitos (ex.: '4118501' = Palotina).
+   *  Fonte canônica de região — city/state ficam para exibição. */
+  regiaoId?: string;
+  /** Código IBGE do estado (ex.: 41 = PR). Valida coerência com regiaoId. */
+  estadoId?: number;
   gender: Gender;
   preferences: Preference[];
   bio: string;
@@ -188,7 +193,9 @@ export type NotificationType =
   | 'level_up'
   | 'tree_evolution'
   | 'achievement_unlocked'
-  | 'collection_complete';
+  | 'collection_complete'
+  | 'ranking_reward'
+  | 'inflation_alert';
 
 export interface AppNotification {
   id:        string;
@@ -276,14 +283,16 @@ export interface ContentAccess {
   level3: boolean;
 }
 
+export type BoostType = 'turbo' | 'destaque' | 'impulso';
+
 export interface ProfileCardData {
-  id:       string;
-  name:     string;
-  age:      number;
-  location: string;
-  sintonia: number;
-  photoURL: string;
-  
+  id:         string;
+  name:       string;
+  age:        number;
+  location:   string;
+  sintonia:   number;
+  photoURL:   string;
+  boostType?: BoostType | null;
 }
 
 // ------------------------------------------

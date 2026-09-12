@@ -1,11 +1,11 @@
 // ============================================
-// LUMINA — ACHIEVEMENTS SYSTEM v5.2
+// LUMINA — ACHIEVEMENTS SYSTEM v5.3
 // functions/src/engagement/achievements.ts
 //
-// SPRINT 1C: checkAchievements agora dispara
-// LegacyShadowOrchestrator com legacyResult real.
-// Resposta ao cliente 100% inalterada.
-// getAchievementsStatus e repairAchievements: INALTERADAS.
+// v5.3: corrige bug de currentValue não incrementar.
+// Actions incrementais (visit, mission, chat, sintonia, vault)
+// acumulam progress[achId] + 1 no servidor.
+// Actions absolutas (streak, tree) usam currentValue direto.
 // ============================================
 
 import * as functions from 'firebase-functions/v2/https';
@@ -18,6 +18,12 @@ import { LegacyShadowOrchestrator } from '../gamification/compatibility/LegacySh
 import { CompareParams } from '../gamification/compatibility/ICompatibilityAdapter';
 
 const db = admin.firestore();
+
+// Actions que usam currentValue absoluto (não acumulam +1)
+const ABSOLUTE_ACTIONS = new Set([
+  'STREAK_UPDATE',   // currentValue = currentStreak real
+  'TREE_EVOLUTION',  // currentValue = stage real
+]);
 
 function newEventId(): string {
   return `ach_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -42,34 +48,49 @@ export const checkAchievements = functions.onCall(
     const userDoc  = await userRef.get();
     const userData = userDoc.data() ?? {};
 
-    // SPRINT 1C: captura estado PRÉ-ação para o Calculator
-    const preUnlocked: string[]              = userData.achievements?.unlocked  ?? [];
-    const preProgress: Record<string, number> = userData.achievements?.progress  ?? {};
+    const preUnlocked: string[]               = userData.achievements?.unlocked  ?? [];
+    const preProgress: Record<string, number>  = userData.achievements?.progress  ?? {};
 
-    const unlocked: string[]              = [...preUnlocked];
-    const progress: Record<string, number> = { ...preProgress };
+    const unlocked: string[]               = [...preUnlocked];
+    const newlyUnlocked: string[]          = [];
 
-    const newlyUnlocked: string[] = [];
+    // v5.3: determina se a action é incremental ou absoluta
+    const isAbsolute = ABSOLUTE_ACTIONS.has(action);
 
     for (const achId of relatedIds) {
       const ach = ACHIEVEMENTS_CATALOG[achId];
       if (!ach) continue;
       if (unlocked.includes(achId)) continue;
 
-      const currentProgress = Math.max(progress[achId] ?? 0, currentValue);
+      // v5.3: para actions incrementais, acumula +1; para absolutas, usa currentValue
+      const currentProgress = isAbsolute
+        ? currentValue
+        : (preProgress[achId] ?? 0) + 1;
 
       await db.runTransaction(async (t) => {
         const freshDoc  = await t.get(userRef);
         const freshData = freshDoc.data() ?? {};
         const freshUnlocked: string[] = freshData.achievements?.unlocked ?? [];
+        const freshProgress: Record<string, number> = freshData.achievements?.progress ?? {};
+
         if (freshUnlocked.includes(achId)) return;
 
-        t.set(userRef, { achievements: { progress: { [achId]: currentProgress } } }, { merge: true });
-
-        if (currentProgress < ach.target) return;
+        // v5.3: recalcula com dados frescos da transação
+        const freshCurrent = isAbsolute
+          ? currentValue
+          : (freshProgress[achId] ?? 0) + 1;
 
         t.set(userRef, {
-          achievements: { unlocked: FieldValue.arrayUnion(achId), unlockedAt: { [achId]: FieldValue.serverTimestamp() } },
+          achievements: { progress: { [achId]: freshCurrent } },
+        }, { merge: true });
+
+        if (freshCurrent < ach.target) return;
+
+        t.set(userRef, {
+          achievements: {
+            unlocked:   FieldValue.arrayUnion(achId),
+            unlockedAt: { [achId]: FieldValue.serverTimestamp() },
+          },
         }, { merge: true });
 
         t.set(achLogRef.doc(), {
@@ -80,9 +101,10 @@ export const checkAchievements = functions.onCall(
 
         t.set(notifRef.doc(), {
           userId: uid, type: 'achievement_unlocked',
-          title: `${ach.icon} ${ach.title}`, message: ach.description,
-          icon: ach.icon, read: false,
-          dados: { achievementId: achId, rarity: ach.rarity, reward: ach.reward },
+          title:   `${ach.icon} ${ach.title}`,
+          message: ach.description,
+          icon:    ach.icon, read: false,
+          dados:   { achievementId: achId, rarity: ach.rarity, reward: ach.reward },
           timestamp: FieldValue.serverTimestamp(),
         });
 
@@ -90,18 +112,36 @@ export const checkAchievements = functions.onCall(
           const walletRef = db.collection('wallets').doc(uid);
           const walletDoc = await t.get(walletRef);
           const wallet    = walletDoc.data() ?? {};
-          t.set(walletRef, { fragments: FieldValue.increment(ach.reward.fragments), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+          t.set(walletRef, {
+            fragments:  FieldValue.increment(ach.reward.fragments),
+            updatedAt:  FieldValue.serverTimestamp(),
+          }, { merge: true });
           t.set(db.collection('economyLedger').doc(), {
             uid, tipo: 'ACHIEVEMENT_REWARD', achievementId: achId,
-            fragmentos: ach.reward.fragments, saldoAntes: wallet.fragments ?? 0,
+            fragmentos: ach.reward.fragments,
+            saldoAntes: wallet.fragments ?? 0,
             saldoDepois: (wallet.fragments ?? 0) + ach.reward.fragments,
             timestamp: FieldValue.serverTimestamp(), imutavel: true,
           });
         }
 
-        if (ach.reward.badge) t.set(userRef, { [`progression.unlockedItems.badge_${ach.reward.badge}`]: true }, { merge: true });
-        if (ach.reward.frame) t.set(userRef, { [`progression.unlockedItems.frame_${ach.reward.frame}`]: true }, { merge: true });
-        if (ach.reward.title) t.set(userRef, { [`progression.availableTitles`]: FieldValue.arrayUnion(ach.reward.title) }, { merge: true });
+   // Objeto aninhado (set com string contendo ponto cria campo literal)
+        // Catálogo já traz o prefixo — não duplicar 'badge_'/'frame_'
+        if (ach.reward.badge) {
+          t.set(userRef, {
+            progression: { unlockedItems: { [ach.reward.badge]: true } },
+          }, { merge: true });
+        }
+        if (ach.reward.frame) {
+          t.set(userRef, {
+            progression: { unlockedItems: { [ach.reward.frame]: true } },
+          }, { merge: true });
+        }
+        if (ach.reward.title) {
+          t.set(userRef, {
+            progression: { availableTitles: FieldValue.arrayUnion(ach.reward.title) },
+          }, { merge: true });
+        }
 
         newlyUnlocked.push(achId);
 
@@ -116,29 +156,28 @@ export const checkAchievements = functions.onCall(
       }
     }
 
-    // SPRINT 1C: dispara comparação Shadow — fire-and-forget
+    // Shadow — fire-and-forget
     if (relatedIds.length > 0) {
       const eventId = newEventId();
       const params: CompareParams = {
         uid, eventId, legacyActionKey: action,
         legacyResult: { unlockedIds: newlyUnlocked },
         calculatorInput: {
-          actionKey:        action,
-          currentUnlocked:  preUnlocked,
-          currentProgress:  preProgress,
+          actionKey:       action,
+          currentUnlocked: preUnlocked,
+          currentProgress: preProgress,
         },
       };
-
       LegacyShadowOrchestrator
         .dispatchComparisons(action, { ACHIEVEMENT: params })
-        .catch(() => { /* nunca afeta a resposta ao cliente */ });
+        .catch(() => {});
     }
 
     return { unlocked: newlyUnlocked };
   }
 );
 
-// ── Verifica e completa coleções ──
+// ── Verifica e completa coleções ── (inalterada)
 async function checkCollections(uid: string, unlockedAchievements: string[]): Promise<void> {
   const userRef  = db.collection('users').doc(uid);
   const notifRef = db.collection('notifications');
@@ -149,7 +188,6 @@ async function checkCollections(uid: string, unlockedAchievements: string[]): Pr
 
   for (const [colId, col] of Object.entries(COLLECTIONS_CATALOG)) {
     if (completedCollections.includes(colId)) continue;
-
     const allDone = col.achievementIds.every(id => unlockedAchievements.includes(id));
     if (!allDone) continue;
 
@@ -161,8 +199,8 @@ async function checkCollections(uid: string, unlockedAchievements: string[]): Pr
 
       t.set(userRef, {
         achievements: {
-          completedCollections:   FieldValue.arrayUnion(colId),
-          collectionCompletedAt:  { [colId]: FieldValue.serverTimestamp() },
+          completedCollections:  FieldValue.arrayUnion(colId),
+          collectionCompletedAt: { [colId]: FieldValue.serverTimestamp() },
         },
       }, { merge: true });
 
@@ -170,10 +208,14 @@ async function checkCollections(uid: string, unlockedAchievements: string[]): Pr
         const walletRef = db.collection('wallets').doc(uid);
         const walletDoc = await t.get(walletRef);
         const wallet    = walletDoc.data() ?? {};
-        t.set(walletRef, { fragments: FieldValue.increment(col.reward.fragments), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        t.set(walletRef, {
+          fragments: FieldValue.increment(col.reward.fragments),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
         t.set(db.collection('economyLedger').doc(), {
           uid, tipo: 'COLLECTION_REWARD', collectionId: colId, tier: col.tier,
-          fragmentos: col.reward.fragments, saldoAntes: wallet.fragments ?? 0,
+          fragmentos: col.reward.fragments,
+          saldoAntes: wallet.fragments ?? 0,
           saldoDepois: (wallet.fragments ?? 0) + col.reward.fragments,
           timestamp: FieldValue.serverTimestamp(), imutavel: true,
         });
@@ -185,17 +227,17 @@ async function checkCollections(uid: string, unlockedAchievements: string[]): Pr
 
       t.set(notifRef.doc(), {
         userId: uid, type: 'collection_complete',
-        title: `${col.icon} ${col.title} completa!`,
+        title:   `${col.icon} ${col.title} completa!`,
         message: `+${col.reward.fragments} Fragmentos${col.reward.badge ? ' + Badge exclusivo!' : '!'}`,
-        icon: col.icon, read: false,
-        dados: { collectionId: colId, tier: col.tier, reward: col.reward },
+        icon:    col.icon, read: false,
+        dados:   { collectionId: colId, tier: col.tier, reward: col.reward },
         timestamp: FieldValue.serverTimestamp(),
       });
     });
   }
 }
 
-// ── Status de conquistas — INALTERADA ──
+// ── Status de conquistas ── (inalterada)
 export const getAchievementsStatus = functions.onCall(
   { region: 'us-central1' },
   async (request) => {
@@ -229,13 +271,13 @@ export const getAchievementsStatus = functions.onCall(
 
     return {
       achievements, collections,
-      totalUnlocked:   unlocked.length,
-      totalAvailable:  Object.keys(ACHIEVEMENTS_CATALOG).length,
+      totalUnlocked:  unlocked.length,
+      totalAvailable: Object.keys(ACHIEVEMENTS_CATALOG).length,
     };
   }
 );
 
-// ── repairAchievements — INALTERADA ──
+// ── repairAchievements ── (inalterada)
 export const repairAchievements = scheduler.onSchedule(
   { schedule: 'every 24 hours', region: 'us-central1' },
   async () => {
@@ -245,7 +287,6 @@ export const repairAchievements = scheduler.onSchedule(
       .where('lastActive', '>=', yesterday)
       .limit(100)
       .get();
-
     console.log(`[repairAchievements] Verificando ${usersSnap.size} usuários`);
   }
 );

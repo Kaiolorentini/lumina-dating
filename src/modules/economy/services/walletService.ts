@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // LUMINA — WALLET SERVICE (CLIENT)
 // src/modules/economy/services/walletService.ts
 //

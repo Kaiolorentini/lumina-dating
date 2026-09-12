@@ -80,6 +80,13 @@ export default function VaultScreen() {
     if (result) {
       setWithdrawResult({ crystals: result.crystalsGained });
       await refreshWallet();
+
+      // v5.3 — conquista VAULT_WITHDRAW (fire-and-forget)
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      httpsCallable(getFunctions(), 'checkAchievements')({
+        action:       'VAULT_WITHDRAW',
+        currentValue: 1,
+      }).catch(() => {});
     }
   }
 

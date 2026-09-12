@@ -73,32 +73,59 @@ export const getFragmentsStatus = functions.onCall(
 );
 
 // ── Expiração parcial de fragmentos (10% a cada 7 dias sem converter) ──
+//
+// CORREÇÕES v5.3:
+// A) Query com filtro único — duas desigualdades exigiam índice
+//    e ainda assim excluiriam documentos sem o campo.
+// B) Carteiras que NUNCA converteram não têm lastFragmentConversion
+//    e ficavam invisíveis. Agora o filtro de data é feito no código,
+//    com fallback para lastFragmentExpiry e createdAt.
+// C) lastFragmentExpiry agora é gravado — sem ele a expiração
+//    reincidia TODO DIA em vez de a cada 7 dias.
 export const expireFragments = scheduler.onSchedule(
   { schedule: 'every 24 hours', region: 'us-central1' },
   async () => {
-    const now          = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - FRAGMENTS.EXPIRY_DAYS_WITHOUT_CONVERT * 24 * 60 * 60 * 1000);
+    const cutoff = new Date(
+      Date.now() - FRAGMENTS.EXPIRY_DAYS_WITHOUT_CONVERT * 24 * 60 * 60 * 1000
+    );
 
+    // Filtro único: sem índice composto e sem excluir documentos
     const snap = await db.collection('wallets')
       .where('fragments', '>', 0)
-      .where('lastFragmentConversion', '<', sevenDaysAgo)
-      .limit(100)
+      .limit(500)
       .get();
 
     const batch = db.batch();
     let   processed = 0;
+    let   skipped   = 0;
 
     for (const doc of snap.docs) {
       const wallet    = doc.data();
       const fragments = wallet.fragments ?? 0;
       if (fragments <= 0) continue;
 
+      // Referência = evento mais recente entre conversão, expiração e criação
+      const lastConv   = wallet.lastFragmentConversion?.toDate?.() ?? null;
+      const lastExpiry = wallet.lastFragmentExpiry?.toDate?.()     ?? null;
+      const createdAt  = wallet.createdAt?.toDate?.()              ?? null;
+
+      const candidates = [lastConv, lastExpiry, createdAt].filter(Boolean) as Date[];
+      if (candidates.length === 0) { skipped++; continue; }
+
+      const reference = new Date(Math.max(...candidates.map(d => d.getTime())));
+
+      // Ainda dentro da janela de 7 dias
+      if (reference > cutoff) { skipped++; continue; }
+
       const expiry    = Math.floor(fragments * FRAGMENTS.EXPIRY_PERCENTAGE);
+      if (expiry <= 0) { skipped++; continue; }
+
       const remaining = Math.max(0, fragments - expiry);
 
       batch.update(doc.ref, {
-        fragments:  remaining,
-        updatedAt:  FieldValue.serverTimestamp(),
+        fragments:           remaining,
+        lastFragmentExpiry:  FieldValue.serverTimestamp(),
+        updatedAt:           FieldValue.serverTimestamp(),
       });
 
       // Ledger da expiração
@@ -109,6 +136,7 @@ export const expireFragments = scheduler.onSchedule(
         fragmentosExpirados: expiry,
         saldoAntes:          fragments,
         saldoDepois:         remaining,
+        referenceDate:       reference.toISOString(),
         timestamp:           FieldValue.serverTimestamp(),
         imutavel:            true,
       });
@@ -116,7 +144,7 @@ export const expireFragments = scheduler.onSchedule(
       processed++;
     }
 
-    await batch.commit();
-    console.log(`[expireFragments] Processados: ${processed} wallets`);
+    if (processed > 0) await batch.commit();
+    console.log(`[expireFragments] Expirados: ${processed} | Ignorados: ${skipped} | Analisados: ${snap.size}`);
   }
 );

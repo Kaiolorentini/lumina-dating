@@ -14,96 +14,82 @@ service firebase.storage {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isAdmin() {
-      return isAuthenticated() &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
-          in ['admin', 'superadmin'];
+    function isUnderSizeMB(maxMB) {
+      return request.resource.size < maxMB * 1024 * 1024;
     }
 
-    function isNotBlocked() {
-      return isAuthenticated() &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.isBlocked != true;
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
     }
 
-    function isCreator() {
-      return isAuthenticated() && isNotBlocked() &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
-          in ['creator', 'admin', 'superadmin'];
-    }
-
-    function isProductOwner(productId) {
-      return isAuthenticated() && isNotBlocked() &&
-        firestore.get(/databases/(default)/documents/products/$(productId)).data.ownerId
-          == request.auth.uid;
-    }
-
-    function isValidImage() {
-      return request.resource.contentType.matches('image/.*') &&
-        request.resource.size < 10 * 1024 * 1024; // 10MB
-    }
-
-    function isValidFile() {
-      return request.resource.size < 500 * 1024 * 1024; // 500MB
+    function isAllowedProductFile() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType.matches('video/.*') ||
+             request.resource.contentType.matches('audio/.*') ||
+             request.resource.contentType == 'application/pdf' ||
+             request.resource.contentType == 'application/zip' ||
+             request.resource.contentType == 'application/x-zip-compressed';
     }
 
     // ============================================
-    // FOTOS DE PERFIL
+    // FOTOS DE PERFIL — ADICIONADO
     // ============================================
-    match /users/{userId}/{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId) && isValidImage();
-      allow delete: if isOwner(userId) || isAdmin();
+    match /profile_photos/{userId}/{fileName} {
+      allow read:   if true;
+      allow write:  if isOwner(userId) &&
+                       isImage() &&
+                       isUnderSizeMB(5);
+      allow delete: if isOwner(userId);
     }
 
     // ============================================
-    // MARKETPLACE — CAPA DO PRODUTO (pública)
+    // MÍDIA DO USUÁRIO
     // ============================================
+    match /users/{userId}/media/{fileName} {
+      allow read:   if isAuthenticated();
+      allow write:  if isOwner(userId) &&
+                       isUnderSizeMB(50);
+      allow delete: if isOwner(userId);
+    }
+
+    // ============================================
+    // MARKETPLACE — PRODUTOS
+    // ============================================
+
+    // Capa do produto — pública
     match /marketplace/products/{productId}/cover/{fileName} {
-      allow read: if true; // pública — necessário para exibir no app
-      allow write: if isProductOwner(productId) &&
-        isCreator() && isValidImage();
-      allow delete: if isProductOwner(productId) || isAdmin();
+      allow read:   if true;
+      allow write:  if isAuthenticated() &&
+                       isImage() &&
+                       isUnderSizeMB(10);
+      allow delete: if isAuthenticated();
     }
 
-    // ============================================
-    // MARKETPLACE — PRÉVIAS PÚBLICAS
-    // ============================================
+    // Previews — públicos
     match /marketplace/products/{productId}/previews/{fileName} {
-      allow read: if true; // pública — necessário para preview
-      allow write: if isProductOwner(productId) &&
-        isCreator() && isValidImage();
-      allow delete: if isProductOwner(productId) || isAdmin();
+      allow read:   if true;
+      allow write:  if isAuthenticated() &&
+                       isUnderSizeMB(20);
+      allow delete: if isAuthenticated();
     }
 
-    // ============================================
-    // MARKETPLACE — ARQUIVOS DE PRÉVIA PÚBLICOS
-    // ============================================
+    // Preview files — públicos (demos/amostras)
     match /marketplace/products/{productId}/previewFiles/{fileName} {
-      allow read: if true; // pública — preview gratuito
-      allow write: if isProductOwner(productId) &&
-        isCreator() && isValidFile();
-      allow delete: if isProductOwner(productId) || isAdmin();
+      allow read:   if true;
+      allow write:  if isAuthenticated() &&
+                       isAllowedProductFile() &&
+                       isUnderSizeMB(50);
+      allow delete: if isAuthenticated();
     }
 
-    // ============================================
-    // MARKETPLACE — ARQUIVOS PAGOS
-    //
-    // ⚠️ CRÍTICO — BLOQUEIO TOTAL
-    // Nenhum cliente acessa diretamente.
-    // Acesso EXCLUSIVO via Cloud Function (Signed URL).
-    //
-    // API_TODO #11:
-    // Cloud Function getSignedUrl (FASE 9):
-    // → verifica purchase ativa
-    // → verifica isBlocked
-    // → gera Signed URL temporária (15 min)
-    // → usando Admin SDK (ignora estas rules)
-    // ============================================
+    // Arquivos pagos — SOMENTE upload autenticado
+    // Leitura via Cloud Function (getSignedUrl) — nunca direto
     match /marketplace/products/{productId}/files/{fileName} {
-      allow read: if false;  // BLOQUEIO TOTAL — sem exceções
-      allow write: if isProductOwner(productId) &&
-        isCreator() && isValidFile();
-      allow delete: if isProductOwner(productId) || isAdmin();
+      allow read:   if false;
+      allow write:  if isAuthenticated() &&
+                       isAllowedProductFile() &&
+                       isUnderSizeMB(500);
+      allow delete: if isAuthenticated();
     }
 
     // ============================================
@@ -112,134 +98,6 @@ service firebase.storage {
     match /{allPaths=**} {
       allow read, write: if false;
     }
-
-
-    // ============================================
-// LUMINA — FIRESTORE RULES COMPLETAS (FASE 0)
-// firestore.rules — substituir seção economy
-// ============================================
-
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    // ----------------------------------------
-    // HELPERS
-    // ----------------------------------------
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    function isOwner(uid) {
-      return request.auth.uid == uid;
-    }
-
-    function isSuperAdmin() {
-      return request.auth.uid in [
-        'DOoEhA9B2QZfTnJrIBJIUhNjuC23',
-        '8DyoecyZiuPOwvCDoO9WekJkVkH3'
-      ];
-    }
-
-    // ----------------------------------------
-    // CARTEIRAS — leitura pelo dono, escrita só backend
-    // ----------------------------------------
-    match /wallets/{userId} {
-      allow read:  if isAuthenticated() && isOwner(userId);
-      allow write: if false; // somente Admin SDK (Cloud Functions)
-
-      match /transactions/{txId} {
-        allow read:  if isAuthenticated() && isOwner(userId);
-        allow write: if false;
-      }
-    }
-
-    // ----------------------------------------
-    // AUDIT LOGS FINANCEIROS — somente backend
-    // ----------------------------------------
-    match /walletAuditLogs/{logId} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    match /xpAuditLogs/{logId} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    // ----------------------------------------
-    // IDEMPOTÊNCIA — somente backend
-    // ----------------------------------------
-    match /earnIdempotency/{key} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    match /spendIdempotency/{key} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    // ----------------------------------------
-    // ECONOMY CONFIG — leitura pública, escrita superadmin
-    // ----------------------------------------
-    match /config/{docId} {
-      allow read:  if isAuthenticated();
-      allow write: if isSuperAdmin();
-    }
-
-    // ----------------------------------------
-    // ECONOMY SNAPSHOTS — somente superadmin lê
-    // ----------------------------------------
-    match /economySnapshots/{date} {
-      allow read:  if isSuperAdmin();
-      allow write: if false;
-    }
-
-    // ----------------------------------------
-    // RANKING SEMANAL — leitura pública, escrita backend
-    // ----------------------------------------
-    match /weeklyRanking/{weekId}/{category}/{userId} {
-      allow read:  if isAuthenticated();
-      allow write: if false;
-    }
-
-    // ----------------------------------------
-    // USERS — leitura controlada, escrita restrita
-    // ----------------------------------------
-    match /users/{userId} {
-      allow read:  if isAuthenticated();
-      allow update: if isAuthenticated() && isOwner(userId)
-        // Campos que o cliente NÃO pode alterar diretamente
-        && !('economy' in request.resource.data)
-        && !('trustScore' in request.resource.data)
-        && !('progression.xp' in request.resource.data)
-        && !('progression.level' in request.resource.data);
-      allow create: if isAuthenticated() && isOwner(userId);
-      allow delete: if false;
-    }
-
-    // ----------------------------------------
-    // NOTIFICAÇÕES — dono lê e marca como lida
-    // ----------------------------------------
-    match /notifications/{notifId} {
-      allow read:   if isAuthenticated()
-        && resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated()
-        && resource.data.userId == request.auth.uid
-        && request.resource.data.keys().hasOnly(['read']); // só pode marcar como lida
-      allow create, delete: if false;
-    }
-
-    // ----------------------------------------
-    // PURCHASES — dono lê, backend escreve
-    // ----------------------------------------
-    match /purchases/{userId}/transactions/{txId} {
-      allow read:  if isAuthenticated() && isOwner(userId);
-      allow write: if false;
-    }
-  }
-}
 
   }
 }

@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { colors, fonts, spacing, borderRadius } from '../theme';
-import { ProfileCardData } from './ProfileCard';
+import { ProfileCardData } from '../shared/types';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - spacing.lg * 2 - spacing.sm) / 2;

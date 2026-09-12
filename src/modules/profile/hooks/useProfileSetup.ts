@@ -1,10 +1,6 @@
 // ============================================
 // useProfileSetup — HOOK
 // src/modules/profile/hooks/useProfileSetup.ts
-//
-// + Campo CPF (opcional) para pagamentos Asaas.
-//   Guardado só com dígitos. Validado (dígitos verificadores)
-//   apenas se preenchido — vazio é permitido.
 // ============================================
 
 import { useState, useEffect } from 'react';
@@ -14,6 +10,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { saveProfile, getProfile } from '../services/profileService';
 import { uploadProfilePhoto } from '../services/photoService';
 import { Gender, Preference } from '../../../shared/types';
+import { isRegiaoIdValida } from '../../../services/ibgeService';
 
 interface UseProfileSetupProps {
   editMode?: boolean;
@@ -25,13 +22,15 @@ interface UseProfileSetupReturn {
   age: string;
   setAge: (v: string) => void;
   city: string;
-  setCity: (v: string) => void;
   state: string;
-  setState: (v: string) => void;
+  regiaoId: string;
+  estadoId: number | null;
+  /** Seleciona estado. Limpa a cidade — municípios mudam com a UF. */
+  selectEstado: (sigla: string, id: number) => void;
+  /** Seleciona município. regiaoId é o código IBGE. */
+  selectMunicipio: (nome: string, id: number) => void;
   bio: string;
   setBio: (v: string) => void;
-  cpf: string;
-  setCpf: (v: string) => void;
   gender: Gender | null;
   setGender: (v: Gender) => void;
   preferences: Preference[];
@@ -44,41 +43,6 @@ interface UseProfileSetupReturn {
   save: () => Promise<boolean>;
 }
 
-// Mantém só dígitos
-function onlyDigits(v: string): string {
-  return v.replace(/\D/g, '');
-}
-
-// Aplica máscara 000.000.000-00 conforme digita
-export function maskCpf(v: string): string {
-  const d = onlyDigits(v).slice(0, 11);
-  if (d.length <= 3) return d;
-  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
-  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
-}
-
-// Valida dígitos verificadores do CPF
-export function isValidCpf(raw: string): boolean {
-  const cpf = onlyDigits(raw);
-  if (cpf.length !== 11) return false;
-  if (/^(\d)\1{10}$/.test(cpf)) return false; // todos iguais
-
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i], 10) * (10 - i);
-  let check = (sum * 10) % 11;
-  if (check === 10) check = 0;
-  if (check !== parseInt(cpf[9], 10)) return false;
-
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i], 10) * (11 - i);
-  check = (sum * 10) % 11;
-  if (check === 10) check = 0;
-  if (check !== parseInt(cpf[10], 10)) return false;
-
-  return true;
-}
-
 export function useProfileSetup(
   props?: UseProfileSetupProps
 ): UseProfileSetupReturn {
@@ -89,19 +53,15 @@ export function useProfileSetup(
   const [age,         setAge]         = useState('');
   const [city,        setCity]        = useState('');
   const [state,       setState]       = useState('');
+  const [regiaoId,    setRegiaoId]    = useState('');
+  const [estadoId,    setEstadoId]    = useState<number | null>(null);
   const [bio,         setBio]         = useState('');
-  const [cpf,         setCpfRaw]      = useState('');
   const [gender,      setGender]      = useState<Gender | null>(null);
   const [preferences, setPreferences] = useState<Preference[]>([]);
   const [photoURI,    setPhotoURI]    = useState<string | null>(null);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState('');
   const [isEditing,   setIsEditing]   = useState(false);
-
-  // setCpf aplica a máscara automaticamente
-  function setCpf(v: string) {
-    setCpfRaw(maskCpf(v));
-  }
 
   useEffect(() => {
     async function loadExisting() {
@@ -114,17 +74,31 @@ export function useProfileSetup(
           setAge(existing.age ? String(existing.age) : '');
           setCity(existing.city || '');
           setState(existing.state || '');
+          setRegiaoId(existing.regiaoId || '');
+          setEstadoId(existing.estadoId ?? null);
           setBio(existing.bio || '');
           setGender(existing.gender || null);
           setPreferences(existing.preferences || []);
-          if (existing.cpf) setCpfRaw(maskCpf(existing.cpf));
           if (existing.photoURL) setPhotoURI(existing.photoURL);
         }
       }
     }
     loadExisting();
   }, [user]);
+// Trocar de estado invalida a cidade: manter "Palotina" com UF
+  // "SP" gravaria um regiaoId incoerente e o Destaque Regional
+  // entregaria na região errada.
+  function selectEstado(sigla: string, id: number) {
+    setState(sigla);
+    setEstadoId(id);
+    setCity('');
+    setRegiaoId('');
+  }
 
+  function selectMunicipio(nome: string, id: number) {
+    setCity(nome);
+    setRegiaoId(String(id));
+  }
   function togglePreference(pref: Preference) {
     setPreferences(prev =>
       prev.includes(pref)
@@ -162,12 +136,14 @@ export function useProfileSetup(
     if (!name || !age || !city || !state || !gender || preferences.length === 0) {
       return 'Preencha todos os campos obrigatórios';
     }
+    if (!regiaoId || !estadoId) {
+      return 'Selecione seu estado e cidade nas listas';
+    }
+    if (!isRegiaoIdValida(regiaoId, estadoId)) {
+      return 'Cidade e estado não combinam. Selecione novamente.';
+    }
     if (isNaN(Number(age)) || Number(age) < 18 || Number(age) > 100) {
       return 'Digite uma idade válida (mínimo 18 anos)';
-    }
-    // CPF é opcional — mas se preenchido, precisa ser válido
-    if (cpf.trim() && !isValidCpf(cpf)) {
-      return 'CPF inválido. Verifique os números ou deixe em branco.';
     }
     return null;
   }
@@ -185,8 +161,6 @@ export function useProfileSetup(
 
       if (!user) return false;
 
-      const cpfDigits = onlyDigits(cpf);
-
       await saveProfile(user.uid, {
         uid:       user.uid,
         email:     user.email || '',
@@ -194,11 +168,11 @@ export function useProfileSetup(
         age:       Number(age),
         city,
         state,
+        regiaoId,
+        estadoId: estadoId!,
         gender:    gender!,
         preferences,
         bio,
-        // Só grava cpf se preenchido e válido (guarda apenas dígitos)
-        ...(cpfDigits.length === 11 && { cpf: cpfDigits }),
         createdAt: new Date(),
       });
 
@@ -221,10 +195,9 @@ export function useProfileSetup(
   return {
     name, setName,
     age, setAge,
-    city, setCity,
-    state, setState,
+    city, state, regiaoId, estadoId,
+    selectEstado, selectMunicipio,
     bio, setBio,
-    cpf, setCpf,
     gender, setGender,
     preferences,
     photoURI,

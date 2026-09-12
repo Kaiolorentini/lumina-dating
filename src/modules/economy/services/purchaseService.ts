@@ -1,13 +1,10 @@
 // ============================================
-// LUMINA — PURCHASE SERVICE v5.1
+// LUMINA — PURCHASE SERVICE v5.2
 // src/modules/economy/services/purchaseService.ts
 //
-// REGRA 1: Nenhuma compra creditada client-side.
-// Crédito real: onAsaasWebhook (Cloud Function).
-//
-// CORREÇÃO: Removido import de ../../../functions/
-// (pasta backend não pode ser importada no client)
-// Pacotes definidos localmente para exibição apenas.
+// v5.2: initiatePurchase agora chama createCoinsPurchase
+// (CF dedicada para cristais) em vez de createAsaasPayment
+// (CF do marketplace de produtos).
 // ============================================
 
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -15,8 +12,8 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 const functions = getFunctions();
 
 // Pacotes apenas para exibição na UI
-// Preços e totais reais ficam em functions/src/config/economy.ts
-// Cliente nunca credita — apenas inicia o fluxo de pagamento
+// Preços e totais reais ficam no backend (createCoinsPurchase.ts)
+// Cliente NUNCA credita — apenas inicia o fluxo de pagamento
 export interface CoinPackageDisplay {
   id:                 string;
   label:              string;
@@ -36,9 +33,9 @@ export const COIN_PACKAGES_DISPLAY: CoinPackageDisplay[] = [
     label:              'Iniciante',
     coinsPremium:       100,
     bonus:              0,
-    total:              100,   // +100 na 1ª compra → 200 (backend calcula)
-    priceValue:         4.99,
-    priceLabel:         'R$ 4,99',
+    total:              100,
+    priceValue:         5.00,
+    priceLabel:         'R$ 5,00',
     packAsset:          'pack-iniciante',
     isFirstPurchasePkg: true,
   },
@@ -78,21 +75,31 @@ export const COIN_PACKAGES_DISPLAY: CoinPackageDisplay[] = [
   },
 ];
 
-// Inicia pagamento via Asaas
-// O crédito só acontece quando webhook confirmar
+// v5.2 — chama createCoinsPurchase (CF dedicada para cristais)
+// Retorna { saleId, checkoutUrl, pixQrCode, pixCopyPaste }
+// para navegar ao CheckoutScreen existente
 export async function initiatePurchase(packageId: string): Promise<{
-  success:      boolean;
-  checkoutUrl?: string;
-  error?:       string;
+  success:       boolean;
+  saleId?:       string;
+  checkoutUrl?:  string;
+  pixQrCode?:    string;
+  pixCopyPaste?: string;
+  error?:        string;
 }> {
   try {
     const fn = httpsCallable<
       { packageId: string },
-      { success: boolean; checkoutUrl?: string; error?: string }
-    >(functions, 'createAsaasPayment');
+      { saleId: string; checkoutUrl: string; pixQrCode: string; pixCopyPaste: string }
+    >(functions, 'createCoinsPurchase');
 
     const result = await fn({ packageId });
-    return result.data;
+    return {
+      success:      true,
+      saleId:       result.data.saleId,
+      checkoutUrl:  result.data.checkoutUrl,
+      pixQrCode:    result.data.pixQrCode,
+      pixCopyPaste: result.data.pixCopyPaste,
+    };
   } catch (error: unknown) {
     console.error('[purchaseService] initiatePurchase error:', error);
     return { success: false, error: 'Erro ao iniciar pagamento.' };

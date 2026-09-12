@@ -10,7 +10,7 @@ import { getMostVisitedProfiles }  from './visitsService';
 import { getProfile }              from './profileService';
 import { calcularSintonia }        from '../utils/sintoniaEngine';
 import { UserProfile }             from '../shared/types';
-import { ProfileCardData }         from '../components/ProfileCard';
+import { ProfileCardData }         from '../shared/types';
 
 export async function getMostVisitedProfileCards(
   currentUser: UserProfile | null,

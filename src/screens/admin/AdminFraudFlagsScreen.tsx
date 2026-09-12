@@ -13,7 +13,6 @@ import { getFraudFlags, getUserById } from '../../services/marketplace/adminServ
 import { FraudFlag, FraudReason, FraudStatus } from '../../shared/types/marketplace';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
 import app from '../../core/firebase';
-import ScreenContainer from '../../components/ScreenContainer';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -222,7 +221,7 @@ export default function AdminFraudFlagsScreen() {
   }
 
   return (
-    <ScreenContainer>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -338,7 +337,7 @@ export default function AdminFraudFlagsScreen() {
           </View>
         </View>
       </Modal>
-    </ScreenContainer>
+    </View>
   );
 }
 
@@ -346,7 +345,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
   backBtn: { color: colors.gold, fontSize: 28 },

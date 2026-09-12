@@ -1,289 +1,515 @@
 // ============================================
-// LUMINA — STORE SCREEN v5.2
+// LUMINA — STORE SCREEN v5.3
 // src/modules/economy/screens/StoreScreen.tsx
 //
-// v5.2: Botão de Fragmentos adicionado
+// v5.3: navega para CheckoutScreen com dados PIX
+// em vez de abrir Linking.openURL.
+// Adiciona seção Galáxia Plus.
 // ============================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Alert, ActivityIndicator,
+  TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
-import { LinearGradient }  from 'expo-linear-gradient';
-import { useNavigation }   from '@react-navigation/native';
+import { LinearGradient }   from 'expo-linear-gradient';
+import { useNavigation }    from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useAuth }   from '../../../context/AuthContext';
-import { useCoins }  from '../../../context/CoinsContext';
+import { useAuth }          from '../../../context/AuthContext';
+import { useCoins }         from '../../../context/CoinsContext';
 import {
   COIN_PACKAGES_DISPLAY,
   initiatePurchase,
-  getTransactions,
-} from '../../../services/coinsService';
-import {
-  COLORS, GRADIENTS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT,
-} from '../../../theme/tokens';
-import Header        from '../../../components/Header';
-import { Transaction } from '../../../shared/types';
-import { formatRelativeTime } from '../../../shared/utils';
+  CoinPackageDisplay,
+} from '../services/purchaseService';
 import { RootStackParamList } from '../../../navigation/types';
-
+import Header from '../../../components/Header';
+import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { SpendableFeature, isPremiumOnly } from '../services/walletService';
+import { usePremiumTools }                 from '../../premium/hooks/usePremiumTools';
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-const MARKET_FEATURES = [
-  { key: 'REVEAL_VISITORS',         icon: '👁️', label: 'Ver Visitantes',       cost: 50,  premium: false },
-  { key: 'REVEAL_QUASE_SINTONIA',   icon: '💜', label: 'Quase Sintonia',       cost: 25,  premium: false },
-  { key: 'REVEAL_SINTONIA_PERDIDA', icon: '💔', label: 'Sintonia Perdida',     cost: 35,  premium: true  },
-  { key: 'IMPULSO_PERFIL',          icon: '🚀', label: 'Impulso de Perfil',    cost: 80,  premium: false },
-  { key: 'TURBO_SINTONIA',          icon: '⚡', label: 'Turbo Sintonia',       cost: 120, premium: true  },
-  { key: 'SEGUNDA_CHANCE',          icon: '🔄', label: 'Segunda Chance',       cost: 15,  premium: false },
-  { key: 'DESTAQUE_REGIONAL',       icon: '📍', label: 'Destaque Regional',    cost: 150, premium: false },
-  { key: 'FERTILIZANTE_SINTONIA',   icon: '🌱', label: 'Fertilizante Árvore', cost: 80,  premium: true  },
-] as const;
+const PACK_ICONS: Record<string, string> = {
+  starter: '✨',
+  popular: '💎',
+  supremo: '👑',
+  galaxia: '🌌',
+};
 
 const GALAXIA_PLUS_BENEFITS = [
-  '500 Cristais mensais',
-  '10 Cartas do Destino/dia',
-  'Sintonia Perdida grátis',
-  '1 Turbo Sintonia/semana',
-  'Badge Galáxia exclusivo',
-  'Prioridade no algoritmo',
+  '💜 10 Cartas do Destino por dia',
+  '✨ 300 Cristais Gratuitos todo mês',
+  '⚡ Faísca com bônus +20%',
+  '🔓 Revelações mais baratas',
+  '🏅 Badge exclusivo Galáxia',
+  '📊 Ver quem visitou seu perfil',
 ];
+// Ação de cada item — evita cobrar por efeito inexistente
+//   'TURBO' / 'FERTILIZER' → CF própria que debita E ativa
+//   'SPEND'                → spendCoins (só debita — exige efeito implementado)
+//   'SOON'                 → sem efeito no backend, card bloqueado
+type MarketAction = 'TURBO' | 'FERTILIZER' | 'IMPULSO' | 'DESTAQUE' | 'VISITORS' | 'SPEND' | 'SOON';
+
+const MARKET_FEATURES: {
+  key: SpendableFeature; icon: string; label: string; sub: string;
+  cost: number; action: MarketAction;
+}[] = [
+  { key: 'REVEAL_VISITORS',         icon: '👁️', label: 'Ver Visitantes',    sub: 'Descubra quem visitou seu perfil', cost: 50,  action: 'VISITORS' },
+  { key: 'REVEAL_QUASE_SINTONIA',   icon: '💜', label: 'Quase Sintonia',    sub: 'Revele quem quase deu match',      cost: 25,  action: 'SOON' },
+  { key: 'SEGUNDA_CHANCE',          icon: '🔄', label: 'Segunda Chance',    sub: 'Reveja um perfil descartado',      cost: 15,  action: 'SOON' },
+  { key: 'IMPULSO_PERFIL',          icon: '🚀', label: 'Impulso de Perfil', sub: 'Mais visibilidade por 30 min',     cost: 80,  action: 'IMPULSO' },
+
+  { key: 'DESTAQUE_REGIONAL',       icon: '📍', label: 'Destaque Regional', sub: 'Destaque na sua região por 4h',    cost: 150, action: 'DESTAQUE' },
+  { key: 'REVEAL_SINTONIA_PERDIDA', icon: '💔', label: 'Sintonia Perdida',  sub: 'Recupere uma conexão perdida',     cost: 35,  action: 'SOON' },
+  { key: 'TURBO_SINTONIA',          icon: '⚡', label: 'Turbo Sintonia',    sub: 'Impulso 1.8× por 30 min',          cost: 120, action: 'TURBO' },
+  { key: 'FERTILIZANTE_SINTONIA',   icon: '🌱', label: 'Fertilizante',      sub: '+50% XP da Árvore por 24h',        cost: 80,  action: 'FERTILIZER' },
+];
+function PackageCard({
+  pkg,
+  onPress,
+  loading,
+}: {
+  pkg:     CoinPackageDisplay;
+  onPress: () => void;
+  loading: boolean;
+}) {
+  const isPopular = pkg.highlighted;
+
+  return (
+    <TouchableOpacity
+      style={[styles.packageCard, isPopular && styles.packageCardHighlighted]}
+      onPress={onPress}
+      disabled={loading}
+      activeOpacity={0.85}
+    >
+      {isPopular && (
+        <View style={styles.popularBadge}>
+          <Text style={styles.popularBadgeText}>⭐ MAIS POPULAR</Text>
+        </View>
+      )}
+      <View style={styles.packageContent}>
+        <Text style={styles.packageIcon}>{PACK_ICONS[pkg.id] ?? '💎'}</Text>
+        <View style={styles.packageInfo}>
+          <Text style={[styles.packageLabel, isPopular && styles.packageLabelHighlighted]}>
+            {pkg.label}
+          </Text>
+          <Text style={styles.packageCoins}>
+            {pkg.coinsPremium.toLocaleString()} Cristais Premium
+          </Text>
+          {pkg.bonus > 0 && (
+            <Text style={styles.packageBonus}>+{pkg.bonus} bônus</Text>
+          )}
+          {pkg.isFirstPurchasePkg && (
+            <Text style={styles.packageFirst}>🎁 Dobro na 1ª compra!</Text>
+          )}
+        </View>
+        <View style={styles.packagePriceBox}>
+          {loading
+            ? <ActivityIndicator color={COLORS.secondary} />
+            : <Text style={[styles.packagePrice, isPopular && styles.packagePriceHighlighted]}>
+                {pkg.priceLabel}
+              </Text>
+          }
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export default function StoreScreen() {
-  const navigation = useNavigation<NavProp>();
-  const { user }   = useAuth();
-  const { wallet, loading } = useCoins();
+  const navigation        = useNavigation<NavProp>();
+  const { user }          = useAuth();
+  const { wallet, spend } = useCoins();
+  const coinsGratuitos = wallet?.coinsGratuitos ?? 0;
+  const coinsPremium   = wallet?.coinsPremium   ?? 0;
+  const fragments      = wallet?.fragments      ?? 0;
 
-  const [purchasing,     setPurchasing]     = useState<string | null>(null);
-  const [transactions,   setTransactions]   = useState<Transaction[]>([]);
-  const [showHistory,    setShowHistory]    = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingPkg,      setLoadingPkg]      = useState<string | null>(null);
+  const [loadingGalaxia,  setLoadingGalaxia]  = useState(false);
+  const [spending,        setSpending]        = useState<string | null>(null);
 
-  const handlePurchase = useCallback(async (packageId: string) => {
-    if (!user) return;
-    const pkg = COIN_PACKAGES_DISPLAY.find((p: typeof COIN_PACKAGES_DISPLAY[number]) => p.id === packageId);
-    if (!pkg) return;
+  const {
+    fertilizer, turbo, impulso, destaque, activating,
+    activateFertilizer, activateTurbo, activateImpulso, activateDestaqueRegional,
+  } = usePremiumTools(user?.uid);
 
-    const isFirst      = !wallet?.firstPurchaseDone && pkg.isFirstPurchasePkg;
-    const totalDisplay = isFirst ? pkg.total + 100 : pkg.total;
+  async function handlePurchase(pkg: CoinPackageDisplay) {
+    if (!user?.uid) return;
+    setLoadingPkg(pkg.id);
+    try {
+      const result = await initiatePurchase(pkg.id);
+      if (result.success) {
+        navigation.navigate('Checkout', {
+          saleId:       result.saleId       ?? '',
+          checkoutUrl:  result.checkoutUrl  ?? '',
+          pixQrCode:    result.pixQrCode    ?? '',
+          pixCopyPaste: result.pixCopyPaste ?? '',
+        });
+      } else {
+        Alert.alert('Erro', result.error ?? 'Erro ao iniciar pagamento.');
+      }
+    } catch (err) {
+      Alert.alert('Erro', 'Não foi possível iniciar o pagamento.');
+    } finally {
+      setLoadingPkg(null);
+    }
+  }
 
-    Alert.alert(
-      '✨ Confirmar compra',
-      `${pkg.label}\n${totalDisplay} Cristais Premium\n${pkg.priceLabel}${isFirst ? '\n\n🎁 +100 bônus de primeira compra!' : ''}`,
-      [
+  async function handleGalaxiaPlus() {
+    if (!user?.uid) return;
+    setLoadingGalaxia(true);
+    try {
+      const result = await initiatePurchase('galaxia_plus');
+      if (result.success) {
+        navigation.navigate('Checkout', {
+          saleId:       result.saleId       ?? '',
+          checkoutUrl:  result.checkoutUrl  ?? '',
+          pixQrCode:    result.pixQrCode    ?? '',
+          pixCopyPaste: result.pixCopyPaste ?? '',
+        });
+      } else {
+        Alert.alert('Erro', result.error ?? 'Erro ao iniciar assinatura.');
+      }
+    } catch (err) {
+      Alert.alert('Erro', 'Não foi possível iniciar a assinatura.');
+    } finally {
+      setLoadingGalaxia(false);
+    }
+  }
+
+  async function handleSpendFeature(item: typeof MARKET_FEATURES[number]) {
+    if (!user?.uid || spending || activating) return;
+
+    // Bloqueio de segurança: nunca cobrar por efeito que não existe
+    if (item.action === 'SOON') {
+      Alert.alert('Em breve', `${item.label} está sendo finalizado e chega logo.`);
+      return;
+    }
+// A compra acontece na própria tela, com o número de visitas
+    // à vista — decisão informada em vez de compra às cegas.
+    if (item.action === 'VISITORS') {
+      navigation.navigate('Visitors' as any);
+      return;
+    }
+    // Turbo e Fertilizante têm CF própria que debita E ativa.
+    // Usar spendCoins aqui cobraria sem ativar nada.
+    if (item.action === 'TURBO') {
+      if (turbo?.status === 'ACTIVE') {
+        Alert.alert('Turbo já ativo', 'Aguarde o atual terminar para ativar outro.');
+        return;
+      }
+      if (turbo?.status === 'COOLDOWN') {
+        Alert.alert('Aguarde', 'Há um intervalo de 5 minutos entre ativações.');
+        return;
+      }
+      if (coinsPremium < item.cost) {
+        Alert.alert('💎 Cristais Premium insuficientes',
+          `Turbo custa ${item.cost} Premium. Você tem ${coinsPremium}.`);
+        return;
+      }
+      Alert.alert(item.label, `Ativar por ${item.cost} Cristais Premium?`, [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'Comprar agora',
+          text: 'Ativar',
           onPress: async () => {
-            try {
-              setPurchasing(packageId);
-              const result = await initiatePurchase(packageId);
-              if (result.success && result.checkoutUrl) {
-                Alert.alert('🔗 Pagamento', 'Redirecionando para o pagamento seguro.');
-              } else {
-                Alert.alert('Erro', result.error ?? 'Não foi possível iniciar o pagamento.');
-              }
-            } catch {
-              Alert.alert('Erro', 'Não foi possível completar a compra.');
-            } finally {
-              setPurchasing(null);
+            const res = await activateTurbo();
+            if (res.ok) {
+              Alert.alert('⚡ Turbo ativado!', 'Seu perfil terá mais visibilidade nos próximos 30 minutos.');
+            } else if (res.error) {
+              Alert.alert('Não foi possível ativar', res.error);
             }
           },
         },
-      ]
-    );
-  }, [user, wallet]);
-
-  const handleShowHistory = useCallback(async () => {
-    if (!user) return;
-    const next = !showHistory;
-    setShowHistory(next);
-    if (next && transactions.length === 0) {
-      setLoadingHistory(true);
-      const trans = await getTransactions(user.uid);
-      setTransactions(trans);
-      setLoadingHistory(false);
+      ]);
+      return;
     }
-  }, [user, showHistory, transactions.length]);
 
-  const S = SPACING;
-  const R = BORDER_RADIUS;
+    if (item.action === 'FERTILIZER') {
+      if (fertilizer?.status === 'ACTIVE') {
+        Alert.alert('Fertilizante já ativo', 'Aguarde o atual terminar.');
+        return;
+      }
+      if (coinsPremium < item.cost) {
+        Alert.alert('💎 Cristais Premium insuficientes',
+          `Fertilizante custa ${item.cost} Premium. Você tem ${coinsPremium}.`);
+        return;
+      }
+      Alert.alert(item.label, `Ativar por ${item.cost} Cristais Premium?`, [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Ativar',
+          onPress: async () => {
+            const res = await activateFertilizer();
+            if (res.ok) {
+              Alert.alert('🌱 Fertilizante ativado!', 'Você ganha +50% de XP na Árvore pelas próximas 24 horas.');
+            } else if (res.error) {
+              Alert.alert('Não foi possível ativar', res.error);
+            }
+          },
+        },
+      ]);
+      return;
+    }
+
+    if (item.action === 'IMPULSO') {
+      if (impulso?.status === 'ACTIVE') {
+        Alert.alert('Impulso já ativo', 'Aguarde o atual terminar para ativar outro.');
+        return;
+      }
+      if (impulso?.status === 'COOLDOWN') {
+        Alert.alert('Aguarde', 'Há um intervalo de 5 minutos entre ativações.');
+        return;
+      }
+      // Impulso aceita gratuitos + premium (R19)
+      if ((coinsGratuitos + coinsPremium) < item.cost) {
+        Alert.alert('Saldo insuficiente',
+          `Impulso custa ${item.cost} cristais. Você tem ${coinsGratuitos + coinsPremium}.`);
+        return;
+      }
+      Alert.alert(item.label, `Ativar por ${item.cost} cristais?`, [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Ativar',
+          onPress: async () => {
+            const res = await activateImpulso();
+            if (res.ok) {
+              Alert.alert('🚀 Impulso ativado!', 'Seu perfil terá mais visibilidade nos próximos 30 minutos.');
+            } else if (res.error) {
+              Alert.alert('Não foi possível ativar', res.error);
+            }
+          },
+        },
+      ]);
+      return;
+    }
+
+    if (item.action === 'DESTAQUE') {
+      if (destaque?.status === 'ACTIVE') {
+        Alert.alert('Destaque já ativo', 'Aguarde o atual terminar para ativar outro.');
+        return;
+      }
+      if (destaque?.status === 'COOLDOWN') {
+        Alert.alert('Aguarde', 'Há um intervalo de 5 minutos entre ativações.');
+        return;
+      }
+      // Destaque aceita gratuitos + premium (R19)
+      if ((coinsGratuitos + coinsPremium) < item.cost) {
+        Alert.alert('Saldo insuficiente',
+          `Destaque Regional custa ${item.cost} cristais. Você tem ${coinsGratuitos + coinsPremium}.`);
+        return;
+      }
+
+      const regiao = destaque?.city && destaque?.state
+        ? `${destaque.city}, ${destaque.state}`
+        : 'sua região';
+
+      const audiencia = destaque?.usersInRegion
+        ? `\n\nHá ${destaque.usersInRegion} pessoas cadastradas na sua região.`
+        : '';
+
+     // Mostrar a audiência real antes da compra vale mais que
+      // qualquer piso que a gente escolha: em região cheia o
+      // número vende, em região vazia ele evita o arrependimento.
+      const audiencia = typeof destaque?.usersInRegion === 'number'
+        ? `\n\n👥 ${destaque.usersInRegion} pessoas cadastradas na sua região.`
+        : '';
+
+      Alert.alert(
+        item.label,
+        `Destacar seu perfil em ${regiao} por 4 horas, por ${item.cost} cristais?${audiencia}`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Ativar',
+            onPress: async () => {
+              const res = await activateDestaqueRegional();
+              if (res.ok) {
+                Alert.alert('📍 Destaque ativado!',
+                  `Seu perfil aparece em evidência em ${regiao} pelas próximas 4 horas.`);
+              } else if (res.error) {
+                // Mensagem do servidor: guard de região, exclusividade,
+                // cidade não preenchida. Cada uma orienta uma ação diferente.
+                Alert.alert('Não foi possível ativar', res.error);
+              }
+            },
+          },
+        ]);
+      return;
+    }
+
+    // action === 'SPEND' — apenas para features com efeito implementado
+    const premiumOnly = isPremiumOnly(item.key);
+    const saldo = premiumOnly ? coinsPremium : coinsGratuitos + coinsPremium;
+
+    if (saldo < item.cost) {
+      Alert.alert(
+        premiumOnly ? '💎 Cristais Premium insuficientes' : 'Saldo insuficiente',
+        premiumOnly
+          ? `${item.label} custa ${item.cost} Cristais Premium. Você tem ${coinsPremium}.`
+          : `${item.label} custa ${item.cost} cristais. Você tem ${coinsGratuitos + coinsPremium}.`
+      );
+      return;
+    }
+
+    Alert.alert(item.label, `Confirmar por ${item.cost} cristais?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Confirmar',
+        onPress: async () => {
+          setSpending(item.key);
+          const ok = await spend(item.key);
+          setSpending(null);
+          Alert.alert(
+            ok ? '✨ Ativado!' : 'Erro',
+            ok ? `${item.label} foi ativado com sucesso.` : 'Não foi possível concluir. Tente novamente.'
+          );
+        },
+      },
+    ]);
+  }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Header title="Mercado de Cristais" showBack={true} showHome={true} />
+    <View style={styles.container}>
+      <Header title="Cristais de Sintonia" showBack={true} showHome={true} />
+      <ScrollView showsVerticalScrollIndicator={false}>
 
-      {/* SALDO */}
-      <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.walletCard}>
-        <Text style={styles.walletTitle}>✨ Cristais de Sintonia</Text>
-        <View style={styles.walletRow}>
-          <View style={styles.walletItem}>
-            <View style={styles.crystalDot} />
-            {loading
-              ? <ActivityIndicator color={COLORS.secondary} size="small" />
-              : <Text style={styles.walletAmount}>{wallet?.coinsGratuitos ?? 0}</Text>
-            }
-            <Text style={styles.walletItemLabel}>Gratuitos</Text>
-          </View>
-          <View style={styles.walletDivider} />
-          <View style={styles.walletItem}>
-            <View style={[styles.crystalDot, styles.crystalDotPremium]} />
-            {loading
-              ? <ActivityIndicator color={COLORS.premium} size="small" />
-              : <Text style={[styles.walletAmount, styles.amountPremium]}>{wallet?.coinsPremium ?? 0}</Text>
-            }
-            <Text style={[styles.walletItemLabel, styles.labelPremium]}>Premium 💎</Text>
-          </View>
-        </View>
-
-        {/* Fragmentos com botão de conversão */}
-        {(wallet?.fragments ?? 0) > 0 && (
-          <TouchableOpacity
-            style={styles.fragmentsBtn}
-            onPress={() => navigation.navigate('Fragments' as any)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.fragmentsBtnText}>
-              🔮 {wallet?.fragments ?? 0} Fragmentos
-            </Text>
-            <Text style={styles.fragmentsBtnSub}>
-              = {Math.floor((wallet?.fragments ?? 0) / 100)} cristal{Math.floor((wallet?.fragments ?? 0) / 100) !== 1 ? 'is' : ''} · Toque para converter
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity style={styles.historyBtn} onPress={handleShowHistory}>
-          <Text style={styles.historyBtnText}>
-            {showHistory ? 'Fechar histórico' : '📋 Ver histórico'}
-          </Text>
-        </TouchableOpacity>
-      </LinearGradient>
-
-      {/* HISTÓRICO */}
-      {showHistory && (
-        <View style={styles.historyContainer}>
-          {loadingHistory ? (
-            <ActivityIndicator color={COLORS.secondary} style={{ marginTop: 16 }} />
-          ) : transactions.length === 0 ? (
-            <Text style={styles.emptyText}>Nenhuma transação ainda</Text>
-          ) : (
-            transactions.map(trans => (
-              <View key={trans.id} style={styles.transactionItem}>
-                <Text style={styles.transactionIcon}>{trans.type === 'earn' ? '⬆️' : '⬇️'}</Text>
-                <View style={styles.transactionInfo}>
-                  <Text style={styles.transactionDesc}>{trans.description}</Text>
-                  <View style={styles.transactionMeta}>
-                    <Text style={styles.transactionDate}>{formatRelativeTime(trans.timestamp)}</Text>
-                    <Text style={[
-                      styles.transactionCoinType,
-                      { color: trans.coinTipo === 'premium' ? COLORS.premium : COLORS.secondary },
-                    ]}>
-                      {trans.coinTipo === 'premium' ? '💎 Premium' : '✨ Gratuito'}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[
-                  styles.transactionAmount,
-                  { color: trans.type === 'earn' ? COLORS.success : COLORS.error },
-                ]}>
-                  {trans.type === 'earn' ? '+' : '-'}{Math.abs(trans.amount)}
-                </Text>
-              </View>
-            ))
-          )}
-        </View>
-      )}
-
-      {/* PACOTES */}
-      <Text style={styles.sectionTitle}>💎 Pacotes de Cristais</Text>
-      <Text style={styles.sectionSub}>Cristais Premium desbloqueiam recursos exclusivos</Text>
-
-      {COIN_PACKAGES_DISPLAY.map((pkg: typeof COIN_PACKAGES_DISPLAY[number]) => {
-        const isFirst      = !wallet?.firstPurchaseDone && pkg.isFirstPurchasePkg;
-        const totalDisplay = isFirst ? pkg.total + 100 : pkg.total;
-        return (
-          <TouchableOpacity
-            key={pkg.id}
-            style={[styles.packageCard, pkg.highlighted && styles.packageHighlighted]}
-            onPress={() => handlePurchase(pkg.id)}
-            disabled={purchasing === pkg.id}
-            activeOpacity={0.85}
-          >
-            {pkg.highlighted && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>⭐ MAIS POPULAR</Text>
-              </View>
-            )}
-            {isFirst && (
-              <View style={[styles.badge, styles.badgeFirst]}>
-                <Text style={styles.badgeText}>🎁 PRIMEIRA COMPRA</Text>
-              </View>
-            )}
-            <View style={styles.packageLeft}>
-              <View style={styles.packageIconBox}>
-                <Text style={styles.packageEmoji}>
-                  {pkg.id === 'starter' ? '💠' : pkg.id === 'popular' ? '💎' : pkg.id === 'supremo' ? '👑' : '✨'}
-                </Text>
-              </View>
-              <View>
-                <Text style={styles.packageLabel}>{pkg.label}</Text>
-                <Text style={styles.packageCoins}>
-                  {totalDisplay} Cristais Premium
-                  {pkg.bonus > 0 && !isFirst && <Text style={styles.packageBonus}> (+{pkg.bonus} bônus)</Text>}
-                  {isFirst && <Text style={styles.packageBonus}> (+100 bônus 🎁)</Text>}
-                </Text>
-              </View>
+        {/* Saldo atual */}
+        <LinearGradient colors={['#1A0A2E','#2D1B4E']} style={styles.balanceCard}>
+          <Text style={styles.balanceTitle}>✨ CRISTAIS DE SINTONIA</Text>
+          <View style={styles.balanceRow}>
+            <View style={styles.balanceStat}>
+              <Text style={styles.balanceValue}>{coinsGratuitos ?? 0}</Text>
+              <Text style={styles.balanceLabel}>GRATUITOS</Text>
             </View>
-            <View>
-              {purchasing === pkg.id
-                ? <ActivityIndicator color={COLORS.premium} />
-                : <Text style={[styles.packagePrice, pkg.highlighted && styles.packagePriceHL]}>{pkg.priceLabel}</Text>
+            <View style={styles.balanceDivider} />
+            <View style={styles.balanceStat}>
+              <Text style={[styles.balanceValue, styles.balanceValuePremium]}>
+                {coinsPremium ?? 0}
+              </Text>
+              <Text style={styles.balanceLabel}>PREMIUM 💎</Text>
+            </View>
+          </View>
+          {(fragments ?? 0) > 0 && (
+            <TouchableOpacity style={styles.fragmentsRow}>
+              <Text style={styles.fragmentsText}>
+                🔮 {fragments} Fragmentos · = {Math.floor((fragments ?? 0) / 100)} cristais · Toque para converter
+              </Text>
+            </TouchableOpacity>
+          )}
+        </LinearGradient>
+
+        {/* Galáxia Plus */}
+        <Text style={styles.sectionTitle}>💜 Galáxia Plus</Text>
+        <TouchableOpacity
+          style={styles.galaxiaCard}
+          onPress={handleGalaxiaPlus}
+          disabled={loadingGalaxia}
+          activeOpacity={0.85}
+        >
+          <LinearGradient colors={['#2A0A4E','#4E1B7E']} style={styles.galaxiaInner}>
+            <View style={styles.galaxiaHeader}>
+              <Text style={styles.galaxiaIcon}>💜</Text>
+              <View style={styles.galaxiaInfo}>
+                <Text style={styles.galaxiaTitle}>Galáxia Plus</Text>
+                <Text style={styles.galaxiaPrice}>R$ 19,90/mês</Text>
+              </View>
+              {loadingGalaxia
+                ? <ActivityIndicator color={COLORS.secondary} />
+                : <Text style={styles.galaxiaArrow}>›</Text>
               }
             </View>
-          </TouchableOpacity>
-        );
-      })}
+            <View style={styles.galaxiaBenefits}>
+              {GALAXIA_PLUS_BENEFITS.map((benefit, i) => (
+                <Text key={i} style={styles.galaxiaBenefit}>{benefit}</Text>
+              ))}
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
 
-      {/* MERCADO CÓSMICO */}
-      <Text style={styles.sectionTitle}>🌌 Mercado Cósmico</Text>
-      <Text style={styles.sectionSub}>💎 = Requer Cristais Premium exclusivamente</Text>
-      <View style={styles.marketGrid}>
-        {MARKET_FEATURES.map(f => (
-          <View key={f.key} style={[styles.marketItem, f.premium && styles.marketItemPremium]}>
-            <Text style={styles.marketIcon}>{f.icon}</Text>
-            <Text style={styles.marketLabel}>{f.label}</Text>
-            <Text style={[styles.marketCost, f.premium && styles.marketCostPremium]}>
-              {f.premium ? '💎' : '✨'} {f.cost}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      {/* GALÁXIA PLUS */}
-      <LinearGradient
-        colors={GRADIENTS.galaxia as [string, string, string]}
-        style={styles.galaxiaCard}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <Text style={styles.galaxiaTitle}>💜 Galáxia Plus</Text>
-        <Text style={styles.galaxiaPrice}>R$ 19,90/mês</Text>
-        <View style={styles.galaxiaBenefits}>
-          {GALAXIA_PLUS_BENEFITS.map((b, i) => (
-            <Text key={i} style={styles.galaxiaBenefit}>✦ {b}</Text>
+        {/* Pacotes de Cristais */}
+        <Text style={styles.sectionTitle}>💎 Pacotes de Cristais</Text>
+        <Text style={styles.sectionSub}>Cristais Premium desbloqueiam recursos exclusivos</Text>
+        <View style={styles.packagesSection}>
+          {COIN_PACKAGES_DISPLAY.map(pkg => (
+            <PackageCard
+              key={pkg.id}
+              pkg={pkg}
+              loading={loadingPkg === pkg.id}
+              onPress={() => handlePurchase(pkg)}
+            />
           ))}
         </View>
-        <TouchableOpacity
-          style={styles.galaxiaBtn}
-          onPress={() => Alert.alert('Em breve', 'Galáxia Plus em breve!')}
-        >
-          <Text style={styles.galaxiaBtnText}>Assinar Galáxia Plus</Text>
-        </TouchableOpacity>
-      </LinearGradient>
 
-      <View style={{ height: 40 }} />
-    </ScrollView>
+        {/* Mercado Cósmico */}
+        <Text style={styles.sectionTitle}>🌌 Mercado Cósmico</Text>
+        <Text style={styles.sectionSub}>💎 = exige Cristais Premium exclusivamente</Text>
+        <View style={styles.marketSection}>
+         {MARKET_FEATURES.map(item => {
+            const premiumOnly = isPremiumOnly(item.key);
+            const isSoon      = item.action === 'SOON';
+            const isBusy      = spending === item.key
+              || (item.action === 'TURBO'      && activating === 'TURBO')
+              || (item.action === 'FERTILIZER' && activating === 'FERTILIZER')
+              || (item.action === 'IMPULSO'    && activating === 'IMPULSO')
+              || (item.action === 'DESTAQUE'   && activating === 'DESTAQUE');
+            const isActive    = (item.action === 'TURBO'      && turbo?.status === 'ACTIVE')
+              || (item.action === 'FERTILIZER' && fertilizer?.status === 'ACTIVE')
+              || (item.action === 'IMPULSO'    && impulso?.status === 'ACTIVE')
+              || (item.action === 'DESTAQUE'   && destaque?.status === 'ACTIVE');
+            const canAfford   = premiumOnly
+              ? coinsPremium >= item.cost
+              : (coinsGratuitos + coinsPremium) >= item.cost;
+
+            return (
+              <TouchableOpacity
+                key={item.key}
+                style={[
+                  styles.marketCard,
+                  premiumOnly && styles.marketCardPremium,
+                  (!canAfford || isSoon) && styles.marketCardLocked,
+                  isActive && styles.marketCardActive,
+                ]}
+                onPress={() => handleSpendFeature(item)}
+                disabled={isBusy}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.marketIcon}>{item.icon}</Text>
+                <View style={styles.marketInfo}>
+                  <Text style={styles.marketLabel}>{item.label}</Text>
+                  <Text style={styles.marketSub}>
+                    {isActive ? 'Ativo agora ✓' : item.sub}
+                  </Text>
+                </View>
+                {isBusy ? (
+                  <ActivityIndicator color={COLORS.secondary} />
+                ) : isSoon ? (
+                  <View style={styles.soonBadge}>
+                    <Text style={styles.soonBadgeText}>Em breve</Text>
+                  </View>
+                ) : isActive ? (
+                  <Text style={styles.marketActiveText}>ATIVO</Text>
+                ) : (
+                  <Text style={[styles.marketCost, premiumOnly && styles.marketCostPremium]}>
+                    {premiumOnly ? '💎' : '✨'} {item.cost}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Info */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>ℹ️ Sobre os Cristais</Text>
+          <Text style={styles.infoText}>• Cristais Gratuitos: ganhos por engajamento diário</Text>
+          <Text style={styles.infoText}>• Cristais Premium: comprados e desbloqueiam recursos exclusivos</Text>
+          <Text style={styles.infoText}>• Pagamento 100% seguro via PIX</Text>
+          <Text style={styles.infoText}>• Cristais não expiram após a compra</Text>
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </View>
   );
 }
 
@@ -291,61 +517,60 @@ const S = SPACING;
 const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
-  container:           { flex: 1, backgroundColor: COLORS.background },
-  walletCard:          { margin: S.md, borderRadius: R.xl, padding: S.lg, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
-  walletTitle:         { color: COLORS.secondary, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, textAlign: 'center', letterSpacing: 1, textTransform: 'uppercase', marginBottom: S.md },
-  walletRow:           { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
-  walletItem:          { alignItems: 'center', gap: S.xs, flex: 1 },
-  walletDivider:       { width: 1, height: 50, backgroundColor: 'rgba(181,123,238,0.3)' },
-  crystalDot:          { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.primary },
-  crystalDotPremium:   { backgroundColor: COLORS.premium },
-  walletAmount:        { color: COLORS.surface, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold },
-  amountPremium:       { color: COLORS.premium },
-  walletItemLabel:     { color: COLORS.secondary, fontSize: FONT_SIZE.xs, textTransform: 'uppercase', letterSpacing: 0.5 },
-  labelPremium:        { color: COLORS.premium },
-  // Fragmentos
-  fragmentsBtn:        { marginTop: S.md, backgroundColor: 'rgba(123,47,190,0.15)', borderRadius: R.lg, padding: S.md, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(123,47,190,0.4)' },
-  fragmentsBtnText:    { color: COLORS.secondary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  fragmentsBtnSub:     { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
-  historyBtn:          { marginTop: S.md, alignSelf: 'center', paddingHorizontal: S.md, paddingVertical: S.xs, borderRadius: R.full, borderWidth: 1, borderColor: 'rgba(181,123,238,0.4)' },
-  historyBtnText:      { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
-  historyContainer:    { marginHorizontal: S.md, marginBottom: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.border },
-  transactionItem:     { flexDirection: 'row', alignItems: 'center', paddingVertical: S.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border, gap: S.sm },
-  transactionIcon:     { fontSize: 18 },
-  transactionInfo:     { flex: 1 },
-  transactionDesc:     { color: COLORS.surface, fontSize: FONT_SIZE.sm },
-  transactionMeta:     { flexDirection: 'row', gap: S.sm, alignItems: 'center', marginTop: 2 },
-  transactionDate:     { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
-  transactionCoinType: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold },
-  transactionAmount:   { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.extrabold },
-  sectionTitle:        { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginTop: S.xl, marginBottom: S.xs },
-  sectionSub:          { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginHorizontal: S.md, marginBottom: S.md },
-  packageCard:         { marginHorizontal: S.md, marginBottom: S.sm, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  packageHighlighted:  { borderColor: COLORS.premium, backgroundColor: 'rgba(255,215,0,0.05)' },
-  badge:               { position: 'absolute', top: -10, left: S.md, backgroundColor: COLORS.premium, borderRadius: R.full, paddingHorizontal: S.sm, paddingVertical: 2 },
-  badgeFirst:          { left: undefined, right: S.md, backgroundColor: COLORS.primary },
-  badgeText:           { color: COLORS.background, fontSize: 9, fontWeight: FONT_WEIGHT.bold },
-  packageLeft:         { flexDirection: 'row', alignItems: 'center', gap: S.md, flex: 1 },
-  packageIconBox:      { width: 48, height: 48, borderRadius: R.md, backgroundColor: 'rgba(123,47,190,0.2)', alignItems: 'center', justifyContent: 'center' },
-  packageEmoji:        { fontSize: 24 },
-  packageLabel:        { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
-  packageCoins:        { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
-  packageBonus:        { color: COLORS.premium, fontWeight: FONT_WEIGHT.bold },
-  packagePrice:        { color: COLORS.secondary, fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.extrabold },
-  packagePriceHL:      { color: COLORS.premium },
-  marketGrid:          { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: S.md, gap: S.sm, marginBottom: S.md },
-  marketItem:          { width: '47%', backgroundColor: COLORS.card, borderRadius: R.md, padding: S.md, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, gap: S.xs },
-  marketItemPremium:   { borderColor: 'rgba(255,215,0,0.3)', backgroundColor: 'rgba(255,215,0,0.03)' },
-  marketIcon:          { fontSize: 26 },
-  marketLabel:         { color: COLORS.surface, fontSize: FONT_SIZE.xs, textAlign: 'center', fontWeight: FONT_WEIGHT.medium },
-  marketCost:          { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
-  marketCostPremium:   { color: COLORS.premium },
-  galaxiaCard:         { margin: S.md, borderRadius: R.xl, padding: S.xl, borderWidth: 1, borderColor: 'rgba(123,47,190,0.5)' },
-  galaxiaTitle:        { color: COLORS.surface, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center' },
-  galaxiaPrice:        { color: COLORS.premium, fontSize: FONT_SIZE.hero, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center', marginTop: S.xs, marginBottom: S.lg },
-  galaxiaBenefits:     { gap: S.sm, marginBottom: S.xl },
-  galaxiaBenefit:      { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.medium },
-  galaxiaBtn:          { backgroundColor: COLORS.primary, borderRadius: R.lg, paddingVertical: S.md, alignItems: 'center' },
-  galaxiaBtnText:      { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, letterSpacing: 0.5 },
-  emptyText:           { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center', marginTop: S.md },
+  container:              { flex: 1, backgroundColor: COLORS.background },
+  balanceCard:            { margin: S.md, borderRadius: R.xl, padding: S.xl, gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  balanceTitle:           { color: COLORS.secondary, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center', letterSpacing: 2 },
+  balanceRow:             { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
+  balanceStat:            { alignItems: 'center', gap: 4 },
+  balanceValue:           { color: COLORS.surface, fontSize: 40, fontWeight: FONT_WEIGHT.extrabold },
+  balanceValuePremium:    { color: '#FFD700' },
+  balanceLabel:           { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, letterSpacing: 1 },
+  balanceDivider:         { width: 1, height: 40, backgroundColor: COLORS.border },
+  fragmentsRow:           { backgroundColor: 'rgba(181,123,238,0.1)', borderRadius: R.full, padding: S.sm, alignItems: 'center', borderWidth: 1, borderColor: COLORS.secondary + '44' },
+  fragmentsText:          { color: COLORS.secondary, fontSize: FONT_SIZE.xs, textAlign: 'center' },
+  sectionTitle:           { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginTop: S.lg, marginBottom: S.xs },
+  sectionSub:             { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginHorizontal: S.md, marginBottom: S.sm },
+  galaxiaCard:            { marginHorizontal: S.md, marginBottom: S.md, borderRadius: R.xl, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.secondary + '66' },
+  galaxiaInner:           { padding: S.lg, gap: S.md },
+  galaxiaHeader:          { flexDirection: 'row', alignItems: 'center', gap: S.md },
+  galaxiaIcon:            { fontSize: 36 },
+  galaxiaInfo:            { flex: 1 },
+  galaxiaTitle:           { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.extrabold },
+  galaxiaPrice:           { color: COLORS.secondary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
+  galaxiaArrow:           { color: COLORS.secondary, fontSize: 28, fontWeight: FONT_WEIGHT.bold },
+  galaxiaBenefits:        { gap: S.xs },
+  galaxiaBenefit:         { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },
+  packagesSection:        { marginHorizontal: S.md, gap: S.sm },
+  packageCard:            { backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.border },
+  packageCardHighlighted: { borderColor: COLORS.secondary, backgroundColor: 'rgba(181,123,238,0.08)' },
+  popularBadge:           { backgroundColor: COLORS.secondary, borderRadius: R.full, paddingHorizontal: S.md, paddingVertical: 2, alignSelf: 'flex-start', marginBottom: S.sm },
+  popularBadgeText:       { color: COLORS.background, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.extrabold, letterSpacing: 1 },
+  packageContent:         { flexDirection: 'row', alignItems: 'center', gap: S.md },
+  packageIcon:            { fontSize: 32 },
+  packageInfo:            { flex: 1, gap: 2 },
+  packageLabel:           { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
+  packageLabelHighlighted:{ color: COLORS.secondary },
+  packageCoins:           { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
+  packageBonus:           { color: '#44FF88', fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+  packageFirst:           { color: '#FFD700', fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+  packagePriceBox:        { alignItems: 'flex-end' },
+  packagePrice:           { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.extrabold },
+  packagePriceHighlighted:{ color: COLORS.secondary },
+  marketSection:          { marginHorizontal: S.md, gap: S.sm },
+  marketCard:             { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, gap: S.md, borderWidth: 1, borderColor: COLORS.border },
+  marketCardPremium:      { borderColor: '#FFD70055', backgroundColor: 'rgba(255,215,0,0.04)' },
+  marketCardLocked:       { opacity: 0.45 },
+  marketIcon:             { fontSize: 26 },
+  marketInfo:             { flex: 1 },
+  marketLabel:            { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  marketSub:              { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
+  marketCost:             { color: COLORS.secondary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.extrabold },
+  marketCostPremium:      { color: '#FFD700' },
+  marketCardActive:       { borderColor: '#44FF88', backgroundColor: 'rgba(68,255,136,0.06)' },
+  marketActiveText:       { color: '#44FF88', fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.extrabold, letterSpacing: 1 },
+  soonBadge:              { backgroundColor: COLORS.border, borderRadius: R.full, paddingHorizontal: S.sm, paddingVertical: 2 },
+  soonBadgeText:          { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+  infoCard:               { marginHorizontal: S.md, marginTop: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.xs, borderWidth: 1, borderColor: COLORS.border },
+  infoTitle:              { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, marginBottom: S.xs },
+  infoText:               { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, lineHeight: 18 },
 });

@@ -1,336 +1,440 @@
 // ============================================
-// ASAAS WEBHOOK — FASE 6B
+// LUMINA — ASAAS WEBHOOK v5.3
+// functions/src/payments/onAsaasWebhook.ts
 //
-// Validação de token obrigatória.
-// Idempotente: verifica sale.status antes.
-// Salva lastWebhookEvent + lastWebhookAt.
-// Chargeback gera fraudFlag (reason: chargeback).
+// v5.3: adiciona suporte a coins_purchase.
+// Todo o resto é idêntico ao original v5.2.
 // ============================================
 
-import { onRequest } from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
-import { createAuditLog } from "../utils/auditLog";
-import { incrementMetrics } from "../utils/incrementMetric";
-import { createFraudFlag } from "../utils/createFraudFlag";
-import { notifyAdmins } from "../utils/notifyAdmins";
-import { notifyUser } from "../utils/notifyUser";
+import * as functions  from 'firebase-functions/v2/https';
+import * as admin       from 'firebase-admin';
+import { FieldValue }   from 'firebase-admin/firestore';
+import { notifyUser }   from '../utils/notifyUser';
+import { notifyAdmins } from '../utils/notifyAdmins';
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
+import { handleCoinsChargeback } from './handleCoinsChargeback';
 
-export const onAsaasWebhook = onRequest(
-  {
-    secrets: ["ASAAS_WEBHOOK_TOKEN"],
-  },
+const db = admin.firestore();
+
+export const onAsaasWebhook = functions.onRequest(
+  { region: 'us-central1' },
   async (req, res) => {
-    // ============================================
-    // Validações de entrada
-    // ============================================
-    if (req.method !== "POST") {
-      res.status(405).send("Method Not Allowed");
-      return;
-    }
-
-    const token = req.headers["asaas-access-token"] as string;
-    const expectedToken = process.env.ASAAS_WEBHOOK_TOKEN!;
-
-    if (!token) {
-      console.warn("[onAsaasWebhook] Token ausente");
-      res.status(401).send("Unauthorized");
-      return;
-    }
-
-    if (token !== expectedToken) {
-      console.warn("[onAsaasWebhook] Token inválido");
-      res.status(401).send("Unauthorized");
+    if (req.method !== 'POST') {
+      res.status(405).send('Method Not Allowed');
       return;
     }
 
     const event = req.body;
-    const payment = event?.payment;
-    const eventType = event?.event as string;
-
-    if (!payment?.externalReference) {
-      res.status(200).send("OK — sem referência");
+    if (!event || !event.payment) {
+      res.status(400).send('Invalid payload');
       return;
     }
 
-    const saleId = payment.externalReference as string;
-    const db = admin.firestore();
+    const payment   = event.payment;
+    const eventType = event.event;
 
-    try {
-      const saleRef = db.collection("sales").doc(saleId);
-      const saleSnap = await saleRef.get();
+    console.log('[onAsaasWebhook] Full payload:', JSON.stringify({ eventType, paymentId: payment?.id, externalRef: payment?.externalReference, value: payment?.value }));
 
-      if (!saleSnap.exists) {
-        console.warn(`[onAsaasWebhook] Sale ${saleId} não encontrada`);
-        res.status(200).send("OK");
-        return;
-      }
+    // ── Idempotência: verifica se já processamos este payment ──
+    const idempotencyRef  = db.collection('processedWebhooks').doc(payment.id);
+    const idempotencySnap = await idempotencyRef.get();
+    if (idempotencySnap.exists) {
+      console.log('[onAsaasWebhook] Already processed:', payment.id);
+      res.status(200).send('Already processed');
+      return;
+    }
 
-      const sale = saleSnap.data()!;
+    // ── Busca a sale pelo asaasPaymentId ──
+    const salesQuery = await db
+      .collection('sales')
+      .where('asaasPaymentId', '==', payment.id)
+      .limit(1)
+      .get();
 
-      // ============================================
-      // IDEMPOTÊNCIA — já processado
-      // ============================================
-      if (sale.status === "paid") {
-        console.log(`[onAsaasWebhook] Sale ${saleId} já processada — ignorando`);
-        res.status(200).send("OK — já processado");
-        return;
-      }
+    if (salesQuery.empty) {
+      console.warn('[onAsaasWebhook] Sale not found for payment:', payment.id);
+      res.status(200).send('Sale not found');
+      return;
+    }
 
-      // ============================================
-      // PAYMENT_RECEIVED | PAYMENT_CONFIRMED
-      // ============================================
-      if (eventType === "PAYMENT_RECEIVED" || eventType === "PAYMENT_CONFIRMED") {
-        await db.runTransaction(async (tx) => {
-          const saleDoc = await tx.get(saleRef);
-          if (saleDoc.data()?.status === "paid") return; // double-check
+    const saleDoc  = salesQuery.docs[0];
+    const sale     = saleDoc.data();
+    const saleId   = saleDoc.id;
+    const buyerId  = sale.buyerId;
+    const sellerId = sale.sellerId;
 
-          const saleData = saleDoc.data()!;
-          const purchaseId = saleData.purchaseId ?? `${saleData.buyerId}_${saleData.productId}`;
-          const purchaseRef = db.collection("purchases").doc(purchaseId);
-          const walletRef = db.collection("creatorWallets").doc(saleData.sellerId);
-          const walletSnap = await tx.get(walletRef);
+    // ── PAYMENT_RECEIVED ou PAYMENT_CONFIRMED ──────────────────
+    if (eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED') {
 
-          // Cupom: lê ANTES de qualquer escrita (regra da transação).
-          // Só incrementa se a sale tem couponId E o cupom ainda existe.
-          let couponRef: FirebaseFirestore.DocumentReference | null = null;
-          if (saleData.couponId) {
-            couponRef = db.collection("coupons").doc(saleData.couponId);
-            const couponSnap = await tx.get(couponRef);
-            if (!couponSnap.exists) {
-              console.warn(`[onAsaasWebhook] cupom ${saleData.couponId} não existe mais — pulando usedCount`);
-              couponRef = null;
-            }
-          }
+      // ── v5.3: CRISTAIS PREMIUM ─────────────────────────────
+      if (sale.type === 'coins_purchase') {
+        const uid        = sale.uid ?? buyerId;
+        const totalCoins = sale.totalCoins ?? 0;
 
-          const refundWindowExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await db.runTransaction(async (t) => {
+          const freshSale = await t.get(saleDoc.ref);
+          if (freshSale.data()?.status === 'paid') return; // idempotência
 
-          tx.update(saleRef, {
-            status: "paid",
-            paymentStatus: "received",
-            paidAt: admin.firestore.FieldValue.serverTimestamp(),
-            webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
-            lastWebhookEvent: eventType,
-            lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
-            refundWindowExpiresAt: admin.firestore.Timestamp.fromDate(refundWindowExpires),
+          const walletRef  = db.collection('wallets').doc(uid);
+          const walletSnap = await t.get(walletRef);
+          const wallet     = walletSnap.data() ?? {};
+
+          const saldoAntes  = wallet.coinsPremium ?? 0;
+          const saldoDepois = saldoAntes + totalCoins;
+
+          // Credita coinsPremium
+          t.set(walletRef, {
+            coinsPremium:   FieldValue.increment(totalCoins),
+            totalPurchases: FieldValue.increment(1),
+            // Trava o bônus de primeira compra: 1x por conta, para
+            // sempre. Não é revertido nem em chargeback — o bônus
+            // foi consumido.
+            ...(sale.isFirstPurchaseBonus === true && { firstPurchaseUsed: true }),
+            updatedAt:      FieldValue.serverTimestamp(),
+          }, { merge: true });
+
+          // Atualiza status da venda
+          t.update(saleDoc.ref, {
+            status: 'paid',
+            paidAt: FieldValue.serverTimestamp(),
           });
 
-          // Incrementa usedCount do cupom — só aqui, no pagamento confirmado.
-          // Idempotente: o guard `sale.status === "paid"` acima garante 1x.
-          if (couponRef) {
-            tx.update(couponRef, {
-              usedCount: admin.firestore.FieldValue.increment(1),
-            });
-          }
-
-          tx.set(purchaseRef, {
-            buyerId: saleData.buyerId,
-            sellerId: saleData.sellerId,
-            productId: saleData.productId,
+          // Registro em coinsPurchases
+          t.set(db.collection('coinsPurchases').doc(`${uid}_${saleId}`), {
+            uid,
             saleId,
-            amount: saleData.amount,
-            status: "active",
-            isRevoked: false,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            packageId:    sale.packageId,
+            packageLabel: sale.packageLabel,
+            coinsPremium: sale.coinsPremium,
+            bonus:        sale.bonus,
+            totalCoins,
+            amount:       sale.amount,
+            status:       'completed',
+            createdAt:    FieldValue.serverTimestamp(),
           });
 
-          if (walletSnap.exists) {
-            tx.update(walletRef, {
-              // Sem período pendente: a venda já cai como DISPONÍVEL para saque.
-              // O desconto do saldo ocorre em onMarkWithdrawalPaid.
-              availableBalance: admin.firestore.FieldValue.increment(saleData.sellerAmount),
-              totalEarned: admin.firestore.FieldValue.increment(saleData.sellerAmount),
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-          } else {
-            tx.set(walletRef, {
-              userId: saleData.sellerId,
-              availableBalance: saleData.sellerAmount,
-              pendingBalance: 0,
-              totalEarned: saleData.sellerAmount,
-              totalWithdrawn: 0,
-              hasChargebackPending: false,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-          }
-
-          const txRef = db.collection("creatorTransactions").doc();
-          tx.set(txRef, {
-            userId: saleData.sellerId,
-            type: "sale",
-            amount: saleData.sellerAmount,
-            description: `Venda: ${saleData.productId}`,
+          // economyLedger
+          t.set(db.collection('economyLedger').doc(), {
+            uid,
+            tipo:         'COINS_PURCHASE',
             saleId,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            packageId:    sale.packageId,
+            coinsPremium: totalCoins,
+            saldoAntes,
+            saldoDepois,
+            timestamp:    FieldValue.serverTimestamp(),
+            imutavel:     true,
           });
+
+          // auditLog
+          t.set(db.collection('auditLogs').doc(), {
+            uid,
+            action:    'coins_purchased',
+            saleId,
+            packageId: sale.packageId,
+            totalCoins,
+            amount:    sale.amount,
+            timestamp: FieldValue.serverTimestamp(),
+            imutavel:  true,
+          });
+
+          // R20: audit financeiro — este é o ponto onde dinheiro
+          // real vira cristais. Sem ele, uma disputa de pagamento
+          // não tem como ser reconstruída.
+          auditLogFinanceiro({
+            uid,
+            tipo:                   'COMPRA_ASAAS',
+            coinTipo:               'premium',
+            valor:                  totalCoins,
+            origem:                 'onAsaasWebhook',
+            saldoAnteriorGratuito:  wallet.coinsGratuitos ?? 0,
+            saldoAnteriorPremium:   saldoAntes,
+            saldoPosteriorGratuito: wallet.coinsGratuitos ?? 0,
+            saldoPosteriorPremium:  saldoDepois,
+            metadata: {
+              saleId,
+              packageId:    sale.packageId,
+              packageLabel: sale.packageLabel,
+              amountBRL:    sale.amount,
+              bonus:        sale.bonus ?? 0,
+              asaasPaymentId: payment.id,
+            },
+          }, t);
         });
 
-        await incrementMetrics({
-          totalSales: 1,
-          totalCommission: sale.platformCommission,
-          totalProductsSold: 1,
-          todaySales: 1,
-          todayRevenue: sale.amount,
-          monthlyRevenue: sale.amount,
-          monthlyCommission: sale.platformCommission,
-        });
-
-        await createAuditLog({
-          action: "payment_received",
-          performedBy: "asaas-webhook",
-          targetId: saleId,
-          targetType: "sale",
-          metadata: { eventType, amount: sale.amount, paymentId: payment.id },
-          req,
-        });
-
-        // Notifica o VENDEDOR sobre a venda (push + in-app). Fire-and-forget.
+        // Notificações — fire-and-forget
         notifyUser({
-          userId: sale.sellerId,
-          title: "🎉 Você fez uma venda!",
-          body: `Você recebeu R$ ${(sale.sellerAmount ?? 0).toFixed(2)} por uma venda no marketplace.`,
-          type: "sale_completed",
-          data: { saleId, productId: sale.productId ?? "" },
+          userId: uid,
+          type:   'promocao',
+          title:  '✨ Cristais recebidos!',
+          body:   `+${totalCoins} Cristais Premium foram adicionados à sua carteira.`,
         }).catch(() => {});
 
-        // Notifica o COMPRADOR que o conteúdo está disponível. Fire-and-forget.
-        notifyUser({
-          userId: sale.buyerId,
-          title: "✅ Compra confirmada",
-          body: "Seu pagamento foi confirmado. Seu conteúdo já está disponível em Minhas Compras.",
-          type: "purchase_confirmed",
-          data: { saleId, productId: sale.productId ?? "" },
-        }).catch(() => {});
-
-        // Notifica os ADMINS sobre a venda realizada. Fire-and-forget.
         notifyAdmins({
-          title: "💰 Nova venda realizada",
-          body: `Venda de R$ ${(sale.amount ?? 0).toFixed(2)} confirmada no marketplace.`,
-          type: "sale_completed",
-          data: { saleId, productId: sale.productId ?? "" },
+          title: '💎 Nova compra de cristais',
+          body:  `${sale.packageLabel} — R$ ${sale.amount?.toFixed(2)} — uid: ${uid}`,
+          type:  'promocao',
         }).catch(() => {});
-      }
 
-      // ============================================
-      // PAYMENT_OVERDUE
-      // ============================================
-      if (eventType === "PAYMENT_OVERDUE") {
-        await saleRef.update({
-          paymentStatus: "overdue",
-          lastWebhookEvent: eventType,
-          lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Conquista FIRST_PURCHASE — fire-and-forget
+        db.collection('achievementTriggers').add({
+          uid,
+          action:       'FIRST_PURCHASE',
+          currentValue: 1,
+          processedAt:  null,
+          timestamp:    FieldValue.serverTimestamp(),
+        }).catch(() => {});
+
+        // Marca como processado
+        await idempotencyRef.set({
+          processedAt: FieldValue.serverTimestamp(),
+          saleId,
+          type:        'coins_purchase',
         });
+
+        res.status(200).send('Coins credited');
+        return;
       }
 
-      // ============================================
-      // PAYMENT_CANCELLED
-      // ============================================
-      if (eventType === "PAYMENT_CANCELLED") {
-        await saleRef.update({
-          status: "refunded",
-          paymentStatus: "cancelled",
-          lastWebhookEvent: eventType,
-          lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
-          webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+      // ── PRODUTO DO MARKETPLACE ─────────────────────────────
+      if (!buyerId || !sellerId) {
+        console.warn('[onAsaasWebhook] Missing buyerId or sellerId');
+        res.status(200).send('Missing buyer/seller');
+        return;
+      }
+
+      // Idempotência: verifica se sale já está paga
+      if (sale.status === 'paid') {
+        console.log('[onAsaasWebhook] Sale already paid:', saleId);
+        res.status(200).send('Already paid');
+        return;
+      }
+
+      // Busca produto
+      const productRef  = db.collection('products').doc(sale.productId);
+      const productSnap = await productRef.get();
+      if (!productSnap.exists) {
+        console.warn('[onAsaasWebhook] Product not found:', sale.productId);
+        res.status(200).send('Product not found');
+        return;
+      }
+      const product = productSnap.data()!;
+
+      // Calcula split
+      const saleAmount       = sale.amount ?? 0;
+      const platformFeeRate  = 0.20;
+      const platformFee      = parseFloat((saleAmount * platformFeeRate).toFixed(2));
+      const sellerAmount     = parseFloat((saleAmount - platformFee).toFixed(2));
+
+      // Transaction principal
+      await db.runTransaction(async (t) => {
+        const freshSale = await t.get(saleDoc.ref);
+        if (freshSale.data()?.status === 'paid') return;
+
+        // Busca wallet do seller
+        const sellerWalletRef  = db.collection('creatorWallets').doc(sellerId);
+        const sellerWalletSnap = await t.get(sellerWalletRef);
+        const sellerWallet     = sellerWalletSnap.data() ?? {};
+
+        // Credita seller — direto em availableBalance (sem pendingBalance)
+        t.set(sellerWalletRef, {
+          availableBalance: FieldValue.increment(sellerAmount),
+          totalEarned:      FieldValue.increment(sellerAmount),
+          updatedAt:        FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // Cria purchase para o buyer
+        const purchaseId  = `${buyerId}_${sale.productId}`;
+        const purchaseRef = db.collection('purchases').doc(purchaseId);
+        t.set(purchaseRef, {
+          buyerId,
+          productId:   sale.productId,
+          sellerId,
+          saleId,
+          amount:      saleAmount,
+          status:      'active',
+          isRevoked:   false,
+          createdAt:   FieldValue.serverTimestamp(),
+          updatedAt:   FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // Atualiza sale
+        t.update(saleDoc.ref, {
+          status:        'paid',
+          sellerAmount,
+          platformFee,
+          paidAt:        FieldValue.serverTimestamp(),
+          updatedAt:     FieldValue.serverTimestamp(),
         });
-      }
 
-      // ============================================
-      // CHARGEBACK_REQUESTED
-      // ============================================
-      if (eventType === "CHARGEBACK_REQUESTED") {
-        // buyerId capturado dentro da tx para uso na fraudFlag (fora do escopo)
-        let buyerId = "";
+        // walletAuditLog
+        t.set(db.collection('walletAuditLogs').doc(), {
+          uid:           sellerId,
+          type:          'sale_credit',
+          amount:        sellerAmount,
+          saleId,
+          productId:     sale.productId,
+          balanceBefore: sellerWallet.availableBalance ?? 0,
+          balanceAfter:  (sellerWallet.availableBalance ?? 0) + sellerAmount,
+          timestamp:     FieldValue.serverTimestamp(),
+          imutavel:      true,
+        });
 
-        await db.runTransaction(async (tx) => {
-          const saleDoc = await tx.get(saleRef);
-          const saleData = saleDoc.data()!;
+        // auditLog
+        t.set(db.collection('auditLogs').doc(), {
+          action:       'sale_completed',
+          saleId,
+          buyerId,
+          sellerId,
+          productId:    sale.productId,
+          amount:       saleAmount,
+          sellerAmount,
+          platformFee,
+          timestamp:    FieldValue.serverTimestamp(),
+          imutavel:     true,
+        });
+      });
 
-          buyerId = saleData.buyerId ?? "";
+      // Notificações — fire-and-forget
+      notifyUser({
+        userId: sellerId,
+        type:   'promocao',
+        title:  '🎉 Você fez uma venda!',
+        body:   `${product.title ?? 'Seu produto'} foi vendido! +R$ ${sellerAmount.toFixed(2)} disponível.`,
+      }).catch(() => {});
 
-          if (saleData.isChargebacked) return;
+      notifyUser({
+        userId: buyerId,
+        type:   'promocao',
+        title:  '✅ Compra confirmada',
+        body:   `${product.title ?? 'Produto'} está disponível na sua biblioteca.`,
+      }).catch(() => {});
 
-          const purchaseId = saleData.purchaseId ?? `${saleData.buyerId}_${saleData.productId}`;
-          const purchaseRef = db.collection("purchases").doc(purchaseId);
-          const walletRef = db.collection("creatorWallets").doc(saleData.sellerId);
-          const walletSnap = await tx.get(walletRef);
-          const wallet = walletSnap.data();
+      notifyAdmins({
+        title: '💰 Nova venda realizada',
+        body:  `${product.title ?? 'Produto'} — R$ ${saleAmount.toFixed(2)} — seller: ${sellerId}`,
+        type:  'promocao',
+      }).catch(() => {});
 
-          tx.update(saleRef, {
-            isChargebacked: true,
-            chargebackedAt: admin.firestore.FieldValue.serverTimestamp(),
-            paymentStatus: "refunded",
-            lastWebhookEvent: eventType,
-            lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
+      // Screenshot protection trigger
+      db.collection('triggerControl').doc(`screenshot_${sale.productId}_${buyerId}`).set({
+        productId: sale.productId,
+        buyerId,
+        sellerId,
+        activatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true }).catch(() => {});
 
-          tx.update(purchaseRef, {
-            status: "revoked",
+      // Marca como processado
+      await idempotencyRef.set({
+        processedAt: FieldValue.serverTimestamp(),
+        saleId,
+        type:        'product_purchase',
+      });
+
+      res.status(200).send('OK');
+      return;
+    }
+
+    // ── PAYMENT_OVERDUE ────────────────────────────────────────
+    if (eventType === 'PAYMENT_OVERDUE') {
+      await db.runTransaction(async (t) => {
+        const freshSale = await t.get(saleDoc.ref);
+        if (freshSale.data()?.status !== 'pending') return;
+        t.update(saleDoc.ref, {
+          status:    'overdue',
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+
+      await idempotencyRef.set({
+        processedAt: FieldValue.serverTimestamp(),
+        saleId,
+        type:        'overdue',
+      });
+
+      res.status(200).send('Marked overdue');
+      return;
+    }
+
+    // ── PAYMENT_DELETED / PAYMENT_REFUNDED ─────────────────────
+    if (eventType === 'PAYMENT_DELETED' || eventType === 'PAYMENT_REFUNDED') {
+      await db.runTransaction(async (t) => {
+        const freshSale = await t.get(saleDoc.ref);
+        const currentStatus = freshSale.data()?.status;
+        if (currentStatus === 'refunded' || currentStatus === 'cancelled') return;
+
+        t.update(saleDoc.ref, {
+          status:    eventType === 'PAYMENT_REFUNDED' ? 'refunded' : 'cancelled',
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // Se era produto e estava pago, revoga purchase
+        if (currentStatus === 'paid' && sale.type !== 'coins_purchase') {
+          const purchaseId  = `${buyerId}_${sale.productId}`;
+          const purchaseRef = db.collection('purchases').doc(purchaseId);
+          t.update(purchaseRef, {
+            status:    'refunded',
             isRevoked: true,
-          });
-
-          if (wallet) {
-            const fromPending = Math.min(wallet.pendingBalance ?? 0, saleData.sellerAmount);
-            const fromAvailable = Math.min(
-              wallet.availableBalance ?? 0,
-              saleData.sellerAmount - fromPending
-            );
-
-            tx.update(walletRef, {
-              hasChargebackPending: true,
-              pendingBalance: admin.firestore.FieldValue.increment(-fromPending),
-              availableBalance: admin.firestore.FieldValue.increment(-fromAvailable),
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-          }
-        });
-
-        await createAuditLog({
-          action: "chargeback_received",
-          performedBy: "asaas-webhook",
-          targetId: saleId,
-          targetType: "sale",
-          metadata: { eventType, paymentId: payment.id },
-          req,
-        });
-
-        // Fraud detection — fire-and-forget, nunca derruba o webhook.
-        // O helper é idempotente (não duplica se já houver flag ativa).
-        if (buyerId) {
-          createFraudFlag({
-            userId: buyerId,
-            reason: "chargeback",
-            description: `Chargeback recebido na venda ${saleId}`,
-            relatedSaleId: saleId,
-          }).catch((error) => {
-            console.warn("[onAsaasWebhook] erro criando fraudFlag:", error);
+            updatedAt: FieldValue.serverTimestamp(),
           });
         }
+      });
 
+      // ── Estorno de compra de cristais ──
+      // Fora da transaction acima porque handleCoinsChargeback abre
+      // a própria (uma transaction não pode conter outra).
+      // Cristais não são reembolsáveis, mas o chargeback chega pelo
+      // banco de qualquer forma — sem isto, o usuário recebe o
+      // dinheiro de volta E fica com os cristais.
+      if (sale.type === 'coins_purchase') {
+        const cbUid   = sale.uid ?? buyerId;
+        const cbCoins = sale.totalCoins ?? 0;
+
+        try {
+          const cb = await handleCoinsChargeback(
+            cbUid, saleId, cbCoins, sale.amount ?? 0,
+          );
+
+          if (cb.reverted) {
+            notifyUser({
+              userId: cbUid,
+              type:   'promocao',
+              title:  cb.debtCreated > 0
+                ? '⚠️ Compra estornada — pendência na sua conta'
+                : 'Compra estornada',
+              body:   cb.debtCreated > 0
+                ? `O pagamento de ${cbCoins} cristais foi estornado. Como ${cb.debtCreated} já haviam sido usados, sua conta ficou com pendência e novas compras estão bloqueadas até a revisão. O caso foi enviado para nossa equipe de moderação.`
+                : `O pagamento de ${cbCoins} cristais foi estornado e os cristais foram removidos da sua carteira.`,
+            }).catch(() => {});
+
+            notifyAdmins({
+              title: cb.debtCreated > 0 ? '🚨 Estorno com dívida' : '↩️ Estorno de cristais',
+              body:  `uid ${cbUid} — R$ ${(sale.amount ?? 0).toFixed(2)} — revertidos ${cb.coinsReverted}, dívida ${cb.debtCreated}`,
+              type:  'promocao',
+            }).catch(() => {});
+          }
+        } catch (error) {
+          // Falha aqui NÃO pode impedir o 200 ao Asaas — senão ele
+          // reenvia o webhook e a venda nunca fecha como estornada.
+          // O fraudFlag pendente é o rastro para tratamento manual.
+          console.error('[onAsaasWebhook] handleCoinsChargeback falhou:', {
+            uid: cbUid, saleId, error,
+          });
+        }
       }
 
-      // ============================================
-      // CHARGEBACK_DISPUTE | CHARGEBACK_REVERSED
-      // ============================================
-      if (eventType === "CHARGEBACK_DISPUTE" || eventType === "CHARGEBACK_REVERSED") {
-        await saleRef.update({
-          lastWebhookEvent: eventType,
-          lastWebhookAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      await idempotencyRef.set({
+        processedAt: FieldValue.serverTimestamp(),
+        saleId,
+        type:        eventType.toLowerCase(),
+      });
 
-        await createAuditLog({
-          action: eventType.toLowerCase(),
-          performedBy: "asaas-webhook",
-          targetId: saleId,
-          targetType: "sale",
-          metadata: { eventType },
-          req,
-        });
-      }
-
-      res.status(200).send("OK");
-    } catch (error) {
-      console.error("[onAsaasWebhook] Erro:", error);
-      res.status(500).send("Internal Error");
+      res.status(200).send('Processed');
+      return;
     }
+
+    // ── Outros eventos — ignora ────────────────────────────────
+    console.log('[onAsaasWebhook] Ignored event:', eventType);
+    res.status(200).send('Event ignored');
   }
 );

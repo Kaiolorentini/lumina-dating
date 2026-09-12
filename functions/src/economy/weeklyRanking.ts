@@ -129,9 +129,27 @@ async function distributeRankingRewards(
     const entry  = doc.data();
     const reward = REWARDS_BY_POSITION[index] ?? 20;
 
-    const userRef = db.collection('users').doc(entry.uid);
-    batch.update(userRef, {
-      'economy.fragments': admin.firestore.FieldValue.increment(reward),
+    // CORREÇÃO: fragmentos vivem em wallets/{uid}, não em users/{uid}.economy
+    // set+merge em vez de update: update() falha se a wallet não existir
+    // e derruba o batch inteiro (ninguém receberia prêmio).
+    const walletRef = db.collection('wallets').doc(entry.uid);
+    batch.set(walletRef, {
+      fragments: admin.firestore.FieldValue.increment(reward),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    // REGRA 20: todo ganho gera registro auditável
+    const ledgerRef = db.collection('economyLedger').doc();
+    batch.set(ledgerRef, {
+      uid:         entry.uid,
+      tipo:        'RANKING_REWARD',
+      origem:      'resetWeeklyRanking',
+      category,
+      weekId,
+      position:    index + 1,
+      fragmentos:  reward,
+      timestamp:   admin.firestore.FieldValue.serverTimestamp(),
+      imutavel:    true,
     });
 
     const notifRef = db.collection('notifications').doc();

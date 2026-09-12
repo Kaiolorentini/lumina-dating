@@ -1,68 +1,117 @@
 // ============================================
-// LUMINA — ENGAGEMENT INITIALIZER v5.4
+// LUMINA — ENGAGEMENT INITIALIZER v5.5
 // src/components/EngagementInitializer.tsx
 //
-// v5.4: Verifica recompensa diária + gatilhos pendentes
-// Modal de recompensa diária aparece primeiro.
-// Se houver gatilhos não lidos → badge no sino.
+// v5.5 — CORREÇÕES DE ROBUSTEZ
+//
+// 1. FAIL-CLOSED no catch (era CRÍTICO)
+//    Antes, qualquer falha (rede, cold start, permissão) caía num
+//    fallback que ABRIA o modal de recompensa. Quem já resgatou
+//    hoje via o modal, clicava, e a CF rejeitava por idempotência.
+//    Num fluxo de economia, erro → não mostra nada.
+//
+// 2. getFunctions() lazy
+//    No escopo do módulo, executava no import — sem garantia de
+//    que initializeApp() já tinha rodado. Falha não determinística
+//    no boot ("às vezes a recompensa não aparece").
+//
+// 3. checkedRef marcado só APÓS sucesso
+//    Antes era marcado antes da chamada: uma falha transitória
+//    bloqueava nova tentativa pela sessão inteira.
+//
+// 4. Cleanup do setTimeout
+//    Logout dentro dos 1500ms causava setState em componente
+//    desmontado.
+//
+// 5. Logs sob __DEV__, sem UID em produção.
+//
+// MELHORIA FUTURA (não aplicada — exige mudança de modelagem):
+// esta CF roda a cada abertura do app, por usuário. Se
+// lastDailyRewardAt morar no documento de wallet que o
+// CoinsContext já escuta via onSnapshot, o status vem de graça:
+// zero invocações, zero leituras extras.
 // ============================================
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { useAuth }       from '../context/AuthContext';
-import DailyRewardModal  from './DailyRewardModal';
+import { useAuth }      from '../context/AuthContext';
+import DailyRewardModal from './DailyRewardModal';
 
-const functions = getFunctions();
+const REVEAL_DELAY_MS = 1500;
 
 export default function EngagementInitializer() {
   const { user, loading: authLoading } = useAuth();
   const [showDailyReward, setShowDailyReward] = useState(false);
+
   const checkedRef = useRef<string | null>(null);
+  const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    if (authLoading)    return;
-    if (!user?.uid)     return;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (authLoading)  return;
+    if (!user?.uid)   return;
     if (checkedRef.current === user.uid) return;
-    checkedRef.current = user.uid;
 
     checkEngagements(user.uid);
   }, [user?.uid, authLoading]);
 
   async function checkEngagements(uid: string) {
-    console.log('[EngagementInitializer] Verificando para:', uid);
     try {
-      // 1. Verifica recompensa diária
+      // Lazy: resolvido aqui, não no import do módulo.
       const fn = httpsCallable<void, { alreadyClaimed: boolean }>(
-        functions, 'getDailyRewardStatus'
+        getFunctions(),
+        'getDailyRewardStatus',
       );
-      const result = await fn();
-      console.log('[EngagementInitializer] alreadyClaimed:', result.data.alreadyClaimed);
 
-      if (!result.data.alreadyClaimed) {
-        setTimeout(() => setShowDailyReward(true), 1500);
+      const result = await fn();
+
+      // Só marca como verificado APÓS sucesso — uma falha
+      // transitória deve permitir nova tentativa.
+      checkedRef.current = uid;
+
+      if (__DEV__) {
+        console.log('[EngagementInitializer] alreadyClaimed:', result.data.alreadyClaimed);
       }
 
-      // 2. Gatilhos emocionais pendentes são tratados
-      // na NotificationsScreen — não abrimos modal aqui
-      // para não sobrecarregar o usuário ao abrir o app.
-      // O badge do sino já indica notificações não lidas.
+      if (!result.data.alreadyClaimed && mountedRef.current) {
+        timerRef.current = setTimeout(() => {
+          if (mountedRef.current) setShowDailyReward(true);
+        }, REVEAL_DELAY_MS);
+      }
 
+      // Gatilhos emocionais pendentes são tratados na
+      // NotificationsScreen — não abrimos modal aqui para não
+      // sobrecarregar o usuário ao abrir o app. O badge do sino
+      // já indica notificações não lidas.
     } catch (error) {
-      console.error('[EngagementInitializer] Erro:', error);
-      // Fallback: mostra modal mesmo se CF falhar
-      setTimeout(() => setShowDailyReward(true), 1500);
+      // FAIL-CLOSED: não sabemos se já resgatou, então não
+      // oferecemos. Mostrar o modal aqui exibiria uma recompensa
+      // que a CF vai rejeitar — e, se claimDailyReward não tiver
+      // guard de idempotência, seria vetor de farm.
+      if (__DEV__) {
+        console.error('[EngagementInitializer] getDailyRewardStatus falhou:', error);
+      }
     }
   }
 
+  if (!showDailyReward || !user?.uid) return null;
+
   return (
-    <>
-      {showDailyReward && user?.uid && (
-        <DailyRewardModal
-          uid={user.uid}
-          visible={showDailyReward}
-          onClose={() => setShowDailyReward(false)}
-        />
-      )}
-    </>
+    <DailyRewardModal
+      uid={user.uid}
+      visible={showDailyReward}
+      onClose={() => setShowDailyReward(false)}
+    />
   );
 }

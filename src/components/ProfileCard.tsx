@@ -8,18 +8,13 @@ import {
   Dimensions,
 } from 'react-native';
 import { colors, fonts, spacing, borderRadius } from '../theme';
+import { ProfileCardData } from '../shared/types';
+import BoostBadge from './BoostBadge';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - spacing.lg * 2 - spacing.sm) / 2;
 
-export interface ProfileCardData {
-  id: string;
-  name: string;
-  age: number;
-  location: string;
-  sintonia: number;
-  photoURL: string;
-}
+
 
 interface Props {
   data: ProfileCardData;
@@ -32,8 +27,11 @@ export default function ProfileCard({ data, onPress }: Props) {
       <Image
         source={{ uri: data.photoURL }}
         style={styles.photo}
-        defaultSource={{ uri: 'https://randomuser.me/api/portraits/lego/1.jpg' }}
       />
+
+      {(data.boostType === 'turbo' || data.boostType === 'destaque') && (
+        <BoostBadge type={data.boostType} />
+      )}
 
       <View style={styles.sintoniaContainer}>
         <Text style={styles.sintoniaText}>{data.sintonia}%</Text>

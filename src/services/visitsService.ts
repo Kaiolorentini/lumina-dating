@@ -15,7 +15,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
-
+import { getFunctions, httpsCallable } from 'firebase/functions';
 export interface ProfileVisit {
   id: string;
   visitorId: string;
@@ -88,37 +88,24 @@ async function updateVisitCount(profileId: string): Promise<void> {
   }
 }
 
+// A escrita agora é server-side. O cliente apenas PEDE o registro
+// — visitorId vem de request.auth na CF, não do payload, então
+// não dá para forjar visita em nome de outro usuário.
 export async function registrarVisita(
-  visitorId: string,
+  _visitorId: string,
   profileId: string
 ): Promise<boolean> {
-  if (!visitorId || !profileId) {
-    console.warn('[registrarVisita] IDs inválidos — abortando:', visitorId, profileId);
-    return false;
-  }
+  if (!profileId) return false;
+
   try {
-    console.log('[registrarVisita] Iniciando:', visitorId, '->', profileId);
-
-    const isDuplicate = await hasRecentVisit(visitorId, profileId);
-    console.log('[registrarVisita] isDuplicate:', isDuplicate);
-
-    if (isDuplicate) {
-      console.log('[registrarVisita] Visita ignorada — muito recente');
-      return false;
-    }
-
-    console.log('[registrarVisita] Criando documento...');
-    await addDoc(collection(db, 'profile_visits'), {
-      visitorId,
-      profileId,
-      timestamp: serverTimestamp(),
-    });
-    console.log('[registrarVisita] ✅ Documento criado com sucesso');
-
-    await updateVisitCount(profileId);
-    return true;
+    const fn = httpsCallable<{ profileId: string }, { registered: boolean }>(
+      getFunctions(),
+      'registerProfileVisit'
+    );
+    const result = await fn({ profileId });
+    return result.data?.registered === true;
   } catch (error) {
-    console.error('[registrarVisita] ❌ Erro:', error);
+    console.error('[registrarVisita] Erro:', error);
     return false;
   }
 }

@@ -14,6 +14,7 @@
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
+import { assertSingleBoost } from './utils/assertSingleBoost';
 import {
   PREMIUM_FLAGS, PREMIUM_COSTS,
   PREMIUM_DURATIONS, PREMIUM_VERSIONS,
@@ -56,15 +57,8 @@ export const activateTurbo = functions.onCall(
         );
       }
 
-      // Verifica se já existe Turbo ativo
-      const turboExpiry = user.turbo?.expiresAt?.toDate?.() ?? null;
-      if (turboExpiry && turboExpiry > new Date()) {
-        const remainingMin = Math.ceil((turboExpiry.getTime() - Date.now()) / 60000);
-        throw new functions.HttpsError(
-          'already-exists',
-          `Turbo já ativo. Restam ${remainingMin} minutos.`
-        );
-      }
+      // Exclusividade: Turbo, Impulso e Destaque não coexistem
+      assertSingleBoost(user, new Date(), 'turbo');
 
       // Cooldown de 5 minutos entre ativações
       const lastTurboAt = user.turbo?.lastActivatedAt?.toDate?.() ?? null;
@@ -94,6 +88,8 @@ export const activateTurbo = functions.onCall(
 
       // 2. Ativa Turbo no perfil
       t.set(userRef, {
+        boostActiveUntil: admin.firestore.Timestamp.fromDate(expiresAt),
+        boostType:        'turbo',
         turbo: {
           active:          true,
           expiresAt:       admin.firestore.Timestamp.fromDate(expiresAt),

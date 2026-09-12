@@ -39,6 +39,9 @@ export function getNotificationIcon(type: NotificationType): string {
     tree_evolution:       '🌳',
     achievement_unlocked: '🏆',
     collection_complete:  '📚',
+    // v5.4 — Ranking semanal
+    ranking_reward:       '🏅',
+    inflation_alert:      '⚠️',
   };
   return icons[type] ?? '🔔';
 }

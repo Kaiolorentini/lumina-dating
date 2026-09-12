@@ -235,7 +235,7 @@ export const earnXP = functions.onCall(
       // REGRA 18: atualiza risk score (ação muito rápida = risco)
       // Implementação simples: incrementa e decai ao longo do tempo
       if (riskScore < ANTI_BOT.BLOCK_THRESHOLD) {
-        t.set(userRef, { 'xp.xpRiskScore': Math.max(0, riskScore - 1) }, { merge: true });
+        t.set(userRef, { xp: { xpRiskScore: Math.max(0, riskScore - 1) } }, { merge: true });
       }
 
       return {
@@ -254,6 +254,17 @@ export const earnXP = functions.onCall(
         treeProgress: newTree.progress,  // REGRA 22
       };
     });
+
+    // v5.3 — conquista TREE_EVOLUTION (fire-and-forget, só se evoluiu)
+    if (result.stageUp && result.newStage !== undefined) {
+      db.collection('achievementTriggers').add({
+        uid,
+        action:       'TREE_EVOLUTION',
+        currentValue: result.newStage,
+        processedAt:  null,
+        timestamp:    FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
 
     return { success: true, ...result };
   }

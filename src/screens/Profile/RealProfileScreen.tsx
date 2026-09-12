@@ -1,11 +1,9 @@
 // ============================================
-// LUMINA — REAL PROFILE SCREEN v5.2
-// src/screens/RealProfile/RealProfileScreen.tsx
+// LUMINA — REAL PROFILE SCREEN v5.3
+// src/screens/Profile/RealProfileScreen.tsx
 //
-// v5.2: botão ❤️ integrado ao ProfileLikeOrchestrator
-// Alterações: imports Firestore/Functions, estados liked/liking,
-// checkAlreadyLiked(), handleLike(), likeButton atualizado,
-// likeButtonActive no StyleSheet.
+// v5.3: progressMission chamado em visita e curtida
+// para registrar progresso das missões diárias.
 // ============================================
 
 import React, { useState, useEffect } from 'react';
@@ -38,43 +36,44 @@ import {
 import { estaBloqueado, bloquearUsuario } from '../../services/blockService';
 import { UserProfile } from '../../types';
 import { registrarVisita } from '../../services/visitsService';
-// v5.2 — adicionado
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable }           from 'firebase/functions';
 import { db }                                    from '../../services/firebase';
 
 const { width, height } = Dimensions.get('window');
-const functions         = getFunctions(); // v5.2
+const functions         = getFunctions();
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
+// v5.3 — helper: registra progresso de missão (fire-and-forget)
+function notifyMission(missionType: string, targetUid?: string) {
+  const today     = new Date().toISOString().slice(0, 10).replace(/-/g, '_');
+  const missionId = `daily_${today}_${missionType}`;
+  const fn        = httpsCallable(functions, 'progressMission');
+  fn({ missionIdParam: missionId, targetUid }).catch(() => { /* silencioso */ });
+}
+
 export default function RealProfileScreen() {
-  const { user } = useAuth();
-  const navigation = useNavigation<NavProp>();
-  const route = useRoute<any>();
+  const { user }     = useAuth();
+  const navigation   = useNavigation<NavProp>();
+  const route        = useRoute<any>();
   const targetUserId: string = route.params?.userId;
 
-  const [targetProfile, setTargetProfile] = useState<UserProfile | null>(null);
+  const [targetProfile,  setTargetProfile]  = useState<UserProfile | null>(null);
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
-  const [sintonia, setSintonia] = useState(0);
+  const [sintonia,       setSintonia]       = useState(0);
   const [sintoniaBreakdown, setSintoniaBreakdown] = useState({
-    localizacao: 0,
-    preferencia: 0,
-    perfil: 0,
-    interesses: 0,
+    localizacao: 0, preferencia: 0, perfil: 0, interesses: 0,
   });
-  const [loading, setLoading] = useState(true);
-  const [connected, setConnected] = useState(false);
-  const [requestSent, setRequestSent] = useState(false);
-  const [blocked, setBlocked] = useState(false);
-  const [sending, setSending] = useState(false);
-  // v5.2 — adicionado
-  const [liked,  setLiked]  = useState(false);
-  const [liking, setLiking] = useState(false);
+  const [loading,      setLoading]      = useState(true);
+  const [connected,    setConnected]    = useState(false);
+  const [requestSent,  setRequestSent]  = useState(false);
+  const [blocked,      setBlocked]      = useState(false);
+  const [sending,      setSending]      = useState(false);
+  const [liked,        setLiked]        = useState(false);
+  const [liking,       setLiking]       = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   async function loadData() {
     if (!user) return;
@@ -102,18 +101,33 @@ export default function RealProfileScreen() {
         setRequestSent(!!request);
         setBlocked(isBlocked);
 
-        // v5.2 — verifica se já curtiu hoje
         const alreadyLiked = await checkAlreadyLiked(user.uid, targetUserId);
         setLiked(alreadyLiked);
 
-        // Registra visita — só se ambos os IDs forem válidos
         if (user?.uid && targetUserId) {
           await registrarVisita(user.uid, targetUserId);
 
-          // Gamificação — XP por visita (fire-and-forget)
-          const earnXPFn = httpsCallable(functions, 'earnXP');
-          earnXPFn({ action: 'VISIT_PROFILE', targetUid: targetUserId, actionId: `visit_${user.uid}_${targetUserId}` })
-            .catch(() => { /* silencioso */ });
+          // XP por visita (fire-and-forget)
+          httpsCallable(functions, 'earnXP')({
+            action: 'VISIT_PROFILE',
+            targetUid: targetUserId,
+            actionId: `visit_${user.uid}_${targetUserId}`,
+          }).catch(() => { /* silencioso */ });
+
+          // v5.3 — missão visit_profiles (fire-and-forget)
+          notifyMission('visit_profiles', targetUserId);
+
+          // v5.3 — conquista VISIT_PROFILE (fire-and-forget)
+          httpsCallable(functions, 'checkAchievements')({
+            action: 'VISIT_PROFILE',
+            currentValue: 1,
+          }).catch(() => {});
+
+          // v5.3 — deposita no cofre do perfil visitado (fire-and-forget)
+          httpsCallable(functions, 'depositToVault')({
+            source:    'visit',
+            targetUid: targetUserId,
+          }).catch(() => {});
         }
       }
     } catch (error) {
@@ -149,12 +163,7 @@ export default function RealProfileScreen() {
     if (Platform.OS === 'web') {
       const confirmed = window.confirm(`Deseja bloquear ${targetProfile.name}?`);
       if (confirmed) {
-        await bloquearUsuario(
-          user.uid,
-          targetUserId,
-          targetProfile.name,
-          targetProfile.photoURL
-        );
+        await bloquearUsuario(user.uid, targetUserId, targetProfile.name, targetProfile.photoURL);
         setBlocked(true);
         navigation.goBack();
       }
@@ -168,12 +177,7 @@ export default function RealProfileScreen() {
             text: 'Bloquear',
             style: 'destructive',
             onPress: async () => {
-              await bloquearUsuario(
-                user.uid,
-                targetUserId,
-                targetProfile.name,
-                targetProfile.photoURL
-              );
+              await bloquearUsuario(user.uid, targetUserId, targetProfile.name, targetProfile.photoURL);
               setBlocked(true);
               navigation.goBack();
             },
@@ -183,7 +187,6 @@ export default function RealProfileScreen() {
     }
   }
 
-  // v5.2 — verifica curtida do dia
   async function checkAlreadyLiked(uid: string, targetUid: string): Promise<boolean> {
     const todayStr = new Date().toISOString().slice(0, 10);
     const likeId   = `${uid}_${targetUid}_${todayStr}`;
@@ -191,7 +194,6 @@ export default function RealProfileScreen() {
     return likeDoc.exists();
   }
 
-  // v5.2 — curtir perfil
   async function handleLike() {
     if (!user || liked || liking) return;
     setLiking(true);
@@ -199,7 +201,6 @@ export default function RealProfileScreen() {
       const todayStr = new Date().toISOString().slice(0, 10);
       const likeId   = `${user.uid}_${targetUserId}_${todayStr}`;
 
-      // Salva curtida no Firestore
       await setDoc(doc(db, 'likes', likeId), {
         likerUid:  user.uid,
         targetUid: targetUserId,
@@ -209,11 +210,28 @@ export default function RealProfileScreen() {
 
       setLiked(true);
 
-      // Dispara gamificação — fire-and-forget
-      const processLike = httpsCallable(functions, 'onProfileLike');
-      processLike({ likerUid: user.uid, targetUid: targetUserId }).catch(err => {
+      // Gamificação XP/Engine — fire-and-forget
+      httpsCallable(functions, 'onProfileLike')({
+        likerUid: user.uid,
+        targetUid: targetUserId,
+      }).catch(err => {
         console.warn('[RealProfileScreen] onProfileLike falhou:', err);
       });
+
+      // v5.3 — missão like_profiles (fire-and-forget)
+      notifyMission('like_profiles', targetUserId);
+
+      // v5.3 — conquista GIVE_LIKE (fire-and-forget)
+      httpsCallable(functions, 'checkAchievements')({
+        action: 'GIVE_LIKE',
+        currentValue: 1,
+      }).catch(() => {});
+
+      // v5.3 — deposita no cofre do perfil curtido (fire-and-forget)
+      httpsCallable(functions, 'depositToVault')({
+        source:    'like',
+        targetUid: targetUserId,
+      }).catch(() => {});
 
     } catch (error) {
       Alert.alert('Erro', 'Não foi possível registrar a curtida.');
@@ -246,10 +264,7 @@ export default function RealProfileScreen() {
         <View style={styles.blockedContent}>
           <Text style={styles.blockedIcon}>🚫</Text>
           <Text style={styles.blockedText}>Usuário bloqueado</Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Text style={styles.backButtonText}>Voltar</Text>
           </TouchableOpacity>
         </View>
@@ -271,13 +286,10 @@ export default function RealProfileScreen() {
       />
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Foto principal — estilo AIProfile */}
+        {/* Foto principal */}
         <View style={styles.photoContainer}>
           {targetProfile?.photoURL ? (
-            <Image
-              source={{ uri: targetProfile.photoURL }}
-              style={styles.mainPhoto}
-            />
+            <Image source={{ uri: targetProfile.photoURL }} style={styles.mainPhoto} />
           ) : (
             <View style={styles.photoPlaceholder}>
               <Text style={styles.photoPlaceholderIcon}>👤</Text>
@@ -286,16 +298,12 @@ export default function RealProfileScreen() {
           <View style={styles.photoOverlay} />
           <View style={styles.photoInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.name}>
-                {targetProfile?.name}, {targetProfile?.age}
-              </Text>
+              <Text style={styles.name}>{targetProfile?.name}, {targetProfile?.age}</Text>
               <View style={styles.realBadge}>
                 <Text style={styles.realBadgeText}>👤 Real</Text>
               </View>
             </View>
-            <Text style={styles.location}>
-              📍 {targetProfile?.city}, {targetProfile?.state}
-            </Text>
+            <Text style={styles.location}>📍 {targetProfile?.city}, {targetProfile?.state}</Text>
             <View style={styles.onlineBadge}>
               <View style={styles.onlineDot} />
               <Text style={styles.onlineText}>Ativo recentemente</Text>
@@ -317,9 +325,7 @@ export default function RealProfileScreen() {
 
           {sintonia >= 60 && (
             <View style={styles.connectionCard}>
-              <Text style={styles.connectionText}>
-                💫 Vocês têm uma conexão forte!
-              </Text>
+              <Text style={styles.connectionText}>💫 Vocês têm uma conexão forte!</Text>
             </View>
           )}
 
@@ -340,15 +346,11 @@ export default function RealProfileScreen() {
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoIcon}>📍</Text>
-              <Text style={styles.infoText}>
-                {targetProfile?.city}, {targetProfile?.state}
-              </Text>
+              <Text style={styles.infoText}>{targetProfile?.city}, {targetProfile?.state}</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoIcon}>💫</Text>
-              <Text style={styles.infoText}>
-                {targetProfile?.gender || 'Não informado'}
-              </Text>
+              <Text style={styles.infoText}>{targetProfile?.gender || 'Não informado'}</Text>
             </View>
           </View>
 
@@ -372,8 +374,8 @@ export default function RealProfileScreen() {
               <TouchableOpacity
                 style={styles.chatButton}
                 onPress={() => navigation.navigate('UserChat', {
-                  userId: targetUserId,
-                  userName: targetProfile?.name || '',
+                  userId:    targetUserId,
+                  userName:  targetProfile?.name   || '',
                   userPhoto: targetProfile?.photoURL || '',
                 })}
               >
@@ -389,15 +391,13 @@ export default function RealProfileScreen() {
                 onPress={handleSendRequest}
                 disabled={sending}
               >
-                {sending ? (
-                  <ActivityIndicator color={colors.background} />
-                ) : (
-                  <Text style={styles.connectButtonText}>✦ Conectar</Text>
-                )}
+                {sending
+                  ? <ActivityIndicator color={colors.background} />
+                  : <Text style={styles.connectButtonText}>✦ Conectar</Text>
+                }
               </TouchableOpacity>
             )}
 
-            {/* v5.2 — botão de curtida integrado ao ProfileLikeOrchestrator */}
             <TouchableOpacity
               style={[styles.likeButton, liked && styles.likeButtonActive]}
               onPress={handleLike}
@@ -419,210 +419,49 @@ export default function RealProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  blockedContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  blockedIcon: { fontSize: 60 },
-  blockedText: { color: colors.gray, fontSize: fonts.sizes.lg },
-  backButton: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.grayDark,
-  },
-  backButtonText: { color: colors.white, fontWeight: 'bold' },
-  blockIcon: { fontSize: 20 },
-
-  // Foto principal — igual AIProfile
-  photoContainer: {
-    width,
-    height: height * 0.45,
-    position: 'relative',
-  },
-  mainPhoto: { width: '100%', height: '100%' },
-  photoPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  container:            { flex: 1, backgroundColor: colors.background },
+  loadingContainer:     { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
+  blockedContent:       { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  blockedIcon:          { fontSize: 60 },
+  blockedText:          { color: colors.gray, fontSize: fonts.sizes.lg },
+  backButton:           { backgroundColor: colors.surface, borderRadius: borderRadius.sm, padding: spacing.md, paddingHorizontal: spacing.xl, borderWidth: 1, borderColor: colors.grayDark },
+  backButtonText:       { color: colors.white, fontWeight: 'bold' },
+  blockIcon:            { fontSize: 20 },
+  photoContainer:       { width, height: height * 0.45, position: 'relative' },
+  mainPhoto:            { width: '100%', height: '100%' },
+  photoPlaceholder:     { width: '100%', height: '100%', backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   photoPlaceholderIcon: { fontSize: 80 },
-  photoOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '60%',
-    backgroundColor: '#0D0D0D99',
-  },
-  photoInfo: {
-    position: 'absolute',
-    bottom: spacing.lg,
-    left: spacing.lg,
-    gap: spacing.xs,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  name: {
-    color: colors.white,
-    fontSize: fonts.sizes.xxl,
-    fontWeight: 'bold',
-  },
-  realBadge: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  realBadgeText: {
-    color: colors.background,
-    fontSize: fonts.sizes.xs,
-    fontWeight: 'bold',
-  },
-  location: { color: colors.grayLight, fontSize: fonts.sizes.md },
-  onlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#44FF88',
-  },
-  onlineText: {
-    color: '#44FF88',
-    fontSize: fonts.sizes.sm,
-    fontWeight: 'bold',
-  },
-
-  // Conteúdo
-  content: { padding: spacing.lg, gap: spacing.md },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.grayDark,
-  },
-  milestoneText: {
-    color: colors.gold,
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: spacing.md,
-    letterSpacing: 1,
-  },
-  connectionCard: {
-    backgroundColor: colors.gold + '22',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.gold + '44',
-    alignItems: 'center',
-  },
-  connectionText: {
-    color: colors.gold,
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  sectionTitle: {
-    color: colors.gold,
-    fontSize: fonts.sizes.md,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    marginBottom: spacing.sm,
-  },
-  bio: {
-    color: colors.grayLight,
-    fontSize: fonts.sizes.md,
-    lineHeight: 24,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  infoIcon: { fontSize: 18, width: 24, textAlign: 'center' },
-  infoText: { color: colors.grayLight, fontSize: fonts.sizes.md },
-  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  tag: {
-    backgroundColor: colors.grayDark,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  tagText: { color: colors.grayLight, fontSize: fonts.sizes.sm },
-
-  // Botões
-  actions: { flexDirection: 'row', gap: spacing.md },
-  chatButton: {
-    flex: 1,
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  chatButtonText: {
-    color: colors.background,
-    fontWeight: 'bold',
-    fontSize: fonts.sizes.lg,
-  },
-  connectButton: {
-    flex: 1,
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  connectButtonText: {
-    color: colors.background,
-    fontWeight: 'bold',
-    fontSize: fonts.sizes.lg,
-  },
-  pendingButton: {
-    flex: 1,
-    backgroundColor: colors.grayDark,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.gray,
-  },
-  pendingButtonText: { color: colors.gray, fontSize: fonts.sizes.md },
-  likeButton: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.grayDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // v5.2 — adicionado
-  likeButtonActive: {
-    backgroundColor: '#E91E63',
-    borderColor: '#E91E63',
-  },
-  likeButtonText: { fontSize: 24 },
+  photoOverlay:         { position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', backgroundColor: '#0D0D0D99' },
+  photoInfo:            { position: 'absolute', bottom: spacing.lg, left: spacing.lg, gap: spacing.xs },
+  nameRow:              { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  name:                 { color: colors.white, fontSize: fonts.sizes.xxl, fontWeight: 'bold' },
+  realBadge:            { backgroundColor: colors.gold, borderRadius: borderRadius.full, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+  realBadgeText:        { color: colors.background, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
+  location:             { color: colors.grayLight, fontSize: fonts.sizes.md },
+  onlineBadge:          { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  onlineDot:            { width: 8, height: 8, borderRadius: 4, backgroundColor: '#44FF88' },
+  onlineText:           { color: '#44FF88', fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  content:              { padding: spacing.lg, gap: spacing.md },
+  card:                 { backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.grayDark },
+  milestoneText:        { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', textAlign: 'center', marginBottom: spacing.md, letterSpacing: 1 },
+  connectionCard:       { backgroundColor: colors.gold + '22', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.gold + '44', alignItems: 'center' },
+  connectionText:       { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', textAlign: 'center' },
+  sectionTitle:         { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', letterSpacing: 1, marginBottom: spacing.sm },
+  bio:                  { color: colors.grayLight, fontSize: fonts.sizes.md, lineHeight: 24 },
+  infoRow:              { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
+  infoIcon:             { fontSize: 18, width: 24, textAlign: 'center' },
+  infoText:             { color: colors.grayLight, fontSize: fonts.sizes.md },
+  tagsRow:              { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  tag:                  { backgroundColor: colors.grayDark, borderRadius: borderRadius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  tagText:              { color: colors.grayLight, fontSize: fonts.sizes.sm },
+  actions:              { flexDirection: 'row', gap: spacing.md },
+  chatButton:           { flex: 1, backgroundColor: colors.gold, borderRadius: borderRadius.sm, padding: spacing.md, alignItems: 'center' },
+  chatButtonText:       { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.lg },
+  connectButton:        { flex: 1, backgroundColor: colors.gold, borderRadius: borderRadius.sm, padding: spacing.md, alignItems: 'center' },
+  connectButtonText:    { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.lg },
+  pendingButton:        { flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm, padding: spacing.md, alignItems: 'center', borderWidth: 1, borderColor: colors.gray },
+  pendingButtonText:    { color: colors.gray, fontSize: fonts.sizes.md },
+  likeButton:           { width: 56, height: 56, borderRadius: borderRadius.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.grayDark, alignItems: 'center', justifyContent: 'center' },
+  likeButtonActive:     { backgroundColor: '#E91E63', borderColor: '#E91E63' },
+  likeButtonText:       { fontSize: 24 },
 });

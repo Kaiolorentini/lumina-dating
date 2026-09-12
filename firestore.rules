@@ -54,10 +54,19 @@ service cloud.firestore {
         get(/databases/$(database)/documents/appSettings/config).data.maintenanceMode != true;
     }
 
+    // Campos que o cliente NUNCA pode escrever no próprio documento.
+    // affectedKeys() detecta o campo mesmo se o valor não mudar —
+    // por isso o cliente não deve sequer ENVIÁ-LOS no update.
     function hasNoProtectedFields() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        // Permissões e moderação
         'role', 'isBlocked', 'blockedReason', 'blockedAt', 'blockedBy',
         'screenshotWarnings', 'screenshotWarningStatus', 'adminFlags', 'creatorStatus',
+        // Economia — gravados exclusivamente pelas Cloud Functions.
+        // Sem isto, qualquer usuário se concede Turbo/Impulso/Destaque
+        // permanente com boostScore arbitrário, sem gastar cristais.
+        'turbo', 'impulso', 'destaqueRegional',
+        'boostActiveUntil', 'boostType', 'regionCount',
       ]);
     }
 
@@ -67,9 +76,15 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isAuthenticated();
       allow list: if isAuthenticated();
+      // O CREATE também precisa barrar os campos de economia:
+      // sem isso, uma conta nova nasce com Turbo já ativo.
       allow create: if isOwner(userId) &&
         request.resource.data.role == 'user' &&
-        request.resource.data.isBlocked == false;
+        request.resource.data.isBlocked == false &&
+        !request.resource.data.keys().hasAny([
+          'turbo', 'impulso', 'destaqueRegional',
+          'boostActiveUntil', 'boostType', 'regionCount',
+        ]);
       allow update: if isOwner(userId) && hasNoProtectedFields();
       allow delete: if false;
 
@@ -80,31 +95,63 @@ service cloud.firestore {
     }
 
     // ============================================
-    // SISTEMA DE MOEDAS
+    // CARTEIRA — escrita apenas pelo backend
     // ============================================
     match /wallets/{userId} {
       allow read: if isAuthenticated() && isOwner(userId);
-      allow write: if isAuthenticated() && isOwner(userId);
+      allow write: if false;
+    }
+
+    match /walletAuditLogs/{logId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    match /earnIdempotency/{key} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    match /spendIdempotency/{key} {
+      allow read:  if false;
+      allow write: if false;
     }
 
     // ============================================
     // CHATS E MENSAGENS
     // ============================================
+    // chatId = [uidA, uidB].sort().join('_') — determinístico e
+    // imutável. Validar por ele custa ZERO leituras e é imune ao
+    // bug do participants (setDoc/merge substitui o array e pode
+    // remover um membro do próprio chat).
+    function isChatMember(chatId) {
+      return isAuthenticated() && chatId.split('_').hasAny([request.auth.uid]);
+    }
+
     match /chats/{chatId} {
-      allow read, write: if isAuthenticated();
+      allow read:   if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if false;
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
-        allow update: if isAuthenticated() &&
-          resource.data.senderId == request.auth.uid;
+        allow read: if isChatMember(chatId);
+        allow create: if isChatMember(chatId) &&
+          request.resource.data.senderId == request.auth.uid;
+        allow update: if isChatMember(chatId) && (
+          resource.data.senderId == request.auth.uid ||
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['delivered', 'deliveredAt', 'read', 'readAt'])
+        );
         allow delete: if false;
       }
 
       match /typing/{userId} {
-        allow read, write: if isAuthenticated();
+        allow read:  if isChatMember(chatId);
+        allow write: if isChatMember(chatId) && isOwner(userId);
       }
     }
+    
 
     // ============================================
     // NOTIFICAÇÕES
@@ -112,10 +159,16 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() &&
         resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated();
+      // Antes, qualquer usuário criava notificação para qualquer
+      // outro — vetor de phishing dentro do app ("você ganhou
+      // 500 cristais, toque aqui").
+      // Notificações de sistema vêm do Admin SDK e ignoram Rules.
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() &&
         resource.data.userId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['read', 'delivered', 'deliveredAt', 'readAt']);
       allow delete: if false;
     }
 
@@ -153,13 +206,48 @@ service cloud.firestore {
     // ============================================
     // VISITAS DE PERFIL
     // ============================================
+    // Escrita exclusiva da CF registerProfileVisit (Admin SDK).
+    // A lista de visitantes é servida por getVisitorsStatus, que
+    // exige acesso pago — por isso a leitura direta fica fechada.
     match /profile_visits/{visitId} {
-      allow read, write: if isAuthenticated();
+      allow read:  if false;
+      allow write: if false;
     }
 
+    // Contadores alimentam a aba "Em Alta". Escrita livre permitia
+    // inflar o próprio contador e ocupar o topo sem pagar —
+    // canibalizando Turbo, Impulso e Destaque Regional.
+    // Incremento deve vir de Cloud Function (R13: usuários únicos,
+    // não eventos).
     match /profile_visit_counts/{profileId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+// ============================================
+    // VER VISITANTES — acesso pago (somente backend escreve)
+    // ============================================
+    match /visitorsAccess/{uid} {
+      allow read:  if isAuthenticated() && isOwner(uid);
+      allow write: if false;
+    }
+
+    match /premiumUsageLog/{docId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    match /premiumAnalytics/{docId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+    // ============================================
+    // CURTIDAS
+    // ============================================
+    match /likes/{likeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.likerUid == request.auth.uid;
+      allow update, delete: if false;
     }
 
     // ============================================
@@ -231,30 +319,26 @@ service cloud.firestore {
     }
 
     // ============================================
-// MARKETPLACE — CREATOR REQUESTS
-// ============================================
-match /creatorRequests/{requestId} {
-  allow read: if isAuthenticated() && (
-    resource.data.userId == request.auth.uid || isAdmin()
-  );
-  allow create: if isAuthenticated() && isNotBlocked() &&
-    request.resource.data.userId == request.auth.uid &&
-    request.resource.data.status == 'pending';
-
-  // ✅ Dono cancela (pending → rejected) — apenas campos permitidos
-  // Admin pode atualizar qualquer campo
-  allow update: if isAuthenticated() && (
-    (
-      resource.data.userId == request.auth.uid &&
-      resource.data.status == 'pending' &&
-      request.resource.data.status == 'rejected' &&
-      request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['status', 'reviewedAt', 'rejectionReason'])
-    ) || isAdmin()
-  );
-
-  allow delete: if false;
-}
+    // MARKETPLACE — CREATOR REQUESTS
+    // ============================================
+    match /creatorRequests/{requestId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      allow update: if isAuthenticated() && (
+        (
+          resource.data.userId == request.auth.uid &&
+          resource.data.status == 'pending' &&
+          request.resource.data.status == 'rejected' &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'reviewedAt', 'rejectionReason'])
+        ) || isAdmin()
+      );
+      allow delete: if false;
+    }
 
     // ============================================
     // MARKETPLACE — SALES
@@ -267,7 +351,11 @@ match /creatorRequests/{requestId} {
       allow get, list: if isAdmin();
       allow create, update, delete: if false;
     }
-
+match /coinsPurchases/{docId} {
+  allow read: if isAuthenticated() &&
+    resource.data.uid == request.auth.uid;
+  allow write: if false;
+}
     // ============================================
     // MARKETPLACE — PURCHASES
     // ============================================
@@ -275,6 +363,8 @@ match /creatorRequests/{requestId} {
       allow get: if isAuthenticated() && (
         resource.data.buyerId == request.auth.uid || isAdmin()
       );
+      allow list: if isAuthenticated() &&
+        resource.data.buyerId == request.auth.uid;
       allow list: if isAdmin();
       allow create, update, delete: if false;
     }
@@ -378,7 +468,7 @@ match /creatorRequests/{requestId} {
     }
 
     // ============================================
-    // MARKETPLACE — AUDIT LOGS
+    // AUDIT LOGS
     // ============================================
     match /auditLogs/{logId} {
       allow read: if isSuperAdmin();
@@ -410,11 +500,20 @@ match /creatorRequests/{requestId} {
     }
 
     // ============================================
-    // MARKETPLACE — ADMIN METRICS
+    // ADMIN METRICS
     // ============================================
     match /adminMetrics/{docId} {
       allow read: if isAdmin();
       allow create, update, delete: if false;
+    }
+
+    // ============================================
+    // MONITOR DE INFLAÇÃO — snapshots diários
+    // Leitura restrita a superadmin (mesma regra da CF)
+    // ============================================
+    match /economySnapshots/{docId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
     }
 
     // ============================================
@@ -425,9 +524,8 @@ match /creatorRequests/{requestId} {
       allow create, update, delete: if false;
     }
 
-
     // ============================================
-    // MARKETPLACE — PRODUCT ANALYTICS
+    // PRODUCT ANALYTICS
     // ============================================
     match /productAnalytics/{productId} {
       allow read: if isAuthenticated();
@@ -440,7 +538,7 @@ match /creatorRequests/{requestId} {
     }
 
     // ============================================
-    // CONTENT ACCESS LOGS — rate limit
+    // CONTENT ACCESS LOGS — somente backend
     // ============================================
     match /contentAccessLogs/{userId} {
       allow read, write: if false;
@@ -452,71 +550,72 @@ match /creatorRequests/{requestId} {
       match /minutes/{minuteId} {
         allow read, write: if false;
       }
+    }
 
+    // ============================================
+    // GAMIFICAÇÃO — ENGAJAMENTO
+    // ============================================
+    match /dailyRewards/{uid} {
+      allow read: if isAuthenticated() && isOwner(uid);
+      allow write: if false;
+    }
 
-      // ============================================
-// LUMINA — FIRESTORE RULES (ADIÇÕES FASE 0)
-// Adicionar ao firestore.rules existente
-// ============================================
+    match /dailyFaisca/{uid} {
+      allow read: if isAuthenticated() && isOwner(uid);
+      allow write: if false;
+    }
 
-// Carteira — leitura permitida ao dono, escrita apenas pelo backend
-match /wallets/{userId} {
-  allow read:  if request.auth != null && request.auth.uid == userId;
-  allow write: if false; // somente Cloud Functions via Admin SDK
-}
+    match /destinyCards/{uid} {
+      allow read: if isAuthenticated() && isOwner(uid);
+      allow write: if false;
+    }
 
-// Audit log financeiro — ninguém lê pelo cliente
-match /walletAuditLogs/{logId} {
+    match /dailyMissions/{docId} {
+      allow read: if isAuthenticated() &&
+        resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /xpLog/{logId} {
+      allow read: if isAuthenticated() &&
+        resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /xpIdempotency/{key} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    match /economyLedger/{logId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    match /shadowComparisons/{docId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    match /systemConfig/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+match /achievementTriggers/{docId} {
   allow read:  if false;
   allow write: if false;
 }
+    // ============================================
+    // GAMIFICAÇÃO — CONTROLES INTERNOS
+    // ============================================
+    match /triggerControl/{docId} {
+      allow read:  if false;
+      allow write: if false;
+    }
 
-// Idempotência de earn — somente backend
-match /earnIdempotency/{key} {
-  allow read:  if false;
-  allow write: if false;
-}
-
-// Idempotência de spend — somente backend
-match /spendIdempotency/{key} {
-  allow read:  if false;
-  allow write: if false;
-}
-//trigger
-match /triggerControl/{docId} {
-  allow read: if false;
-  allow write: if false;
-}
-match /pendingLostSintonia/{docId} {
-  allow read: if false;
-  allow write: if false;
-}
-// ============================================
-// CHECKLIST FINAL FASE 0
-//
-// [x] economy.ts — catálogo central de preços
-// [x] auditLogFinanceiro.ts — log completo
-// [x] initWallet.ts — criação idempotente
-// [x] earnCoins.ts — crédito blindado
-// [x] spendCoins.ts — débito blindado
-// [x] walletService.ts — só leitura + CF calls
-// [x] useWallet.ts — onSnapshot + CF spend
-// [x] CoinsContext.tsx — spend por feature
-// [x] shared/types/index.ts — Wallet v5.0
-// [x] Firestore Rules — wallets write: false
-//
-// REGRAS ANTIFRAUDE COBERTAS:
-// [x] CRÍTICO 1  — runTransaction() em earn/spend
-// [x] CRÍTICO 2  — timestamps server-side only
-// [x] CRÍTICO 3  — idempotência uid+data+tipo
-// [x] CRÍTICO 4  — limite diário + mensal server
-// [x] CRÍTICO 10 — saldo nunca negativo (HttpsError)
-// [x] CRÍTICO 14 — coins separados (gratuito/premium)
-// [x] CRÍTICO 19 — ordem de gasto: gratuitos primeiro
-// [x] CRÍTICO 15 — auditLog em toda movimentação
-//
-// PRÓXIMO PASSO: Fase 1 — Cristais de Sintonia
-// ============================================
+    match /pendingLostSintonia/{docId} {
+      allow read:  if false;
+      allow write: if false;
     }
 
   }

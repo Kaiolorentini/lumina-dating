@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Alert, Text, View, StyleSheet, Platform } from 'react-native';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -12,7 +12,6 @@ import PushInitializer from '../modules/notifications/components/PushInitializer
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { CoinsProvider } from '../context/CoinsContext';
 import SplashScreen from '../screens/Onboarding/SplashScreen';
-import FragmentsScreen from '../modules/engagement/screens/FragmentsScreen';
 import AppLoadingScreen from '../screens/Onboarding/LoadingScreen';
 import { LoginScreen, RegisterScreen } from '../modules/auth';
 import { ProfileSetupScreen } from '../modules/profile';
@@ -25,7 +24,8 @@ import { NotificationsScreen } from '../modules/notifications';
 import EngagementInitializer from '../components/EngagementInitializer';
 import UpdateChecker from '../components/UpdateChecker';
 import { RootStackParamList, TabParamList } from './types';
-import VaultScreen from '../modules/engagement/screens/VaultScreen';
+
+import MediaScreen from '../modules/media/screens/MediaScreen';
 import ProfileScreen from '../modules/profile/screens/ProfileScreen';
 import RealProfileScreen from '../screens/Profile/RealProfileScreen';
 import UserChatScreen from '../modules/chat/screens/UserChatScreen';
@@ -56,14 +56,19 @@ import AdminCreatorRequestsScreen from '../screens/admin/AdminCreatorRequestsScr
 import AdminWithdrawalsScreen from '../screens/admin/AdminWithdrawalsScreen';
 import AdminUserSearchScreen from '../screens/admin/AdminUserSearchScreen';
 import AdminUserDetailScreen from '../screens/admin/AdminUserDetailScreen';
-import MissionsScreen from '../modules/engagement/screens/MissionsScreen';
-import FaiscaScreen from '../modules/engagement/screens/FaiscaScreen';
-import AchievementsScreen from '../modules/engagement/screens/AchievementsScreen';
-import DestinyCardScreen from '../modules/engagement/screens/DestinyCardScreen';
 import AdminLoadingScreen from '../screens/admin/AdminLoadingScreen';
+import DestinyCardScreen from '../modules/engagement/screens/DestinyCardScreen';
+import FaiscaScreen from '../modules/engagement/screens/FaiscaScreen';
+import MissionsScreen from '../modules/engagement/screens/MissionsScreen';
+import FragmentsScreen from '../modules/engagement/screens/FragmentsScreen';
+import VaultScreen from '../modules/engagement/screens/VaultScreen';
+import XPScreen from '../modules/engagement/screens/XPScreen';
+import AchievementsScreen from '../modules/engagement/screens/AchievementsScreen';
 import RankingScreen from '../modules/engagement/screens/RankingScreen';
-import PremiumToolsScreen from '../modules/premium/screens/PremiumToolsScreen';
 import PrestigeScreen from '../modules/engagement/screens/PrestigeScreen';
+import PremiumToolsScreen from '../modules/premium/screens/PremiumToolsScreen';
+import AdminInflationScreen from '../screens/admin/AdminInflationScreen';
+import VisitorsScreen from '../modules/premium/screens/VisitorsScreen';
 import {
   AdminProductsModerationScreen,
   AdminSalesScreen,
@@ -71,8 +76,8 @@ import {
   AdminFraudFlagsScreen,
   AdminCouponsScreen,
   AdminReportsScreen,
-  AdminProductReviewScreen,
 } from '../screens/admin/AdminPlaceholderScreens';
+
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab   = createBottomTabNavigator<TabParamList>();
@@ -189,6 +194,12 @@ function TabNavigator() {
         }}
       />
 
+      <Tab.Screen name="Media" component={MediaScreen}
+        options={{
+          tabBarLabel: 'Mídia',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📸</Text>,
+        }}
+      />
 
       <Tab.Screen name="Sintonias" component={SintoniasScreen}
         options={{
@@ -289,16 +300,18 @@ function MainStack() {
       <Stack.Screen name="AdminUserDetail"       component={AdminUserDetailScreen} />
       <Stack.Screen name="AdminCoupons"          component={AdminCouponsScreen} />
       <Stack.Screen name="AdminReports"          component={AdminReportsScreen} />
-      <Stack.Screen name="AdminProductReview"    component={AdminProductReviewScreen} />
+      <Stack.Screen name="AdminInflation"        component={AdminInflationScreen} />
+      <Stack.Screen name="Faisca" component={FaiscaScreen} />
       <Stack.Screen name="DestinyCard" component={DestinyCardScreen} />
       <Stack.Screen name="Missions" component={MissionsScreen} />
-      <Stack.Screen name="Faisca" component={FaiscaScreen} />
       <Stack.Screen name="Fragments" component={FragmentsScreen} />
       <Stack.Screen name="Vault" component={VaultScreen} />
+      <Stack.Screen name="XP" component={XPScreen} />
       <Stack.Screen name="Achievements" component={AchievementsScreen} />
       <Stack.Screen name="Ranking" component={RankingScreen} />
       <Stack.Screen name="Prestige" component={PrestigeScreen} />
       <Stack.Screen name="PremiumTools" component={PremiumToolsScreen} />
+      <Stack.Screen name="Visitors" component={VisitorsScreen} />
     </Stack.Navigator>
   );
 }
@@ -443,15 +456,13 @@ function AppContent() {
 // ============================================
 export default function AppNavigator() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <CoinsProvider>
-          <NavigationContainer ref={navigationRef}>
-            <AppContent />
-          </NavigationContainer>
-        </CoinsProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <AuthProvider>
+      <CoinsProvider>
+        <NavigationContainer ref={navigationRef}>
+          <AppContent />
+        </NavigationContainer>
+      </CoinsProvider>
+    </AuthProvider>
   );
 }
 
