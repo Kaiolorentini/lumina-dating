@@ -112,7 +112,10 @@ export function useFavorites(
       } else {
         await addFavorite(uid, productId);
       }
-    } catch {
+    } catch (e: any) {
+      // Sem este log, uma falha de permissão vira apenas "o coração
+      // volta ao cinza" — sintoma sem causa visível.
+      console.error('[useFavorites] toggleFavorite error:', e?.code, e?.message);
       // Reverte optimistic update em caso de erro
       setFavoriteIds(prev =>
         alreadyFavorited ? [...prev, productId] : prev.filter(id => id !== productId),
