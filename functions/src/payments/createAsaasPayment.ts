@@ -76,7 +76,7 @@ export const createAsaasPayment = onCall(
     // ============================================
     const purchaseId = `${uid}_${productId}`;
 
-    const existingResult = await db.runTransaction(async (tx) => {
+    await db.runTransaction(async (tx) => {
       // 1. Purchase ativa?
       const purchaseRef = db.collection("purchases").doc(purchaseId);
       const purchaseSnap = await tx.get(purchaseRef);
@@ -104,36 +104,23 @@ export const createAsaasPayment = onCall(
         .get();
 
       if (!pendingSales.empty) {
+        // Devolver a cobrança antiga em silêncio fazia o app navegar
+        // para o Checkout com pixQrCode nulo — spinner eterno — e
+        // ignorava qualquer cupom recém-digitado sem avisar ninguém.
+        // Erro explícito: o app já trata 'já possui um pagamento'.
         const existing = pendingSales.docs[0].data();
-        return {
-          existing: true,
-          saleId: pendingSales.docs[0].id,
-          pixCopyPaste: existing.pixCopyPaste ?? null,
-          checkoutUrl: existing.checkoutUrl ?? null,
-        };
+        throw new HttpsError(
+          "already-exists",
+          "Você já tem um pagamento em aberto para este produto. " +
+          "Finalize ou aguarde o vencimento antes de gerar outro. " +
+          `Link: ${existing.checkoutUrl ?? "indisponível"}`,
+        );
       }
 
-      return { existing: false };
+      // A transaction agora só valida — qualquer bloqueio vira
+      // HttpsError acima. O retorno de cobrança existente saiu junto:
+      // ele devolvia pixQrCode nulo e o app ficava carregando para sempre.
     });
-
-    // Retornar cobrança existente
-    if (existingResult.existing) {
-      await createAuditLog({
-        action: "payment_existing_returned",
-        performedBy: uid,
-        targetId: existingResult.saleId!,
-        targetType: "sale",
-        metadata: { productId },
-        req: request.rawRequest,
-      });
-
-      return {
-        saleId: existingResult.saleId,
-        pixCopyPaste: existingResult.pixCopyPaste,
-        checkoutUrl: existingResult.checkoutUrl,
-        pixQrCode: null, // QR não guardado — usuário deve gerar novo
-      };
-    }
 
     // ============================================
     // Criar cobrança no Asaas

@@ -34,6 +34,10 @@ export default function ProductDetailScreen() {
   const [buying, setBuying] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
   const [couponCode, setCouponCode] = useState('');
+  // Campo oculto atrás de um toque: quem não tem cupom não vê ruído,
+  // e quem tem descobre que existe — antes era um input solto que
+  // passava despercebido acima do botão de comprar.
+  const [showCoupon, setShowCoupon] = useState(false);
   // Produto pago aguardando CPF. Produto gratuito não passa por aqui:
   // sem cobrança no Asaas, não há CPF a informar.
   const [awaitingCpf, setAwaitingCpf] = useState(false);
@@ -283,15 +287,38 @@ export default function ProductDetailScreen() {
           <>
             {!product.isFree && (
               <View style={styles.couponRow}>
-                <TextInput
-                  style={styles.couponInput}
-                  placeholder="Cupom de desconto (opcional)"
-                  placeholderTextColor={colors.gray}
-                  value={couponCode}
-                  onChangeText={t => setCouponCode(t.toUpperCase())}
-                  autoCapitalize="characters"
-                  editable={!buying}
-                />
+                {!showCoupon ? (
+                  <TouchableOpacity
+                    style={styles.couponToggle}
+                    onPress={() => setShowCoupon(true)}
+                    disabled={buying}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.couponToggleText}>🎟️  Tenho um cupom de desconto</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View>
+                    <View style={styles.couponHeader}>
+                      <Text style={styles.couponLabel}>Cupom de desconto</Text>
+                      <TouchableOpacity
+                        onPress={() => { setShowCoupon(false); setCouponCode(''); }}
+                        disabled={buying}
+                      >
+                        <Text style={styles.couponDismiss}>Não tenho</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      style={styles.couponInput}
+                      placeholder="Digite o código"
+                      placeholderTextColor={colors.gray}
+                      value={couponCode}
+                      onChangeText={t => setCouponCode(t.toUpperCase())}
+                      autoCapitalize="characters"
+                      editable={!buying}
+                      autoFocus
+                    />
+                  </View>
+                )}
               </View>
             )}
             <TouchableOpacity
@@ -362,6 +389,18 @@ const styles = StyleSheet.create({
   reviewComment: { color: colors.gray, fontSize: fonts.sizes.sm },
   footer: { padding: spacing.md, borderTopWidth: 0.5, borderTopColor: colors.grayDark },
   couponRow: { marginBottom: spacing.sm },
+  couponToggle: {
+    paddingVertical: spacing.sm, alignItems: 'center',
+    borderRadius: borderRadius.md, borderWidth: 1,
+    borderColor: colors.gold + '55', borderStyle: 'dashed',
+  },
+  couponToggleText: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  couponHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: spacing.xs,
+  },
+  couponLabel: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  couponDismiss: { color: colors.gray, fontSize: fonts.sizes.xs },
   couponInput: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md,
     borderWidth: 1, borderColor: colors.grayDark,
