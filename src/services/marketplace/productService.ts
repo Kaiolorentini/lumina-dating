@@ -29,6 +29,7 @@ import {
   serverTimestamp,
   DocumentSnapshot,
   QueryConstraint,
+  documentId,
 } from 'firebase/firestore';
 import {
   ref,
@@ -489,4 +490,43 @@ export async function getProductTotalViews(productId: string): Promise<number> {
   } catch {
     return 0;
   }
+}
+// ============================================
+// BUSCA EM LOTE — evita N+1 em telas de listagem
+//
+// where(documentId(), 'in', [...]) aceita no máximo 30 ids por
+// query. Uma página de 20 favoritos vira 1 leitura em vez de 20.
+// Produtos ausentes (deletados) simplesmente não voltam — o
+// chamador decide como exibir a lacuna.
+// ============================================
+
+export async function getProductsByIds(productIds: string[]): Promise<Map<string, Product>> {
+  const result = new Map<string, Product>();
+  if (productIds.length === 0) return result;
+
+  const CHUNK_SIZE = 30;
+  const chunks: string[][] = [];
+  for (let i = 0; i < productIds.length; i += CHUNK_SIZE) {
+    chunks.push(productIds.slice(i, i + CHUNK_SIZE));
+  }
+
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      try {
+        const snapshot = await getDocs(
+          query(
+            collection(db, MARKETPLACE_COLLECTIONS.PRODUCTS),
+            where(documentId(), 'in', chunk),
+          ),
+        );
+        snapshot.docs.forEach((d) => {
+          result.set(d.id, { id: d.id, ...d.data() } as Product);
+        });
+      } catch (e) {
+        console.error('[getProductsByIds] chunk failed:', e);
+      }
+    }),
+  );
+
+  return result;
 }

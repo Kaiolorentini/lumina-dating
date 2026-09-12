@@ -1,6 +1,11 @@
 // ============================================
-// LUMINA — STORE SCREEN v5.3
+// LUMINA — STORE SCREEN v5.4
 // src/modules/economy/screens/StoreScreen.tsx
+//
+// v5.4: CPF pedido no momento da compra (CpfPromptModal).
+// O CPF é exigido pelo Banco Central para cobrança Pix, mas
+// não é armazenado — trafega app → CF → Asaas e é descartado.
+// LGPD, minimização (Art. 6º, III).
 //
 // v5.3: navega para CheckoutScreen com dados PIX
 // em vez de abrir Linking.openURL.
@@ -24,6 +29,7 @@ import {
 } from '../services/purchaseService';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
+import CpfPromptModal from '../../../components/CpfPromptModal';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
 import { SpendableFeature, isPremiumOnly } from '../services/walletService';
 import { usePremiumTools }                 from '../../premium/hooks/usePremiumTools';
@@ -128,17 +134,43 @@ export default function StoreScreen() {
   const [loadingGalaxia,  setLoadingGalaxia]  = useState(false);
   const [spending,        setSpending]        = useState<string | null>(null);
 
+  // packageId aguardando CPF. Guardar o id (e não um booleano)
+  // permite um único modal servir pacotes e Galáxia Plus.
+  const [pendingPackageId, setPendingPackageId] = useState<string | null>(null);
+
   const {
     fertilizer, turbo, impulso, destaque, activating,
     activateFertilizer, activateTurbo, activateImpulso, activateDestaqueRegional,
   } = usePremiumTools(user?.uid);
 
-  async function handlePurchase(pkg: CoinPackageDisplay) {
+  // Abre o modal de CPF — a cobrança só é criada após a confirmação,
+  // porque o Asaas exige o CPF para gerar o customer.
+  function handlePurchase(pkg: CoinPackageDisplay) {
     if (!user?.uid) return;
-    setLoadingPkg(pkg.id);
+    setPendingPackageId(pkg.id);
+  }
+
+  function handleGalaxiaPlus() {
+    if (!user?.uid) return;
+    setPendingPackageId('galaxia_plus');
+  }
+
+  function handleCpfCancel() {
+    setPendingPackageId(null);
+  }
+
+  async function handleCpfConfirm(cpfDigits: string) {
+    const packageId = pendingPackageId;
+    if (!user?.uid || !packageId) return;
+
+    const isGalaxia = packageId === 'galaxia_plus';
+    if (isGalaxia) setLoadingGalaxia(true);
+    else           setLoadingPkg(packageId);
+
     try {
-      const result = await initiatePurchase(pkg.id);
+      const result = await initiatePurchase(packageId, cpfDigits);
       if (result.success) {
+        setPendingPackageId(null);
         navigation.navigate('Checkout', {
           saleId:       result.saleId       ?? '',
           checkoutUrl:  result.checkoutUrl  ?? '',
@@ -146,33 +178,17 @@ export default function StoreScreen() {
           pixCopyPaste: result.pixCopyPaste ?? '',
         });
       } else {
-        Alert.alert('Erro', result.error ?? 'Erro ao iniciar pagamento.');
+        // Modal segue aberto: a falha mais provável é CPF recusado
+        // pelo Asaas, e fechar obrigaria a redigitar tudo.
+        Alert.alert(
+          'Erro',
+          result.error ?? (isGalaxia ? 'Erro ao iniciar assinatura.' : 'Erro ao iniciar pagamento.'),
+        );
       }
     } catch (err) {
       Alert.alert('Erro', 'Não foi possível iniciar o pagamento.');
     } finally {
       setLoadingPkg(null);
-    }
-  }
-
-  async function handleGalaxiaPlus() {
-    if (!user?.uid) return;
-    setLoadingGalaxia(true);
-    try {
-      const result = await initiatePurchase('galaxia_plus');
-      if (result.success) {
-        navigation.navigate('Checkout', {
-          saleId:       result.saleId       ?? '',
-          checkoutUrl:  result.checkoutUrl  ?? '',
-          pixQrCode:    result.pixQrCode    ?? '',
-          pixCopyPaste: result.pixCopyPaste ?? '',
-        });
-      } else {
-        Alert.alert('Erro', result.error ?? 'Erro ao iniciar assinatura.');
-      }
-    } catch (err) {
-      Alert.alert('Erro', 'Não foi possível iniciar a assinatura.');
-    } finally {
       setLoadingGalaxia(false);
     }
   }
@@ -505,6 +521,13 @@ export default function StoreScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <CpfPromptModal
+        visible={pendingPackageId !== null}
+        loading={loadingGalaxia || loadingPkg !== null}
+        onConfirm={handleCpfConfirm}
+        onCancel={handleCpfCancel}
+      />
     </View>
   );
 }

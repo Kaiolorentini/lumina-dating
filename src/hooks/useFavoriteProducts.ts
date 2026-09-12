@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DocumentSnapshot } from 'firebase/firestore';
-import { getFavoriteProducts, removeFavorite } from '../services/marketplace/favoritesService';
+import { getUserFavorites, removeFavorite } from '../services/marketplace/favoritesService';
+import { getProductsByIds } from '../services/marketplace/productService';
 
 export interface FavoriteProductDisplayItem {
   productId: string;
   title: string;
   coverImage: string;
   ownerId: string;
-  favoritedAt: Date | null;
 }
 
 interface UseFavoriteProductsReturn {
@@ -49,18 +49,22 @@ export function useFavoriteProducts(
     lastDocRef.current = null;
 
     try {
-      const result = await getFavoriteProducts(capturedUid, pageSize, null);
+      const result = await getUserFavorites(capturedUid, pageSize, null);
+      const products = await getProductsByIds(result.favoriteProductIds);
 
       if (!mountedRef.current || thisRequestId !== requestIdRef.current) return;
       if (currentUidRef.current !== capturedUid) return;
 
-      setItems(result.items.map(f => ({
-        productId: f.productId,
-        title: f.product?.title ?? 'Produto removido',
-        coverImage: f.product?.coverImage ?? '',
-        ownerId: f.product?.ownerId ?? '',
-        favoritedAt: f.favoritedAt?.toDate() ?? null,
-      })));
+      setItems(result.favoriteProductIds.map(productId => {
+        const product = products.get(productId);
+        return {
+          productId,
+          title: product?.title ?? 'Produto removido',
+          coverImage: product?.coverImage ?? '',
+          ownerId: product?.ownerId ?? '',
+          favoritedAt: null,
+        };
+      }));
       setHasMore(result.hasMore);
       lastDocRef.current = result.lastDoc;
     } catch (e: any) {
@@ -81,16 +85,21 @@ export function useFavoriteProducts(
     setLoadingMore(true);
 
     try {
-      const result = await getFavoriteProducts(uid, pageSize, lastDocRef.current);
+      const result = await getUserFavorites(uid, pageSize, lastDocRef.current);
+      const products = await getProductsByIds(result.favoriteProductIds);
+
       if (!mountedRef.current || thisRequestId !== requestIdRef.current) return;
 
-      setItems(prev => [...prev, ...result.items.map(f => ({
-        productId: f.productId,
-        title: f.product?.title ?? 'Produto removido',
-        coverImage: f.product?.coverImage ?? '',
-        ownerId: f.product?.ownerId ?? '',
-        favoritedAt: f.favoritedAt?.toDate() ?? null,
-      }))]);
+      setItems(prev => [...prev, ...result.favoriteProductIds.map(productId => {
+        const product = products.get(productId);
+        return {
+          productId,
+          title: product?.title ?? 'Produto removido',
+          coverImage: product?.coverImage ?? '',
+          ownerId: product?.ownerId ?? '',
+          favoritedAt: null,
+        };
+      })]);
       setHasMore(result.hasMore);
       lastDocRef.current = result.lastDoc;
     } catch (e: any) {

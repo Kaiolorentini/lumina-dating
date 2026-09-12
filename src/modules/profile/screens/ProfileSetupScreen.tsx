@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -49,7 +49,6 @@ export default function ProfileSetupScreen() {
     city, state,
     selectEstado, selectMunicipio,
     bio, setBio,
-    cpf, setCpf,
     gender, setGender,
     preferences, togglePreference,
     photoURI, pickPhoto,
@@ -57,16 +56,12 @@ export default function ProfileSetupScreen() {
     save,
   } = useProfileSetup({ editMode });
 
-  // O AppNavigator renderiza a stack condicionalmente por
-  // hasProfile (linha ~406). Mudar o flag já troca a árvore —
-  // o reset manual disparava ANTES do re-render, quando
-  // 'MainTabs' ainda não existia, e o React Navigation
-  // respondia "action RESET was not handled by any navigator".
-  useEffect(() => {
-    if (isEditing && !editMode) {
-      setHasProfile(true);
-    }
-  }, [isEditing, editMode, setHasProfile]);
+  // NÃO reagir a isEditing aqui. O AuthContext já resolve
+  // hasProfile no boot; um setHasProfile(true) automático
+  // durante o onboarding fazia o flag virar true ANTES do
+  // toque em "Descobrir conexões" — e o setHasProfile(true)
+  // do handleContinue virava no-op (React não re-renderiza
+  // com o mesmo valor), deixando o spinner girando para sempre.
 
   async function handleSave() {
     const success = await save();
@@ -179,34 +174,6 @@ export default function ProfileSetupScreen() {
           multiline
           maxLength={300}
         />
-
-        <Text style={styles.label}>CPF (para compras)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="000.000.000-00"
-          placeholderTextColor={colors.gray}
-          value={cpf}
-          onChangeText={setCpf}
-          keyboardType="numeric"
-          maxLength={14}
-        />
-        <View style={styles.cpfInfoBox}>
-          <Text style={styles.cpfInfoTitle}>Por que pedimos seu CPF?</Text>
-          <Text style={styles.cpfInfoText}>
-            O CPF é necessário apenas para processar pagamentos de compras no
-            marketplace, conforme exigido pela regulamentação do Banco Central
-            para transações via Pix.
-          </Text>
-          <Text style={styles.cpfInfoText}>
-            É totalmente opcional — preencha somente se desejar comprar conteúdos.
-            Você pode adicioná-lo depois, a qualquer momento, aqui no seu perfil.
-          </Text>
-          <Text style={styles.cpfPrivacyText}>
-            🔒 Seu CPF é armazenado com segurança, nunca é exibido para outros
-            usuários e jamais será compartilhado ou usado para qualquer
-            finalidade sem a sua permissão.
-          </Text>
-        </View>
 
         <Text style={styles.label}>Genero *</Text>
         <View style={styles.optionsRow}>
@@ -387,31 +354,6 @@ const styles = StyleSheet.create({
     borderColor: colors.grayDark,
   },
   bioInput: { height: 100, textAlignVertical: 'top' },
-  cpfInfoBox: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.gold + '33',
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
-  },
-  cpfInfoTitle: {
-    color: colors.gold,
-    fontSize: fonts.sizes.sm,
-    fontWeight: 'bold',
-  },
-  cpfInfoText: {
-    color: colors.gray,
-    fontSize: fonts.sizes.xs,
-    lineHeight: 18,
-  },
-  cpfPrivacyText: {
-    color: colors.grayLight,
-    fontSize: fonts.sizes.xs,
-    lineHeight: 18,
-    marginTop: spacing.xs,
-  },
   optionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
