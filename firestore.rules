@@ -129,9 +129,15 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow read:   if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      // O documento de chat guarda lastMessage e lastMessageTime —
+      // conteúdo de conversa privada. Com `isAuthenticated()` qualquer
+      // conta lia a última mensagem de qualquer par de usuários e
+      // podia sobrescrever os metadados de conversas alheias.
+      // isChatMember valida pelo próprio id (uidA_uidB ordenado),
+      // custa ZERO leituras e cobre leitura e escrita.
+      allow read:   if isChatMember(chatId);
+      allow create: if isChatMember(chatId);
+      allow update: if isChatMember(chatId);
       allow delete: if false;
 
       match /messages/{messageId} {

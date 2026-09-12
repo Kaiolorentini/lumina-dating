@@ -203,7 +203,10 @@ export const createAsaasPayment = onCall(
       status: "pending",
       paymentStatus: "pending",
       paymentProvider: "asaas",
-      paymentId: pixPayment.id,
+      // asaasPaymentId é o nome que o onAsaasWebhook consulta.
+      // Gravar como `paymentId` fazia toda venda de produto cair
+      // em "Sale not found" e nunca ser creditada.
+      asaasPaymentId: pixPayment.id,
       paymentMethod: "pix",
       checkoutUrl: pixPayment.invoiceUrl,
       pixCopyPaste: pixPayment.pixCopyPaste ?? null,
