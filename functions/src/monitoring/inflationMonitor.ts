@@ -1,10 +1,19 @@
 // ============================================
-// LUMINA — INFLATION MONITOR v2.0
+// LUMINA — INFLATION MONITOR v2.1
 // functions/src/monitoring/inflationMonitor.ts
 //
 // Acompanha cristais criados vs gastos por dia.
 // Meta: 70–90% dos cristais criados devem
 // voltar para o sistema (não acumular).
+//
+// v2.1 — CORREÇÕES DE JANELA TEMPORAL:
+// 6. Roda às 00:10 e agrega o dia ANTERIOR. Antes rodava às 23:55
+//    sobre o dia corrente: os últimos 5 minutos nunca entravam.
+// 7. Data calculada em America/Sao_Paulo, não em UTC. toISOString()
+//    às 23:55 BRT já marca o dia seguinte — todo snapshot era
+//    gravado com a data errada e agregava uma janela futura,
+//    saindo zerado.
+// 8. endOfDay inclui os milissegundos (.999).
 //
 // v2.0 — CORREÇÕES:
 // 1. Usa notifyAdmins() — sem UIDs hardcoded
@@ -16,6 +25,10 @@
 //
 // NOTA: fragmentos NÃO entram aqui. Ranking e Cofre
 // gravam em economyLedger — economia separada dos cristais.
+//
+// ESCALA: o .get() dos logs carrega o dia inteiro em memória.
+// Acima de ~10 mil transações/dia isso precisa virar paginação
+// por cursor — os 256Mi da função não comportam mais que isso.
 // ============================================
 
 import * as admin from 'firebase-admin';
@@ -40,32 +53,36 @@ interface DailyEconomySnapshot {
 }
 
 // ------------------------------------------
-// Snapshot diário — roda às 23:55 todo dia
+// Snapshot diário — roda às 00:10 e fecha o dia ANTERIOR
 // ------------------------------------------
 export const takeDailyEconomySnapshot = onSchedule(
   {
-    schedule: '55 23 * * *',
+    // 00:10 agrega um dia já encerrado. Às 23:55 os últimos
+    // 5 minutos de movimentação ficavam permanentemente fora
+    // do registro — inaceitável num dado financeiro auditável.
+    schedule: '10 0 * * *',
     timeZone: 'America/Sao_Paulo',
     region:   'us-central1',
   },
   async () => {
     const db = admin.firestore();
 
-    // toISOString() devolve UTC. Às 23:55 de Brasília o UTC já é
-    // 02:55 do dia seguinte — o snapshot era gravado com a data
-    // errada e agregava uma janela que ainda não tinha começado.
-    // 'en-CA' formata como YYYY-MM-DD, que é o id usado na collection.
-    const today = new Date().toLocaleDateString('en-CA', {
+    // Roda às 00:10 e agrega o dia ANTERIOR, já fechado.
+    // A data precisa ser calculada em America/Sao_Paulo:
+    // toISOString() devolve UTC e, na virada, aponta o dia errado.
+    // 'en-CA' formata YYYY-MM-DD, que é o id usado na collection.
+    const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const targetDate = ontem.toLocaleDateString('en-CA', {
       timeZone: 'America/Sao_Paulo',
     });
 
-    console.log(`[inflationMonitor] Snapshot do dia: ${today}`);
+    console.log(`[inflationMonitor] Snapshot do dia: ${targetDate}`);
 
     // Agrega auditLogs do dia
     const logsSnap = await db
       .collection('walletAuditLogs')
-      .where('createdAt', '>=', startOfDay(today))
-      .where('createdAt', '<=', endOfDay(today))
+      .where('createdAt', '>=', startOfDay(targetDate))
+      .where('createdAt', '<=', endOfDay(targetDate))
       .get();
 
     let cristaisCreatedGratuitos = 0;
@@ -108,8 +125,8 @@ export const takeDailyEconomySnapshot = onSchedule(
     try {
       const walletsSnap = await db
         .collection('wallets')
-        .where('createdAt', '>=', startOfDay(today))
-        .where('createdAt', '<=', endOfDay(today))
+        .where('createdAt', '>=', startOfDay(targetDate))
+        .where('createdAt', '<=', endOfDay(targetDate))
         .count()
         .get();
       newWallets = walletsSnap.data().count;
@@ -122,11 +139,13 @@ export const takeDailyEconomySnapshot = onSchedule(
     const netFlow      = cristaisSpent - totalCreated;
     const ratio        = totalCreated > 0 ? cristaisSpent / totalCreated : 0;
 
-    // Alerta se ratio < 0.5 (menos de 50% voltando ao sistema)
+    // Alerta se ratio < 0.5 (menos de 50% voltando ao sistema).
+    // O piso de 1000 cristais evita ruído em dias de baixo volume —
+    // na base atual isso significa que o alerta raramente dispara.
     const alertNeeded = ratio < 0.5 && totalCreated > 1000;
 
     const snapshot: DailyEconomySnapshot = {
-      date:                    today,
+      date:                    targetDate,
       cristaisCreatedGratuitos,
       cristaisCreatedPremium,
       cristaisSpent,
@@ -141,17 +160,17 @@ export const takeDailyEconomySnapshot = onSchedule(
       alertSent:               alertNeeded,
     };
 
-    await db.collection('economySnapshots').doc(today).set(snapshot);
+    await db.collection('economySnapshots').doc(targetDate).set(snapshot);
 
     // CORREÇÃO 1: notifyAdmins lê os superadmins do appSettings.
     // Fire-and-forget — nunca derruba o snapshot.
     if (alertNeeded) {
       notifyAdmins({
         title: '⚠️ Alerta de inflação',
-        body:  `Ratio gasto/criado em ${today}: ${snapshot.ratioSpentToCreated} (meta 0.7–0.9). Criados: ${totalCreated} · Gastos: ${cristaisSpent}.`,
+        body:  `Ratio gasto/criado em ${targetDate}: ${snapshot.ratioSpentToCreated} (meta 0.7–0.9). Criados: ${totalCreated} · Gastos: ${cristaisSpent}.`,
         type:  'inflation_alert',
         data: {
-          date:  today,
+          date:  targetDate,
           ratio: String(snapshot.ratioSpentToCreated),
         },
       }).catch((error) => {
@@ -229,6 +248,9 @@ function startOfDay(date: string): admin.firestore.Timestamp {
   return admin.firestore.Timestamp.fromDate(new Date(`${date}T00:00:00-03:00`));
 }
 
+// 23:59:59.999 — sem os milissegundos, um log gravado em
+// 23:59:59.500 ficava fora da janela, porque Timestamp compara
+// com precisão de nanossegundos.
 function endOfDay(date: string): admin.firestore.Timestamp {
-  return admin.firestore.Timestamp.fromDate(new Date(`${date}T23:59:59-03:00`));
+  return admin.firestore.Timestamp.fromDate(new Date(`${date}T23:59:59.999-03:00`));
 }
