@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // LUMINA — ACHIEVEMENTS SYSTEM v5.3
 // functions/src/engagement/achievements.ts
 //
@@ -61,11 +61,6 @@ export const checkAchievements = functions.onCall(
       const ach = ACHIEVEMENTS_CATALOG[achId];
       if (!ach) continue;
       if (unlocked.includes(achId)) continue;
-
-      // v5.3: para actions incrementais, acumula +1; para absolutas, usa currentValue
-      const currentProgress = isAbsolute
-        ? currentValue
-        : (preProgress[achId] ?? 0) + 1;
 
       await db.runTransaction(async (t) => {
         const freshDoc  = await t.get(userRef);
