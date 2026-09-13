@@ -327,6 +327,17 @@ export const withdrawFromVault = functions.onCall(
       };
     });
 
+    // Conquistas VAULT_FIRST e VAULT_10 — fire-and-forget, fora da
+    // transaction. Action incremental: o onAchievementTrigger soma
+    // +1 ao progresso, então currentValue é sempre 1.
+    db.collection('achievementTriggers').add({
+      uid,
+      action:       'VAULT_WITHDRAW',
+      currentValue: 1,
+      processedAt:  null,
+      timestamp:    FieldValue.serverTimestamp(),
+    }).catch(() => {});
+
     return { success: true, ...result };
   }
 );

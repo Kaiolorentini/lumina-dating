@@ -5,6 +5,7 @@ import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { createAuditLog } from "../utils/auditLog";
 import { incrementMetric } from "../utils/incrementMetric";
 import { notifyUser } from "../utils/notifyUser";
+import { FieldValue } from "firebase-admin/firestore";
 
 export const onApproveCreator = onCall(async (request) => {
   assertAuthenticated(request.auth?.uid);
@@ -64,6 +65,17 @@ export const onApproveCreator = onCall(async (request) => {
     type: "creator_approved",
     data: { requestId },
   });
+
+  // Conquista CREATOR_ZERO — fire-and-forget, fora da transaction.
+  // O trigger vai para o UID APROVADO, não para o admin que aprovou:
+  // a conquista é de quem virou criador.
+  db.collection("achievementTriggers").add({
+    uid:          userId,
+    action:       "CREATOR_APPROVED",
+    currentValue: 1,
+    processedAt:  null,
+    timestamp:    FieldValue.serverTimestamp(),
+  }).catch(() => {});
 
   return { success: true };
 });

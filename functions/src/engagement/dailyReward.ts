@@ -72,15 +72,31 @@ export const claimDailyReward = functions.onCall(
 
         let currentStreak = rewardData.currentStreak ?? 0;
 
+        // daysStreak conta os dias consecutivos REAIS, sem teto.
+        // currentStreak tem teto 7 porque STREAK_REWARDS só define
+        // recompensa até o dia 7 — é a régua do prêmio, não do tempo.
+        // Sem esta separação, STREAK_30 (target 30) era matemática-
+        // mente inalcançável: currentStreak e longestStreak param
+        // ambos em 7.
+        let daysStreak = rewardData.daysStreak ?? 0;
+
         if (lastDate === yesterdayStr) {
           currentStreak = Math.min(currentStreak + 1, 7); // teto 7
+          daysStreak   += 1;                              // sem teto
         } else {
           currentStreak = 1; // reinicia
+          daysStreak    = 1;
         }
 
         const longestStreak = Math.max(
           rewardData.longestStreak ?? 0,
           currentStreak
+        );
+
+        // Recorde de dias consecutivos, também sem teto.
+        const longestDaysStreak = Math.max(
+          rewardData.longestDaysStreak ?? 0,
+          daysStreak
         );
 
         // Cristais gratuitos a creditar
@@ -96,6 +112,8 @@ export const claimDailyReward = functions.onCall(
           lastClaimedDate: todayStr,
           currentStreak,
           longestStreak,
+          daysStreak,
+          longestDaysStreak,
           totalClaimed: FieldValue.increment(crystals),
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -124,9 +142,40 @@ export const claimDailyReward = functions.onCall(
           crystals,
           currentStreak,
           longestStreak,
+          daysStreak,
+          longestDaysStreak,
           nextReward: STREAK_REWARDS[Math.min(currentStreak + 1, 7)] ?? 25,
         };
       });
+
+      // Conquistas STREAK_3, STREAK_7 e STREAK_30 — fire-and-forget,
+      // fora da transaction.
+      //
+      // STREAK_UPDATE é action ABSOLUTA no onAchievementTrigger:
+      // currentValue é comparado direto com o target, sem somar +1.
+      // Por isso enviamos o streak real, não 1.
+      db.collection('achievementTriggers').add({
+        uid,
+        action:       'STREAK_UPDATE',
+        currentValue: result.currentStreak,
+        processedAt:  null,
+        timestamp:    FieldValue.serverTimestamp(),
+      }).catch(() => {});
+
+      // Conquistas STREAK_3, STREAK_7 e STREAK_30 — fire-and-forget,
+      // fora da transaction.
+      //
+      // STREAK_UPDATE é action ABSOLUTA no onAchievementTrigger:
+      // currentValue vai direto contra o target, sem somar +1. Por
+      // isso enviamos daysStreak (dias reais) e não currentStreak,
+      // que para em 7 e nunca alcançaria STREAK_30.
+      db.collection('achievementTriggers').add({
+        uid,
+        action:       'STREAK_UPDATE',
+        currentValue: result.daysStreak,
+        processedAt:  null,
+        timestamp:    FieldValue.serverTimestamp(),
+      }).catch(() => {});
 
       return { success: true, ...result };
 
