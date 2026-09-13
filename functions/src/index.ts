@@ -71,6 +71,7 @@ export { registerRankingEvent, resetWeeklyRanking } from "./economy/weeklyRankin
 
 // Monitoramento
 export { takeDailyEconomySnapshot, getEconomySnapshots } from "./monitoring/inflationMonitor";
+export { resetDailyMetrics, resetMonthlyMetrics } from "./monitoring/resetAdminMetrics";
 
 // recompensa diaria
 export { claimDailyReward, getDailyRewardStatus } from './engagement/dailyReward';

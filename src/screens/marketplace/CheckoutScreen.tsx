@@ -212,9 +212,16 @@ export default function CheckoutScreen() {
             </View>
           </View>
         ) : (
+          // O QR chega junto com a resposta da CF ou não chega mais:
+          // não há segunda requisição da tela. Um spinner aqui era
+          // uma espera que nunca terminava — o caminho é apontar
+          // para o Copia e Cola, que já está logo abaixo.
           <View style={styles.qrPlaceholder}>
-            <ActivityIndicator color={colors.gold} />
-            <Text style={styles.qrPlaceholderText}>Carregando QR Code...</Text>
+            <Text style={styles.qrUnavailableIcon}>⎘</Text>
+            <Text style={styles.qrUnavailableTitle}>QR Code indisponível</Text>
+            <Text style={styles.qrPlaceholderText}>
+              Use o código Pix Copia e Cola abaixo para pagar.
+            </Text>
           </View>
         )}
 
@@ -265,7 +272,9 @@ const styles = StyleSheet.create({
   qrWrapper:     { padding: spacing.sm, backgroundColor: colors.white, borderRadius: borderRadius.md },
   qrImage:       { width: 240, height: 240 },
   qrPlaceholder: { height: 240, alignSelf: 'center', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
-  qrPlaceholderText: { color: colors.gray, fontSize: fonts.sizes.sm },
+  qrPlaceholderText: { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center', paddingHorizontal: spacing.lg },
+  qrUnavailableIcon: { fontSize: 40, color: colors.gray },
+  qrUnavailableTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   divider:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: spacing.lg },
   dividerLine:   { flex: 1, height: 0.5, backgroundColor: colors.grayDark },
   dividerText:   { color: colors.gray, fontSize: fonts.sizes.sm },

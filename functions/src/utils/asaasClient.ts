@@ -150,8 +150,16 @@ export async function createPixPayment(params: {
 
     const paymentId = payment.data.id as string;
 
-    // Busca QR Code Pix
-    const pixData = await client.get(`/payments/${paymentId}/pixQrCode`);
+    // Busca QR Code Pix. O Asaas às vezes ainda não gerou a imagem
+    // no instante seguinte à criação da cobrança — uma segunda
+    // tentativa após 1,2s resolve a maioria dos casos. Sem ela o
+    // app recebia encodedImage vazio e ficava com o spinner girando.
+    let pixData = await client.get(`/payments/${paymentId}/pixQrCode`);
+
+    if (!pixData.data?.encodedImage) {
+      await new Promise(r => setTimeout(r, 1200));
+      pixData = await client.get(`/payments/${paymentId}/pixQrCode`);
+    }
 
     return {
       id: paymentId,

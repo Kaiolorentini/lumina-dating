@@ -71,6 +71,7 @@ import AdminInflationScreen from '../screens/admin/AdminInflationScreen';
 import VisitorsScreen from '../modules/premium/screens/VisitorsScreen';
 import {
   AdminProductsModerationScreen,
+  AdminProductReviewScreen,
   AdminSalesScreen,
   AdminRefundRequestsScreen,
   AdminFraudFlagsScreen,
@@ -292,6 +293,11 @@ function MainStack() {
       <Stack.Screen name="AdminDashboard"        component={AdminDashboardScreen} />
       <Stack.Screen name="AdminCreatorRequests"  component={AdminCreatorRequestsScreen} />
       <Stack.Screen name="AdminProductsModeration" component={AdminProductsModerationScreen} />
+      {/* Rota estava tipada no RootStackParamList e usada em dois
+          pontos (card da moderação e push de review), mas nunca foi
+          registrada aqui — o React Navigation avisava no console e
+          o toque não fazia nada. */}
+      <Stack.Screen name="AdminProductReview"    component={AdminProductReviewScreen} />
       <Stack.Screen name="AdminSales"            component={AdminSalesScreen} />
       <Stack.Screen name="AdminRefundRequests"   component={AdminRefundRequestsScreen} />
       <Stack.Screen name="AdminWithdrawals"      component={AdminWithdrawalsScreen} />
@@ -357,6 +363,16 @@ function AppContent() {
       case 'refund_processed':    navigationRef.current.navigate('MyPurchases'); break;
       case 'creator_approved':
       case 'product_approved':    navigationRef.current.navigate('MyProducts');  break;
+      // Push de moderação enviado pelo notifySuperAdmins quando um
+      // criador submete produto. Sem este case o admin tocava na
+      // notificação e nada acontecia — o switch caía no default.
+      case 'product_review_new':
+        if (data.productId) {
+          navigationRef.current.navigate('AdminProductReview', { productId: data.productId });
+        } else {
+          navigationRef.current.navigate('AdminProductsModeration');
+        }
+        break;
       case 'screenshot_warning':
         Alert.alert('⚠️ Aviso', data?.message ?? 'Ação proibida detectada em conteúdo protegido.');
         break;

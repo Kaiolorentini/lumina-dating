@@ -13,6 +13,7 @@ import { notifyUser }   from '../utils/notifyUser';
 import { notifyAdmins } from '../utils/notifyAdmins';
 import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import { handleCoinsChargeback } from './handleCoinsChargeback';
+import { incrementMetrics }      from '../utils/incrementMetric';
 
 const db = admin.firestore();
 
@@ -162,6 +163,15 @@ export const onAsaasWebhook = functions.onRequest(
           }, t);
         });
 
+        // Métricas — compra de cristais é receita direta da
+        // plataforma, sem comissão de criador.
+        incrementMetrics({
+          totalSales:     1,
+          todaySales:     1,
+          todayRevenue:   sale.amount ?? 0,
+          monthlyRevenue: sale.amount ?? 0,
+        }).catch(() => {});
+
         // Notificações — fire-and-forget
         notifyUser({
           userId: uid,
@@ -294,6 +304,19 @@ export const onAsaasWebhook = functions.onRequest(
           imutavel:     true,
         });
       });
+
+      // Métricas do painel admin — fire-and-forget.
+      // O webhook processa TODA venda paga e nunca incrementava nada:
+      // o dashboard ficou parado nos números das vendas gratuitas.
+      incrementMetrics({
+        totalSales:        1,
+        totalProductsSold: 1,
+        totalCommission:   platformFee,
+        monthlyCommission: platformFee,
+        todaySales:        1,
+        todayRevenue:      saleAmount,
+        monthlyRevenue:    saleAmount,
+      }).catch(() => {});
 
       // Notificações — fire-and-forget
       notifyUser({
