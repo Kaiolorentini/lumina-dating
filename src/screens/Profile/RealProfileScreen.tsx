@@ -107,11 +107,17 @@ export default function RealProfileScreen() {
         if (user?.uid && targetUserId) {
           await registrarVisita(user.uid, targetUserId);
 
-          // XP por visita (fire-and-forget)
+          // XP por visita (fire-and-forget).
+          //
+          // actionId precisa ser único por EVENTO. Com
+          // `visit_${uid}_${targetUid}` fixo, a idempotência do
+          // earnXP bloqueava toda visita após a primeira — 18
+          // visitas registradas renderam 2 de XP no total.
+          // O limite de 1x/dia por alvo já vem do `perUser`.
           httpsCallable(functions, 'earnXP')({
             action: 'VISIT_PROFILE',
             targetUid: targetUserId,
-            actionId: `visit_${user.uid}_${targetUserId}`,
+            actionId: `visit_${targetUserId}_${Date.now().toString(36)}`,
           }).catch(() => { /* silencioso */ });
 
           // v5.3 — missão visit_profiles (fire-and-forget)

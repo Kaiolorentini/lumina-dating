@@ -20,13 +20,25 @@ export interface TreeStageDef {
   };
 }
 
-// REGRA 26: Alterar aqui sem tocar na lógica
+// v5.3 — REBALANCEAMENTO
+//
+// Os limiares antigos foram calibrados para treeXP de 20 por
+// sintonia. Com 50, e considerando que só conexão humana real
+// alimenta a árvore (REGRA 14), o estágio 4 exigia 30 sintonias
+// distintas — mais do que um usuário faz em meses.
+//
+// A curva nova é progressiva: o estágio 1 sai na PRIMEIRA
+// sintonia, porque recompensa imediata é o que prende no início,
+// e cada estágio seguinte custa cerca do dobro do anterior.
+//
+// As recompensas em cristais (10 e 30) não mudaram — são as
+// mesmas da economia atual.
 export const TREE_STAGE_TABLE: TreeStageDef[] = [
-  { stage: 0, name: 'Broto',         icon: '🌱', treeXPMin: 0,    reward: { type: 'crystals',  value: 10,        label: '10 Cristais Gratuitos' } },
-  { stage: 1, name: 'Crescimento',   icon: '🌿', treeXPMin: 100,  reward: { type: 'frame',     value: 'nebulosa', label: 'Moldura Nebulosa'       } },
-  { stage: 2, name: 'Florescimento', icon: '🌸', treeXPMin: 300,  reward: { type: 'badge',     value: 'flor',     label: 'Badge Flor'             } },
-  { stage: 3, name: 'Constelação',   icon: '✨', treeXPMin: 700,  reward: { type: 'crystals',  value: 30,         label: '30 Cristais Gratuitos'  } },
-  { stage: 4, name: 'Galáxia',       icon: '💜', treeXPMin: 1500, reward: { type: 'animation', value: 'galaxia',  label: 'Animação Exclusiva'     } },
+  { stage: 0, name: 'Broto',         icon: '🌱', treeXPMin: 0,   reward: { type: 'crystals',  value: 10,         label: '10 Cristais Gratuitos' } },
+  { stage: 1, name: 'Crescimento',   icon: '🌿', treeXPMin: 50,  reward: { type: 'frame',     value: 'nebulosa', label: 'Moldura Nebulosa'      } },
+  { stage: 2, name: 'Florescimento', icon: '🌸', treeXPMin: 150, reward: { type: 'badge',     value: 'flor',     label: 'Badge Flor'            } },
+  { stage: 3, name: 'Constelação',   icon: '✨', treeXPMin: 350, reward: { type: 'crystals',  value: 30,         label: '30 Cristais Gratuitos' } },
+  { stage: 4, name: 'Galáxia',       icon: '💜', treeXPMin: 700, reward: { type: 'animation', value: 'galaxia',  label: 'Animação Exclusiva'    } },
 ];
 
 export function calcTreeStage(treeXP: number): {

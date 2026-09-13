@@ -22,15 +22,25 @@ export interface XPActionDef {
 // treeXP só para conexões humanas reais
 // Visita, curtida, missão comum → NÃO alimentam a árvore
 // Sintonia, conversa real, missão social → alimentam a árvore
+// v5.3 — REBALANCEAMENTO
+//
+// XP global subiu ~2x: com os valores antigos, uma sessão típica
+// (5 visitas, 3 curtidas, 1 conversa) rendia 30 XP — 3 dias para
+// sair do nível 1. Agora rende ~65.
+//
+// treeXP subiu mais: a árvore era matematicamente inviável.
+// Estágio 4 exigia 1.500 treeXP = 75 sintonias distintas. Com os
+// novos valores são ~30, e o estágio 1 sai em 3 sintonias.
+// A regra 14 se mantém — só conexão humana real alimenta a árvore.
 export const XP_ACTION_VALUES: Record<string, XPActionDef> = {
-  VISIT_PROFILE:       { xp: 1,  treeXP: 0,  category: 'SOCIAL',      dailyMax: 20,  perUser: true                },
-  GIVE_LIKE:           { xp: 3,  treeXP: 0,  category: 'SOCIAL',      dailyMax: 30,  perUser: true                },
-  RECEIVE_LIKE:        { xp: 5,  treeXP: 0,  category: 'SOCIAL',      dailyMax: 100, perUser: true                },
-  START_CONVO:         { xp: 10, treeXP: 5,  category: 'SOCIAL',      dailyMax: 50,  perUser: true, minMessages: 2 },
-  CREATE_SINTONIA:     { xp: 20, treeXP: 20, category: 'SOCIAL',      dailyMax: 0,   perUser: true                },
-  COMPLETE_MISSION:    { xp: 15, treeXP: 0,  category: 'MISSION',     dailyMax: 0,   perUser: false               },
-  COMPLETE_SOCIAL_MISSION: { xp: 15, treeXP: 5, category: 'MISSION',  dailyMax: 0,   perUser: false               },
-  UNLOCK_ACHIEVEMENT:  { xp: 30, treeXP: 10, category: 'ACHIEVEMENT', dailyMax: 0,   perUser: false               },
+  VISIT_PROFILE:       { xp: 2,  treeXP: 0,  category: 'SOCIAL',      dailyMax: 40,  perUser: true                },
+  GIVE_LIKE:           { xp: 5,  treeXP: 0,  category: 'SOCIAL',      dailyMax: 50,  perUser: true                },
+  RECEIVE_LIKE:        { xp: 8,  treeXP: 0,  category: 'SOCIAL',      dailyMax: 120, perUser: true                },
+  START_CONVO:         { xp: 20, treeXP: 15, category: 'SOCIAL',      dailyMax: 80,  perUser: true, minMessages: 2 },
+  CREATE_SINTONIA:     { xp: 50, treeXP: 50, category: 'SOCIAL',      dailyMax: 0,   perUser: true                },
+  COMPLETE_MISSION:    { xp: 25, treeXP: 0,  category: 'MISSION',     dailyMax: 0,   perUser: false               },
+  COMPLETE_SOCIAL_MISSION: { xp: 25, treeXP: 10, category: 'MISSION', dailyMax: 0,   perUser: false               },
+  UNLOCK_ACHIEVEMENT:  { xp: 50, treeXP: 20, category: 'ACHIEVEMENT', dailyMax: 0,   perUser: false               },
 };
 
-export const DAILY_XP_MAX = 300; // REGRA 5 — teto global
+export const DAILY_XP_MAX = 400; // REGRA 5 — teto global
