@@ -41,6 +41,16 @@ function dateToBR(d: Date): string {
   }
 }
 
+// Aplica dd/mm/aaaa conforme digita. Sem isto o admin precisava
+// acertar as barras na mão, e "1/7/2026" era rejeitado pelo regex
+// que exige dois dígitos.
+function maskDateBR(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
 // "dd/mm/aaaa" → epoch ms (ou null se inválido)
 function parseDateBR(text: string): number | null {
   const m = text.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -168,10 +178,15 @@ export default function AdminCouponsScreen() {
     if (fType === 'percentage' && value > 100) return { ok: false, msg: 'Percentual não pode passar de 100%.' };
 
     const startMs = parseDateBR(fStart);
-    const endMs = parseDateBR(fEnd);
+    const endRaw = parseDateBR(fEnd);
     if (startMs === null) return { ok: false, msg: 'Data inicial inválida (use dd/mm/aaaa).' };
-    if (endMs === null) return { ok: false, msg: 'Data final inválida (use dd/mm/aaaa).' };
-    if (startMs >= endMs) return { ok: false, msg: 'Data inicial deve ser antes da final.' };
+    if (endRaw === null) return { ok: false, msg: 'Data final inválida (use dd/mm/aaaa).' };
+    if (startMs >= endRaw) return { ok: false, msg: 'Data inicial deve ser antes da final.' };
+
+    // parseDateBR devolve 00:00. Sem somar o dia, um cupom "válido
+    // até 13/09" expirava à meia-noite do dia 13 — não valia no
+    // próprio dia final que o admin escolheu.
+    const endMs = endRaw + (24 * 60 * 60 * 1000) - 1;
 
     const maxUses = parseInt(fMaxUses, 10);
     if (isNaN(maxUses) || maxUses < 0) return { ok: false, msg: 'Limite de uso inválido (0 = ilimitado).' };
@@ -447,8 +462,9 @@ export default function AdminCouponsScreen() {
                 placeholder="01/07/2026"
                 placeholderTextColor={colors.gray}
                 value={fStart}
-                onChangeText={setFStart}
-                keyboardType="numbers-and-punctuation"
+                onChangeText={t => setFStart(maskDateBR(t))}
+                keyboardType="number-pad"
+                maxLength={10}
               />
 
               <Text style={styles.fieldLabel}>Data final (dd/mm/aaaa)</Text>
@@ -457,8 +473,9 @@ export default function AdminCouponsScreen() {
                 placeholder="31/07/2026"
                 placeholderTextColor={colors.gray}
                 value={fEnd}
-                onChangeText={setFEnd}
-                keyboardType="numbers-and-punctuation"
+                onChangeText={t => setFEnd(maskDateBR(t))}
+                keyboardType="number-pad"
+                maxLength={10}
               />
 
               <Text style={styles.fieldLabel}>Limite de uso (0 = ilimitado)</Text>
