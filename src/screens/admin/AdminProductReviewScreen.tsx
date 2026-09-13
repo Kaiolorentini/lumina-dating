@@ -87,6 +87,7 @@ export default function AdminProductReviewScreen() {
   const [processing, setProcessing] = useState(false);
   const [rejectModal, setRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [togglingFeatured, setTogglingFeatured] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -173,6 +174,39 @@ export default function AdminProductReviewScreen() {
         },
       },
     ]);
+  }
+
+  async function handleToggleFeatured() {
+    if (!product) return;
+    const next = !product.isFeatured;
+
+    Alert.alert(
+      next ? 'Destacar produto?' : 'Remover destaque?',
+      next
+        ? `"${product.title}" vai aparecer no carrossel da home do marketplace.`
+        : `"${product.title}" sai do carrossel e volta para a listagem comum.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: next ? 'Destacar' : 'Remover',
+          onPress: async () => {
+            setTogglingFeatured(true);
+            try {
+              const functions = getFunctions(app, 'us-central1');
+              const toggle = httpsCallable(functions, 'toggleProductFeatured');
+              await toggle({ productId, isFeatured: next });
+              // Recarrega para refletir o estado real do servidor,
+              // não um otimismo local que pode divergir.
+              await loadData();
+            } catch (e: any) {
+              Alert.alert('Erro', e.message ?? 'Não foi possível alterar o destaque.');
+            } finally {
+              setTogglingFeatured(false);
+            }
+          },
+        },
+      ],
+    );
   }
 
   async function confirmReject() {
@@ -392,6 +426,43 @@ export default function AdminProductReviewScreen() {
             )}
           </View>
         )}
+
+        {/* Curadoria — só faz sentido em produto já aprovado.
+            Era o único caminho para o carrossel da home, e antes
+            só existia via script com Admin SDK. */}
+        {product.status === 'approved' && (
+          <View style={styles.featuredBox}>
+            <View style={styles.featuredInfo}>
+              <Text style={styles.featuredTitle}>
+                {product.isFeatured ? '✦ Em destaque' : 'Destaque no marketplace'}
+              </Text>
+              <Text style={styles.featuredHint}>
+                {product.isFeatured
+                  ? 'Este produto aparece no carrossel da home.'
+                  : 'Coloca o produto no carrossel da home do marketplace.'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.featuredBtn,
+                product.isFeatured && styles.featuredBtnActive,
+              ]}
+              onPress={handleToggleFeatured}
+              disabled={togglingFeatured}
+            >
+              {togglingFeatured ? (
+                <ActivityIndicator color={colors.gold} size="small" />
+              ) : (
+                <Text style={[
+                  styles.featuredBtnText,
+                  product.isFeatured && styles.featuredBtnTextActive,
+                ]}>
+                  {product.isFeatured ? 'Remover' : 'Destacar'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Modal de rejeição */}
@@ -524,6 +595,26 @@ const styles = StyleSheet.create({
   },
   statusText: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   statusReason: { color: colors.gray, fontSize: fonts.sizes.sm, marginTop: spacing.xs },
+  featuredBox: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    marginHorizontal: spacing.md, marginBottom: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.surface, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.gold + '44',
+  },
+  featuredInfo: { flex: 1, gap: 2 },
+  featuredTitle: { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  featuredHint: { color: colors.gray, fontSize: fonts.sizes.xs, lineHeight: 16 },
+  featuredBtn: {
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1, borderColor: colors.gold,
+    backgroundColor: colors.gold + '22',
+    minWidth: 92, alignItems: 'center',
+  },
+  featuredBtnActive: { backgroundColor: colors.gold },
+  featuredBtnText: { color: colors.gold, fontWeight: 'bold', fontSize: fonts.sizes.sm },
+  featuredBtnTextActive: { color: colors.background },
   errorIcon: { fontSize: 48 },
   errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center', marginTop: spacing.md },
   retryBtn: {

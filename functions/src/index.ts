@@ -14,6 +14,7 @@ setGlobalOptions({
 export { onApproveCreator }         from "./creators/onApproveCreator";
 export { onRejectCreator }          from "./creators/onRejectCreator";
 export { onApproveProduct }         from "./products/onApproveProduct";
+export { toggleProductFeatured }    from "./products/toggleProductFeatured";
 export { onRejectProduct }          from "./products/onRejectProduct";
 export { releaseCreatorBalance }    from "./wallet/releaseCreatorBalance";
 export { createFreeProductPurchase } from "./payments/createFreeProductPurchase";
