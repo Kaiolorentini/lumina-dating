@@ -1,10 +1,8 @@
 // ============================================
-// LUMINA — ABA DE COMPRAS DE CRISTAIS v1.0
+// LUMINA — ABA DE COMPRAS DE CRISTAIS v2.0
 // src/screens/marketplace/CoinsPurchasesTab.tsx
 //
-// Histórico financeiro de Cristais Premium.
-// Componente separado para não inchar MyPurchasesScreen, que já
-// carrega a lógica de reembolso de conteúdos.
+// v2.0 — tema do marketplace, para não destoar da aba ao lado.
 //
 // SEM BOTÃO DE REEMBOLSO: cristais não são reembolsáveis. Quando
 // um estorno chega pelo banco, o status vira 'chargeback' e o
@@ -17,7 +15,7 @@ import {
   View, Text, FlatList, StyleSheet,
   ActivityIndicator, RefreshControl, TouchableOpacity,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { MP, MP_FONT, spacing, borderRadius } from '../../theme/marketplace';
 import { useCoinsPurchases, CoinsPurchase } from '../../hooks/useCoinsPurchases';
 import { MarketplaceEmptyState } from '../../components/marketplace/MarketplaceEmptyState';
 
@@ -27,14 +25,14 @@ interface Props {
 
 function StatusBadge({ status }: { status: CoinsPurchase['status'] }) {
   const config = {
-    completed:  { label: 'Concluída', style: styles.badgeSuccess },
-    chargeback: { label: 'Estornada', style: styles.badgeError },
-    pending:    { label: 'Pendente',  style: styles.badgeNeutral },
-  }[status] ?? { label: status, style: styles.badgeNeutral };
+    completed:  { label: 'Concluída', style: styles.badgeSuccess, text: styles.badgeTextSuccess },
+    chargeback: { label: 'Estornada', style: styles.badgeError,   text: styles.badgeTextError },
+    pending:    { label: 'Pendente',  style: styles.badgeNeutral, text: styles.badgeTextNeutral },
+  }[status] ?? { label: status, style: styles.badgeNeutral, text: styles.badgeTextNeutral };
 
   return (
     <View style={[styles.badge, config.style]}>
-      <Text style={styles.badgeText}>{config.label}</Text>
+      <Text style={[styles.badgeText, config.text]}>{config.label}</Text>
     </View>
   );
 }
@@ -44,7 +42,7 @@ function PurchaseCard({ item }: { item: CoinsPurchase }) {
 
   return (
     <View style={[styles.card, isChargeback && styles.cardChargeback]}>
-      <View style={styles.cardHeader}>
+      <View style={styles.cardTop}>
         <Text style={styles.packageLabel} numberOfLines={1}>
           💎 {item.packageLabel}
         </Text>
@@ -53,19 +51,27 @@ function PurchaseCard({ item }: { item: CoinsPurchase }) {
 
       <View style={styles.coinsRow}>
         <Text style={[styles.coins, isChargeback && styles.coinsStruck]}>
-          {item.totalCoins.toLocaleString('pt-BR')} cristais
+          {item.totalCoins.toLocaleString('pt-BR')}
+        </Text>
+        <Text style={[styles.coinsUnit, isChargeback && styles.coinsStruck]}>
+          cristais
         </Text>
         {item.bonus > 0 && !isChargeback && (
-          <Text style={styles.bonus}>+{item.bonus} bônus</Text>
+          <View style={styles.bonusPill}>
+            <Text style={styles.bonusText}>+{item.bonus} bônus</Text>
+          </View>
         )}
       </View>
 
-      <Text style={styles.amount}>R$ {item.amount.toFixed(2).replace('.', ',')}</Text>
-
-      <Text style={styles.date}>
-        {item.createdAt.toLocaleDateString('pt-BR')} às{' '}
-        {item.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-      </Text>
+      <View style={styles.footerRow}>
+        <Text style={styles.amount}>
+          R$ {item.amount.toFixed(2).replace('.', ',')}
+        </Text>
+        <Text style={styles.date}>
+          {item.createdAt.toLocaleDateString('pt-BR')} ·{' '}
+          {item.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      </View>
 
       {isChargeback && (
         <View style={styles.chargebackBox}>
@@ -87,7 +93,7 @@ export default function CoinsPurchasesTab({ uid }: Props) {
   const { purchases, loading, error, refresh } = useCoinsPurchases(uid);
 
   if (loading) {
-    return <ActivityIndicator color={colors.gold} style={styles.centered} />;
+    return <ActivityIndicator color={MP.gold} style={styles.centered} />;
   }
 
   if (error) {
@@ -107,17 +113,20 @@ export default function CoinsPurchasesTab({ uid }: Props) {
       data={purchases}
       keyExtractor={item => item.id}
       contentContainerStyle={styles.listContent}
+      showsVerticalScrollIndicator={false}
       initialNumToRender={8}
       windowSize={7}
       refreshControl={
-        <RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.gold} />
+        <RefreshControl refreshing={false} onRefresh={refresh} tintColor={MP.gold} />
       }
       ListEmptyComponent={
-        <MarketplaceEmptyState
-          icon="💎"
-          title="Nenhuma compra de cristais"
-          subtitle="Suas compras de Cristais Premium aparecem aqui"
-        />
+        <View style={styles.emptyWrap}>
+          <MarketplaceEmptyState
+            icon="💎"
+            title="Nenhuma compra de cristais"
+            subtitle="Suas compras de Cristais Premium aparecem aqui"
+          />
+        </View>
       }
       renderItem={({ item }) => <PurchaseCard item={item} />}
     />
@@ -125,61 +134,109 @@ export default function CoinsPurchasesTab({ uid }: Props) {
 }
 
 const styles = StyleSheet.create({
-  centered:    { flex: 1, marginTop: spacing.xl * 2 },
+  centered:    { flex: 1, marginTop: spacing.xxl },
   listContent: { padding: spacing.md },
+  emptyWrap:   { minHeight: 340, justifyContent: 'center' },
 
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: MP.surface,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.grayDark,
+    borderColor: MP.border,
     padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  cardChargeback: { borderColor: colors.error + '88' },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: spacing.sm,
     gap: spacing.sm,
   },
-  packageLabel: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', flex: 1 },
+  cardChargeback: { borderColor: 'rgba(255, 77, 109, 0.5)' },
+
+  cardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  packageLabel: {
+    color: MP.text,
+    fontSize: MP_FONT.size.md,
+    fontWeight: MP_FONT.weight.bold,
+    flex: 1,
+  },
 
   badge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
+    paddingVertical: 2,
     borderRadius: borderRadius.full,
     borderWidth: 1,
   },
-  badgeSuccess: { backgroundColor: colors.success + '22', borderColor: colors.success },
-  badgeError:   { backgroundColor: colors.error + '22',   borderColor: colors.error },
-  badgeNeutral: { backgroundColor: colors.grayDark,       borderColor: colors.gray },
-  badgeText:    { color: colors.white, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
+  badgeSuccess: { backgroundColor: 'rgba(0, 230, 118, 0.12)', borderColor: MP.success },
+  badgeError:   { backgroundColor: 'rgba(255, 77, 109, 0.12)', borderColor: MP.error },
+  badgeNeutral: { backgroundColor: MP.bgElevated, borderColor: MP.border },
+  badgeText:    { fontSize: MP_FONT.size.xs, fontWeight: MP_FONT.weight.bold },
+  badgeTextSuccess: { color: MP.success },
+  badgeTextError:   { color: MP.error },
+  badgeTextNeutral: { color: MP.textMuted },
 
-  coinsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  coins:    { color: colors.gold, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  coinsStruck: { textDecorationLine: 'line-through', color: colors.gray },
-  bonus:    { color: colors.success, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
+  coinsRow: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
+  coins: {
+    color: MP.gold,
+    fontSize: MP_FONT.size.xxl,
+    fontWeight: MP_FONT.weight.heavy,
+    letterSpacing: MP_FONT.tracking.tight,
+  },
+  coinsUnit: {
+    color: MP.goldLight,
+    fontSize: MP_FONT.size.sm,
+    fontWeight: MP_FONT.weight.semibold,
+  },
+  coinsStruck: { textDecorationLine: 'line-through', color: MP.textMuted },
+  bonusPill: {
+    backgroundColor: 'rgba(0, 230, 118, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 230, 118, 0.4)',
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 1,
+    marginLeft: 2,
+  },
+  bonusText: {
+    color: MP.success,
+    fontSize: MP_FONT.size.xs,
+    fontWeight: MP_FONT.weight.bold,
+  },
 
-  amount: { color: colors.grayLight, fontSize: fonts.sizes.md, marginTop: 2 },
-  date:   { color: colors.gray, fontSize: fonts.sizes.xs, marginTop: spacing.xs },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: MP.border,
+  },
+  amount: {
+    color: MP.textSoft,
+    fontSize: MP_FONT.size.md,
+    fontWeight: MP_FONT.weight.semibold,
+  },
+  date: { color: MP.textMuted, fontSize: MP_FONT.size.xs },
 
   chargebackBox: {
-    marginTop: spacing.md,
     padding: spacing.sm,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.error + '11',
+    backgroundColor: 'rgba(255, 77, 109, 0.08)',
     borderWidth: 1,
-    borderColor: colors.error + '44',
+    borderColor: 'rgba(255, 77, 109, 0.3)',
   },
   chargebackTitle: {
-    color: colors.error,
-    fontSize: fonts.sizes.sm,
-    fontWeight: 'bold',
+    color: MP.error,
+    fontSize: MP_FONT.size.sm,
+    fontWeight: MP_FONT.weight.bold,
     marginBottom: 2,
   },
-  chargebackText: { color: colors.grayLight, fontSize: fonts.sizes.xs, lineHeight: 18 },
+  chargebackText: {
+    color: MP.textSoft,
+    fontSize: MP_FONT.size.xs,
+    lineHeight: 18,
+  },
 
   errorBox: {
     flex: 1,
@@ -188,15 +245,23 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
   },
-  errorIcon: { fontSize: 48 },
-  errorText: { color: colors.error, fontSize: fonts.sizes.sm, textAlign: 'center' },
+  errorIcon: { fontSize: 44 },
+  errorText: {
+    color: MP.textSoft,
+    fontSize: MP_FONT.size.sm,
+    textAlign: 'center',
+  },
   retry: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.gold,
-    backgroundColor: colors.gold + '22',
+    borderColor: MP.borderGold,
+    backgroundColor: MP.goldSubtle,
   },
-  retryText: { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  retryText: {
+    color: MP.goldLight,
+    fontSize: MP_FONT.size.md,
+    fontWeight: MP_FONT.weight.bold,
+  },
 });

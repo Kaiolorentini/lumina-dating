@@ -68,6 +68,7 @@ import RankingScreen from '../modules/engagement/screens/RankingScreen';
 import PrestigeScreen from '../modules/engagement/screens/PrestigeScreen';
 import PremiumToolsScreen from '../modules/premium/screens/PremiumToolsScreen';
 import AdminInflationScreen from '../screens/admin/AdminInflationScreen';
+import AdminCurationScreen from '../screens/admin/AdminCurationScreen';
 import VisitorsScreen from '../modules/premium/screens/VisitorsScreen';
 import {
   AdminProductsModerationScreen,
@@ -307,6 +308,7 @@ function MainStack() {
       <Stack.Screen name="AdminCoupons"          component={AdminCouponsScreen} />
       <Stack.Screen name="AdminReports"          component={AdminReportsScreen} />
       <Stack.Screen name="AdminInflation"        component={AdminInflationScreen} />
+      <Stack.Screen name="AdminCuration"         component={AdminCurationScreen} />
       <Stack.Screen name="Faisca" component={FaiscaScreen} />
       <Stack.Screen name="DestinyCard" component={DestinyCardScreen} />
       <Stack.Screen name="Missions" component={MissionsScreen} />

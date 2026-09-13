@@ -120,6 +120,12 @@ export default function AdminDashboardScreen() {
             <Text style={styles.menuIcon}>🔍</Text>
             <Text style={styles.menuLabel}>Usuários</Text>
           </TouchableOpacity>
+          {isSuperAdmin && (
+            <TouchableOpacity style={styles.menuCard} onPress={() => navigation.navigate('AdminCuration')}>
+              <Text style={styles.menuIcon}>✦</Text>
+              <Text style={styles.menuLabel}>Vitrine</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>Financeiro</Text>

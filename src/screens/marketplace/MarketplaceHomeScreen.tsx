@@ -18,7 +18,7 @@ import {
   TouchableOpacity, RefreshControl, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   MP, MP_GRADIENT, MP_SHADOW, MP_FONT, MP_CATEGORY,
@@ -28,6 +28,7 @@ import { RootStackParamList } from '../../navigation/types';
 import { useProducts } from '../../hooks/useProducts';
 import { useFavorites } from '../../hooks/useFavorites';
 import { useAuth } from '../../context/AuthContext';
+import { useUserPermissions } from '../../hooks/useUserPermissions';
 import { ProductCard } from '../../components/marketplace/ProductCard';
 import { FeaturedCarousel } from '../../components/marketplace/FeaturedCarousel';
 import { MarketplaceEmptyState } from '../../components/marketplace/MarketplaceEmptyState';
@@ -57,8 +58,19 @@ export default function MarketplaceHomeScreen() {
   }), []);
 
   const { products, loading, loadingMore, hasMore, loadMore, refresh } = useProducts(filters);
-  const { products: featured } = useProducts(featuredFilters);
+  const { products: featured, refresh: refreshFeatured } = useProducts(featuredFilters);
   const { favoriteIds, toggleFavorite } = useFavorites(user?.uid);
+  // isCreator já cobre creator, admin e superadmin, e é falso para
+  // conta bloqueada — mesma regra do isCreator() nas firestore.rules.
+  const { isCreator } = useUserPermissions(user?.uid);
+
+  // O Marketplace é uma aba: fica montado o tempo todo. Sem isto,
+  // um produto destacado pelo admin só entrava no carrossel depois
+  // de fechar e reabrir o app — os filtros do hook são fixos, então
+  // o useEffect interno nunca dispara de novo.
+  useFocusEffect(
+    useCallback(() => { refreshFeatured(); }, [refreshFeatured]),
+  );
 
   const filteredProducts = useMemo(() => {
     if (!search.trim()) return products;
@@ -234,12 +246,17 @@ export default function MarketplaceHomeScreen() {
           }
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
+          // O FlatList não dá altura ao contentContainer, então o
+          // flex:1 do empty state não centraliza — sem minHeight ele
+          // gruda embaixo da busca com um vazio enorme abaixo.
           ListEmptyComponent={
-            <MarketplaceEmptyState
-              icon="🛍️"
-              title="Nenhum produto encontrado"
-              subtitle={isSearching ? 'Tente outro termo de busca' : 'Tente outra categoria'}
-            />
+            <View style={styles.emptyWrap}>
+              <MarketplaceEmptyState
+                icon="🛍️"
+                title="Nenhum produto encontrado"
+                subtitle={isSearching ? 'Tente outro termo de busca' : 'Tente outra categoria'}
+              />
+            </View>
           }
           ListFooterComponent={
             loadingMore
@@ -257,6 +274,27 @@ export default function MarketplaceHomeScreen() {
             </View>
           )}
         />
+      )}
+
+      {/* FAB de publicação — position absolute de propósito: quando
+          o usuário não é criador o botão simplesmente não existe e
+          nada no layout se desloca. Um botão inline deixaria vão. */}
+      {isCreator && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => navigation.navigate('CreateProduct')}
+          activeOpacity={0.88}
+        >
+          <LinearGradient
+            colors={MP_GRADIENT.gold}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fabInner}
+          >
+            <Text style={styles.fabIcon}>+</Text>
+            <Text style={styles.fabText}>Publicar</Text>
+          </LinearGradient>
+        </TouchableOpacity>
       )}
     </ScreenContainer>
   );
@@ -367,9 +405,44 @@ const styles = StyleSheet.create({
   // isto seriam 48px de vão até a seção seguinte.
   featuredSection: {},
 
-  listContent: { padding: spacing.md, paddingTop: spacing.xs, rowGap: CARD_GAP },
+  // paddingBottom generoso: o FAB flutua sobre a lista e cobriria
+  // o último card sem esse respiro.
+  listContent: {
+    padding: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: 96,
+    rowGap: CARD_GAP,
+  },
+
+  fab: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: spacing.lg,
+    borderRadius: borderRadius.full,
+    ...MP_SHADOW.goldGlow,
+  },
+  fabInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 13,
+    borderRadius: borderRadius.full,
+  },
+  fabIcon: {
+    color: MP.textOnGold,
+    fontSize: 20,
+    fontWeight: MP_FONT.weight.heavy,
+    marginTop: -2,
+  },
+  fabText: {
+    color: MP.textOnGold,
+    fontSize: MP_FONT.size.md,
+    fontWeight: MP_FONT.weight.heavy,
+  },
   columnWrapper: { gap: CARD_GAP },
   cardWrapper: { flex: 1 },
+  emptyWrap: { minHeight: 380, justifyContent: 'center' },
 
   skeletonContainer: { padding: spacing.md, gap: CARD_GAP },
   skeletonRow: { flexDirection: 'row', gap: CARD_GAP },

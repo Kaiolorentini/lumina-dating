@@ -18,6 +18,7 @@ import {
 } from '../../services/marketplace/productService';
 import { ProductCategory } from '../../shared/types/marketplace';
 import ScreenContainer from '../../components/ScreenContainer';
+import CreatorGuidelinesModal from '../../components/marketplace/CreatorGuidelinesModal';
 
 const CATEGORIES: { label: string; value: ProductCategory }[] = [
   { label: 'Fotos', value: 'fotos' },
@@ -76,6 +77,8 @@ export default function CreateProductScreen() {
 
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  // Abre já na entrada da tela, antes de qualquer campo.
+  const [showGuidelines, setShowGuidelines] = useState(true);
   const [productId, setProductId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadLabel, setUploadLabel] = useState('');
@@ -563,6 +566,11 @@ export default function CreateProductScreen() {
         )}
 
       </ScrollView>
+
+      <CreatorGuidelinesModal
+        visible={showGuidelines}
+        onContinue={() => setShowGuidelines(false)}
+      />
     </ScreenContainer>
   );
 }

@@ -66,7 +66,10 @@ export const MP_GRADIENT = {
   // Fundo da tela: preto com brilho dourado na base, como uma
   // vitrine iluminada por baixo. Sutil de propósito — os cards
   // roxos precisam dominar.
-  screen:   ['#0B0716', '#120C08', '#1A1206'] as [string, string, string],
+  // O dourado da base precisa ser quase imperceptível: com a tela
+  // cheia ele dá profundidade, mas numa tela vazia um degradê forte
+  // vira mancha marrom no meio do nada.
+  screen:   ['#0B0716', '#0D0910', '#12100C'] as [string, string, string],
   gold:     ['#F0D060', '#D4AF37'] as [string, string],
   purple:   ['#7B2FBE', '#B57BEE'] as [string, string],
   veil:     ['transparent', 'rgba(11, 7, 22, 0.92)'] as [string, string],
