@@ -83,7 +83,9 @@ export default function CreateProductScreen() {
   // Campos do produto
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<ProductCategory>('fotos');
+  // null força a escolha: com 'fotos' como padrão, todo produto
+  // nascia como foto porque o criador passava direto pela etapa.
+  const [category, setCategory] = useState<ProductCategory | null>(null);
   const [price, setPrice] = useState('');
   const [isFree, setIsFree] = useState(false);
   const [coverUri, setCoverUri] = useState<string | null>(null);
@@ -92,7 +94,17 @@ export default function CreateProductScreen() {
   // Arquivos pagos
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
 
-  function goNext() { setStep(s => Math.min(s + 1, TOTAL_STEPS)); }
+  // Bloqueia o avanço da etapa 1 sem categoria. Antes o state
+  // nascia como 'fotos' e o criador passava direto — resultado:
+  // toda a base ficou classificada como foto e os filtros do
+  // marketplace não separavam nada.
+  function goNext() {
+    if (step === 1) {
+      if (!title.trim())  { Alert.alert('Falta o título', 'Dê um nome ao seu produto.'); return; }
+      if (!category)      { Alert.alert('Escolha uma categoria', 'A categoria define onde seu produto aparece no marketplace.'); return; }
+    }
+    setStep(s => Math.min(s + 1, TOTAL_STEPS));
+  }
   function goBack() {
     if (step === 1) navigation.goBack();
     else setStep(s => s - 1);
@@ -184,6 +196,14 @@ export default function CreateProductScreen() {
       Alert.alert('Erro', 'Informe pelo menos o título.');
       return;
     }
+    // Rede de segurança: o goNext já barra, mas é aqui que o
+    // createProduct é chamado com category!, e uma asserção sem
+    // guarda no ponto de escrita é como o campo virava null.
+    if (!category) {
+      Alert.alert('Erro', 'Escolha uma categoria antes de salvar.');
+      setStep(1);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -199,7 +219,10 @@ export default function CreateProductScreen() {
         title: title.trim(),
         description: description.trim(),
         price: parsedPrice,
-        category,
+        // O guard da etapa 1 impede chegar aqui sem categoria;
+        // a asserção existe porque o state é nullable por design,
+        // para forçar a escolha em vez de assumir 'fotos'.
+        category: category!,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
       });
       setProductId(id);
@@ -323,7 +346,10 @@ export default function CreateProductScreen() {
               maxLength={1000}
             />
 
-            <Text style={styles.label}>Categoria</Text>
+            <Text style={styles.label}>Categoria *</Text>
+            <Text style={styles.labelHint}>
+              Define em qual filtro seu produto aparece no marketplace.
+            </Text>
             <View style={styles.categoryGrid}>
               {CATEGORIES.map(cat => (
                 <TouchableOpacity
@@ -490,7 +516,9 @@ export default function CreateProductScreen() {
 
             <View style={styles.reviewCard}>
               <Text style={styles.reviewRow}>📝 Título: <Text style={styles.reviewValue}>{title || '—'}</Text></Text>
-              <Text style={styles.reviewRow}>📁 Categoria: <Text style={styles.reviewValue}>{category}</Text></Text>
+              <Text style={styles.reviewRow}>📁 Categoria: <Text style={styles.reviewValue}>
+                {CATEGORIES.find(c => c.value === category)?.label ?? '—'}
+              </Text></Text>
               <Text style={styles.reviewRow}>💰 Preço: <Text style={styles.reviewValue}>{isFree ? 'Grátis' : `R$ ${price}`}</Text></Text>
               <Text style={styles.reviewRow}>🖼️ Capa: <Text style={styles.reviewValue}>{coverUri ? 'Selecionada' : '⚠️ Não selecionada'}</Text></Text>
               <Text style={styles.reviewRow}>📦 Arquivos: <Text style={styles.reviewValue}>{selectedFiles.length} arquivo(s)</Text></Text>
@@ -561,6 +589,12 @@ const styles = StyleSheet.create({
     padding: spacing.md, fontSize: fonts.sizes.md,
   },
   inputMultiline: { height: 100, textAlignVertical: 'top' },
+  labelHint: {
+    color: colors.textMuted,
+    fontSize: fonts.sizes.xs,
+    marginBottom: spacing.sm,
+    marginTop: -spacing.xs,
+  },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   catChip: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
