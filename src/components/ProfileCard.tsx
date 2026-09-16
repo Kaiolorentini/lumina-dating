@@ -1,14 +1,17 @@
 // ============================================
-// LUMINA — PROFILE CARD
+// LUMINA — PROFILE CARD v2.0
 // src/components/ProfileCard.tsx
 //
-// FASE 5 Etapa 2: moldura e badge equipados aparecem para
-// QUEM VÊ o perfil, não só para o dono. É o que dá sentido à
-// compra — ninguém paga por algo que só ele enxerga.
+// FASE 8 — a moldura virou o fundo do card e o badge ganhou
+// faixa própria.
 //
-// A validade do aluguel é checada aqui: equippedFrameUntil vem
-// no documento justamente porque a limpeza automática do
-// getFramesStatus só roda quando o próprio dono abre o app.
+// v1 tinha a cena num quadrado centralizado, sobrando cinza em
+// volta, e o badge como ícone de 26px ao lado do nome — sumia.
+// Agora: a cena preenche a área da foto inteira, e o badge tem
+// uma faixa com o significado, que é o que ele comunica.
+//
+// A validade do aluguel é checada no usersService, não aqui: o
+// card recebe o id já filtrado ou null.
 // ============================================
 
 import React from 'react';
@@ -26,11 +29,13 @@ import BoostBadge from './BoostBadge';
 import { ProfileFrame } from './profile/ProfileFrame';
 import { Badge } from './profile/Badge';
 import {
-  frameAppearanceById, badgeAppearanceById, badgeMeaningById, Rarity,
+  frameAppearanceById, badgeAppearanceById, badgeMeaningById,
+  BADGES, RARITY_COLOR, Rarity,
 } from '../config/cosmeticsCatalog';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - spacing.lg * 2 - spacing.sm) / 2;
+const PHOTO_RATIO = 1.15;
 
 interface Props {
   data: ProfileCardData;
@@ -42,28 +47,27 @@ export default function ProfileCard({ data, onPress }: Props) {
   const badge = data.equippedBadge
     ? badgeAppearanceById(data.equippedBadge, (data.equippedBadgeRarity as Rarity) ?? 'COMMON')
     : null;
-  // O significado é o produto: um símbolo sozinho não comunica
-  // "só de passagem". Badges de conquista não têm meaning e
-  // aparecem só como símbolo.
   const meaning = badgeMeaningById(data.equippedBadge);
+
+  // Cor da faixa: raridade do badge da loja, ou a que veio do
+  // documento para badges de conquista.
+  const badgeRarity = data.equippedBadge
+    ? BADGES[data.equippedBadge]?.rarity ?? data.equippedBadgeRarity ?? 'COMMON'
+    : 'COMMON';
+  const stripColor = RARITY_COLOR[badgeRarity] ?? colors.gold;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
-      {/* Com moldura, a foto vira circular e ganha a borda. Sem
-          moldura, segue retangular como sempre — nada regride
-          para quem não tem cosmético. */}
+      {/* Com moldura, a cena preenche a área inteira e a foto
+          flutua no centro. Sem moldura, a foto ocupa tudo como
+          antes — nada regride para quem não tem cosmético. */}
       {frame ? (
-        <View style={styles.framedPhotoBox}>
-          {/* 0.92 e não 0.5: no ProfileFrame v3 o `size` é o
-              quadrado INTEIRO da cena, e a foto ocupa 60% dele.
-              Com 0.5 a cena saía com ~90px e a foto com ~54px —
-              daí o cinza em volta. */}
-          <ProfileFrame
-            photoURL={data.photoURL}
-            size={CARD_WIDTH * 0.92}
-            frame={frame}
-          />
-        </View>
+        <ProfileFrame
+          photoURL={data.photoURL}
+          size={CARD_WIDTH}
+          ratio={PHOTO_RATIO}
+          frame={frame}
+        />
       ) : (
         <Image source={{ uri: data.photoURL }} style={styles.photo} />
       )}
@@ -77,26 +81,27 @@ export default function ProfileCard({ data, onPress }: Props) {
         <Text style={styles.sintoniaLabel}>Sintonia</Text>
       </View>
 
-      <View style={styles.info}>
-        {/* Badge saiu de cima da foto para a linha do nome: em
-            30px sobre a imagem ele sumia, e o significado não
-            tinha onde caber. */}
-        <View style={styles.nameRow}>
-          {badge && <Badge appearance={badge} size={26} />}
-          <Text style={styles.name} numberOfLines={1}>
-            {data.name}, {data.age}
-          </Text>
+      {/* Faixa do badge: atravessa o card e separa a foto das
+          informações. O badge sozinho não comunica "só de
+          passagem" — é o texto que carrega o sentido. */}
+      {badge && (
+        <View style={[styles.badgeStrip, { borderTopColor: stripColor }]}>
+          <Badge appearance={badge} size={38} />
+          {meaning && (
+            <Text style={styles.badgeMeaning} numberOfLines={2}>
+              {meaning}
+            </Text>
+          )}
         </View>
+      )}
 
+      <View style={styles.info}>
+        <Text style={styles.name} numberOfLines={1}>
+          {data.name}, {data.age}
+        </Text>
         <Text style={styles.location} numberOfLines={1}>
           📍 {data.location}
         </Text>
-
-        {meaning && (
-          <Text style={styles.meaning} numberOfLines={2}>
-            {meaning}
-          </Text>
-        )}
       </View>
     </TouchableOpacity>
   );
@@ -114,15 +119,8 @@ const styles = StyleSheet.create({
   },
   photo: {
     width: '100%',
-    height: CARD_WIDTH * 1.3,
+    height: CARD_WIDTH * PHOTO_RATIO,
     backgroundColor: colors.grayDark,
-  },
-  framedPhotoBox: {
-    width: '100%',
-    height: CARD_WIDTH * 1.3,
-    backgroundColor: colors.grayDark,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   sintoniaContainer: {
     position: 'absolute',
@@ -143,35 +141,34 @@ const styles = StyleSheet.create({
     color: colors.gray,
     fontSize: 8,
   },
+  badgeStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    backgroundColor: colors.surfaceRaised,
+    borderTopWidth: 2,
+    minHeight: 52,
+  },
+  badgeMeaning: {
+    flex: 1,
+    color: colors.grayLight,
+    fontSize: 10,
+    fontStyle: 'italic',
+    lineHeight: 13,
+  },
   info: {
     padding: spacing.sm,
     gap: 2,
-    // Altura mínima para o card não pular quando um perfil tem
-    // significado e o vizinho não tem.
-    minHeight: 86,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
   },
   name: {
     color: colors.white,
     fontSize: fonts.sizes.md,
     fontWeight: 'bold',
-    flexShrink: 1,
-  },
-  meaning: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xs,
-    fontStyle: 'italic',
-    lineHeight: 14,
-    marginTop: 2,
-    opacity: 0.85,
   },
   location: {
     color: colors.gray,
     fontSize: fonts.sizes.xs,
-    marginTop: 2,
   },
 });

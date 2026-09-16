@@ -317,10 +317,30 @@ export default function RealProfileScreen() {
       />
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Foto principal */}
+        {/* Foto principal.
+            Com moldura, a cena vira o FUNDO da área inteira e a
+            foto fica por cima, centralizada a 80% da largura —
+            a cena aparece nas margens e atrás do gradiente. É
+            aqui que a moldura precisa se justificar: o perfil
+            aberto é onde alguém decide mandar mensagem. */}
         <View style={styles.photoContainer}>
+          {targetFrame && (
+            <View style={StyleSheet.absoluteFill}>
+              <ProfileFrame
+                photoURL=""
+                size={width}
+                ratio={0.45 * height / width}
+                frame={targetFrame}
+                showPhoto={false}
+              />
+            </View>
+          )}
+
           {targetProfile?.photoURL ? (
-            <Image source={{ uri: targetProfile.photoURL }} style={styles.mainPhoto} />
+            <Image
+              source={{ uri: targetProfile.photoURL }}
+              style={targetFrame ? styles.mainPhotoFramed : styles.mainPhoto}
+            />
           ) : (
             <View style={styles.photoPlaceholder}>
               <Text style={styles.photoPlaceholderIcon}>👤</Text>
@@ -328,17 +348,7 @@ export default function RealProfileScreen() {
           )}
           <View style={styles.photoOverlay} />
           <View style={styles.photoInfo}>
-            {/* Avatar com moldura ao lado do nome. A foto de fundo
-                ocupa 45% da tela e é retangular — moldura circular
-                sobre ela não encaixaria. */}
             <View style={styles.nameRow}>
-              {targetFrame && targetProfile?.photoURL && (
-                <ProfileFrame
-                  photoURL={targetProfile.photoURL}
-                  size={104}
-                  frame={targetFrame}
-                />
-              )}
               <Text style={styles.name}>{targetProfile?.name}, {targetProfile?.age}</Text>
               <View style={styles.realBadge}>
                 <Text style={styles.realBadgeText}>👤 Real</Text>
@@ -479,8 +489,10 @@ const styles = StyleSheet.create({
   backButton:           { backgroundColor: colors.surface, borderRadius: borderRadius.sm, padding: spacing.md, paddingHorizontal: spacing.xl, borderWidth: 1, borderColor: colors.grayDark },
   backButtonText:       { color: colors.white, fontWeight: 'bold' },
   blockIcon:            { fontSize: 20 },
-  photoContainer:       { width, height: height * 0.45, position: 'relative' },
+  photoContainer:       { width, height: height * 0.45, position: 'relative', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
   mainPhoto:            { width: '100%', height: '100%' },
+  // Com moldura: 80% da largura, para a cena respirar nas laterais.
+  mainPhotoFramed:      { width: width * 0.8, height: '100%' },
   photoPlaceholder:     { width: '100%', height: '100%', backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   photoPlaceholderIcon: { fontSize: 80 },
   photoOverlay:         { position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', backgroundColor: '#0D0D0D99' },

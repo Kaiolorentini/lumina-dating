@@ -47,8 +47,12 @@ interface ProfileFrameProps {
   tier?:      Tier;
   frame?:     FrameAppearance | null;
   size?:      number;   // largura; a altura segue `ratio`
-  /** altura / largura. 1 = quadrado. O card do feed usa 1.3. */
+  /** altura / largura. 1 = quadrado. O card do feed usa 1.15. */
   ratio?:     number;
+  /** false desenha SÓ a cena, sem a foto no centro. Usado quando
+   *  a tela já tem a própria foto por cima — o perfil aberto põe
+   *  a moldura como fundo da imagem grande. */
+  showPhoto?: boolean;
   style?:     ViewStyle;
 }
 
@@ -451,10 +455,11 @@ let frameIdCounter = 0;
 
 export function ProfileFrame({
   photoURL,
-  tier  = 'comum',
-  frame = null,
-  size  = 80,
-  ratio = 1,
+  tier      = 'comum',
+  frame     = null,
+  size      = 80,
+  ratio     = 1,
+  showPhoto = true,
   style,
 }: ProfileFrameProps) {
   const frameAsset = getFrameAsset(tier);
@@ -545,17 +550,19 @@ export function ProfileFrame({
           </Svg>
         </Animated.View>
 
-        <Image
-          source={{ uri: photoURL }}
-          style={{
-            width:        photoSize,
-            height:       photoSize,
-            borderRadius: photoSize / 2,
-            borderWidth:  2,
-            borderColor,
-          }}
-          resizeMode="cover"
-        />
+        {showPhoto && (
+          <Image
+            source={{ uri: photoURL }}
+            style={{
+              width:        photoSize,
+              height:       photoSize,
+              borderRadius: photoSize / 2,
+              borderWidth:  2,
+              borderColor,
+            }}
+            resizeMode="cover"
+          />
+        )}
       </View>
     );
   }

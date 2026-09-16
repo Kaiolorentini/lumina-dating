@@ -1,3 +1,14 @@
+// ============================================
+// LUMINA — VISITED PROFILE CARD v2.0
+// src/components/VisitedProfileCard.tsx
+//
+// FASE 8 — mesmo tratamento do ProfileCard: a cena da moldura
+// preenche a área da foto e o badge ganha faixa própria.
+//
+// v1 tinha a moldura num box centralizado, sobrando cinza em
+// volta, e o badge como ícone de 26px na linha do nome.
+// ============================================
+
 import React from 'react';
 import {
   View,
@@ -12,11 +23,13 @@ import { ProfileCardData } from '../shared/types';
 import { ProfileFrame } from './profile/ProfileFrame';
 import { Badge } from './profile/Badge';
 import {
-  frameAppearanceById, badgeAppearanceById, badgeMeaningById, Rarity,
+  frameAppearanceById, badgeAppearanceById, badgeMeaningById,
+  BADGES, RARITY_COLOR, Rarity,
 } from '../config/cosmeticsCatalog';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - spacing.lg * 2 - spacing.sm) / 2;
+const PHOTO_RATIO = 1.15;
 
 interface Props {
   data: ProfileCardData;
@@ -31,7 +44,11 @@ export default function VisitedProfileCard({ data, visitCount, rank, onPress }: 
     ? badgeAppearanceById(data.equippedBadge, (data.equippedBadgeRarity as Rarity) ?? 'COMMON')
     : null;
   const meaning = badgeMeaningById(data.equippedBadge);
-  
+
+  const badgeRarity = data.equippedBadge
+    ? BADGES[data.equippedBadge]?.rarity ?? data.equippedBadgeRarity ?? 'COMMON'
+    : 'COMMON';
+  const stripColor = RARITY_COLOR[badgeRarity] ?? colors.gold;
 
   function getRankColor(): string {
     if (rank === 1) return '#FFD700'; // Ouro
@@ -53,16 +70,14 @@ export default function VisitedProfileCard({ data, visitCount, rank, onPress }: 
       onPress={onPress}
       activeOpacity={0.9}
     >
-      {/* Foto. Com moldura vira circular; sem, segue retangular —
-          nada regride para quem não tem cosmético. */}
+      {/* Cena preenchendo a área da foto, como no feed. */}
       {frame ? (
-        <View style={styles.framedPhotoBox}>
-          <ProfileFrame
-            photoURL={data.photoURL}
-            size={CARD_WIDTH * 0.92}
-            frame={frame}
-          />
-        </View>
+        <ProfileFrame
+          photoURL={data.photoURL}
+          size={CARD_WIDTH}
+          ratio={PHOTO_RATIO}
+          frame={frame}
+        />
       ) : (
         <Image source={{ uri: data.photoURL }} style={styles.photo} />
       )}
@@ -77,29 +92,31 @@ export default function VisitedProfileCard({ data, visitCount, rank, onPress }: 
         <Text style={styles.visitsText}>👁 {visitCount}</Text>
       </View>
 
-      {/* Sintonia */}
+      {/* Sintonia — reposicionada: com a faixa do badge, a
+          posição antiga caía em cima dela. */}
       <View style={styles.sintoniaBadge}>
         <Text style={styles.sintoniaText}>{data.sintonia}%</Text>
       </View>
 
-      {/* Info. O badge fica aqui e não sobre a foto: o card já tem
-          rank, visitas e sintonia lá, e um quarto elemento viraria
-          poluição. */}
-      <View style={styles.info}>
-        <View style={styles.nameRow}>
-          {badge && <Badge appearance={badge} size={26} />}
-          <Text style={styles.name} numberOfLines={1}>
-            {data.name}, {data.age}
-          </Text>
+      {badge && (
+        <View style={[styles.badgeStrip, { borderTopColor: stripColor }]}>
+          <Badge appearance={badge} size={38} />
+          {meaning && (
+            <Text style={styles.badgeMeaning} numberOfLines={2}>
+              {meaning}
+            </Text>
+          )}
         </View>
+      )}
+
+      {/* Info */}
+      <View style={styles.info}>
+        <Text style={styles.name} numberOfLines={1}>
+          {data.name}, {data.age}
+        </Text>
         <Text style={styles.location} numberOfLines={1}>
           📍 {data.location}
         </Text>
-        {meaning && (
-          <Text style={styles.meaning} numberOfLines={2}>
-            {meaning}
-          </Text>
-        )}
         <Text style={styles.visitsLabel}>
           🔥 {visitCount} visitas
         </Text>
@@ -120,27 +137,8 @@ const styles = StyleSheet.create({
   },
   photo: {
     width: '100%',
-    height: CARD_WIDTH * 1.3,
+    height: CARD_WIDTH * PHOTO_RATIO,
     backgroundColor: colors.grayDark,
-  },
-  framedPhotoBox: {
-    width: '100%',
-    height: CARD_WIDTH * 1.3,
-    backgroundColor: colors.grayDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  meaning: {
-    color: colors.gold,
-    fontSize: fonts.sizes.xs,
-    fontStyle: 'italic',
-    lineHeight: 14,
-    opacity: 0.85,
   },
   rankBadge: {
     position: 'absolute',
@@ -171,7 +169,7 @@ const styles = StyleSheet.create({
   },
   sintoniaBadge: {
     position: 'absolute',
-    bottom: 52,
+    top: CARD_WIDTH * PHOTO_RATIO - 26,
     right: spacing.sm,
     backgroundColor: colors.gold + 'CC',
     borderRadius: borderRadius.full,
@@ -182,6 +180,23 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontSize: fonts.sizes.xs,
     fontWeight: 'bold',
+  },
+  badgeStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    backgroundColor: colors.surfaceRaised,
+    borderTopWidth: 2,
+    minHeight: 52,
+  },
+  badgeMeaning: {
+    flex: 1,
+    color: colors.grayLight,
+    fontSize: 10,
+    fontStyle: 'italic',
+    lineHeight: 13,
   },
   info: {
     padding: spacing.sm,
