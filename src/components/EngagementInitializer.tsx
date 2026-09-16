@@ -1,6 +1,17 @@
 // ============================================
-// LUMINA — ENGAGEMENT INITIALIZER v5.5
+// LUMINA — ENGAGEMENT INITIALIZER v5.6
 // src/components/EngagementInitializer.tsx
+//
+// v5.6 — FASE 8: revelação de cosmético.
+//
+// Dois modais podem competir ao abrir o app. A ordem é:
+// cosmético primeiro, recompensa diária depois que ele fechar.
+// Ganhar a moldura de Criador é evento raro; a recompensa
+// acontece todo dia e pode esperar trinta segundos.
+//
+// A flag progression.pendingCosmeticReveal vive no SERVIDOR e
+// não em armazenamento local: quem concede é o backend, só ele
+// sabe o que é novidade, e a flag sobrevive a reinstalação.
 //
 // v5.5 — CORREÇÕES DE ROBUSTEZ
 //
@@ -24,24 +35,28 @@
 //    desmontado.
 //
 // 5. Logs sob __DEV__, sem UID em produção.
-//
-// MELHORIA FUTURA (não aplicada — exige mudança de modelagem):
-// esta CF roda a cada abertura do app, por usuário. Se
-// lastDailyRewardAt morar no documento de wallet que o
-// CoinsContext já escuta via onSnapshot, o status vem de graça:
-// zero invocações, zero leituras extras.
 // ============================================
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { doc, getDoc } from 'firebase/firestore';
 import { useAuth }      from '../context/AuthContext';
+import { db }           from '../services/firebase';
 import DailyRewardModal from './DailyRewardModal';
+import CosmeticRevealModal from './CosmeticRevealModal';
+import { FRAMES } from '../config/cosmeticsCatalog';
 
 const REVEAL_DELAY_MS = 1500;
 
 export default function EngagementInitializer() {
   const { user, loading: authLoading } = useAuth();
+  const navigation = useNavigation<any>();
+
   const [showDailyReward, setShowDailyReward] = useState(false);
+  const [rewardPending,   setRewardPending]   = useState(false);
+  const [revealId,        setRevealId]        = useState<string | null>(null);
+  const [photoURL,        setPhotoURL]        = useState('');
 
   const checkedRef = useRef<string | null>(null);
   const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -67,6 +82,26 @@ export default function EngagementInitializer() {
   }, [user?.uid, authLoading]);
 
   async function checkEngagements(uid: string) {
+    // ── Cosmético pendente ──
+    // Leitura direta do documento: uma leitura por abertura, e
+    // evita uma CF só para isso. Falha aqui não pode derrubar a
+    // recompensa diária, por isso o try próprio.
+    try {
+      const snap = await getDoc(doc(db, 'users', uid));
+      const data = snap.data() ?? {};
+      const pending = data?.progression?.pendingCosmeticReveal;
+
+      if (typeof pending === 'string' && pending && mountedRef.current) {
+        setRevealId(pending);
+        setPhotoURL(data?.photoURL ?? '');
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[EngagementInitializer] pendingCosmeticReveal falhou:', error);
+      }
+    }
+
+    // ── Recompensa diária ──
     try {
       // Lazy: resolvido aqui, não no import do módulo.
       const fn = httpsCallable<void, { alreadyClaimed: boolean }>(
@@ -85,15 +120,8 @@ export default function EngagementInitializer() {
       }
 
       if (!result.data.alreadyClaimed && mountedRef.current) {
-        timerRef.current = setTimeout(() => {
-          if (mountedRef.current) setShowDailyReward(true);
-        }, REVEAL_DELAY_MS);
+        setRewardPending(true);
       }
-
-      // Gatilhos emocionais pendentes são tratados na
-      // NotificationsScreen — não abrimos modal aqui para não
-      // sobrecarregar o usuário ao abrir o app. O badge do sino
-      // já indica notificações não lidas.
     } catch (error) {
       // FAIL-CLOSED: não sabemos se já resgatou, então não
       // oferecemos. Mostrar o modal aqui exibiria uma recompensa
@@ -105,13 +133,68 @@ export default function EngagementInitializer() {
     }
   }
 
-  if (!showDailyReward || !user?.uid) return null;
+  // A recompensa só entra na fila quando não há cosmético a
+  // revelar. Dois modais sobrepostos é pior que um atraso.
+  useEffect(() => {
+    if (!rewardPending) return;
+    if (revealId)       return;
+
+    timerRef.current = setTimeout(() => {
+      if (mountedRef.current) setShowDailyReward(true);
+    }, REVEAL_DELAY_MS);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [rewardPending, revealId]);
+
+  async function closeReveal() {
+    const id = revealId;
+    setRevealId(null);
+
+    // Limpa a flag no servidor — sem isso o modal volta a cada
+    // abertura. Falha aqui é tolerável: o pior caso é ver a
+    // comemoração duas vezes.
+    try {
+      await httpsCallable(getFunctions(), 'clearCosmeticReveal')({});
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[EngagementInitializer] clearCosmeticReveal falhou:', error);
+      }
+    }
+
+    return id;
+  }
+
+  async function handleRevealClose() {
+    await closeReveal();
+  }
+
+  async function handleRevealGoToItem() {
+    const id = await closeReveal();
+    // Molduras e badges têm telas próprias; o catálogo diz qual.
+    navigation.navigate(id && FRAMES[id] ? 'Frames' : 'Badges');
+  }
+
+  if (!user?.uid) return null;
 
   return (
-    <DailyRewardModal
-      uid={user.uid}
-      visible={showDailyReward}
-      onClose={() => setShowDailyReward(false)}
-    />
+    <>
+      <CosmeticRevealModal
+        visible={revealId !== null}
+        cosmeticId={revealId}
+        photoURL={photoURL}
+        onClose={handleRevealClose}
+        onGoToItem={handleRevealGoToItem}
+      />
+
+      {showDailyReward && (
+        <DailyRewardModal
+          uid={user.uid}
+          visible={showDailyReward}
+          onClose={() => setShowDailyReward(false)}
+        />
+      )}
+    </>
   );
 }

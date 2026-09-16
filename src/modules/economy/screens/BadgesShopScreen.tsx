@@ -162,7 +162,6 @@ export default function BadgesShopScreen() {
                       motion:      offer.motion,
                     }}
                     size={72}
-                    dimmed={!canAfford}
                   />
                 </View>
 
@@ -259,7 +258,7 @@ const styles = StyleSheet.create({
   sectionSub:      { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginHorizontal: S.md, marginBottom: S.md },
   grid:            { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginHorizontal: S.md },
   card:            { alignItems: 'center', gap: 3, backgroundColor: COLORS.card, borderRadius: R.lg, paddingTop: S.lg, paddingBottom: S.md, paddingHorizontal: S.sm, borderWidth: 1, marginBottom: S.sm, overflow: 'hidden' },
-  cardLocked:      { opacity: 0.5 },
+  cardLocked:      { borderStyle: 'dashed' },
   rarityStrip:     { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
   badgeBox:        { height: 78, justifyContent: 'center' },
   cardTitle:       { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },

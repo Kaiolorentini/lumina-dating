@@ -335,7 +335,7 @@ export default function RealProfileScreen() {
               {targetFrame && targetProfile?.photoURL && (
                 <ProfileFrame
                   photoURL={targetProfile.photoURL}
-                  size={40}
+                  size={104}
                   frame={targetFrame}
                 />
               )}

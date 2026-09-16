@@ -67,6 +67,13 @@ export const FRAMES: Record<string, FrameLook> = {
   frame_devoto:    { id: 'frame_devoto',    costKey: null, title: 'Devoto',        description: 'Conquistado com 30 dias seguidos',       rarity: 'LEGENDARY', price: 0, borderColor: '#FF9800', glowColor: 'rgba(255,152,0,0.4)',   borderWidth: 3, animated: false, scene: 'conquista' },
   frame_galaxia:   { id: 'frame_galaxia',   costKey: null, title: 'Galáxia Viva',  description: 'Conquistado com a Árvore no estágio Galáxia', rarity: 'LEGENDARY', price: 0, borderColor: '#7B2FBE', glowColor: 'rgba(123,47,190,0.5)', borderWidth: 3, animated: true, scene: 'nebulosa' },
   frame_fundador:  { id: 'frame_fundador',  costKey: null, title: 'Fundador',      description: 'Esteve aqui desde o começo',             rarity: 'LEGENDARY', price: 0, borderColor: '#FFD700', glowColor: 'rgba(255,215,0,0.5)',   borderWidth: 3, animated: true, scene: 'via_lactea' },
+
+  // Criador — a única moldura de fogo. O contraste com as oito
+  // cósmicas é proposital: a insígnia precisa ser reconhecida de
+  // longe, e quem produz conteúdo queima por isso.
+  // A descrição diz COMO se obtém, porque ela aparece na tela de
+  // molduras de quem ainda não é criador.
+  frame_forja:     { id: 'frame_forja',     costKey: null, title: 'Forja',         description: 'Exclusiva de criadores — concedida quando a equipe aprova seu pedido para publicar conteúdo', rarity: 'MYTHIC', price: 0, borderColor: '#FF8A1F', glowColor: 'rgba(255,138,31,0.75)', borderWidth: 4, animated: true, scene: 'forja' },
 };
 
 export const PURCHASABLE_FRAMES: FrameLook[] =

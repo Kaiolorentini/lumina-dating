@@ -92,6 +92,7 @@ export { getFragmentsStatus, expireFragments } from './engagement/fragments';
 export { getVaultStatus, withdrawFromVault } from './engagement/vault';
 export { equipFrame, getFramesStatus } from './engagement/frames';
 export { equipBadge, getBadgesStatus } from './engagement/badges';
+export { clearCosmeticReveal }         from './engagement/cosmeticReveal';
 export { buyBadgeWithFragments }       from './economy/buyBadgeWithFragments';
 export { earnXP, getXPStatus } from './engagement/xp';
 export { checkAchievements, getAchievementsStatus, repairAchievements } from './engagement/achievements';

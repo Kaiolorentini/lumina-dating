@@ -25,6 +25,11 @@ import { UserProfile }       from '../../../shared/types';
 import { RootStackParamList } from '../../../navigation/types';
 import Header                from '../../../components/Header';
 import XPBar                 from '../../../components/XPBar';
+import { ProfileFrame }      from '../../../components/profile/ProfileFrame';
+import { Badge }             from '../../../components/profile/Badge';
+import {
+  frameAppearanceById, badgeAppearanceById, badgeMeaningById, Rarity,
+} from '../../../config/cosmeticsCatalog';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -98,6 +103,31 @@ export default function ProfileScreen() {
     }
   }
 
+  // Cosméticos do próprio usuário. O aluguel vencido é
+  // descartado aqui como nas demais telas — a limpeza do
+  // getFramesStatus só roda quando ele abre a tela de Molduras.
+  function activeCosmetic(id: unknown, until: unknown): string | null {
+    if (typeof id !== 'string' || !id) return null;
+    if (until === null || until === undefined) return id;  // permanente
+    const date = (until as { toDate?: () => Date })?.toDate?.() ?? null;
+    if (!date) return id;
+    return date.getTime() > Date.now() ? id : null;
+  }
+
+  const prog = (profile as { progression?: Record<string, unknown> } | null)?.progression ?? {};
+  const myFrame = frameAppearanceById(
+    activeCosmetic(prog.equippedFrame, prog.equippedFrameUntil)
+  );
+  const myBadgeId = activeCosmetic(prog.equippedBadge, prog.equippedBadgeUntil);
+  const myBadge = myBadgeId
+    ? badgeAppearanceById(myBadgeId, (prog.equippedBadgeRarity as Rarity) ?? 'COMMON')
+    : null;
+  const myMeaning = badgeMeaningById(myBadgeId);
+
+    // TEMPORÁRIO — diagnóstico da moldura no próprio perfil
+  console.log('[ProfileScreen] prog:', JSON.stringify(prog));
+  console.log('[ProfileScreen] myFrame:', JSON.stringify(myFrame));
+  
   if (loading) return (
     <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
       <ActivityIndicator color={colors.gold} />
@@ -111,23 +141,50 @@ export default function ProfileScreen() {
 
         {/* Foto e nome */}
         <View style={styles.photoSection}>
+          {/* Com moldura, a cena substitui o círculo: é aqui que
+              o usuário confere o que comprou. O ícone de câmera
+              fica FORA da cena, senão compete com ela e a área de
+              toque vira ambígua. */}
           <TouchableOpacity onPress={handleChangePhoto} disabled={uploadingPhoto}>
-            <View style={styles.photoContainer}>
-              {uploadingPhoto ? (
+            {uploadingPhoto ? (
+              <View style={styles.photoContainer}>
                 <ActivityIndicator color={colors.gold} />
-              ) : profile?.photoURL ? (
-                <Image source={{ uri: profile.photoURL }} style={styles.photo} />
-              ) : (
-                <View style={styles.photoPlaceholder}>
-                  <Text style={styles.photoPlaceholderText}>👤</Text>
-                </View>
-              )}
-              <View style={styles.cameraIcon}>
-                <Text style={{ fontSize: 14 }}>📷</Text>
               </View>
-            </View>
+            ) : myFrame && profile?.photoURL ? (
+              <View style={styles.framedBox}>
+                <ProfileFrame
+                  photoURL={profile.photoURL}
+                  size={168}
+                  frame={myFrame}
+                />
+                <View style={styles.cameraIconFramed}>
+                  <Text style={{ fontSize: 14 }}>📷</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.photoContainer}>
+                {profile?.photoURL ? (
+                  <Image source={{ uri: profile.photoURL }} style={styles.photo} />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <Text style={styles.photoPlaceholderText}>👤</Text>
+                  </View>
+                )}
+                <View style={styles.cameraIcon}>
+                  <Text style={{ fontSize: 14 }}>📷</Text>
+                </View>
+              </View>
+            )}
           </TouchableOpacity>
-          <Text style={styles.name}>{profile?.name ?? 'Usuário'}</Text>
+
+          <View style={styles.nameRow}>
+            {myBadge && <Badge appearance={myBadge} size={30} />}
+            <Text style={styles.name}>{profile?.name ?? 'Usuário'}</Text>
+          </View>
+
+          {myMeaning && (
+            <Text style={styles.meaning}>{myMeaning}</Text>
+          )}
 
           {xpStatus && (
             <View style={styles.levelBadge}>
@@ -349,7 +406,12 @@ const styles = StyleSheet.create({
   photoPlaceholder: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center' },
   photoPlaceholderText: { fontSize: 40 },
   cameraIcon:    { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.gold, borderRadius: 12, padding: 4 },
-  name:          { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', marginTop: spacing.md },
+  framedBox:     { width: 168, height: 168, alignItems: 'center', justifyContent: 'center' },
+  // Câmera na borda da cena, não sobre ela.
+  cameraIconFramed: { position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.gold, borderRadius: 12, padding: 4 },
+  nameRow:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
+  name:          { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold' },
+  meaning:       { color: colors.gold, fontSize: fonts.sizes.sm, fontStyle: 'italic', marginTop: spacing.xs, opacity: 0.85, textAlign: 'center', paddingHorizontal: spacing.xl },
   levelBadge:    { backgroundColor: colors.gold + '22', borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.gold, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, marginTop: spacing.xs },
   levelText:     { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   crystalsRow:   { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },

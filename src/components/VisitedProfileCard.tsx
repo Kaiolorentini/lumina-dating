@@ -59,7 +59,7 @@ export default function VisitedProfileCard({ data, visitCount, rank, onPress }: 
         <View style={styles.framedPhotoBox}>
           <ProfileFrame
             photoURL={data.photoURL}
-            size={CARD_WIDTH * 0.5}
+            size={CARD_WIDTH * 0.92}
             frame={frame}
           />
         </View>

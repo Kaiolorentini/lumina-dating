@@ -162,8 +162,10 @@ export default function FramesShopScreen() {
 
                 {isBusy
                   ? <ActivityIndicator color={COLORS.secondary} size="small" />
-                  : <View style={styles.priceTag}>
-                      <Text style={styles.priceText}>💎 {offer.price}</Text>
+                  : <View style={[styles.priceTag, !canAfford && styles.priceTagLocked]}>
+                      <Text style={[styles.priceText, !canAfford && styles.priceTextLocked]}>
+                        💎 {offer.price}
+                      </Text>
                     </View>
                 }
               </TouchableOpacity>
@@ -188,11 +190,16 @@ const styles = StyleSheet.create({
   sectionSub:    { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginHorizontal: S.md, marginTop: S.sm, marginBottom: S.md, lineHeight: 16 },
   grid:          { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginHorizontal: S.md },
   card:          { alignItems: 'center', gap: S.xs, backgroundColor: COLORS.card, borderRadius: R.lg, paddingTop: S.lg, paddingBottom: S.md, paddingHorizontal: S.sm, borderWidth: 1, marginBottom: S.sm, overflow: 'hidden' },
-  cardLocked:    { opacity: 0.45 },
+  // Sem saldo, o card NÃO é esmaecido: a vitrine precisa vender
+  // justamente para quem ainda não tem cristais. O que sinaliza
+  // a falta de saldo é o preço em vermelho, não a peça apagada.
+  cardLocked:    { borderStyle: 'dashed' },
   rarityStrip:   { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
   cardTitle:     { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, textAlign: 'center', marginTop: S.xs },
   cardRarity:    { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, letterSpacing: 1 },
   cardDesc:      { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textAlign: 'center', minHeight: 28, lineHeight: 14 },
   priceTag:      { backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: R.full, paddingHorizontal: S.md, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(255,215,0,0.35)', marginTop: 2 },
   priceText:     { color: '#FFD700', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.extrabold },
+  priceTagLocked:  { backgroundColor: 'rgba(255,107,107,0.1)', borderColor: 'rgba(255,107,107,0.35)' },
+  priceTextLocked: { color: '#FF8A8A' },
 });

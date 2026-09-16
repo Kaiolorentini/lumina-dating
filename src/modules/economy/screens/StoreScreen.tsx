@@ -51,7 +51,7 @@ const CATEGORIES: {
   { route: 'CrystalPacks', icon: '💎', title: 'Cristais', sub: 'Pacotes a partir de R$ 5', gradient: ['#2A1A4E', '#4E2B7E'] },
   { route: 'Boosts',       icon: '🚀', title: 'Impulsos', sub: 'Mais visibilidade agora',  gradient: ['#1A2A4E', '#2B4E7E'] },
   { route: 'FramesShop',   icon: '🖼️', title: 'Molduras', sub: '8 estilos · 30 dias',      gradient: ['#4E1A3A', '#7E2B5E'] },
-  { route: 'BadgesShop',   icon: '✦',  title: 'Badges',   sub: '12 emblemas exclusivos',   gradient: ['#4E3A1A', '#7E5E2B'] },
+  { route: 'BadgesShop',   icon: '✦',  title: 'Badges',   sub: 'Diga o que você procura',   gradient: ['#4E3A1A', '#7E5E2B'] },
 ];
 
 export default function StoreScreen() {

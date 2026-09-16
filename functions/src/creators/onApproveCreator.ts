@@ -44,6 +44,20 @@ export const onApproveCreator = onCall(async (request) => {
     });
 
     tx.update(userRef, { role: "creator" });
+
+    // Moldura Forja — concedida junto com o papel, na mesma
+    // transação: se o role gravar e a moldura não, o criador fica
+    // sem a insígnia e ninguém percebe.
+    //
+    // pendingCosmeticReveal marca o que ainda não foi comemorado.
+    // Sem ela o app não teria como saber se a moldura é nova ou
+    // se o usuário já a viu — e o modal apareceria toda vez.
+    tx.set(userRef, {
+      progression: {
+        unlockedItems:          { frame_forja: true },
+        pendingCosmeticReveal:  'frame_forja',
+      },
+    }, { merge: true });
   });
 
   await incrementMetric("totalCreators");
@@ -60,8 +74,8 @@ export const onApproveCreator = onCall(async (request) => {
   // ✅ Notifica o usuário aprovado — push + in-app
   await notifyUser({
     userId,
-    title: "🎨 Você é um Criador!",
-    body: "Sua solicitação foi aprovada. Comece a publicar produtos agora!",
+    title: "🔥 Você é um Criador!",
+    body: "Sua solicitação foi aprovada e a moldura Forja é sua. Comece a publicar!",
     type: "creator_approved",
     data: { requestId },
   });

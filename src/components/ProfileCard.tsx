@@ -54,9 +54,13 @@ export default function ProfileCard({ data, onPress }: Props) {
           para quem não tem cosmético. */}
       {frame ? (
         <View style={styles.framedPhotoBox}>
+          {/* 0.92 e não 0.5: no ProfileFrame v3 o `size` é o
+              quadrado INTEIRO da cena, e a foto ocupa 60% dele.
+              Com 0.5 a cena saía com ~90px e a foto com ~54px —
+              daí o cinza em volta. */}
           <ProfileFrame
             photoURL={data.photoURL}
-            size={CARD_WIDTH * 0.5}
+            size={CARD_WIDTH * 0.92}
             frame={frame}
           />
         </View>
