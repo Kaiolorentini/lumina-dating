@@ -15,6 +15,7 @@ import { XP_MULTIPLIERS, XP_FEATURE_FLAGS, ANTI_BOT } from '../config/xpMultipli
 import { calcLevel } from '../config/xpTable';
 import { calcTreeStage } from '../config/treeTable';
 import { grantTreeStageReward } from '../services/rewardService';
+import { todayBr } from '../utils/dateBr';
 
 const db = admin.firestore();
 
@@ -57,7 +58,9 @@ export const earnXP = functions.onCall(
       );
     }
 
-    const todayStr        = new Date().toISOString().slice(0, 10);
+    // BRT: em UTC o teto diário (DAILY_XP_MAX) zerava às 21h,
+    // liberando até 800 XP no mesmo dia civil.
+    const todayStr        = todayBr();
     const userRef         = db.collection('users').doc(uid);
     const xpLogRef        = db.collection('xpLog');
     const notifRef        = db.collection('notifications');
@@ -281,7 +284,7 @@ export const getXPStatus = functions.onCall(
     const userData = userDoc.data() ?? {};
     const xp       = userData.xp ?? {};
 
-    const todayStr  = new Date().toISOString().slice(0, 10);
+    const todayStr  = todayBr();
     const totalXP   = xp.totalXP   ?? 0;
     const treeXP    = xp.treeXP    ?? 0;
     const xpToday   = xp.xpTodayDate === todayStr ? (xp.xpToday ?? 0) : 0;

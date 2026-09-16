@@ -62,6 +62,11 @@ function toCardData(p: RealProfile): ProfileCardData {
     sintonia:  p.sintonia,
     photoURL:  p.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
     boostType: p.boostType,
+    // FASE 5 Etapa 2 — já vêm filtrados por validade do
+    // usersService; aqui é só repasse.
+    equippedFrame:       p.equippedFrame,
+    equippedBadge:       p.equippedBadge,
+    equippedBadgeRarity: p.equippedBadgeRarity,
   };
 }
 

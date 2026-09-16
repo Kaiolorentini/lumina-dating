@@ -32,7 +32,7 @@
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-
+import { todayBr }   from '../utils/dateBr';
 const db = admin.firestore();
 
 // Janela de deduplicação: revisitas dentro deste intervalo não
@@ -107,10 +107,9 @@ export const registerProfileVisit = functions.onCall(
     const countRef = db.collection('profile_visit_counts').doc(profileId);
 
     // Data local do perfil visitado, para o corte de "hoje".
-    // Servidor roda em UTC; usamos o fuso de Brasília para que
-    // "visitas hoje" bata com o que o usuário vê.
-    const nowBr = new Date(Date.now() - 3 * 3600000);
-    const todayKey = nowBr.toISOString().slice(0, 10); // YYYY-MM-DD
+    // A subtração fixa de 3h anterior quebraria se o Brasil
+    // voltasse ao horário de verão (offset -2).
+    const todayKey = todayBr();
 
     const batch = db.batch();
 

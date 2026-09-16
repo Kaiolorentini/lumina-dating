@@ -18,7 +18,7 @@ import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { ValidationError }                from '../ErrorBoundary';
 import { GamificationIntegrationService } from '../GamificationIntegrationService';
-
+import { todayBr }                        from '../../utils/dateBr';
 const db = admin.firestore();
 
 export interface CompleteMissionInput {
@@ -47,7 +47,9 @@ export const MissionService = {
   // Ao concluir, dispara o Engine via GamificationIntegrationService.
   async completeMission(input: CompleteMissionInput): Promise<CompleteMissionResult> {
     const { uid, missionIdParam, targetUid, messageLength } = input;
-    const dateStr   = new Date().toISOString().slice(0, 10);
+    // Mesma fronteira do dailyMissions.ts — se divergirem, o
+    // progresso procura um documento que não existe.
+    const dateStr   = todayBr();
     const missRef   = db.collection('dailyMissions').doc(`${uid}_${dateStr}`);
     const walletRef = db.collection('wallets').doc(uid);
 

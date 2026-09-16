@@ -87,6 +87,10 @@ export interface RealProfile extends UserProfile {
   sintoniaLabel: string;
   boostScore: number;           // interno — nunca exibido para outros usuários
   boostType: BoostType | null;  // dirige o badge na Home
+  // Cosméticos já filtrados por validade — FASE 5 Etapa 2.
+  equippedFrame:       string | null;
+  equippedBadge:       string | null;
+  equippedBadgeRarity: string | null;
 }
 
 export interface ProfilePage {
@@ -171,6 +175,31 @@ function getActiveBoostScore(
   return NO_BOOST;
 }
 
+/**
+ * Cosmético equipado, já descartando aluguel vencido.
+ *
+ * A checagem vive aqui — e não no ProfileCard — para a regra
+ * existir num lugar só. O card fica burro: recebe o id ou null.
+ *
+ * `equippedFrameUntil` é gravado no documento ao equipar
+ * justamente para permitir esta checagem por terceiros: a limpeza
+ * automática do getFramesStatus só roda quando o próprio dono
+ * abre o app, e até lá o campo equipado continua lá.
+ */
+function activeCosmetic(
+  id:    unknown,
+  until: unknown,
+): string | null {
+  if (typeof id !== 'string' || !id) return null;
+
+  // until null/ausente = permanente (conquista).
+  if (until === null || until === undefined) return id;
+
+  const date = (until as { toDate?: () => Date })?.toDate?.() ?? null;
+  if (!date) return id;
+
+  return date.getTime() > Date.now() ? id : null;
+}
 // ============================================
 // MONTAGEM DE PERFIL
 // ============================================
@@ -194,12 +223,21 @@ function buildProfile(
   const sintoniaResult = calcularSintonia(currentUser, data);
   const boost = getActiveBoostScore(docSnap.data(), viewerRegiaoId, now);
 
+  // FASE 5 Etapa 2: cosméticos equipados viajam junto para que a
+  // moldura e o badge apareçam no feed, não só no perfil do dono.
+  // Lidos de docSnap.data() e não de `data` porque UserProfile não
+  // tipa `progression` — o dado existe no documento de qualquer forma.
+  const prog = (docSnap.data() as { progression?: Record<string, unknown> })?.progression ?? {};
+
   return {
     ...data,
     sintonia: sintoniaResult.score,
     sintoniaLabel: sintoniaResult.label,
     boostScore: boost.score,
     boostType: boost.type,
+    equippedFrame: activeCosmetic(prog.equippedFrame, prog.equippedFrameUntil),
+    equippedBadge: activeCosmetic(prog.equippedBadge, prog.equippedBadgeUntil),
+    equippedBadgeRarity: (prog.equippedBadgeRarity as string) ?? null,
   };
 }
 

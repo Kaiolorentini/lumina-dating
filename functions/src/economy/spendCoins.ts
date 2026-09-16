@@ -13,6 +13,8 @@
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { COSTS, PREMIUM_ONLY_FEATURES } from '../config/economy';
+import { COSMETICS_CATALOG, COST_KEY_TO_COSMETIC } from '../config/cosmeticsCatalog';
+import { BADGES_CATALOG, COST_KEY_TO_BADGE }       from '../config/badgesCatalog';
 import { auditLogFinanceiro, AuditTipo } from '../utils/auditLogFinanceiro';
 
 export type SpendableFeature = keyof typeof COSTS;
@@ -29,6 +31,8 @@ interface SpendResult {
   spentFromPremium:     number;
   newBalanceGratuitos:  number;
   newBalancePremium:    number;
+  grantedCosmeticId?:   string;  // FASE 5
+  rentalExpiresAt?:     string;  // ISO, quando for aluguel
 }
 
 export const spendCoins = onCall(
@@ -53,15 +57,41 @@ export const spendCoins = onCall(
       ? db.collection('spendIdempotency').doc(idempotencyKey)
       : null;
 
+    // FASE 5: features cosméticas concedem um item além de debitar.
+    // A concessão acontece DENTRO da transação do débito — se ela
+    // falhar, o débito não acontece. Nunca cobrar sem entregar.
+    // Molduras e badges compartilham o mesmo mecanismo: um item
+    // com id, dias de aluguel e raridade. Normalizo os dois num
+    // formato só para não duplicar o bloco de concessão.
+    const cosmeticId = COST_KEY_TO_COSMETIC[feature] ?? null;
+    const badgeId    = COST_KEY_TO_BADGE[feature]    ?? null;
+
+    const cosmetic = cosmeticId
+      ? { id: cosmeticId, rentalDays: COSMETICS_CATALOG[cosmeticId].rentalDays,
+          rarity: COSMETICS_CATALOG[cosmeticId].rarity, kind: 'FRAME' as const }
+      : badgeId
+        ? { id: badgeId, rentalDays: BADGES_CATALOG[badgeId].rentalDays,
+            rarity: BADGES_CATALOG[badgeId].rarity, kind: 'BADGE' as const }
+        : null;
+
+    // Molduras e badges vivem em campos separados: o usuário pode
+    // ter uma de cada equipada ao mesmo tempo.
+    const rentalField = cosmetic?.kind === 'BADGE' ? 'badgeRentals' : 'frameRentals';
+    const userRef     = cosmetic ? db.collection('users').doc(uid) : null;
+
     try {
       const result = await db.runTransaction(async (t) => {
+        // Firestore exige TODAS as leituras antes de qualquer
+        // escrita na transação — por isso o usuário entra aqui.
         const snaps = await Promise.all([
           t.get(walletRef),
           idempotencyRef ? t.get(idempotencyRef) : Promise.resolve(null),
+          userRef        ? t.get(userRef)        : Promise.resolve(null),
         ]);
 
         const walletSnap      = snaps[0];
         const idempotencySnap = snaps[1];
+        const userSnap        = snaps[2];
 
         // Admin SDK: .exists é propriedade booleana (sem parênteses)
         if (idempotencySnap?.exists) {
@@ -114,6 +144,7 @@ export const spendCoins = onCall(
         }
 
         const now = admin.firestore.FieldValue.serverTimestamp();
+        let grantedExpiry: string | undefined;
 
         t.update(walletRef, {
           coinsGratuitos: newGratuitos,
@@ -126,6 +157,51 @@ export const spendCoins = onCall(
           t.set(idempotencyRef, {
             uid, feature, cost,
             createdAt: now,
+          });
+        }
+
+        // ── FASE 5: concessão do cosmético ──
+        if (cosmetic && userRef) {
+          if (cosmetic.rentalDays > 0) {
+            // Aluguel. Se o usuário já tem a moldura e ela ainda
+            // não expirou, SOMA os dias em vez de reiniciar — quem
+            // recompra cedo não perde o tempo que pagou.
+            const rentals  = userSnap?.data()?.progression?.[rentalField] ?? {};
+            const current  = rentals[cosmetic.id]?.toDate?.() ?? null;
+            const base     = current && current.getTime() > Date.now()
+              ? current.getTime()
+              : Date.now();
+            const expiresAt = new Date(base + cosmetic.rentalDays * 24 * 3600000);
+            grantedExpiry = expiresAt.toISOString();
+
+            t.set(userRef, {
+              progression: {
+                [rentalField]: {
+                  [cosmetic.id]: admin.firestore.Timestamp.fromDate(expiresAt),
+                },
+              },
+            }, { merge: true });
+          } else {
+            // Permanente — só frames de conquista chegam aqui, e
+            // eles não têm costKey, então na prática este ramo não
+            // roda hoje. Fica pelo contrato do catálogo.
+            t.set(userRef, {
+              progression: { unlockedItems: { [cosmetic.id]: true } },
+            }, { merge: true });
+          }
+
+          t.set(db.collection('economyLedger').doc(), {
+            uid,
+            tipo:        'COSMETIC_PURCHASE',
+            origem:      'spendCoins',
+            feature,
+            cosmeticId:  cosmetic.id,
+            cosmeticKind: cosmetic.kind,
+            rarity:      cosmetic.rarity,
+            rentalDays:  cosmetic.rentalDays,
+            cristaisGastos: cost,
+            timestamp:   now,
+            imutavel:    true,
           });
         }
 
@@ -155,6 +231,10 @@ export const spendCoins = onCall(
           spentFromPremium,
           newBalanceGratuitos: newGratuitos,
           newBalancePremium:   newPremium,
+          ...(cosmetic ? { grantedCosmeticId: cosmetic.id } : {}),
+          ...(cosmetic && cosmetic.rentalDays > 0
+            ? { rentalExpiresAt: grantedExpiry }
+            : {}),
         };
       });
 

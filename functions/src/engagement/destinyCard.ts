@@ -13,7 +13,7 @@
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-
+import { todayBr }   from '../utils/dateBr';
 const db = admin.firestore();
 
 interface DestinyProfile {
@@ -55,7 +55,7 @@ export const getDestinyCard = functions.onCall(
       throw new functions.HttpsError('unauthenticated', 'Usuário não autenticado.');
     }
 
-    const todayStr   = new Date().toISOString().slice(0, 10);
+    const todayStr   = todayBr();
     const cardRef    = db.collection('destinyCards').doc(uid);
     const userRef    = db.collection('users').doc(uid);
     const walletRef  = db.collection('wallets').doc(uid);

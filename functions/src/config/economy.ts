@@ -47,16 +47,45 @@ export const COSTS = {
   // Progressão — PREMIUM ONLY
   FERTILIZANTE_SINTONIA:   80,  // +50% XP árvore por 24h — premium only
 
-  // Mercado Cósmico — Comum (Gratuitos)
-  MOLDURA_NEBULOSA:        50,
-  MOLDURA_ECLIPSE:         50,
-  MOLDURA_SUPERNOVA:       50,
+  // Mercado Cósmico — Molduras (aluguel 30 dias, PREMIUM ONLY)
+  // Preço por raridade: RARE 70, EPIC 100, LEGENDARY 150.
+  // Premium-only porque molduras são o principal motor de compra
+  // de cristais — e o aluguel de 30 dias sustenta a recompra.
+  MOLDURA_NEBULOSA:        70,
+  MOLDURA_ECLIPSE:         70,
+  MOLDURA_MARESIA:         70,
+  MOLDURA_SUPERNOVA:      100,
+  MOLDURA_AURORA:         100,
+  MOLDURA_COMETA:         100,
+  MOLDURA_BURACO_NEGRO:   150,
+  MOLDURA_VIA_LACTEA:     150,
 
   // Mercado Cósmico — PREMIUM ONLY (Lendário+)
   EFEITO_AURORA:           80,
   TEMA_GALAXIA:           120,
   COR_NOME_ESPECIAL:       60,
   EFEITO_ENTRADA:         150,
+
+  // Badges da loja — aluguel 30 dias, PREMIUM ONLY (FASES 6 e 8).
+  // Mesma escala das molduras: RARE 70, EPIC 100, LEGENDARY 150.
+  // Os 4 de fragmentos não entram aqui: são permanentes e passam
+  // pela CF buyBadgeWithFragments, que mexe em wallets.fragments.
+  BADGE_METEORO:           70,
+  BADGE_PULSAR:            70,
+  BADGE_BUSSOLA:           70,
+  BADGE_FAROL:             70,
+  BADGE_ANDARILHO:         70,
+  BADGE_ESTUFA:            70,
+  BADGE_ANEL_GELO:        100,
+  BADGE_POEIRA_ESTELAR:   100,
+  BADGE_COROA_SOLAR:      100,
+  BADGE_NEBULOSA_CARMIM:  100,
+  BADGE_ECLIPSE:          100,
+  BADGE_CRISTAL:          100,
+  BADGE_QUASAR:           150,
+  BADGE_SINGULARIDADE:    150,
+  BADGE_GENESE:           150,
+  BADGE_VIA_LACTEA:       150,
 } as const;
 
 // ------------------------------------------
@@ -243,6 +272,32 @@ export const PREMIUM_ONLY_FEATURES = [
   'TEMA_GALAXIA',
   'COR_NOME_ESPECIAL',
   'EFEITO_ENTRADA',
+  // Molduras — FASE 5
+  'MOLDURA_NEBULOSA',
+  'MOLDURA_ECLIPSE',
+  'MOLDURA_MARESIA',
+  'MOLDURA_SUPERNOVA',
+  'MOLDURA_AURORA',
+  'MOLDURA_COMETA',
+  'MOLDURA_BURACO_NEGRO',
+  'MOLDURA_VIA_LACTEA',
+  // Badges — FASES 6 e 8
+  'BADGE_METEORO',
+  'BADGE_PULSAR',
+  'BADGE_BUSSOLA',
+  'BADGE_FAROL',
+  'BADGE_ANDARILHO',
+  'BADGE_ESTUFA',
+  'BADGE_ANEL_GELO',
+  'BADGE_POEIRA_ESTELAR',
+  'BADGE_COROA_SOLAR',
+  'BADGE_NEBULOSA_CARMIM',
+  'BADGE_ECLIPSE',
+  'BADGE_CRISTAL',
+  'BADGE_QUASAR',
+  'BADGE_SINGULARIDADE',
+  'BADGE_GENESE',
+  'BADGE_VIA_LACTEA',
 ] as const;
 
 export type PremiumOnlyFeature = typeof PREMIUM_ONLY_FEATURES[number];

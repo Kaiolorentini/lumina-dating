@@ -64,6 +64,11 @@ import FragmentsScreen from '../modules/engagement/screens/FragmentsScreen';
 import VaultScreen from '../modules/engagement/screens/VaultScreen';
 import XPScreen from '../modules/engagement/screens/XPScreen';
 import AchievementsScreen from '../modules/engagement/screens/AchievementsScreen';
+import BadgesScreen from '../modules/engagement/screens/BadgesScreen';
+import BadgesShopScreen from '../modules/economy/screens/BadgesShopScreen';
+import FramesShopScreen from '../modules/economy/screens/FramesShopScreen';
+import CrystalPacksScreen from '../modules/economy/screens/CrystalPacksScreen';
+import BoostsScreen from '../modules/economy/screens/BoostsScreen';
 import RankingScreen from '../modules/engagement/screens/RankingScreen';
 import PrestigeScreen from '../modules/engagement/screens/PrestigeScreen';
 import PremiumToolsScreen from '../modules/premium/screens/PremiumToolsScreen';
@@ -79,6 +84,7 @@ import {
   AdminCouponsScreen,
   AdminReportsScreen,
 } from '../screens/admin/AdminPlaceholderScreens';
+import FramesScreen from '../modules/engagement/screens/FramesScreen';
 
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -320,6 +326,12 @@ function MainStack() {
       <Stack.Screen name="Prestige" component={PrestigeScreen} />
       <Stack.Screen name="PremiumTools" component={PremiumToolsScreen} />
       <Stack.Screen name="Visitors" component={VisitorsScreen} />
+      <Stack.Screen name="Frames" component={FramesScreen} />
+      <Stack.Screen name="Badges" component={BadgesScreen} />
+      <Stack.Screen name="FramesShop" component={FramesShopScreen} />
+      <Stack.Screen name="BadgesShop" component={BadgesShopScreen} />
+      <Stack.Screen name="CrystalPacks" component={CrystalPacksScreen} />
+      <Stack.Screen name="Boosts" component={BoostsScreen} />
     </Stack.Navigator>
   );
 }

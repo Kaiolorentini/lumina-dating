@@ -14,11 +14,11 @@ export const LOADING_DURATION = 7000;
 
 const FRASES = [
   'Encontrando sua sintonia perfeita...',
-  'Conexoes que brilham esperando por voce...',
-  'IA preparando seus matches...',
-  'Descobrindo perfis compativeis...',
+  'Conexões que brilham esperando por você...',
+  'Calculando compatibilidades...',
+  'Descobrindo perfis compatíveis...',
   'Sincronizando sua conta...',
-  'Seu mundo de conexoes esta pronto...',
+  'Seu mundo de conexões está pronto...',
 ];
 
 export default function AppLoadingScreen() {
@@ -99,17 +99,16 @@ export default function AppLoadingScreen() {
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={styles.appName}>Lumina</Text>
-          <Text style={styles.appTagline}>AI Dating</Text>
+          <Text style={styles.appTagline}>Descubra · Sintonize · Acenda</Text>
         </Animated.View>
 
         <View style={styles.divider} />
 
         <View style={styles.featuresContainer}>
-          <FeatureItem icon="✦" text="10 modelos de IA exclusivos" delay={300} />
-          <FeatureItem icon="💬" text="Chat em tempo real com match" delay={600} />
-          <FeatureItem icon="💰" text="Sistema de moedas e recompensas" delay={900} />
-          <FeatureItem icon="🔔" text="Notificacoes de novas conexoes" delay={1200} />
+          <FeatureItem icon="✦" text="Sintonia calculada em tempo real" delay={300} />
+          <FeatureItem icon="💬" text="Chat instantâneo com suas conexões" delay={600} />
+          <FeatureItem icon="💎" text="Cristais de Sintonia e recompensas" delay={900} />
+          <FeatureItem icon="🌱" text="Árvore da Sintonia que evolui com você" delay={1200} />
         </View>
 
         <Animated.Text style={[styles.frase, { opacity: fraseAnim }]}>
@@ -181,8 +180,11 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   logoImage: {
-    width: 100,
-    height: 100,
+    // A arte é retrato e já traz o nome "LUMINA". Num quadrado de
+    // 100px a estrela encolhe e o texto fica ilegível — melhor dar
+    // altura e deixar o contain resolver a largura.
+    width:  160,
+    height: 200,
   },
   appName: {
     fontSize: fonts.sizes.xxxl,

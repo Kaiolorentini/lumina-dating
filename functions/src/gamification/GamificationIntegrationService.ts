@@ -62,7 +62,11 @@ export const GamificationIntegrationService = {
 
   handleProfileLike(p: ProfileLikeParams): void {
     const cid  = newCorrelationId();
-    const opts: ProcessorOptions = { correlationId: cid, originCF: 'onProfileLike', triggerName: 'likes/{likeId}' };
+    // triggerName dizia 'likes/{likeId}', contrato do mundo antigo
+    // em que o cliente gravava a curtida. Desde a 2D quem grava é
+    // o onCreateMatch, e o rastro de auditoria apontava para um
+    // trigger que não existe mais.
+    const opts: ProcessorOptions = { correlationId: cid, originCF: 'onProfileLike', triggerName: 'onCreateMatch' };
     run(() => fireAndForget('PROFILE_LIKE', p.likerUid, cid, opts,
       () => GameEventFactory.profileLike({ uid: p.likerUid, targetUid: p.targetUid, correlationId: cid })
     ), p.likerUid, cid, 'PROFILE_LIKE');

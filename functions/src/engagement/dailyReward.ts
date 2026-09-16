@@ -15,7 +15,7 @@
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-
+import { todayBr, yesterdayBr } from '../utils/dateBr';
 const db = admin.firestore();
 
 // Recompensas por dia de streak (1–7)
@@ -41,8 +41,10 @@ export const claimDailyReward = functions.onCall(
     const rewardRef  = db.collection('dailyRewards').doc(uid);
     const auditRef   = db.collection('wallets').doc(uid).collection('auditLog');
 
-    // Data do servidor (YYYY-MM-DD UTC)
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // Data do servidor em BRT (YYYY-MM-DD).
+    // Em UTC, o dia virava às 21h e o usuário podia resgatar duas
+    // vezes na mesma noite — ou perder o streak resgatando às 20h.
+    const todayStr = todayBr();
 
     try {
       const result = await db.runTransaction(async (t) => {
@@ -65,10 +67,8 @@ export const claimDailyReward = functions.onCall(
         // ── REGRA 6: Calcular streak ──
         // Se último claim foi ontem → incrementa streak
         // Se foi há 2+ dias → reseta streak para 1
-        const lastDate   = rewardData.lastClaimedDate ?? '';
-        const yesterday  = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().slice(0, 10);
+        const lastDate     = rewardData.lastClaimedDate ?? '';
+        const yesterdayStr = yesterdayBr();
 
         let currentStreak = rewardData.currentStreak ?? 0;
 
@@ -148,20 +148,7 @@ export const claimDailyReward = functions.onCall(
         };
       });
 
-      // Conquistas STREAK_3, STREAK_7 e STREAK_30 — fire-and-forget,
-      // fora da transaction.
-      //
-      // STREAK_UPDATE é action ABSOLUTA no onAchievementTrigger:
-      // currentValue é comparado direto com o target, sem somar +1.
-      // Por isso enviamos o streak real, não 1.
-      db.collection('achievementTriggers').add({
-        uid,
-        action:       'STREAK_UPDATE',
-        currentValue: result.currentStreak,
-        processedAt:  null,
-        timestamp:    FieldValue.serverTimestamp(),
-      }).catch(() => {});
-
+    
       // Conquistas STREAK_3, STREAK_7 e STREAK_30 — fire-and-forget,
       // fora da transaction.
       //
@@ -210,7 +197,9 @@ export const getDailyRewardStatus = functions.onCall(
     }
 
     const data       = doc.data()!;
-    const todayStr   = new Date().toISOString().slice(0, 10);
+    // Mesma fronteira do claimDailyReward — se divergirem, o modal
+    // abre dizendo que há recompensa e a CF nega.
+    const todayStr   = todayBr();
     const alreadyClaimed = data.lastClaimedDate === todayStr;
     const currentStreak  = data.currentStreak ?? 0;
 

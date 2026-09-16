@@ -67,6 +67,11 @@ service cloud.firestore {
         // permanente com boostScore arbitrário, sem gastar cristais.
         'turbo', 'impulso', 'destaqueRegional',
         'boostActiveUntil', 'boostType', 'regionCount',
+        // Progressão — XP, árvore, conquistas, molduras e títulos.
+        // FASE 5: sem isto, qualquer conta se concede a moldura
+        // Lendária e o frame de Fundador escrevendo direto no
+        // próprio documento.
+        'progression', 'xp', 'achievements',
       ]);
     }
 
@@ -250,10 +255,24 @@ service cloud.firestore {
     // CURTIDAS
     // ============================================
     match /likes/{likeId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isNotBlocked() &&
-        request.resource.data.likerUid == request.auth.uid;
-      allow update, delete: if false;
+      // Escrita exclusiva da CF onCreateMatch (Admin SDK ignora rules).
+      // A rule antiga validava `likerUid`, campo que a CF nem grava —
+      // o caminho antigo do cliente seguia aberto: dava para forjar a
+      // curtida pelo SDK sem passar pelo MatchService.
+      //
+      // `resource == null` é obrigatório: o checkAlreadyLiked faz get
+      // de um documento que pode não existir (mesma armadilha que
+      // quebrou favorites).
+      //
+      // get('likerUid', '') cobre os documentos legados, gravados pelo
+      // cliente antes da v2 com o nome de campo antigo.
+      allow get: if isAuthenticated() && (
+        resource == null ||
+        resource.data.get('fromUid',  '') == request.auth.uid ||
+        resource.data.get('likerUid', '') == request.auth.uid
+      );
+      allow list: if false;
+      allow create, update, delete: if false;
     }
 
     // ============================================

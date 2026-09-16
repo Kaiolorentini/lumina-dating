@@ -23,6 +23,7 @@ import { useUserChat }                     from '../hooks/useChat';
 import { useBlock }                        from '../../profile/hooks/useBlock';
 import { ChatMessage }                     from '../../../shared/types';
 import { formatTime }                      from '../../../shared/utils';
+import { todayBrUnderscore }               from '../../../utils/dateBr';
 import { markAsDelivered, markAsRead, generateChatId } from '../services/messageService';
 import { Audio }                           from 'expo-av';
 import {
@@ -37,8 +38,7 @@ const fns = getFunctions();
 
 // Fire-and-forget: registra progresso da missão send_message
 function notifyMissionSendMessage(messageLength: number) {
-  const today     = new Date().toISOString().slice(0, 10).replace(/-/g, '_');
-  const missionId = `daily_${today}_send_message`;
+  const missionId = `daily_${todayBrUnderscore()}_send_message`;
   httpsCallable(fns, 'progressMission')({
     missionIdParam: missionId,
     messageLength,

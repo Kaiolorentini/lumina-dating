@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useDailyReward } from '../modules/engagement/hooks/useDailyReward';
 import { useCoins }       from '../context/CoinsContext';
+import { todayBrUnderscore } from '../utils/dateBr';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../theme/tokens';
 
 interface Props {
@@ -42,8 +43,7 @@ export default function DailyRewardModal({ uid, visible, onClose }: Props) {
       await refreshWallet();
 
       // v5.2 — registra progresso da missão claim_daily (fire-and-forget)
-      const today     = new Date().toISOString().slice(0, 10).replace(/-/g, '_');
-      const missionId = `daily_${today}_claim_daily`;
+      const missionId = `daily_${todayBrUnderscore()}_claim_daily`;
       httpsCallable(fns, 'progressMission')({ missionIdParam: missionId }).catch(() => {});
 
       // v5.3 — conquista STREAK_UPDATE (fire-and-forget)

@@ -19,6 +19,7 @@ import { useCoins }        from '../../../context/CoinsContext';
 import { useFaisca, FaiscaTier } from '../hooks/useFaisca';
 import { RootStackParamList }    from '../../../navigation/types';
 import Header from '../../../components/Header';
+import { todayBrUnderscore } from '../../../utils/dateBr';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -84,8 +85,7 @@ export default function FaiscaScreen() {
 
       // v5.2 — registra progresso da missão claim_faisca (fire-and-forget)
       if (user?.uid) {
-        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '_');
-        notifyMissionProgress(user.uid, `daily_${today}_claim_faisca`);
+        notifyMissionProgress(user.uid, `daily_${todayBrUnderscore()}_claim_faisca`);
       }
     }
   }

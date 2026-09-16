@@ -10,26 +10,26 @@
 //
 // REGRA 1:  Nenhum crédito client-side.
 // REGRA 2:  runTransaction() obrigatório.
-// REGRA 3:  Idempotência por uid+data+tipo+target.
-// REGRA 12: Cofre — máx 20 fragmentos/dia de visitas.
+// REGRA 3:  Idempotência por uid+data+tipo.
+// REGRA 12 (cofre, máx 20 fragmentos/dia de visitas) vive no
+// VaultService desde a FASE 2F — este arquivo não alimenta o Cofre.
 // ============================================
 
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { FRAGMENTS, DAILY_LIMITS } from '../config/economy';
-
+import { FRAGMENTS } from '../config/economy';
+// VISITA_RECEBIDA, CURTIDA_RECEBIDA e NOVA_SINTONIA saíram na
+// FASE 2F: essas origens creditavam em `wallets.fragments`, que é
+// a carteira — o Cofre é `wallets.vaultFragments`, campo distinto.
+// Quem alimenta o Cofre é o VaultService.
 export type FragmentOrigin =
   | 'MISSAO_COMUM'       // missões diárias comuns
-  | 'VISITA_RECEBIDA'    // cofre — alguém visitou seu perfil
-  | 'CURTIDA_RECEBIDA'   // cofre — alguém curtiu seu perfil
-  | 'NOVA_SINTONIA'      // nova sintonia criada
   | 'RANKING_RECOMPENSA'; // top 10 no ranking semanal
 
 interface EarnFragmentsRequest {
   origin:         FragmentOrigin;
   amount:         number;
   idempotencyKey: string;
-  targetUid?:     string; // para visitas/curtidas (anti-farm)
 }
 
 export const earnFragments = onCall(
@@ -38,7 +38,7 @@ export const earnFragments = onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Não autenticado.');
 
-    const { origin, amount, idempotencyKey, targetUid } = request.data as EarnFragmentsRequest;
+    const { origin, amount, idempotencyKey } = request.data as EarnFragmentsRequest;
 
     if (!origin || !idempotencyKey || !amount || amount <= 0) {
       throw new HttpsError('invalid-argument', 'Parâmetros inválidos.');
@@ -46,7 +46,6 @@ export const earnFragments = onCall(
 
     const db             = admin.firestore();
     const walletRef      = db.collection('wallets').doc(uid);
-    const userRef        = db.collection('users').doc(uid);
     const idempotencyRef = db.collection('earnIdempotency').doc(idempotencyKey);
 
     try {
@@ -64,39 +63,10 @@ export const earnFragments = onCall(
         }
 
         const wallet = walletSnap.data()!;
-        const today  = new Date().toISOString().slice(0, 10);
 
-        // REGRA 12: máx 20 fragmentos/dia de visitas ao Cofre
-        if (origin === 'VISITA_RECEBIDA') {
-          const walletDay      = wallet.diaAtual ?? '';
-          const vaultFragToday = walletDay === today
-            ? (wallet.vaultFragmentsFromVisits ?? 0)
-            : 0;
-
-          if (vaultFragToday >= DAILY_LIMITS.VAULT_FRAGMENTS_FROM_VISITS) {
-            return { skipped: true, reason: 'vault_visits_daily_cap_reached' };
-          }
-
-          t.update(walletRef, {
-            vaultFragmentsFromVisits: admin.firestore.FieldValue.increment(amount),
-            diaAtual: today,
-          });
-        }
-
-        // Anti-farm: mesmo visitante só gera 1 fragmento/dia no Cofre
-        if ((origin === 'VISITA_RECEBIDA' || origin === 'CURTIDA_RECEBIDA') && targetUid) {
-          const userSnap = await t.get(userRef);
-          if (userSnap.exists) {
-            const daily       = userSnap.data()!.daily ?? {};
-            const vaultSenders: string[] = daily.vaultFragmentSenders ?? [];
-            if (vaultSenders.includes(targetUid)) {
-              return { skipped: true, reason: 'already_counted_from_this_user' };
-            }
-            t.update(userRef, {
-              'daily.vaultFragmentSenders': admin.firestore.FieldValue.arrayUnion(targetUid),
-            });
-          }
-        }
+        // O teto diário e o anti-farm por visitante viviam aqui e
+        // migraram para o VaultService na FASE 2F, onde o Cofre é
+        // de fato alimentado (fragmentsFromVisitsToday em wallets).
 
         // Verifica expiração parcial de fragmentos (10% a cada 7 dias sem converter)
         const lastConversion    = wallet.lastFragmentConversion?.toDate?.() ?? null;

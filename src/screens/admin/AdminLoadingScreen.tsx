@@ -151,12 +151,19 @@ export default function AdminLoadingScreen({ onFinish }: Props) {
       });
     }, 3000);
 
-    // Progresso
+    // Progresso.
+    //
+    // completedSteps deriva do índice atual em vez de acumular por
+    // push: `[...prev, step]` dependia de cada atualização entrar
+    // num lote separado do React, e quando duas caíam no mesmo tick
+    // um índice se perdia — na prática "Carregando métricas" quase
+    // nunca ficava verde.
     let step = 0;
     const stepInterval = setInterval(() => {
       if (step < STATUS_STEPS.length - 1) {
-        setCompletedSteps(prev => [...prev, step]);
+        const done = step;
         step++;
+        setCompletedSteps(Array.from({ length: done + 1 }, (_, i) => i));
         setCurrentStep(step);
         Animated.timing(progressAnim, {
           toValue: (step / (STATUS_STEPS.length - 1)) * (width - spacing.xl * 2),
@@ -164,7 +171,7 @@ export default function AdminLoadingScreen({ onFinish }: Props) {
           useNativeDriver: false,
         }).start();
       } else {
-        setCompletedSteps(prev => [...prev, step]);
+        setCompletedSteps(STATUS_STEPS.map((_, i) => i));
         Animated.timing(progressAnim, {
           toValue: width - spacing.xl * 2,
           duration: 500,

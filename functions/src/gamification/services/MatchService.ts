@@ -1,10 +1,12 @@
 // ============================================
-// LUMINA — MATCH SERVICE v1.0
+// LUMINA — MATCH SERVICE v1.1
 // functions/src/gamification/services/MatchService.ts
 //
 // ADR-001: MatchService emite o evento MATCH_CREATED.
 // Nunca um trigger Firestore.
 // Regra de negócio vive aqui, não na persistência.
+//
+// v1.1 — gamificationProcessed entra na transação.
 // ============================================
 
 import * as admin     from 'firebase-admin';
@@ -29,18 +31,14 @@ export const MatchService = {
 
     const result = await db.runTransaction(async (t) => {
       const matchDoc = await t.get(matchRef);
+      const data     = matchDoc.exists ? matchDoc.data()! : null;
 
-      // Se já existe, verifica se é nova para gamificação
-      if (matchDoc.exists) {
-        const data = matchDoc.data()!;
-        if (data.gamificationProcessed === true) {
-          return { matchId, uid, targetUid, isNew: false };
-        }
+      // Já processado: nem grava nem reemite.
+      if (data?.gamificationProcessed === true) {
+        return { matchId, uid, targetUid, isNew: false };
       }
 
-      const likedBy = matchDoc.exists
-        ? (matchDoc.data()!.likedBy ?? [])
-        : [];
+      const likedBy: string[] = data?.likedBy ?? [];
 
       // Adiciona curtida do uid atual
       if (!likedBy.includes(uid)) {
@@ -49,6 +47,11 @@ export const MatchService = {
 
       const isMutual = likedBy.includes(uid) && likedBy.includes(targetUid);
 
+      // A flag entra na MESMA transação. Fora dela, duas chamadas
+      // concorrentes no instante do match liam `false` as duas e
+      // emitiam MATCH_CREATED em dobro — 100 XP e 100 treeXP por
+      // uma sintonia só. E o `false` fixo aqui ainda podia
+      // sobrescrever o `true` gravado logo depois.
       t.set(matchRef, {
         matchId,
         users:     [uid, targetUid],
@@ -56,18 +59,16 @@ export const MatchService = {
         isMutual,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-        gamificationProcessed: false,
+        gamificationProcessed: isMutual,
       }, { merge: true });
 
       return { matchId, uid, targetUid, isNew: isMutual };
     });
 
-    // Emite gamificação apenas se é match mútuo novo (ADR-001)
+    // Emite gamificação apenas se é match mútuo novo (ADR-001).
+    // A exclusividade já foi garantida dentro da transação.
     if (result.isNew) {
       GamificationIntegrationService.handleMatchCreated({ uid, targetUid });
-
-      // Marca como processado para evitar duplicatas
-      await matchRef.set({ gamificationProcessed: true }, { merge: true });
     }
 
     return result;

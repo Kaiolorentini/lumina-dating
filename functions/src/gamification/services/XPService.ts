@@ -13,6 +13,7 @@ import { XP_ACTION_VALUES, DAILY_XP_MAX } from '../../config/xpValues';
 import { XP_MULTIPLIERS }                  from '../../config/xpMultipliers';
 import { calcLevel }                       from '../../config/xpTable';
 import { calcTreeStage }                   from '../../config/treeTable';
+import { todayBr }                         from '../../utils/dateBr';
 
 const db = admin.firestore();
 
@@ -49,7 +50,7 @@ export const XPService = {
     const actionDef = XP_ACTION_VALUES[actionKey];
     if (!actionDef) return { skipped: true, reason: `Ação ${actionKey} não encontrada` };
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = todayBr();
     const userDoc  = await db.collection('users').doc(uid).get();
     const data     = userDoc.data() ?? {};
     const xp       = data.xp ?? {};
@@ -78,7 +79,9 @@ export const XPService = {
     const actionDef = XP_ACTION_VALUES[actionKey];
     if (!actionDef) return { skipped: true, reason: `Ação ${actionKey} não encontrada` };
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // Mesma fronteira do earnXP — se divergirem, um caminho zera
+    // o contador que o outro ainda considera cheio.
+    const todayStr = todayBr();
     const idempKey = `${uid}_${eventId}`;
 
     return db.runTransaction(async (t) => {

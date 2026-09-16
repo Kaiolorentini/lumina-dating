@@ -51,11 +51,38 @@ export type SpendableFeature =
   | 'MEGA_DESTAQUE'
   | 'SEGUNDA_CHANCE'
   | 'RECARREGAR_ENERGIA'
-  | 'MOLDURA_NEBULOSA'
-  | 'MOLDURA_ECLIPSE'
-  | 'MOLDURA_SUPERNOVA'
   | 'PERFIL_GALAXIA'
   // Premium Only — nunca com Gratuitos
+  // Molduras (FASE 5): aluguel de 30 dias, preço por raridade
+  // — RARE 70, EPIC 100, LEGENDARY 150. O preço real vem do
+  // COSTS no servidor; aqui só a chave.
+  | 'MOLDURA_NEBULOSA'
+  | 'MOLDURA_ECLIPSE'
+  | 'MOLDURA_MARESIA'
+  | 'MOLDURA_SUPERNOVA'
+  | 'MOLDURA_AURORA'
+  | 'MOLDURA_COMETA'
+  | 'MOLDURA_BURACO_NEGRO'
+  | 'MOLDURA_VIA_LACTEA'
+  // Badges da loja (FASE 6): aluguel de 30 dias, Premium-only.
+  // Só os pagos em cristais entram aqui — os de fragmentos vão
+  // pela CF buyBadgeWithFragments, que não usa SpendableFeature.
+  | 'BADGE_METEORO'
+  | 'BADGE_PULSAR'
+  | 'BADGE_BUSSOLA'
+  | 'BADGE_FAROL'
+  | 'BADGE_ANDARILHO'
+  | 'BADGE_ESTUFA'
+  | 'BADGE_ANEL_GELO'
+  | 'BADGE_POEIRA_ESTELAR'
+  | 'BADGE_COROA_SOLAR'
+  | 'BADGE_NEBULOSA_CARMIM'
+  | 'BADGE_ECLIPSE'
+  | 'BADGE_CRISTAL'
+  | 'BADGE_QUASAR'
+  | 'BADGE_SINGULARIDADE'
+  | 'BADGE_GENESE'
+  | 'BADGE_VIA_LACTEA'
   | 'REVEAL_SINTONIA_PERDIDA'
   | 'TURBO_SINTONIA'
   | 'FERTILIZANTE_SINTONIA'
@@ -130,6 +157,36 @@ export function isPremiumOnly(feature: SpendableFeature): boolean {
     'TEMA_GALAXIA',
     'COR_NOME_ESPECIAL',
     'EFEITO_ENTRADA',
+    // Molduras — FASE 5. Espelha PREMIUM_ONLY_FEATURES do
+    // economy.ts; se divergir, a tela mostra um preço em
+    // gratuitos que o servidor vai recusar.
+    'MOLDURA_NEBULOSA',
+    'MOLDURA_ECLIPSE',
+    'MOLDURA_MARESIA',
+    'MOLDURA_SUPERNOVA',
+    'MOLDURA_AURORA',
+    'MOLDURA_COMETA',
+    'MOLDURA_BURACO_NEGRO',
+    'MOLDURA_VIA_LACTEA',
+    // Badges — FASE 6. Espelha PREMIUM_ONLY_FEATURES do
+    // economy.ts; se divergir, a tela mostra preço em gratuitos
+    // que o servidor vai recusar.
+    'BADGE_METEORO',
+    'BADGE_PULSAR',
+    'BADGE_BUSSOLA',
+    'BADGE_FAROL',
+    'BADGE_ANDARILHO',
+    'BADGE_ESTUFA',
+    'BADGE_ANEL_GELO',
+    'BADGE_POEIRA_ESTELAR',
+    'BADGE_COROA_SOLAR',
+    'BADGE_NEBULOSA_CARMIM',
+    'BADGE_ECLIPSE',
+    'BADGE_CRISTAL',
+    'BADGE_QUASAR',
+    'BADGE_SINGULARIDADE',
+    'BADGE_GENESE',
+    'BADGE_VIA_LACTEA',
   ];
   return premiumFeatures.includes(feature);
 }

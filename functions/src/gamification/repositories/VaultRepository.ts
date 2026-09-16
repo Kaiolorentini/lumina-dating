@@ -14,16 +14,21 @@ export interface VaultSnapshot {
   vaultFragments:   number;
   vaultUnlockAt:    Date | null;
   vaultFullNotified: boolean;
+  fragmentsFromVisitsToday: number;
 }
 
 export const VaultRepository = {
-  async getSnapshot(t: FirebaseFirestore.Transaction, uid: string): Promise<VaultSnapshot> {
+  async getSnapshot(t: FirebaseFirestore.Transaction, uid: string, todayStr?: string): Promise<VaultSnapshot> {
     const doc  = await t.get(db.collection('wallets').doc(uid));
     const data = doc.data() ?? {};
+    // Contador do teto diário: se a data gravada não é a de hoje,
+    // o contador já expirou — vale zero, sem job de reset.
+    const sameDay = todayStr !== undefined && data.fragmentsFromVisitsDate === todayStr;
     return {
       vaultFragments:    data.vaultFragments    ?? 0,
       vaultUnlockAt:     data.vaultUnlockAt?.toDate?.() ?? null,
       vaultFullNotified: data.vaultFullNotified ?? false,
+      fragmentsFromVisitsToday: sameDay ? (data.fragmentsFromVisitsToday ?? 0) : 0,
     };
   },
 

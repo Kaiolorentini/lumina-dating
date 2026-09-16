@@ -211,6 +211,16 @@ export default function ProfileScreen() {
             <Text style={styles.menuItemSubtext}>{prestigeData?.prestigeName ?? 'Desperto'}</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Frames' as any)}>
+            <Text style={styles.menuItemIcon}>🖼️</Text>
+            <Text style={styles.menuItemText}>Molduras</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Badges' as any)}>
+            <Text style={styles.menuItemIcon}>✦</Text>
+            <Text style={styles.menuItemText}>Badges</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PremiumTools' as any)}>
             <Text style={styles.menuItemIcon}>💎</Text>
             <Text style={styles.menuItemText}>Ferramentas Premium</Text>

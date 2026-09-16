@@ -17,12 +17,13 @@
 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { createNotification } from '../modules/notifications/services/notificationService';
+import { todayBr } from '../utils/dateBr';
 
 const functions = getFunctions();
 
 function getDailyKey(userId: string, suffix: string): string {
-  const today = new Date().toISOString().slice(0, 10);
-  return `${userId}_${today}_${suffix}`;
+  // Chave comparada contra o dia que o earnCoins calcula (BRT).
+  return `${userId}_${todayBr()}_${suffix}`;
 }
 
 // actionId precisa ser único por EVENTO, não por par de usuários.

@@ -9,6 +9,7 @@
 
 import * as admin from 'firebase-admin';
 import { ValidationError } from '../ErrorBoundary';
+import { todayBr }         from '../../utils/dateBr';
 
 const db = admin.firestore();
 
@@ -53,7 +54,7 @@ export const ProfileVisitValidator = {
     }
 
     // Anti-farm diário
-    const todayStr  = new Date().toISOString().slice(0, 10);
+    const todayStr  = todayBr();
     const farmDoc   = await db.collection('visitFarmControl').doc(`${visitorUid}_${todayStr}`).get();
     const farmData  = farmDoc.data() ?? {};
     const visitCount = Object.keys(farmData).filter(k => k.startsWith('visited_')).length;

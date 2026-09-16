@@ -18,6 +18,7 @@ import { useAuth }          from '../../../context/AuthContext';
 import { useDestinyCard, DestinyProfile } from '../hooks/useDestinyCard';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
+import { todayBrUnderscore } from '../../../utils/dateBr';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -107,8 +108,7 @@ export default function DestinyCardScreen() {
     // v5.2 — registra progresso da missão open_destiny (fire-and-forget)
     if (user?.uid) {
       missionNotified.current = true;
-      const today    = new Date().toISOString().slice(0, 10).replace(/-/g, '_');
-      const missionId = `daily_${today}_open_destiny`;
+      const missionId = `daily_${todayBrUnderscore()}_open_destiny`;
       const fn = httpsCallable(fns, 'progressMission');
       fn({ missionIdParam: missionId }).catch(() => { /* silencioso */ });
     }

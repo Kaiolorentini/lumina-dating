@@ -63,7 +63,7 @@ export default function LoginScreen({ navigation }: Props) {
           <View style={styles.logoContainer}>
             <Text style={styles.logo}>✦</Text>
             <Text style={styles.title}>Lumina</Text>
-            <Text style={styles.subtitle}>AI Dating</Text>
+            <Text style={styles.subtitle}>a sua nova conexão favorita</Text>
           </View>
 
           <View style={styles.phraseContainer}>

@@ -12,6 +12,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { GameEventType }                        from '../GameEventTypes';
 import { getPolicyForFarm }   from './AntiFarmPolicy';
 import { ValidationError }                      from '../ErrorBoundary';
+import { todayBr }                              from '../../utils/dateBr';
 
 const db = admin.firestore();
 
@@ -28,7 +29,7 @@ export const AntiFarmService = {
     const policy = getPolicyForFarm(ctx.eventType);
     if (!policy) return; // sem política = sem restrição
 
-    const todayStr  = new Date().toISOString().slice(0, 10);
+    const todayStr  = todayBr();
     const controlId = `${ctx.uid}_${todayStr}`;
     const controlRef = db.collection(policy.collectionPath).doc(controlId);
     const controlDoc = await controlRef.get();
@@ -64,7 +65,7 @@ export const AntiFarmService = {
     const policy = getPolicyForFarm(ctx.eventType);
     if (!policy) return;
 
-    const todayStr   = new Date().toISOString().slice(0, 10);
+    const todayStr   = todayBr();
     const controlId  = `${ctx.uid}_${todayStr}`;
     const controlRef = db.collection(policy.collectionPath).doc(controlId);
 

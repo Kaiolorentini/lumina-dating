@@ -12,7 +12,7 @@ import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { MissionService } from '../gamification/services/MissionService';
 import { ValidationError } from '../gamification/ErrorBoundary';
-
+import { todayBr } from '../utils/dateBr';
 const db = admin.firestore();
 
 // ── CATÁLOGO — inalterado ──
@@ -66,7 +66,10 @@ export const generateDailyMissions = functions.onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
 
-    const dateStr  = new Date().toISOString().slice(0, 10);
+    // BRT: dateStr é semente do sorteio E chave do documento.
+    // Em UTC, às 21h o usuário recebia um novo conjunto de missões
+    // e o progresso do dia corrente ficava órfão.
+    const dateStr  = todayBr();
     const missRef  = db.collection('dailyMissions').doc(`${uid}_${dateStr}`);
     const existing = await missRef.get();
 
@@ -108,7 +111,7 @@ export const getDailyMissions = functions.onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
 
-    const dateStr    = new Date().toISOString().slice(0, 10);
+    const dateStr    = todayBr();
     const missRef    = db.collection('dailyMissions').doc(`${uid}_${dateStr}`);
     const walletRef  = db.collection('wallets').doc(uid);
     const [missDoc, walletDoc] = await Promise.all([missRef.get(), walletRef.get()]);

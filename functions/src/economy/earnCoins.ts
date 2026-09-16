@@ -22,7 +22,7 @@ import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { DAILY_LIMITS } from '../config/economy';
 import { auditLogFinanceiro, AuditTipo } from '../utils/auditLogFinanceiro';
-
+import { todayBr, monthBr } from '../utils/dateBr';
 export type EarnCoinsOrigin =
   | 'LOGIN_DIARIO'
   | 'FAISCA_DESTINO'
@@ -91,7 +91,9 @@ export const earnCoins = onCall(
         const wallet = walletSnap.data()!;
 
         // Reset diário verificado server-side
-        const today        = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        // BRT: em UTC o teto diário de cristais gratuitos zerava
+        // às 21h, liberando o dobro no mesmo dia civil.
+        const today        = todayBr();
         const walletDay    = wallet.diaAtual ?? '';
         const dailyTotal   = walletDay === today
           ? (wallet.dailyCristaisGratuitos ?? 0)
@@ -103,7 +105,7 @@ export const earnCoins = onCall(
         }
 
         // Teto mensal (apenas para Gratuitos)
-        const currentMonth   = new Date().toISOString().slice(0, 7);
+        const currentMonth   = monthBr();
         const walletMonth    = wallet.mesAtual ?? '';
         const monthlyTotal   = walletMonth === currentMonth
           ? (wallet.cristaisGratuitosMensais ?? 0)

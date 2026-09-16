@@ -89,7 +89,10 @@ export { onProfileVisit, checkLostSintonia } from './engagement/emotionalTrigger
 export { getUserPublicProfile }              from './engagement/getUserPublicProfile';
 export { generateDailyMissions, getDailyMissions, progressMission } from './engagement/dailyMissions';
 export { getFragmentsStatus, expireFragments } from './engagement/fragments';
-export { getVaultStatus, depositToVault, withdrawFromVault } from './engagement/vault';
+export { getVaultStatus, withdrawFromVault } from './engagement/vault';
+export { equipFrame, getFramesStatus } from './engagement/frames';
+export { equipBadge, getBadgesStatus } from './engagement/badges';
+export { buyBadgeWithFragments }       from './economy/buyBadgeWithFragments';
 export { earnXP, getXPStatus } from './engagement/xp';
 export { checkAchievements, getAchievementsStatus, repairAchievements } from './engagement/achievements';
 export { registerRankingXP, getRanking, freezeRanking, rewardRanking, resetRanking } from './engagement/ranking';

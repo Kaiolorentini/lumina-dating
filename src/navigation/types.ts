@@ -28,6 +28,12 @@ export type RootStackParamList = {
   Ranking:       undefined;
   Prestige:      undefined;
   PremiumTools:  undefined;
+  Frames:        undefined;
+  Badges:        undefined;
+  BadgesShop:    undefined;
+  FramesShop:    undefined;
+  CrystalPacks:  undefined;
+  Boosts:        undefined;
   WeeklyChallenge: undefined;
   PaymentSetup:    undefined;
   MarketplaceHome: undefined;

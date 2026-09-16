@@ -22,7 +22,7 @@
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-
+import { todayBr }   from '../utils/dateBr';
 const db = admin.firestore();
 
 // Tabela de probabilidades acumuladas
@@ -55,7 +55,7 @@ export const claimDailyFaisca = functions.onCall(
     const faiscaRef = db.collection('dailyFaisca').doc(uid);
     const auditRef  = db.collection('wallets').doc(uid).collection('auditLog');
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = todayBr();
 
     try {
       const result = await db.runTransaction(async (t) => {
@@ -152,7 +152,7 @@ export const getDailyFaiscaStatus = functions.onCall(
     }
 
     const data       = doc.data()!;
-    const todayStr   = new Date().toISOString().slice(0, 10);
+    const todayStr   = todayBr();
 
     return {
       alreadyClaimed: data.lastClaimedDate === todayStr,

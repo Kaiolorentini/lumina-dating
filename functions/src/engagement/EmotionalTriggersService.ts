@@ -8,7 +8,7 @@
 
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-
+import { todayBr }    from '../utils/dateBr';
 const db = admin.firestore();
 
 function calcCompatibilidade(
@@ -43,7 +43,10 @@ async function criarNotificacao(
 
 export const EmotionalTriggersService = {
   async runProfileVisitTriggers(visitorId: string, profileId: string): Promise<void> {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // BRT: a chave triggerControl/{profileId}_{data} governa o teto
+    // de 3 Sintonias Perdidas/dia. Em UTC o contador zerava às 21h
+    // e o usuário podia receber até 6 no mesmo dia.
+    const todayStr = todayBr();
 
     const [visitorDoc, profileDoc] = await Promise.all([
       db.collection('users').doc(visitorId).get(),

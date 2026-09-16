@@ -16,7 +16,7 @@ import { ProfileVisitOrchestrator } from '../gamification/orchestrators/ProfileV
 import { EmotionalTriggersService } from './EmotionalTriggersService';
 import { LegacyShadowOrchestrator } from '../gamification/compatibility/LegacyShadowOrchestrator';
 import { CompareParams } from '../gamification/compatibility/ICompatibilityAdapter';
-
+import { todayBr } from '../utils/dateBr';
 const db = admin.firestore();
 
 function newCorrelationId(): string {
@@ -34,7 +34,10 @@ async function captureXPState(uid: string): Promise<{
   fertilizerActive: boolean;
 } | null> {
   try {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // Mesma fronteira do xp.ts — o Shadow compara xpToday contra o
+    // que o legado calcularia; fusos diferentes gerariam divergência
+    // falsa toda noite.
+    const todayStr = todayBr();
     const doc      = await db.collection('users').doc(uid).get();
     const data     = doc.data() ?? {};
     const xp       = data.xp ?? {};
@@ -121,7 +124,7 @@ export const checkLostSintonia = scheduledFunctions.onSchedule(
       const profileId = data.profileId as string;
       const visitorId = data.visitorId as string;
       const sintonia  = data.sintonia  as number;
-      const todayStr  = new Date().toISOString().slice(0, 10);
+      const todayStr  = todayBr();
 
       try {
         const voltouSnap = await db.collection('profile_visits')

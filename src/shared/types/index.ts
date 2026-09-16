@@ -30,6 +30,9 @@ export interface UserProfile {
   // Campos de segurança — obrigatórios para Firestore Rules
   role: 'user' | 'creator' | 'admin' | 'superadmin';
   isBlocked: boolean;
+  /** Progressão e cosméticos. Escrito só pelas Cloud Functions —
+   *  a rule de users bloqueia `progression` no cliente. */
+  progression?: Partial<UserProgression>;
 }
 
 // ------------------------------------------
@@ -117,6 +120,24 @@ export interface UserProgression {
   };
   visibilidade:  number;
   ultimoAcesso:  Date;
+
+  // ── Cosméticos (FASES 5 e 6) ──
+  // Posse: unlockedItems é permanente (conquista); os *Rentals
+  // guardam o vencimento do aluguel de 30 dias da loja.
+  unlockedItems: Record<string, boolean>;
+  frameRentals:  Record<string, Date>;
+  badgeRentals:  Record<string, Date>;
+
+  // Equipado. Os campos *Until existem para que QUEM VÊ o perfil
+  // alheio saiba se o aluguel venceu, sem depender de o dono
+  // abrir o app e disparar a limpeza do getFramesStatus.
+  equippedFrame:       string | null;
+  equippedFrameUntil:  Date   | null;
+  equippedBadge:       string | null;
+  equippedBadgeUntil:  Date   | null;
+  // Badges de conquista não estão no catálogo da loja — sem a
+  // raridade, o visualizador não sabe qual aparência desenhar.
+  equippedBadgeRarity: string | null;
 }
 
 // ------------------------------------------
@@ -293,6 +314,10 @@ export interface ProfileCardData {
   sintonia:   number;
   photoURL:   string;
   boostType?: BoostType | null;
+  // Cosméticos equipados — FASE 5 Etapa 2.
+  equippedFrame?:       string | null;
+  equippedBadge?:       string | null;
+  equippedBadgeRarity?: string | null;
 }
 
 // ------------------------------------------

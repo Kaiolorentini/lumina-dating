@@ -8,6 +8,8 @@
 
 import * as admin from 'firebase-admin';
 import { VaultRepository } from '../repositories/VaultRepository';
+import { todayBr }         from '../../utils/dateBr';
+import { DAILY_LIMITS }    from '../../config/economy';
 
 const db            = admin.firestore();
 const VAULT_MAX     = 5000;
@@ -38,24 +40,42 @@ export const VaultService = {
     const fragments = VAULT_SOURCES[eventType];
     if (!fragments) return { skipped: true, reason: `${eventType} não alimenta o Cofre` };
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = todayBr();
     const farmKey  = `vault_${eventType}_${fromUid}_${todayStr}`;
 
     return db.runTransaction(async (t) => {
       const [snapshot, isDupe] = await Promise.all([
-        VaultRepository.getSnapshot(t, targetUid),
+        VaultRepository.getSnapshot(t, targetUid, todayStr),
         VaultRepository.isFarmDuplicate(t, targetUid, farmKey, todayStr),
       ]);
 
       if (isDupe)                              return { skipped: true, reason: 'anti-farm: já depositado hoje' };
       if (snapshot.vaultFragments >= VAULT_MAX) return { skipped: true, reason: 'cofre cheio' };
 
+      // R12: teto diário de fragmentos vindos de visitas.
+      // A regra existia só no earnFragments, que não é mais o
+      // caminho ativo — na prática o cofre não tinha teto: 100
+      // visitantes distintos rendiam 200 fragmentos num dia.
+      if (eventType === 'PROFILE_VISIT' &&
+          snapshot.fragmentsFromVisitsToday >= DAILY_LIMITS.VAULT_FRAGMENTS_FROM_VISITS) {
+        return { skipped: true, reason: 'teto diário de fragmentos por visitas atingido' };
+      }
+
       const canDeposit = Math.min(fragments, VAULT_MAX - snapshot.vaultFragments);
       const newVault   = snapshot.vaultFragments + canDeposit;
       const nowFull    = newVault >= VAULT_MAX;
 
       const needsNewCycle = !snapshot.vaultUnlockAt || Date.now() > snapshot.vaultUnlockAt.getTime();
-      const updates: Record<string, unknown> = { vaultFragments: newVault, vaultLastContribution: admin.firestore.FieldValue.serverTimestamp() };
+      const updates: Record<string, unknown> = {
+        vaultFragments:        newVault,
+        vaultLastContribution: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      // Contador do teto diário — reseta sozinho pela data.
+      if (eventType === 'PROFILE_VISIT') {
+        updates.fragmentsFromVisitsToday = snapshot.fragmentsFromVisitsToday + canDeposit;
+        updates.fragmentsFromVisitsDate  = todayStr;
+      }
       if (needsNewCycle) {
         updates.vaultUnlockAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 48 * 3600000));
       }

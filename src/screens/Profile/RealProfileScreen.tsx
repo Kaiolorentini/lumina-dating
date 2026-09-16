@@ -28,6 +28,12 @@ import { RootStackParamList } from '../../navigation/types';
 import Header from '../../components/Header';
 import SintoniaBar from '../../components/SintoniaBar';
 import { calcularSintonia } from '../../utils/sintoniaEngine';
+import { todayBr, todayBrUnderscore } from '../../utils/dateBr';
+import { ProfileFrame } from '../../components/profile/ProfileFrame';
+import { Badge } from '../../components/profile/Badge';
+import {
+  frameAppearanceById, badgeAppearanceById, badgeMeaningById, Rarity,
+} from '../../config/cosmeticsCatalog';
 import {
   enviarSolicitacao,
   estaoConectados,
@@ -36,7 +42,7 @@ import {
 import { estaBloqueado, bloquearUsuario } from '../../services/blockService';
 import { UserProfile } from '../../types';
 import { registrarVisita } from '../../services/visitsService';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable }           from 'firebase/functions';
 import { db }                                    from '../../services/firebase';
 
@@ -45,10 +51,14 @@ const functions         = getFunctions();
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
+// Genéricos extraídos para evitar `httpsCallable<` em fim de linha,
+// que é corrompido de forma recorrente no processo de cópia.
+type CreateMatchReq = { targetUid: string };
+type CreateMatchRes = { success: boolean; isMutual: boolean; alreadyLiked: boolean };
+
 // v5.3 — helper: registra progresso de missão (fire-and-forget)
 function notifyMission(missionType: string, targetUid?: string) {
-  const today     = new Date().toISOString().slice(0, 10).replace(/-/g, '_');
-  const missionId = `daily_${today}_${missionType}`;
+  const missionId = `daily_${todayBrUnderscore()}_${missionType}`;
   const fn        = httpsCallable(functions, 'progressMission');
   fn({ missionIdParam: missionId, targetUid }).catch(() => { /* silencioso */ });
 }
@@ -107,33 +117,20 @@ export default function RealProfileScreen() {
         if (user?.uid && targetUserId) {
           await registrarVisita(user.uid, targetUserId);
 
-          // XP por visita (fire-and-forget).
+          // XP, conquista e cofre NÃO são emitidos aqui.
           //
-          // actionId precisa ser único por EVENTO. Com
-          // `visit_${uid}_${targetUid}` fixo, a idempotência do
-          // earnXP bloqueava toda visita após a primeira — 18
-          // visitas registradas renderam 2 de XP no total.
-          // O limite de 1x/dia por alvo já vem do `perUser`.
-          httpsCallable(functions, 'earnXP')({
-            action: 'VISIT_PROFILE',
-            targetUid: targetUserId,
-            actionId: `visit_${targetUserId}_${Date.now().toString(36)}`,
-          }).catch(() => { /* silencioso */ });
+          // registrarVisita grava em profile_visits, e o trigger
+          // onProfileVisit (emotionalTriggers.ts) roda o
+          // ProfileVisitOrchestrator, que chama handleProfileVisit
+          // → XPService (VISIT_PROFILE), VaultService, ranking e
+          // conquistas — tudo atrás do ProfileVisitValidator.
+          // Emitir do cliente duplicava os três: o actionId do
+          // cliente e o do servidor são chaves diferentes, então a
+          // idempotência do earnXP não pegava.
 
-          // v5.3 — missão visit_profiles (fire-and-forget)
+          // Missão diária continua no cliente: não há equivalente
+          // no caminho do PROFILE_VISIT.
           notifyMission('visit_profiles', targetUserId);
-
-          // v5.3 — conquista VISIT_PROFILE (fire-and-forget)
-          httpsCallable(functions, 'checkAchievements')({
-            action: 'VISIT_PROFILE',
-            currentValue: 1,
-          }).catch(() => {});
-
-          // v5.3 — deposita no cofre do perfil visitado (fire-and-forget)
-          httpsCallable(functions, 'depositToVault')({
-            source:    'visit',
-            targetUid: targetUserId,
-          }).catch(() => {});
         }
       }
     } catch (error) {
@@ -194,8 +191,7 @@ export default function RealProfileScreen() {
   }
 
   async function checkAlreadyLiked(uid: string, targetUid: string): Promise<boolean> {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const likeId   = `${uid}_${targetUid}_${todayStr}`;
+    const likeId   = `${uid}_${targetUid}_${todayBr()}`;
     const likeDoc  = await getDoc(doc(db, 'likes', likeId));
     return likeDoc.exists();
   }
@@ -203,41 +199,48 @@ export default function RealProfileScreen() {
   async function handleLike() {
     if (!user || liked || liking) return;
     setLiking(true);
+    // Otimista: o coração responde na hora, a CF confirma depois.
+    setLiked(true);
+
     try {
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const likeId   = `${user.uid}_${targetUserId}_${todayStr}`;
+      // onCreateMatch grava a curtida E roda o MatchService, que
+      // detecta sintonia mútua e emite CREATE_SINTONIA (50 XP +
+      // 50 treeXP + conquista). Gravar direto em 'likes' pelo
+      // cliente fazia o MatchService NUNCA rodar — a coleção
+      // Conector era inalcançável e a árvore jamais evoluía.
+      const createMatch = httpsCallable<CreateMatchReq, CreateMatchRes>(functions, 'onCreateMatch');
+      const result = await createMatch({ targetUid: targetUserId });
 
-      await setDoc(doc(db, 'likes', likeId), {
-        likerUid:  user.uid,
-        targetUid: targetUserId,
-        date:      todayStr,
-        createdAt: serverTimestamp(),
-      });
+      if (result.data.isMutual) {
+        Alert.alert('✦ Sintonia!', 'Vocês se curtiram. Que tal iniciar uma conversa?');
+      }
 
-      setLiked(true);
+      // Toda a gamificação derivada da curtida fica sob o mesmo
+      // guard. Antes, só o earnXP checava `alreadyLiked`: missão,
+      // cofre e onProfileLike rodavam de novo a cada reentrada na
+      // tela, furando o limite diário de fragmentos e inflando a
+      // missão like_profiles. A CF é a única fonte de verdade
+      // sobre "esta curtida é nova".
+      if (!result.data.alreadyLiked) {
+        // Gamificação XP/Engine — fire-and-forget
+        httpsCallable(functions, 'onProfileLike')({
+          likerUid:  user.uid,
+          targetUid: targetUserId,
+        }).catch(err => {
+          console.warn('[RealProfileScreen] onProfileLike falhou:', err);
+        });
 
-      // Gamificação XP/Engine — fire-and-forget
-      httpsCallable(functions, 'onProfileLike')({
-        likerUid: user.uid,
-        targetUid: targetUserId,
-      }).catch(err => {
-        console.warn('[RealProfileScreen] onProfileLike falhou:', err);
-      });
+        // v5.3 — missão like_profiles (fire-and-forget)
+        notifyMission('like_profiles', targetUserId);
 
-      // v5.3 — missão like_profiles (fire-and-forget)
-      notifyMission('like_profiles', targetUserId);
-
-      // v5.3 — conquista GIVE_LIKE (fire-and-forget)
-      httpsCallable(functions, 'checkAchievements')({
-        action: 'GIVE_LIKE',
-        currentValue: 1,
-      }).catch(() => {});
-
-      // v5.3 — deposita no cofre do perfil curtido (fire-and-forget)
-      httpsCallable(functions, 'depositToVault')({
-        source:    'like',
-        targetUid: targetUserId,
-      }).catch(() => {});
+        // XP GIVE_LIKE e depósito no cofre NÃO são emitidos aqui.
+        // O onProfileLike acima já dispara ambos pela via correta:
+        // XPService mapeia PROFILE_LIKE → GIVE_LIKE e VaultService
+        // deposita 5, ambos atrás do ProfileLikeValidator e do
+        // AntiFarmService. Emitir do cliente duplicava os dois — a
+        // idempotência do earnXP não pegava, porque o actionId do
+        // cliente e o do servidor são chaves diferentes.
+      }
 
     } catch (error) {
       Alert.alert('Erro', 'Não foi possível registrar a curtida.');
@@ -246,6 +249,28 @@ export default function RealProfileScreen() {
       setLiking(false);
     }
   }
+
+  // Cosméticos equipados do perfil visitado. O aluguel vencido é
+  // descartado aqui: `equippedFrameUntil` existe no documento
+  // justamente porque a limpeza do getFramesStatus só roda quando
+  // o próprio dono abre o app.
+  function activeCosmetic(id: unknown, until: unknown): string | null {
+    if (typeof id !== 'string' || !id) return null;
+    if (until === null || until === undefined) return id;  // permanente
+    const date = (until as { toDate?: () => Date })?.toDate?.() ?? null;
+    if (!date) return id;
+    return date.getTime() > Date.now() ? id : null;
+  }
+
+  const prog = (targetProfile as { progression?: Record<string, unknown> } | null)?.progression ?? {};
+  const targetFrame = frameAppearanceById(
+    activeCosmetic(prog.equippedFrame, prog.equippedFrameUntil)
+  );
+  const targetBadgeId = activeCosmetic(prog.equippedBadge, prog.equippedBadgeUntil);
+  const targetBadge = targetBadgeId
+    ? badgeAppearanceById(targetBadgeId, (prog.equippedBadgeRarity as Rarity) ?? 'COMMON')
+    : null;
+  const targetMeaning = badgeMeaningById(targetBadgeId);
 
   function getSintoniaLabel(): string {
     if (sintonia >= 95) return '✦ Sintonia Perfeita';
@@ -303,7 +328,17 @@ export default function RealProfileScreen() {
           )}
           <View style={styles.photoOverlay} />
           <View style={styles.photoInfo}>
+            {/* Avatar com moldura ao lado do nome. A foto de fundo
+                ocupa 45% da tela e é retangular — moldura circular
+                sobre ela não encaixaria. */}
             <View style={styles.nameRow}>
+              {targetFrame && targetProfile?.photoURL && (
+                <ProfileFrame
+                  photoURL={targetProfile.photoURL}
+                  size={40}
+                  frame={targetFrame}
+                />
+              )}
               <Text style={styles.name}>{targetProfile?.name}, {targetProfile?.age}</Text>
               <View style={styles.realBadge}>
                 <Text style={styles.realBadgeText}>👤 Real</Text>
@@ -318,6 +353,17 @@ export default function RealProfileScreen() {
         </View>
 
         <View style={styles.content}>
+          {/* O que a pessoa está dizendo sobre si. Vem antes da
+              Sintonia de propósito: é o que ela escolheu declarar,
+              e pesa mais numa decisão de mandar mensagem do que
+              um número calculado. */}
+          {targetMeaning && targetBadge && (
+            <View style={styles.meaningCard}>
+              <Badge appearance={targetBadge} size={44} />
+              <Text style={styles.meaningText}>{targetMeaning}</Text>
+            </View>
+          )}
+
           {/* Sintonia */}
           <View style={styles.card}>
             <Text style={styles.milestoneText}>{getSintoniaLabel()}</Text>
@@ -449,6 +495,8 @@ const styles = StyleSheet.create({
   onlineText:           { color: '#44FF88', fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   content:              { padding: spacing.lg, gap: spacing.md },
   card:                 { backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.grayDark },
+  meaningCard:          { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.gold + '11', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.gold + '33' },
+  meaningText:          { flex: 1, color: colors.gold, fontSize: fonts.sizes.md, fontStyle: 'italic', lineHeight: 20 },
   milestoneText:        { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', textAlign: 'center', marginBottom: spacing.md, letterSpacing: 1 },
   connectionCard:       { backgroundColor: colors.gold + '22', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.gold + '44', alignItems: 'center' },
   connectionText:       { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', textAlign: 'center' },

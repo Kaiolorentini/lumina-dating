@@ -11,7 +11,7 @@ import { BaseGameEventValidator } from './BaseGameEventValidator';
 import { ValidatorContext }       from '../IGameEventValidator';
 import { GameEventType }          from '../GameEventTypes';
 import { ValidationError }        from '../ErrorBoundary';
-
+import { todayBr } from '../../utils/dateBr';
 const db = admin.firestore();
 
 export class MissionCompletedValidator extends BaseGameEventValidator {
@@ -29,7 +29,7 @@ export class MissionCompletedValidator extends BaseGameEventValidator {
       throw new ValidationError('MISSING_MISSION_ID', 'missionId obrigatório', true);
     }
 
-    const todayStr  = new Date().toISOString().slice(0, 10);
+    const todayStr  = todayBr();
     const missionRef = db.collection('dailyMissions').doc(`${ctx.uid}_${todayStr}`);
     const missionDoc = await missionRef.get();
 
