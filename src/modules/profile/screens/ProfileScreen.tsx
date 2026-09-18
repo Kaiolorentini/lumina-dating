@@ -11,7 +11,7 @@ import {
   Image, ActivityIndicator, Alert, Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation }     from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { useAuth }           from '../../../context/AuthContext';
@@ -60,7 +60,17 @@ export default function ProfileScreen() {
   const isCreator   = role === 'creator';
   const isAdminUser = isAdmin || isSuperAdmin;
 
-  useEffect(() => { loadProfile(); }, []);
+  // useFocusEffect e não useEffect: ao voltar do ProfileSetup
+  // a tela NÃO remonta (fica montada na pilha), então um
+  // useEffect com [] não roda de novo e a tela seguia
+  // mostrando os dados antigos — parecia que a edição não
+  // tinha salvado. O mesmo vale para o papel de criador
+  // restaurado depois de um desbloqueio.
+  useFocusEffect(
+    React.useCallback(() => {
+      loadProfile();
+    }, [user?.uid])
+  );
 
   async function loadProfile() {
     if (!user) return;
@@ -74,32 +84,43 @@ export default function ProfileScreen() {
     }
   }
 
-  async function handleChangePhoto() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
+    async function handleChangePhoto() {
+    if (!user?.uid) return;
+
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
       Alert.alert('Permissão necessária', 'Precisamos acessar sua galeria.');
       return;
     }
+
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      // MediaTypeOptions está deprecado no SDK 54 — a forma
+      // de array é a que o useProfileSetup já usa.
+      mediaTypes:    ['images'],
       allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-      base64: true,
+      aspect:        [1, 1],
+      quality:       0.8,
+      // base64 direto do picker: nem fetch nem XMLHttpRequest
+      // conseguiram ler a URI local no Android — os dois falhavam
+      // antes de o upload começar.
+      base64:        true,
     });
-    if (!result.canceled && user) {
-      try {
-        setUploadingPhoto(true);
-        const asset = result.assets[0];
-        const uri   = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-        const url   = await uploadProfilePhoto(user.uid, uri);
-        await saveProfile(user.uid, { photoURL: url });
-        setProfile(prev => prev ? { ...prev, photoURL: url } : prev);
-      } catch {
-        Alert.alert('Erro', 'Não foi possível atualizar a foto.');
-      } finally {
-        setUploadingPhoto(false);
-      }
+
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadProfilePhoto(user.uid, asset.uri, asset.base64 ?? null);
+      await saveProfile(user.uid, { photoURL: url });
+      await loadProfile();
+      Alert.alert('Sucesso', 'Foto atualizada!');
+    } catch (error) {
+      console.error('[ProfileScreen] upload falhou:', error);
+      Alert.alert('Erro', `Não foi possível atualizar a foto.\n\n${(error as Error)?.message ?? String(error)}`);
+    } finally {
+      setUploadingPhoto(false);
     }
   }
 

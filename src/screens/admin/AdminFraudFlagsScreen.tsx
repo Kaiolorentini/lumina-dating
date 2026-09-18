@@ -38,6 +38,31 @@ function reasonText(reason: FraudReason): string {
   return REASON_LABEL[reason] ?? reason;
 }
 
+// Duração do ban de Marketplace. null = indefinido
+// (comportamento antigo: só o admin remove).
+// Os valores numéricos são validados de novo no servidor.
+type BanOption = { hours: number | null; label: string };
+
+const BAN_OPTIONS: BanOption[] = [
+  { hours: 24,   label: '24 horas' },
+  { hours: 48,   label: '48 horas' },
+  { hours: 72,   label: '72 horas' },
+  { hours: null, label: 'Indefinido' },
+];
+
+interface BlockUserPayload {
+  userId: string;
+  reason: string;
+  banHours: number | null;
+  source: 'fraud';
+}
+
+interface BlockUserResult {
+  success: boolean;
+  marketplaceBanUntil: string | null;
+  roleDowngraded: boolean;
+}
+
 function formatDate(value: any): string {
   try {
     const d = value?.toDate ? value.toDate() : value instanceof Date ? value : null;
@@ -62,6 +87,10 @@ export default function AdminFraudFlagsScreen() {
   const [blockModal, setBlockModal] = useState(false);
   const [blockReason, setBlockReason] = useState('');
   const [blockingUserId, setBlockingUserId] = useState<string | null>(null);
+  // Sem padrão: o admin precisa escolher o prazo
+  // explicitamente — um default silencioso puniria
+  // por 24h ou para sempre sem intenção.
+  const [banHours, setBanHours] = useState<number | null | undefined>(undefined);
 
   const loadFlags = useCallback(async () => {
     setLoading(true);
@@ -125,6 +154,7 @@ export default function AdminFraudFlagsScreen() {
   function openBlockModal(userId: string) {
     setBlockingUserId(userId);
     setBlockReason('');
+    setBanHours(undefined);
     setBlockModal(true);
   }
 
@@ -134,13 +164,38 @@ export default function AdminFraudFlagsScreen() {
       Alert.alert('Erro', 'Informe o motivo do bloqueio.');
       return;
     }
+    if (banHours === undefined) {
+      Alert.alert('Erro', 'Escolha a duração do bloqueio.');
+      return;
+    }
+
+    const userId = blockingUserId;
+    const reason = blockReason.trim();
+    const hours  = banHours;
+
     setBlockModal(false);
-    setProcessing(blockingUserId);
+    setProcessing(userId);
     try {
       const functions = getFunctions(app, 'us-central1');
-      const block = httpsCallable(functions, 'blockUser');
-      await block({ userId: blockingUserId, reason: blockReason.trim() });
-      Alert.alert('✅ Usuário bloqueado');
+      // Genérico extraído para tipo nomeado: httpsCallable
+      // em fim de linha é corrompido ao colar.
+      const block = httpsCallable<BlockUserPayload, BlockUserResult>(functions, 'blockUser');
+      const result = await block({ userId, reason, banHours: hours, source: 'fraud' });
+
+      const parts: string[] = [];
+      if (result.data.roleDowngraded) parts.push('Papel de criador removido.');
+      parts.push(
+        hours === null
+          ? 'Bloqueio indefinido — remova em Bloqueados ou no detalhe do usuário.'
+          : `Marketplace suspenso por ${hours} horas. O papel volta sozinho ao expirar.`
+      );
+      // O bloqueio NÃO resolve a sinalização: punir não é o
+      // mesmo que encerrar a apuração, e o usuário pode ter
+      // outras flags abertas. A decisão fica com o admin.
+      parts.push('');
+      parts.push('⚠️ A sinalização continua ABERTA. Se a apuração terminou, toque em "✅ Resolver".');
+
+      Alert.alert('✅ Usuário bloqueado', parts.join('\n'));
       loadFlags();
     } catch (e: any) {
       Alert.alert('Erro', e.message);
@@ -326,6 +381,30 @@ export default function AdminFraudFlagsScreen() {
               numberOfLines={3}
               autoFocus
             />
+
+            <Text style={styles.modalLabel}>Duração do bloqueio *</Text>
+            <View style={styles.banOptionsWrap}>
+              {BAN_OPTIONS.map(opt => {
+                const selected = banHours === opt.hours;
+                return (
+                  <TouchableOpacity
+                    key={String(opt.hours)}
+                    style={[styles.banOption, selected && styles.banOptionActive]}
+                    onPress={() => setBanHours(opt.hours)}
+                  >
+                    <Text style={[styles.banOptionText, selected && styles.banOptionTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={styles.modalHint}>
+              O usuário perde o papel de criador e o acesso ao Marketplace.
+              Com prazo, tudo volta sozinho ao expirar. Produtos já publicados
+              continuam à venda.
+            </Text>
+
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setBlockModal(false)}>
                 <Text style={styles.modalCancelBtnText}>Cancelar</Text>
@@ -428,6 +507,16 @@ const styles = StyleSheet.create({
   },
   modalTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   modalSubtitle: { color: colors.gray, fontSize: fonts.sizes.sm },
+  modalLabel: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  modalHint: { color: colors.gray, fontSize: fonts.sizes.xs, lineHeight: 16 },
+  banOptionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  banOption: {
+    borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.grayDark,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+  },
+  banOptionActive: { borderColor: colors.error, backgroundColor: colors.error + '22' },
+  banOptionText: { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  banOptionTextActive: { color: colors.error },
   modalInput: {
     backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1,
     borderColor: colors.grayDark, color: colors.white, padding: spacing.md,

@@ -59,6 +59,11 @@ export function useProfileSetup(
   const [gender,      setGender]      = useState<Gender | null>(null);
   const [preferences, setPreferences] = useState<Preference[]>([]);
   const [photoURI,    setPhotoURI]    = useState<string | null>(null);
+  // O base64 vive separado do photoURI: o photoURI serve para
+  // exibir a prévia, e o upload precisa do base64 cru. Embutir
+  // tudo num data URI fazia o serviço depender de parsing e
+  // perdia os dados quando o picker não devolvia base64.
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState('');
   const [isEditing,   setIsEditing]   = useState(false);
@@ -124,11 +129,8 @@ export function useProfileSetup(
 
     if (!result.canceled) {
       const asset = result.assets[0];
-      if (asset.base64) {
-        setPhotoURI(`data:image/jpeg;base64,${asset.base64}`);
-      } else {
-        setPhotoURI(asset.uri);
-      }
+      setPhotoURI(asset.uri);
+      setPhotoBase64(asset.base64 ?? null);
     }
   }
 
@@ -176,10 +178,22 @@ export function useProfileSetup(
         createdAt: new Date(),
       });
 
+      // AGUARDA o upload: disparar sem await fazia a Promise ser
+      // abandonada quando o handleSave chamava goBack() logo
+      // depois, e a foto nunca chegava ao Storage. O erro também
+      // era engolido num console.warn — o usuário via a tela
+      // fechar e a foto continuar a antiga.
       if (photoURI && !photoURI.startsWith('https://')) {
-        uploadProfilePhoto(user.uid, photoURI)
-          .then(() => console.log('✅ Foto enviada'))
-          .catch(err => console.warn('⚠️ Foto falhou:', err));
+        try {
+          await uploadProfilePhoto(user.uid, photoURI, photoBase64);
+        } catch (uploadError) {
+          const message = uploadError instanceof Error
+            ? uploadError.message
+            : 'Erro ao enviar a foto.';
+          // Os dados de texto já foram salvos; só a foto falhou.
+          setError(`Perfil salvo, mas a foto falhou: ${message}`);
+          return false;
+        }
       }
 
       return true;

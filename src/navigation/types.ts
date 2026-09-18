@@ -11,6 +11,15 @@ export type RootStackParamList = {
   /** Onboarding — árvore separada, nome distinto de ProfileSetup para
    *  o React Navigation não preservar estado ao trocar de árvore. */
   ProfileOnboarding: undefined;
+  /** Gate de acesso — árvore própria, nomes exclusivos.
+   *  Cada etapa é uma árvore de UMA tela: o gate decide qual
+   *  mostrar, e nomes iguais em árvores diferentes fariam o
+   *  React Navigation preservar a rota errada na troca. */
+  TermsGate:               undefined;
+  AgeVerificationGate:     undefined;
+  VerificationPendingGate: undefined;
+  AccountBannedGate:       undefined;
+  GateError:               undefined;
   MainTabs:      undefined;
   RealProfile:   { userId: string };
   UserChat:      { userId: string; userName: string; userPhoto: string };
@@ -63,6 +72,8 @@ export type RootStackParamList = {
   AdminRefundRequests:      undefined;
   AdminWithdrawals:         undefined;
   AdminFraudFlags:          undefined;
+  AdminBlockedUsers:        undefined;
+  AdminAgeVerification:     undefined;
   AdminUserSearch:          undefined;
   AdminUserDetail:          { userId: string };
   AdminCoupons:             undefined;

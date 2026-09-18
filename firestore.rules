@@ -61,6 +61,15 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         // Permissões e moderação
         'role', 'isBlocked', 'blockedReason', 'blockedAt', 'blockedBy',
+        // Ban temporário de marketplace: sem isto o cliente apaga
+        // o prazo no próprio documento e escapa da punição.
+        'marketplaceBanUntil', 'previousRole', 'marketplaceBanRestoredAt', 'blockedSource',
+        // Onboarding — gravados só pelas CFs de aceite e
+        // verificação. Sem isto o cliente se declara maior de
+        // idade e verificado escrevendo no próprio documento.
+        'acceptedAppTermsVersion', 'acceptedAppTermsAt',
+        'ageVerified', 'ageVerifiedAt', 'birthDate',
+        'ageVerificationStatus', 'ageRejectionReason', 'ageRejectionNote',
         'screenshotWarnings', 'screenshotWarningStatus', 'adminFlags', 'creatorStatus',
         // Economia — gravados exclusivamente pelas Cloud Functions.
         // Sem isto, qualquer usuário se concede Turbo/Impulso/Destaque
@@ -679,6 +688,50 @@ match /achievementTriggers/{docId} {
     match /pendingLostSintonia/{docId} {
       allow read:  if false;
       allow write: if false;
+    }
+
+    // ============================================
+    // CONTADORES INTERNOS
+    // ============================================
+    // counters/founders guarda quantas vagas de Fundador foram
+    // usadas. Fechado nos dois sentidos: leitura aberta
+    // permitiria descobrir o número exato e escrita permitiria
+    // zerar o limite.
+    match /counters/{counterId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ============================================
+    // VERIFICAÇÃO DE IDADE
+    // ============================================
+    // Fechado ao cliente nos dois sentidos. O usuário NÃO lê
+    // o próprio documento: o status que ele precisa ver é
+    // espelhado em users/{uid}.ageVerificationStatus, que já
+    // é lido pelo useUserPermissions com onSnapshot.
+    //
+    // Leitura fechada também para o admin: a fila vem da CF
+    // listPendingVerifications, que devolve URLs assinadas
+    // curtas em vez de expor os caminhos do Storage.
+    match /ageVerifications/{userId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ============================================
+    // ACEITE DOS TERMOS — prova de consentimento
+    // ============================================
+    // Escrita exclusiva da CF acceptAppTerms. O usuário lê o
+    // próprio histórico (direito de acesso, LGPD art. 18) mas
+    // nunca escreve: consentimento auto-declarado não é prova.
+    match /termsAcceptances/{userId} {
+      allow read:  if isOwner(userId) || isSuperAdmin();
+      allow write: if false;
+
+      match /history/{version} {
+        allow read:  if isOwner(userId) || isSuperAdmin();
+        allow write: if false;
+      }
     }
 
   }

@@ -121,6 +121,18 @@ export default function AdminDashboardScreen() {
             <Text style={styles.menuLabel}>Usuários</Text>
           </TouchableOpacity>
           {isSuperAdmin && (
+            <TouchableOpacity style={styles.menuCard} onPress={() => navigation.navigate('AdminAgeVerification')}>
+              <Text style={styles.menuIcon}>🪪</Text>
+              <Text style={styles.menuLabel}>Idade</Text>
+            </TouchableOpacity>
+          )}
+          {isSuperAdmin && (
+            <TouchableOpacity style={styles.menuCard} onPress={() => navigation.navigate('AdminBlockedUsers')}>
+              <Text style={styles.menuIcon}>🔒</Text>
+              <Text style={styles.menuLabel}>Bloqueados</Text>
+            </TouchableOpacity>
+          )}
+          {isSuperAdmin && (
             <TouchableOpacity style={styles.menuCard} onPress={() => navigation.navigate('AdminCuration')}>
               <Text style={styles.menuIcon}>✦</Text>
               <Text style={styles.menuLabel}>Vitrine</Text>

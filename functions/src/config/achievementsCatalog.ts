@@ -20,7 +20,7 @@ export type AchievementCategory =
   | 'VAULT'
   | 'CHAT'
   | 'SPECIAL'
-  | 'EVENT'
+  | 'EVENT' 
   | 'FOUNDER'   // REGRA 18
   | 'PREMIUM';  // REGRA 19
 

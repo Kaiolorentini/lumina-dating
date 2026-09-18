@@ -74,17 +74,31 @@ interface SceneProps {
 }
 
 // ── Fundo comum: gradiente radial escuro com a cor da moldura ──
+//
+// Renderizado FORA do grupo que gira. Quando o Rect girava junto,
+// os cantos do viewBox apareciam e a moldura virava um quadrado
+// rodando atrás da foto.
 function SceneBackdrop({ border, uid, h }: { border: string; uid: string; h: number }) {
+  // Elipse com gradiente que chega a opacidade ZERO antes das
+  // bordas, em vez de um Rect cobrindo o viewBox.
+  //
+  // O Rect pintava os cantos e a moldura parecia um quadrado
+  // atrás da foto — arredondar o contêiner só trocou o quadrado
+  // por um quadrado de cantos redondos. Dissolvendo o fundo, o
+  // card aparece nas bordas e a atmosfera não tem formato.
+  const cx = W / 2;
+  const cy = h / 2;
   return (
     <>
       <Defs>
-        <RadialGradient id={`bg${uid}`} cx="50%" cy="45%" r="75%">
-          <Stop offset="0%"   stopColor={border}   stopOpacity="0.22" />
-          <Stop offset="55%"  stopColor="#14101F"  stopOpacity="0.95" />
-          <Stop offset="100%" stopColor="#08060F"  stopOpacity="1" />
+        <RadialGradient id={`bg${uid}`} cx="50%" cy="50%" r="50%">
+          <Stop offset="0%"   stopColor={border}  stopOpacity="0.3" />
+          <Stop offset="38%"  stopColor="#14101F" stopOpacity="0.9" />
+          <Stop offset="78%"  stopColor="#0A0812" stopOpacity="0.6" />
+          <Stop offset="100%" stopColor="#0A0812" stopOpacity="0" />
         </RadialGradient>
       </Defs>
-      <Rect x={0} y={0} width={W} height={h} fill={`url(#bg${uid})`} />
+      <Ellipse cx={cx} cy={cy} rx={W * 0.62} ry={h * 0.62} fill={`url(#bg${uid})`} />
     </>
   );
 }
@@ -104,7 +118,7 @@ function SceneViaLactea({ border, uid, h, cx, cy, safe }: SceneProps) {
   ];
   return (
     <G>
-      <SceneBackdrop border={border} uid={uid} h={h} />
+
       {/* Braços assimétricos: um mais longo que os outros */}
       <Path d={`M ${cx + safe} ${cy} Q ${cx + 46} ${cy - 34} ${cx + 4} ${cy - 52}`}
             stroke={border} strokeWidth={7} fill="none" opacity={0.2} strokeLinecap="round" />
@@ -126,7 +140,6 @@ function SceneBuracoNegro({ border, uid, h, cx, cy, safe }: SceneProps) {
   // inteiras atrás da foto.
   return (
     <G>
-      <SceneBackdrop border="#2A1A00" uid={uid} h={h} />
       <Defs>
         <LinearGradient id={`disk${uid}`} x1="0%" y1="0%" x2="100%" y2="0%">
           <Stop offset="0%"   stopColor="#FFD700" stopOpacity="0.2" />
@@ -154,7 +167,7 @@ function SceneSupernova({ border, uid, h, cx, cy, safe }: SceneProps) {
   const rays = Array.from({ length: 28 }, (_, i) => (i * 360) / 28);
   return (
     <G>
-      <SceneBackdrop border={border} uid={uid} h={h} />
+
       <Defs>
         <RadialGradient id={`sn${uid}`} cx="50%" cy="50%" r="55%">
           <Stop offset="30%" stopColor={border} stopOpacity="0.55" />
@@ -198,7 +211,7 @@ function SceneAurora({ border, uid, h, cx, cy, safe }: SceneProps) {
   ];
   return (
     <G>
-      <SceneBackdrop border={border} uid={uid} h={h} />
+
       <Defs>
         <LinearGradient id={`au${uid}`} x1="0%" y1="100%" x2="0%" y2="0%">
           <Stop offset="0%"   stopColor={border} stopOpacity="0" />
@@ -222,7 +235,7 @@ function SceneCometa({ border, uid, h, cx, cy, safe }: SceneProps) {
   const orbit = safe + 18;
   return (
     <G>
-      <SceneBackdrop border={border} uid={uid} h={h} />
+
       <Defs>
         <LinearGradient id={`tail${uid}`} x1="100%" y1="0%" x2="0%" y2="100%">
           <Stop offset="0%"   stopColor="#FFFFFF" stopOpacity="0.95" />
@@ -252,7 +265,7 @@ function SceneCometa({ border, uid, h, cx, cy, safe }: SceneProps) {
 function SceneNebulosa({ border, uid, h, cx, cy, safe }: SceneProps) {
   return (
     <G>
-      <SceneBackdrop border={border} uid={uid} h={h} />
+
       <Defs>
         <RadialGradient id={`nbA${uid}`} cx="35%" cy="35%" r="60%">
           <Stop offset="0%"   stopColor={border} stopOpacity="0.45" />
@@ -286,7 +299,6 @@ function SceneEclipse({ border, uid, h, cx, cy, safe }: SceneProps) {
   const spikes = Array.from({ length: 40 }, (_, i) => (i * 360) / 40);
   return (
     <G>
-      <SceneBackdrop border="#1A1608" uid={uid} h={h} />
       <Defs>
         <RadialGradient id={`cor${uid}`} cx="50%" cy="50%" r="55%">
           <Stop offset={`${(safe / 60) * 100}%`} stopColor="#FFE9A8" stopOpacity="0.85" />
@@ -317,7 +329,7 @@ function SceneEclipse({ border, uid, h, cx, cy, safe }: SceneProps) {
 function SceneMaresia({ border, uid, h, cx, cy, safe }: SceneProps) {
   return (
     <G>
-      <SceneBackdrop border={border} uid={uid} h={h} />
+
       <Defs>
         <ClipPath id={`seaClip${uid}`}>
           <Rect x={0} y={0} width={W} height={h} />
@@ -346,7 +358,7 @@ function SceneMaresia({ border, uid, h, cx, cy, safe }: SceneProps) {
 function SceneConquista({ border, uid, h, cx, cy, safe }: SceneProps) {
   return (
     <G>
-      <SceneBackdrop border={border} uid={uid} h={h} />
+
       <Circle cx={cx} cy={cy} r={safe + 8} stroke={border} strokeWidth={3}
               fill="none" opacity={0.85} />
       <Circle cx={cx} cy={cy} r={safe + 16} stroke={border} strokeWidth={1}
@@ -395,7 +407,6 @@ function SceneForja({ border, uid, h, cx, cy, safe }: SceneProps) {
           <Stop offset="100%" stopColor="#FFF0C0" stopOpacity="0" />
         </LinearGradient>
       </Defs>
-      <Rect x={0} y={0} width={W} height={h} fill={`url(#forjaBg${uid})`} />
 
       {/* Brasa incandescente na base */}
       <Ellipse cx={cx} cy={h * 0.95} rx={46} ry={8} fill="#FF6A00" opacity={0.45} />
@@ -528,6 +539,7 @@ export function ProfileFrame({
           {
             width:  size,
             height,
+           
             shadowColor:   glowColor,
             shadowRadius:  size * 0.12,
             shadowOpacity: 1,
@@ -536,6 +548,20 @@ export function ProfileFrame({
           style,
         ]}
       >
+        {/* Fundo estático, FORA do grupo que gira: quando o Rect
+            girava junto, os cantos do viewBox apareciam e a
+            moldura virava um quadrado rodando atrás da foto. */}
+        <Svg
+          width={size} height={height} viewBox={`0 0 ${W} ${vbH}`}
+          style={StyleSheet.absoluteFill}
+        >
+          <SceneBackdrop
+            border={frame!.scene === 'forja' ? '#FF6A00' : borderColor}
+            uid={`${uid}bg`}
+            h={vbH}
+          />
+        </Svg>
+
         {/* A cena gira/pulsa; a foto fica parada por cima. */}
         <Animated.View
           style={[
@@ -624,7 +650,6 @@ const styles = StyleSheet.create({
   sceneWrap: {
     alignItems:     'center',
     justifyContent: 'center',
-    overflow:       'hidden',
     shadowOffset:   { width: 0, height: 0 },
   },
   galaxiaBadge: {

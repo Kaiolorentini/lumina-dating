@@ -44,3 +44,5 @@ scripts/serviceAccountKey.json
 
 firebase-debug.log
 firestore-debug.log
+
+serviceAccountKey.json

@@ -110,6 +110,17 @@ export default function AdminUserDetailScreen() {
 
   const isBlocked = (profile as any)?.isBlocked;
 
+  const banUntilRaw = (profile as any)?.marketplaceBanUntil;
+  const banUntilDate =
+    banUntilRaw?.toDate ? banUntilRaw.toDate()
+    : banUntilRaw instanceof Date ? banUntilRaw
+    : null;
+  const banUntilText = banUntilDate
+    ? `até ${banUntilDate.toLocaleDateString('pt-BR')} às ${banUntilDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+    : 'Indefinido — só desbloqueio manual';
+
+  const previousRole = (profile as any)?.previousRole ?? null;
+
   return (
     <ScreenContainer>
       <View style={styles.header}>
@@ -132,6 +143,17 @@ export default function AdminUserDetailScreen() {
           </Text></Text>
           {isBlocked && (
             <Text style={styles.field}>Motivo: <Text style={styles.value}>{(profile as any)?.blockedReason}</Text></Text>
+          )}
+          {isBlocked && (
+            <Text style={styles.field}>Duração: <Text style={styles.value}>{banUntilText}</Text></Text>
+          )}
+          {/* previousRole sobrevive ao rebaixamento: sem ele o
+              admin vê "Role: user" e conclui que a pessoa nunca
+              foi criadora. */}
+          {previousRole && (
+            <Text style={styles.field}>
+              Papel anterior: <Text style={styles.value}>{previousRole} (volta ao expirar)</Text>
+            </Text>
           )}
         </View>
 
@@ -157,7 +179,7 @@ export default function AdminUserDetailScreen() {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.blockBtn} onPress={openBlockModal}>
-                <Text style={styles.blockBtnText}>🚫 Bloquear usuário</Text>
+                <Text style={styles.blockBtnText}>🚫 Bloquear (indefinido)</Text>
               </TouchableOpacity>
             )}
           </View>

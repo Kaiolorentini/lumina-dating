@@ -1,6 +1,14 @@
 // ============================================
-// LUMINA — ENGAGEMENT INITIALIZER v5.6
+// LUMINA — ENGAGEMENT INITIALIZER v5.7
 // src/components/EngagementInitializer.tsx
+//
+// v5.7 — Restauração sob demanda do ban de marketplace.
+// Se o ban temporário venceu, a CF devolve o papel de
+// criador na abertura do app. O useUserPermissions escuta
+// o documento com onSnapshot, então a aba Marketplace e as
+// telas de criador voltam sozinhas, sem reiniciar o app.
+// Silenciosa por natureza: nada a mostrar quando não há
+// ban vencido, e o push de liberação vem do servidor.
 //
 // v5.6 — FASE 8: revelação de cosmético.
 //
@@ -49,6 +57,13 @@ import { FRAMES } from '../config/cosmeticsCatalog';
 
 const REVEAL_DELAY_MS = 1500;
 
+// Genérico extraído para tipo nomeado: httpsCallable< em
+// fim de linha é corrompido ao colar.
+interface RestoreCreatorResult {
+  restored: boolean;
+  role: string | null;
+}
+
 export default function EngagementInitializer() {
   const { user, loading: authLoading } = useAuth();
   const navigation = useNavigation<any>();
@@ -82,6 +97,28 @@ export default function EngagementInitializer() {
   }, [user?.uid, authLoading]);
 
   async function checkEngagements(uid: string) {
+    // ── Ban de marketplace vencido ──
+    // Idempotente no servidor: sem ban vencido não escreve
+    // nada. try próprio para não derrubar o resto — e sem
+    // fail-closed aqui, porque não há nada a exibir: falhar
+    // só posterga a restauração para a próxima abertura ou
+    // para a varredura diária.
+    try {
+      const restore = httpsCallable<void, RestoreCreatorResult>(
+        getFunctions(),
+        'restoreCreatorIfExpired',
+      );
+      const restored = await restore();
+
+      if (__DEV__ && restored.data.restored) {
+        console.log('[EngagementInitializer] Ban expirado — papel restaurado:', restored.data.role);
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[EngagementInitializer] restoreCreatorIfExpired falhou:', error);
+      }
+    }
+
     // ── Cosmético pendente ──
     // Leitura direta do documento: uma leitura por abertura, e
     // evita uma CF só para isso. Falha aqui não pode derrubar a

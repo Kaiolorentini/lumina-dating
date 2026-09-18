@@ -34,6 +34,20 @@ export { onRejectWithdrawal }       from "./wallet/onRejectWithdrawal";
 export { onMarkWithdrawalPaid }     from "./wallet/onMarkWithdrawalPaid";
 export { blockUser }                from "./users/blockUser";
 export { unblockUser }              from "./users/unblockUser";
+// Ban temporário de marketplace (fraudes): restauração
+// sob demanda + varredura diária de rede de segurança.
+export { restoreCreatorIfExpired }  from "./users/restoreCreatorIfExpired";
+export { listBlockedUsers }         from "./users/listBlockedUsers";
+
+// ============================================
+// ONBOARDING — TERMOS E VERIFICAÇÃO DE IDADE
+// ============================================
+export { acceptAppTerms }           from "./users/acceptAppTerms";
+export { submitAgeVerification }    from "./verification/submitAgeVerification";
+export { listPendingVerifications } from "./verification/listPendingVerifications";
+export { approveAgeVerification }   from "./verification/approveAgeVerification";
+export { rejectAgeVerification }    from "./verification/rejectAgeVerification";
+export { expireMarketplaceBans }    from "./users/expireMarketplaceBans";
 
 // ============================================
 // FASE 6B — Com Asaas

@@ -8,8 +8,12 @@ import * as Notifications from 'expo-notifications';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { COLLECTIONS } from '../core/constants';
-import PushInitializer from '../modules/notifications/components/PushInitializer';
+// PushInitializer removido: ele só chamava usePushNotifications(),
+// que o AppContent já chama no topo. As duas instâncias
+// registravam listeners próprios do expo-notifications e cada
+// notificação chegava duplicada.
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { auth } from '../services/firebase';
 import { CoinsProvider } from '../context/CoinsContext';
 import SplashScreen from '../screens/Onboarding/SplashScreen';
 import AppLoadingScreen from '../screens/Onboarding/LoadingScreen';
@@ -24,6 +28,13 @@ import { NotificationsScreen } from '../modules/notifications';
 import EngagementInitializer from '../components/EngagementInitializer';
 import UpdateChecker from '../components/UpdateChecker';
 import { RootStackParamList, TabParamList } from './types';
+import { resolveAccessGate } from './accessGate';
+import { APP_TERMS_VERSION } from '../config/terms';
+import TermsAcceptScreen from '../screens/Onboarding/TermsAcceptScreen';
+import AgeVerificationScreen from '../screens/Onboarding/AgeVerificationScreen';
+import VerificationPendingScreen from '../screens/Onboarding/VerificationPendingScreen';
+import AccountBannedScreen from '../screens/Onboarding/AccountBannedScreen';
+import GateErrorScreen from '../screens/Onboarding/GateErrorScreen';
 
 import MediaScreen from '../modules/media/screens/MediaScreen';
 import ProfileScreen from '../modules/profile/screens/ProfileScreen';
@@ -55,6 +66,8 @@ import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import AdminCreatorRequestsScreen from '../screens/admin/AdminCreatorRequestsScreen';
 import AdminWithdrawalsScreen from '../screens/admin/AdminWithdrawalsScreen';
 import AdminUserSearchScreen from '../screens/admin/AdminUserSearchScreen';
+import AdminBlockedUsersScreen from '../screens/admin/AdminBlockedUsersScreen';
+import AdminAgeVerificationScreen from '../screens/admin/AdminAgeVerificationScreen';
 import AdminUserDetailScreen from '../screens/admin/AdminUserDetailScreen';
 import AdminLoadingScreen from '../screens/admin/AdminLoadingScreen';
 import DestinyCardScreen from '../modules/engagement/screens/DestinyCardScreen';
@@ -309,6 +322,8 @@ function MainStack() {
       <Stack.Screen name="AdminRefundRequests"   component={AdminRefundRequestsScreen} />
       <Stack.Screen name="AdminWithdrawals"      component={AdminWithdrawalsScreen} />
       <Stack.Screen name="AdminFraudFlags"       component={AdminFraudFlagsScreen} />
+      <Stack.Screen name="AdminBlockedUsers"     component={AdminBlockedUsersScreen} />
+      <Stack.Screen name="AdminAgeVerification"  component={AdminAgeVerificationScreen} />
       <Stack.Screen name="AdminUserSearch"       component={AdminUserSearchScreen} />
       <Stack.Screen name="AdminUserDetail"       component={AdminUserDetailScreen} />
       <Stack.Screen name="AdminCoupons"          component={AdminCouponsScreen} />
@@ -350,13 +365,34 @@ let _adminBootDone = false;
 
 function AppContent() {
   const { user, loading: authLoading, hasProfile } = useAuth();
-  const { isSuperAdmin, isBlocked, loading: permLoading } = useUserPermissions(user?.uid);
+  const {
+    isSuperAdmin, isBlocked, loading: permLoading,
+    accessGate, loadError, retry,
+  } = useUserPermissions(user?.uid);
   const { marketplaceEnabled }  = useAppSettings();
   const canAccessAdminPanel     = isSuperAdmin;
   const [adminBootReady, setAdminBootReady] = useState(_adminBootDone);
   const [inAppNotif, setInAppNotif]         = useState<InAppNotifState | null>(null);
+  // Sai de 'pending' para 'verification' quando a pessoa toca
+  // em "Enviar novas fotos" na tela de rejeitado.
+  const [forceCapture, setForceCapture]     = useState(false);
 
   usePushNotifications();
+
+  // Renova o token de Auth quando a conta é aprovada. As custom
+  // claims da PARTE 9 vivem no token, e sem o refresh as
+  // primeiras leituras depois da aprovação dariam
+  // permission-denied. Hoje é inofensivo e prepara o terreno.
+  const wasVerifiedRef = useRef(false);
+  useEffect(() => {
+    if (!accessGate.ageVerified) return;
+    if (wasVerifiedRef.current) return;
+    wasVerifiedRef.current = true;
+
+    auth.currentUser?.getIdToken(true).catch(error => {
+      console.warn('[AppContent] Refresh do token falhou:', error);
+    });
+  }, [accessGate.ageVerified]);
 
   function handleNotificationNavigation(data: Record<string, any>) {
     if (!navigationRef.current) return;
@@ -377,6 +413,12 @@ function AppContent() {
       case 'refund_processed':    navigationRef.current.navigate('MyPurchases'); break;
       case 'creator_approved':
       case 'product_approved':    navigationRef.current.navigate('MyProducts');  break;
+      // A aprovação troca a árvore sozinha pelo onSnapshot do
+      // useUserPermissions — o push só traz a pessoa de volta
+      // ao app, não precisa navegar para nada.
+      case 'age_verification_approved':
+      case 'age_verification_rejected':
+        break;
       // Push de moderação enviado pelo notifySuperAdmins quando um
       // criador submete produto. Sem este case o admin tocava na
       // notificação e nada acontecia — o switch caía no default.
@@ -418,6 +460,8 @@ function AppContent() {
         refund_processed:     { title: '↩️ Reembolso processado',  onPress: () => navigationRef.current?.navigate('MyPurchases') },
         withdrawal_paid:      { title: '💸 Saque pago!',           onPress: () => navigationRef.current?.navigate('MyEarnings') },
         withdrawal_rejected:  { title: '❌ Saque rejeitado',       onPress: () => navigationRef.current?.navigate('MyEarnings') },
+        marketplace_banned:   { title: '🚫 Marketplace suspenso',  onPress: () => {} },
+        marketplace_unbanned: { title: '✅ Acesso liberado',       onPress: () => {} },
       };
 
       const config = typeMap[type];
@@ -442,22 +486,99 @@ function AppContent() {
     </Stack.Navigator>
   );
 
-  // Nome DIFERENTE de 'ProfileSetup' (que existe na MainStack).
-  // Com o mesmo nome nas duas árvores, o React Navigation preservava
-  // a rota ativa na troca e o app reabria o formulário de perfil —
-  // vazio, porque a rota da MainStack tem initialParams editMode: true.
-  if (!hasProfile) return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="ProfileOnboarding" component={ProfileSetupScreen} />
-    </Stack.Navigator>
-  );
-
+  // permLoading ANTES do perfil: o gate precisa do status da
+  // verificação para decidir a etapa, e ele vem daqui. Antes o
+  // !hasProfile vinha primeiro — para quem já tem conta a
+  // diferença é imperceptível.
   if (permLoading) return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Splash" component={AppLoadingScreen} />
     </Stack.Navigator>
   );
 
+  // ============================================
+  // GATE DE ACESSO
+  // ============================================
+  // Ordem e regras vivem em navigation/accessGate.ts — função
+  // pura, legível e testável, em vez de if espalhados aqui.
+  //
+  // Cada etapa é uma árvore de UMA tela, com nome exclusivo:
+  // nome repetido entre árvores faz o React Navigation
+  // preservar a rota errada na troca (foi o bug do
+  // ProfileSetup/ProfileOnboarding).
+  //
+  // ISTO É UX, NÃO SEGURANÇA: um APK modificado pula qualquer
+  // tela. A barreira real são as Rules e as CFs.
+  const gateStep = resolveAccessGate({
+    hasProfile,
+    isBlocked,
+    isSuperAdmin,
+    loadError,
+    accessGate,
+    currentTermsVersion: APP_TERMS_VERSION,
+  });
+
+  if (gateStep === 'error') return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="GateError">
+        {() => <GateErrorScreen onRetry={retry} />}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+
+  if (gateStep === 'blocked') return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="AccountBannedGate" component={AccountBannedScreen} />
+    </Stack.Navigator>
+  );
+
+  if (gateStep === 'terms') return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="TermsGate">
+        {/* Sem onAccepted próprio: a CF grava
+            acceptedAppTermsVersion e o onSnapshot do
+            useUserPermissions troca a árvore sozinho. */}
+        {() => <TermsAcceptScreen onAccepted={() => {}} />}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+
+  // Nome DIFERENTE de 'ProfileSetup' (que existe na MainStack).
+  // Com o mesmo nome nas duas árvores, o React Navigation preservava
+  // a rota ativa na troca e o app reabria o formulário de perfil —
+  // vazio, porque a rota da MainStack tem initialParams editMode: true.
+  if (gateStep === 'profile') return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="ProfileOnboarding" component={ProfileSetupScreen} />
+    </Stack.Navigator>
+  );
+
+  // 'rejected' com forceCapture abre a captura para reenviar.
+  if (gateStep === 'verification' || (gateStep === 'rejected' && forceCapture)) return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="AgeVerificationGate">
+        {() => (
+          <AgeVerificationScreen
+            onSubmitted={() => setForceCapture(false)}
+          />
+        )}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+
+  if (gateStep === 'pending' || gateStep === 'rejected') return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="VerificationPendingGate">
+        {() => (
+          <VerificationPendingScreen
+            onResubmit={() => setForceCapture(true)}
+          />
+        )}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+
+  // gateStep === 'app' daqui para baixo.
   if (canAccessAdminPanel && !adminBootReady) return (
     <AdminLoadingScreen onFinish={() => { _adminBootDone = true; setAdminBootReady(true); }} />
   );
@@ -470,7 +591,6 @@ function AppContent() {
     }}>
       <EngagementInitializer />
       <UpdateChecker />
-      <PushInitializer />
       <MainStack />
       {inAppNotif && (
         <InAppNotification

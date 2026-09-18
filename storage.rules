@@ -43,6 +43,29 @@ service firebase.storage {
     }
 
     // ============================================
+    // VERIFICAÇÃO DE IDADE — documento + selfie
+    // ============================================
+    // Três arquivos: doc_front, doc_back, selfie.
+    //
+    // LEITURA NEGADA A TODOS, inclusive ao dono: depois de
+    // enviar, ninguém baixa a imagem pelo app. O admin vê por
+    // URL assinada de 10 minutos, gerada por Cloud Function.
+    //
+    // Storage Rules NÃO leem o Firestore, então a checagem de
+    // superadmin não pode viver aqui — é a CF que autoriza.
+    //
+    // Os arquivos são APAGADOS pelo Admin SDK na aprovação e
+    // na rejeição: documento de identidade guardado
+    // indefinidamente é passivo, não ativo.
+    match /age_verification/{userId}/{fileName} {
+      allow read:   if false;
+      allow write:  if isOwner(userId) &&
+                       isImage() &&
+                       isUnderSizeMB(8);
+      allow delete: if false;
+    }
+
+    // ============================================
     // MÍDIA DO USUÁRIO
     // ============================================
     match /users/{userId}/media/{fileName} {
