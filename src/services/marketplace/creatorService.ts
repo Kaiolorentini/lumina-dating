@@ -21,7 +21,8 @@ import {
 import { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
 import { createAuditLog } from './auditService';
-import { notifySuperAdmins } from './pushAdminService';
+// notifySuperAdmins do cliente REMOVIDO — ver productService.
+// O trigger onCreatorRequestCreated já avisa os admins.
 
 export interface CreatorRequest {
   id: string;
@@ -87,15 +88,7 @@ export async function createCreatorRequest(userId: string): Promise<string> {
     metadata: { userId },
   }).catch(() => { /* auditoria nunca bloqueia */ });
 
-  notifySuperAdmins(
-    '🎨 Nova solicitação de criador',
-    `Usuário ${userId.slice(0, 8)}... quer se tornar criador`,
-    {
-      type: 'creator_request_new',
-      userId,
-      requestId: docRef.id,
-    },
-  ).catch(() => { /* notificação nunca bloqueia */ });
+
 
   return docRef.id;
 }

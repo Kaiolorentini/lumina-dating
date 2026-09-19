@@ -47,7 +47,11 @@ import {
   ProductFileType,
 } from '../../shared/types/marketplace';
 import { createAuditLog } from './auditService';
-import { notifySuperAdmins } from './pushAdminService';
+// notifySuperAdmins do cliente REMOVIDO: ele lia a lista de
+// superadmins do appSettings/adminConfig (público nas rules) e
+// depois o pushToken deles na coleção users. O trigger
+// onProductPending, no backend, já notifica os admins quando o
+// produto entra em revisão — era chamada duplicada.
 
 // ============================================
 // UPLOAD TYPES
@@ -361,11 +365,6 @@ export async function submitProductForReview(
     metadata: { title: snap.data().title },
   }).catch(() => {});
 
-  notifySuperAdmins(
-    '📦 Novo produto para moderação',
-    `"${snap.data().title}" aguarda revisão`,
-    { type: 'product_review_new', productId, ownerId },
-  ).catch(() => {});
 }
 
 export async function softDeleteProduct(
