@@ -19,6 +19,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertAuthenticated } from "../utils/adminGuard";
+import { notifyAdmins } from "../utils/notifyAdmins";
 import { MAX_ATTEMPTS, REQUIRED_FILES, storagePathFor } from "./constants";
 
 interface SubmitResult {
@@ -129,6 +130,19 @@ export const submitAgeVerification = onCall<void, Promise<SubmitResult>>(
     await batch.commit();
 
     console.log(`[submitAgeVerification] Pendente: ${uid} — tentativa ${attempt}`);
+
+    // Fire-and-forget: a verificação já está registrada, e falha
+    // no aviso não pode desfazer isso nem travar a resposta ao
+    // usuário, que está esperando na tela.
+    notifyAdmins({
+      title: "🪪 Verificação de idade pendente",
+      body:
+        attempt > 1
+          ? `${userData.name ?? "Um usuário"} reenviou o documento (${attempt}ª tentativa)`
+          : `${userData.name ?? "Um usuário"} enviou o documento para análise`,
+      type: "age_verification_pending",
+      data: { userId: uid, attempt: String(attempt) },
+    }).catch(() => {});
 
     return { success: true, status: "pending", attempt };
   }

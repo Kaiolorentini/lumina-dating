@@ -81,16 +81,10 @@ export async function enviarSolicitacao(
       `${fromUserName} quer se conectar com voce!`
     );
 
-    const { sendPushToUser } = await import(
+    const { notifyUserOfEvent } = await import(
       '../../notifications/services/pushService'
     );
-    // Passa data com type=request para redirecionamento
-    await sendPushToUser(
-      toUserId,
-      'Nova solicitacao',
-      `${fromUserName} quer se conectar com voce!`,
-      { type: 'request' }
-    );
+    await notifyUserOfEvent(toUserId, 'connection_request');
 
     return true;
   } catch (error) {
@@ -113,14 +107,10 @@ export async function aceitarSolicitacao(
     `${toUserName} aceitou sua solicitacao! Voces agora podem conversar`
   );
 
-  const { sendPushToUser } = await import(
+  const { notifyUserOfEvent } = await import(
     '../../notifications/services/pushService'
   );
-  await sendPushToUser(
-    fromUserId,
-    'Solicitacao aceita!',
-    `${toUserName} aceitou sua solicitacao! Comece a conversar agora.`
-  );
+  await notifyUserOfEvent(fromUserId, 'connection_accepted');
 }
 
 export async function rejeitarSolicitacao(requestId: string): Promise<void> {

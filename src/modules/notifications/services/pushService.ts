@@ -2,13 +2,50 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '../../../core/firebase';
-import { COLLECTIONS } from '../../../core/constants';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app from '../../../core/firebase';
 
 // ============================================
 // PUSH SERVICE — MÓDULO NOTIFICATIONS
+//
+// v2: o ENVIO saiu daqui. Antes este arquivo lia o token de
+// qualquer usuário (getPushToken) e chamava a API do Expo
+// com título e corpo livres (sendPushNotification,
+// sendPushToUser): qualquer conta logada mandava "Você
+// ganhou 500 cristais, toque aqui" com o nome do Lumina para
+// qualquer pessoa. Phishing dentro do app.
+//
+// Agora o envio é a CF sendUserPush: o cliente informa o
+// EVENTO e o destinatário, o servidor valida a relação, monta
+// o texto de um catálogo fixo e envia. O token nunca sai do
+// servidor.
 // ============================================
+
+// Genéricos em tipos nomeados: httpsCallable< em fim de linha
+// é corrompido ao colar.
+interface RegisterPushTokenPayload {
+  token: string;
+}
+
+interface RegisterPushTokenResult {
+  success: boolean;
+}
+
+export type UserPushEvent =
+  | 'chat_message'
+  | 'connection_request'
+  | 'connection_accepted';
+
+interface SendUserPushPayload {
+  targetUserId: string;
+  event: UserPushEvent;
+  chatId?: string;
+}
+
+interface SendUserPushResult {
+  sent: boolean;
+  reason: string | null;
+}
 
 // Configura comportamento das notificações
 Notifications.setNotificationHandler({
@@ -31,9 +68,6 @@ export async function registerForPushNotifications(
       return null;
     }
 
-    console.log('Device.isDevice:', Device.isDevice);
-    console.log('Platform.OS:', Platform.OS);
-
     if (!Device.isDevice) {
       console.log('Push so funciona em dispositivos fisicos');
       return null;
@@ -42,18 +76,15 @@ export async function registerForPushNotifications(
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
 
-    console.log('Status permissao atual:', existingStatus);
-
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
-      console.log('Novo status permissao:', finalStatus);
     }
 
     if (finalStatus !== 'granted') {
-      console.log('Permissao negada!');
+      console.log('Permissao de push negada');
       return null;
     }
 
@@ -70,8 +101,6 @@ export async function registerForPushNotifications(
       Constants.expoConfig?.extra?.eas?.projectId ??
       Constants.easConfig?.projectId;
 
-    console.log('ProjectId:', projectId);
-
     if (!projectId) {
       console.warn('projectId nao configurado no app.json');
       return null;
@@ -79,7 +108,6 @@ export async function registerForPushNotifications(
 
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
-    console.log('Push Token obtido:', token);
 
     await savePushToken(userId, token);
     return token;
@@ -89,89 +117,57 @@ export async function registerForPushNotifications(
   }
 }
 
-// Salva token no Firestore
-// CORREÇÃO: verifica se o documento users/{uid} existe antes de escrever.
-// Isso evita criar um documento órfão (sem role/isBlocked) antes do perfil,
-// que faria o saveProfile virar UPDATE e bater na regra hasNoProtectedFields().
+// Registra o token pela Cloud Function.
+//
+// O cliente não grava mais direto: o campo users/{uid}.pushToken
+// virou protegido nas rules, porque a coleção tem `allow list`
+// aberto e qualquer conta logada lia o token de todo mundo. A CF
+// grava em users/{uid}/private/push, fechado nos dois sentidos.
+//
+// O userId vem por compatibilidade com o chamador; a CF usa o
+// uid do token de autenticação, não este parâmetro.
 export async function savePushToken(
   userId: string,
   token: string
 ): Promise<void> {
   try {
-    const userRef = doc(db, COLLECTIONS.USERS, userId);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) {
-      console.log('[pushService] Documento não existe ainda — push token será salvo após criar perfil');
-      return;
-    }
-    await setDoc(
-      userRef,
-      { pushToken: token, pushTokenUpdatedAt: new Date() },
-      { merge: true }
+    const fn = httpsCallable<RegisterPushTokenPayload, RegisterPushTokenResult>(
+      getFunctions(app, 'us-central1'),
+      'registerPushToken',
     );
-    console.log('Push Token salvo no Firestore!');
+    await fn({ token });
+    console.log('Push Token registrado!');
   } catch (error) {
-    console.error('[pushService] Erro ao salvar push token:', error);
+    console.error('[pushService] Erro ao registrar push token:', error);
   }
 }
 
-// Busca token de um usuário
-export async function getPushToken(
-  userId: string
-): Promise<string | null> {
-  try {
-    const userRef = doc(db, COLLECTIONS.USERS, userId);
-    const snap = await getDoc(userRef);
-    if (snap.exists()) return snap.data().pushToken || null;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-// Envia notificação via Expo Push API
-export async function sendPushNotification(
-  expoPushToken: string,
-  title: string,
-  body: string,
-  data?: Record<string, any>
-): Promise<void> {
-  try {
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Accept-encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: expoPushToken,
-        sound: 'default',
-        title,
-        body,
-        data: data || {},
-        badge: 1,
-      }),
-    });
-
-    const result = await response.json();
-    console.log('✅ Push enviado:', result);
-  } catch (error) {
-    console.error('Erro ao enviar push:', error);
-  }
-}
-
-// Envia push para usuário pelo userId
-export async function sendPushToUser(
+/**
+ * Notifica outro usuário sobre um evento.
+ *
+ * O cliente NÃO escolhe o texto: informa só o evento, e o
+ * servidor monta a mensagem e valida a relação (conexão
+ * aceita, bloqueio mútuo, limite por hora).
+ *
+ * Falha silenciosa por design: push é secundário e não pode
+ * derrubar o envio da mensagem nem da solicitação.
+ */
+export async function notifyUserOfEvent(
   targetUserId: string,
-  title: string,
-  body: string,
-  data?: Record<string, any>
+  event: UserPushEvent,
+  chatId?: string,
 ): Promise<void> {
-  const token = await getPushToken(targetUserId);
-  if (!token) {
-    console.log('⚠️ Usuário sem push token:', targetUserId);
-    return;
+  try {
+    const fn = httpsCallable<SendUserPushPayload, SendUserPushResult>(
+      getFunctions(app, 'us-central1'),
+      'sendUserPush',
+    );
+    const result = await fn({ targetUserId, event, chatId });
+
+    if (!result.data.sent) {
+      console.log(`[pushService] Push nao enviado: ${result.data.reason}`);
+    }
+  } catch (error) {
+    console.warn('[pushService] Erro ao notificar:', error);
   }
-  await sendPushNotification(token, title, body, data);
 }

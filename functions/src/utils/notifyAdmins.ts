@@ -11,6 +11,8 @@
 // ============================================
 
 import * as admin from "firebase-admin";
+import { getSuperAdminUids } from "../config/adminConfig";
+import { getPushTokens } from "./pushTokens";
 
 interface NotifyAdminsParams {
   title: string;
@@ -19,41 +21,11 @@ interface NotifyAdminsParams {
   data?: Record<string, string>;
 }
 
-// Lê os UIDs de superadmin do appSettings/adminConfig
-async function getSuperAdminUids(): Promise<string[]> {
-  try {
-    const snap = await admin.firestore()
-      .collection("appSettings")
-      .doc("adminConfig")
-      .get();
-    const uids = snap.data()?.superAdmins;
-    if (Array.isArray(uids)) {
-      return uids.filter((u): u is string => typeof u === "string" && u.length > 0);
-    }
-    return [];
-  } catch (error) {
-    console.warn("[notifyAdmins] Erro ao ler adminConfig:", error);
-    return [];
-  }
-}
-
-// Busca pushTokens dos superadmins
+// Tokens dos superadmins, pelo helper — que já lê da
+// subcoleção privada com fallback para o campo antigo.
 async function getSuperAdminTokens(uids: string[]): Promise<string[]> {
-  const tokens: string[] = [];
-  await Promise.all(
-    uids.map(async (uid) => {
-      try {
-        const snap = await admin.firestore().collection("users").doc(uid).get();
-        const token = snap.data()?.pushToken;
-        if (typeof token === "string" && token.length > 0) {
-          tokens.push(token);
-        }
-      } catch {
-        // ignora token individual com erro
-      }
-    })
-  );
-  return tokens;
+  const tokens = await getPushTokens(uids);
+  return tokens.filter((t): t is string => typeof t === "string" && t.length > 0);
 }
 
 export async function notifyAdmins({

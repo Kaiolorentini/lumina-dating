@@ -71,6 +71,12 @@ service cloud.firestore {
         'ageVerified', 'ageVerifiedAt', 'birthDate',
         'ageVerificationStatus', 'ageRejectionReason', 'ageRejectionNote',
         'screenshotWarnings', 'screenshotWarningStatus', 'adminFlags', 'creatorStatus',
+        // Token de push: a coleção users tem `allow list` aberto,
+        // então qualquer conta logada lia o token de todo mundo e
+        // mandava push com a marca do Lumina. Agora vive em
+        // users/{uid}/private/push e é gravado pela CF
+        // registerPushToken.
+        'pushToken', 'pushTokenUpdatedAt',
         // Economia — gravados exclusivamente pelas Cloud Functions.
         // Sem isto, qualquer usuário se concede Turbo/Impulso/Destaque
         // permanente com boostScore arbitrário, sem gastar cristais.
@@ -104,6 +110,15 @@ service cloud.firestore {
 
       match /transactions/{transactionId} {
         allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
+      // Dados que NEM O DONO lê pelo cliente. Hoje guarda o
+      // token de push: se o dono pudesse ler, um app modificado
+      // leria o próprio e o de outros pela mesma rule.
+      // Escrita e leitura só pelo Admin SDK.
+      match /private/{docId} {
+        allow read:  if false;
         allow write: if false;
       }
     }
@@ -686,6 +701,42 @@ match /achievementTriggers/{docId} {
     }
 
     match /pendingLostSintonia/{docId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ============================================
+    // CONFIGURAÇÃO INTERNA — fechada ao cliente
+    // ============================================
+    // internalConfig/admins guarda a lista de superadmins.
+    //
+    // Antes ela vivia em appSettings/adminConfig, e appSettings
+    // tem `allow read: if true`: QUALQUER PESSOA, até sem login,
+    // descobria quem são os superadmins do Lumina e depois lia o
+    // pushToken deles pela coleção users. O alvo mais valioso do
+    // sistema estava público.
+    //
+    // Só o Admin SDK acessa. Para alterar a lista, editar pelo
+    // console do Firebase.
+    match /internalConfig/{docId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ============================================
+    // CONFIGURAÇÃO INTERNA — fechada ao cliente
+    // ============================================
+    // internalConfig/admins guarda a lista de superadmins.
+    //
+    // Antes ela vivia em appSettings/adminConfig, e appSettings
+    // tem `allow read: if true`: QUALQUER PESSOA, até sem login,
+    // descobria quem são os superadmins do Lumina e depois lia o
+    // pushToken deles pela coleção users. O alvo mais valioso do
+    // sistema estava público.
+    //
+    // Só o Admin SDK acessa. Para alterar a lista, editar pelo
+    // console do Firebase.
+    match /internalConfig/{docId} {
       allow read:  if false;
       allow write: if false;
     }

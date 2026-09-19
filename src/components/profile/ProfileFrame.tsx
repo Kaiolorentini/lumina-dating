@@ -88,17 +88,26 @@ function SceneBackdrop({ border, uid, h }: { border: string; uid: string; h: num
   // card aparece nas bordas e a atmosfera não tem formato.
   const cx = W / 2;
   const cy = h / 2;
+  // A elipse precisa caber INTEIRA no viewBox. Com rx/ry em 0.62
+  // ela transbordava e era cortada pela borda do SVG: a parte
+  // transparente do gradiente ficava fora da área visível, e o
+  // que sobrava era o miolo opaco recortado num RETÂNGULO — o
+  // "quadrado de cantos arredondados" atrás da foto.
+  //
+  // Em 0.5 o fade termina antes da borda e a atmosfera não tem
+  // formato: some no fundo do card, seja ele qual for.
   return (
     <>
       <Defs>
         <RadialGradient id={`bg${uid}`} cx="50%" cy="50%" r="50%">
           <Stop offset="0%"   stopColor={border}  stopOpacity="0.3" />
-          <Stop offset="38%"  stopColor="#14101F" stopOpacity="0.9" />
-          <Stop offset="78%"  stopColor="#0A0812" stopOpacity="0.6" />
+          <Stop offset="34%"  stopColor="#14101F" stopOpacity="0.85" />
+          <Stop offset="62%"  stopColor="#0A0812" stopOpacity="0.45" />
+          <Stop offset="84%"  stopColor="#0A0812" stopOpacity="0.12" />
           <Stop offset="100%" stopColor="#0A0812" stopOpacity="0" />
         </RadialGradient>
       </Defs>
-      <Ellipse cx={cx} cy={cy} rx={W * 0.62} ry={h * 0.62} fill={`url(#bg${uid})`} />
+      <Ellipse cx={cx} cy={cy} rx={W * 0.5} ry={h * 0.5} fill={`url(#bg${uid})`} />
     </>
   );
 }
@@ -571,8 +580,20 @@ export function ProfileFrame({
           ]}
         >
           <Svg width={size} height={height} viewBox={`0 0 ${W} ${vbH}`}>
-            <Scene border={borderColor} glow={glowColor} uid={uid}
-                   h={vbH} cx={cx} cy={cy} safe={safe} />
+            {/* Recorte ELÍPTICO: sem isto, cenas que desenham
+                além do viewBox (Supernova r=60, Eclipse r=58 numa
+                grade de 100) são cortadas em LINHA RETA pela
+                borda do SVG, e o corte reto gira junto com a
+                cena — é o que denuncia o retângulo. */}
+            <Defs>
+              <ClipPath id={`sceneClip${uid}`}>
+                <Ellipse cx={cx} cy={cy} rx={W * 0.5} ry={vbH * 0.5} />
+              </ClipPath>
+            </Defs>
+            <G clipPath={`url(#sceneClip${uid})`}>
+              <Scene border={borderColor} glow={glowColor} uid={uid}
+                     h={vbH} cx={cx} cy={cy} safe={safe} />
+            </G>
           </Svg>
         </Animated.View>
 

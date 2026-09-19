@@ -1,44 +1,25 @@
 // ============================================
 // ADMIN GUARD — HELPER CENTRALIZADO
 //
-// Cache de 60s para evitar leituras excessivas.
-// Dupla validação:
+// FONTE ÚNICA da validação de admin. O utils/isSuperAdmin.ts
+// era uma segunda implementação, usada por uma única function
+// e sem a checagem de isBlocked — foi apagado.
+//
+// Dupla validação, mantida:
 //   1. users/{uid}.role === 'superadmin'
-//   2. uid em appSettings/adminConfig.superAdmins
+//   2. uid na lista de superadmins (internalConfig/admins)
+//   3. conta não bloqueada
+//
+// A lista saiu do appSettings, que é público nas rules, para
+// o internalConfig, fechado. Ver config/adminConfig.ts.
 // ============================================
 
 import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
+import { getSuperAdminUids, invalidateAdminConfigCache } from "../config/adminConfig";
 
-interface AdminConfig {
-  superAdmins: string[];
-}
-
-// Cache local com TTL de 60 segundos
-let cachedConfig: AdminConfig | null = null;
-let cacheTimestamp = 0;
-const CACHE_TTL_MS = 60 * 1000;
-
-async function getAdminConfig(): Promise<AdminConfig> {
-  const now = Date.now();
-  if (cachedConfig && (now - cacheTimestamp) < CACHE_TTL_MS) {
-    return cachedConfig;
-  }
-  const snap = await admin.firestore()
-    .collection("appSettings")
-    .doc("adminConfig")
-    .get();
-  cachedConfig = {
-    superAdmins: snap.data()?.superAdmins ?? [],
-  };
-  cacheTimestamp = now;
-  return cachedConfig;
-}
-
-export function invalidateAdminConfigCache(): void {
-  cachedConfig = null;
-  cacheTimestamp = 0;
-}
+// Reexportado para não quebrar quem já importava daqui.
+export { invalidateAdminConfigCache };
 
 // Verifica autenticação — obrigatório antes de qualquer guard
 export function assertAuthenticated(uid: string | undefined): asserts uid is string {
@@ -49,11 +30,12 @@ export function assertAuthenticated(uid: string | undefined): asserts uid is str
 
 // Dupla validação de SuperAdmin
 // 1. role === 'superadmin' no Firestore
-// 2. uid no array appSettings/adminConfig.superAdmins
+// 2. uid na lista de superadmins
+// 3. conta não bloqueada
 export async function assertSuperAdmin(uid: string): Promise<void> {
-  const [userSnap, config] = await Promise.all([
+  const [userSnap, superAdmins] = await Promise.all([
     admin.firestore().collection("users").doc(uid).get(),
-    getAdminConfig(),
+    getSuperAdminUids(),
   ]);
 
   const role = userSnap.data()?.role;
@@ -65,7 +47,7 @@ export async function assertSuperAdmin(uid: string): Promise<void> {
     );
   }
 
-  if (!config.superAdmins.includes(uid)) {
+  if (!superAdmins.includes(uid)) {
     throw new HttpsError(
       "permission-denied",
       "UID não autorizado como SuperAdmin"

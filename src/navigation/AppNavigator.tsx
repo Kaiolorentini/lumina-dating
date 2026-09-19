@@ -419,6 +419,10 @@ function AppContent() {
       case 'age_verification_approved':
       case 'age_verification_rejected':
         break;
+      // Push para o admin quando alguém envia documento.
+      case 'age_verification_pending':
+        navigationRef.current.navigate('AdminAgeVerification');
+        break;
       // Push de moderação enviado pelo notifySuperAdmins quando um
       // criador submete produto. Sem este case o admin tocava na
       // notificação e nada acontecia — o switch caía no default.

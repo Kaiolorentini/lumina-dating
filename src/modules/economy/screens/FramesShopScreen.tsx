@@ -152,6 +152,7 @@ export default function FramesShopScreen() {
                   photoURL={photoURL}
                   size={116}
                   frame={frameAppearanceById(offer.id)}
+                  showPhoto={!!photoURL}
                 />
 
                 <Text style={styles.cardTitle} numberOfLines={1}>{offer.title}</Text>

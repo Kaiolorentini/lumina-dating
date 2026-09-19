@@ -43,6 +43,12 @@ export { listBlockedUsers }         from "./users/listBlockedUsers";
 // ONBOARDING — TERMOS E VERIFICAÇÃO DE IDADE
 // ============================================
 export { acceptAppTerms }           from "./users/acceptAppTerms";
+
+// ============================================
+// PUSH ENTRE USUÁRIOS
+// ============================================
+export { sendUserPush }             from "./notifications/sendUserPush";
+export { registerPushToken }        from "./notifications/registerPushToken";
 export { submitAgeVerification }    from "./verification/submitAgeVerification";
 export { listPendingVerifications } from "./verification/listPendingVerifications";
 export { approveAgeVerification }   from "./verification/approveAgeVerification";

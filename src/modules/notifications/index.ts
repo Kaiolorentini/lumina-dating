@@ -19,7 +19,5 @@ export {
 } from './services/notificationService';
 export {
   registerForPushNotifications,
-  sendPushNotification,
-  sendPushToUser,
-  getPushToken,
+  notifyUserOfEvent,
 } from './services/pushService';

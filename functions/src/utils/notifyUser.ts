@@ -4,9 +4,17 @@
 // Envia push + in-app notification para usuário.
 // Usado por todas as Cloud Functions que precisam
 // notificar o usuário sobre ações do admin.
+//
+// v2: token lido pelo helper (users/{uid}/private/push, com
+// fallback para o campo antigo) e envio pelo expoPush, que
+// CONFERE a resposta do Expo. A versão anterior lia o campo
+// direto e imprimia "Notificado" mesmo quando o Expo recusava
+// o envio — a API responde 200 com o erro no corpo.
 // ============================================
 
 import * as admin from "firebase-admin";
+import { getPushToken, deletePushToken } from "./pushTokens";
+import { sendExpoPush } from "./expoPush";
 
 interface NotifyUserParams {
   userId: string;
@@ -14,31 +22,6 @@ interface NotifyUserParams {
   body: string;
   type: string;
   data?: Record<string, string>;
-}
-
-// Envia push via Expo Push API
-async function sendExpoPush(
-  token: string,
-  title: string,
-  body: string,
-  data: Record<string, string>
-): Promise<void> {
-  try {
-    await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        to: token,
-        title,
-        body,
-        data,
-        sound: "default",
-        priority: "high",
-      }),
-    });
-  } catch (error) {
-    console.warn("[notifyUser] Erro ao enviar push:", error);
-  }
 }
 
 // Cria notificação in-app no Firestore
@@ -69,24 +52,29 @@ export async function notifyUser({
   data = {},
 }: NotifyUserParams): Promise<void> {
   try {
-    const userSnap = await admin.firestore()
-      .collection("users")
-      .doc(userId)
-      .get();
+    const pushToken = await getPushToken(userId);
 
-    const pushToken = userSnap.data()?.pushToken;
+    if (pushToken) {
+      const result = await sendExpoPush(pushToken, title, body, { type, ...data });
 
-    // Push (falha silenciosa se sem token)
-    if (pushToken && typeof pushToken === "string" && pushToken.length > 0) {
-      await sendExpoPush(pushToken, title, body, { type, ...data });
+      if (result.sent) {
+        console.log(`[notifyUser] Push enviado: ${userId} — ${type}`);
+      } else {
+        console.warn(
+          `[notifyUser] Push recusado (${result.errorCode}) para ${userId}: ${result.message ?? ""}`,
+        );
+        // Token morto some: sem isto, toda notificação futura
+        // tentaria o mesmo destino inexistente.
+        if (result.errorCode === "DeviceNotRegistered") {
+          await deletePushToken(userId);
+        }
+      }
     } else {
       console.warn(`[notifyUser] Sem pushToken para userId: ${userId}`);
     }
 
-    // In-app sempre
+    // In-app sempre — independe do push.
     await createInAppNotification(userId, type, body);
-
-    console.log(`[notifyUser] Notificado userId: ${userId} — ${type}`);
   } catch (error) {
     console.warn("[notifyUser] Erro:", error);
   }

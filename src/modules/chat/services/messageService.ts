@@ -56,17 +56,12 @@ export async function sendMessage(
   if (recipientId) {
     try {
       await markAsDelivered(chatId, senderId);
-      const { sendPushToUser } = await import('../../notifications/services/pushService');
-      await sendPushToUser(
-        recipientId,
-        senderName,
-        audioUrl
-          ? '🎤 Mensagem de áudio'
-          : text.length > 50
-          ? text.slice(0, 50) + '...'
-          : text,
-        { type: 'message', chatId, senderId, senderName }
-      );
+      // O texto da mensagem NÃO vai mais no push: ele aparece na
+      // tela bloqueada, e conversa privada não deveria vazar ali.
+      // O servidor monta "Fulano enviou uma mensagem" e valida
+      // que existe conexão aceita entre os dois.
+      const { notifyUserOfEvent } = await import('../../notifications/services/pushService');
+      await notifyUserOfEvent(recipientId, 'chat_message', chatId);
     } catch (error) {
       console.error('Erro ao enviar push:', error);
     }
