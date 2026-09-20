@@ -14,6 +14,7 @@ import { XP_MULTIPLIERS }                  from '../../config/xpMultipliers';
 import { calcLevel }                       from '../../config/xpTable';
 import { calcTreeStage }                   from '../../config/treeTable';
 import { todayBr }                         from '../../utils/dateBr';
+import { FieldValue }                       from 'firebase-admin/firestore';
 
 const db = admin.firestore();
 
@@ -34,6 +35,7 @@ export interface XPServiceResult {
   newLevel?:   number;
   leveledUp?:  boolean;
   stageUp?:    boolean;
+  newStage?:   number;
 }
 
 export const XPService = {
@@ -84,7 +86,7 @@ export const XPService = {
     const todayStr = todayBr();
     const idempKey = `${uid}_${eventId}`;
 
-    return db.runTransaction(async (t) => {
+    const result = await db.runTransaction(async (t) => {
       const [snapshot, isDupe] = await Promise.all([
         XPRepository.getSnapshot(t, uid),
         XPRepository.isIdempotent(t, idempKey),
@@ -132,6 +134,81 @@ export const XPService = {
         xpAnterior: snapshot.totalXP, xpAtual: newTotalXP,
       });
 
+      const stageUp = newTree.current.stage > prevTree.current.stage;
+
+      // ── EVOLUÇÃO DA ÁRVORE ──
+      //
+      // O `engagement/xp.ts` (caminho do cliente) paga a
+      // recompensa do estágio e notifica; este Service não fazia
+      // nem uma coisa nem outra. Como a árvore passou a crescer
+      // pelo Engine, quem evoluía NÃO RECEBIA NADA e a conquista
+      // TREE_STAGE_1/4 nunca era disparada.
+      //
+      // A recompensa é gravada aqui, inline, e não pelo
+      // grantTreeStageReward: ele faz um t.get() e o Firestore
+      // exige todas as leituras ANTES das escritas — nesta altura
+      // da transação já escrevemos.
+      if (stageUp) {
+        const reward = newTree.current.reward;
+        const userRef = db.collection('users').doc(uid);
+
+        if (reward.type === 'crystals' && typeof reward.value === 'number') {
+          t.set(
+            db.collection('wallets').doc(uid),
+            {
+              coinsGratuitos: FieldValue.increment(reward.value),
+              updatedAt:      FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+
+          t.set(db.collection('economyLedger').doc(), {
+            uid,
+            tipo:      'ARVORE_RECOMPENSA',
+            origem:    'XPService',
+            stage:     newTree.current.stage,
+            stageName: newTree.current.name,
+            cristais:  reward.value,
+            timestamp: FieldValue.serverTimestamp(),
+            imutavel:  true,
+          });
+        } else if (reward.type === 'badge' || reward.type === 'frame') {
+          t.set(
+            userRef,
+            {
+              progression: {
+                unlockedItems: { [`${reward.type}_${reward.value}`]: true },
+              },
+            },
+            { merge: true },
+          );
+        } else if (reward.type === 'animation') {
+          t.set(
+            userRef,
+            { progression: { unlockedAnimations: { [String(reward.value)]: true } } },
+            { merge: true },
+          );
+        }
+
+        // Marca a recompensa como concedida, igual ao xp.ts.
+        t.set(
+          userRef,
+          { [`xp.stageRewardsClaimed.stage_${newTree.current.stage}`]: true },
+          { merge: true },
+        );
+
+        t.set(db.collection('notifications').doc(), {
+          userId:    uid,
+          type:      'tree_evolution',
+          title:     `${newTree.current.icon} Árvore evoluiu!`,
+          message:   `Estágio ${newTree.current.name} desbloqueado! ${reward.label}`,
+          icon:      newTree.current.icon,
+          read:      false,
+          dados:     { stage: newTree.current.stage, reward },
+          timestamp: FieldValue.serverTimestamp(),
+        });
+      }
+
       return {
         skipped:    false,
         xpGained,
@@ -139,8 +216,25 @@ export const XPService = {
         newTotalXP,
         newLevel:   newLevel.level,
         leveledUp:  newLevel.level > prevLevel.level,
-        stageUp:    newTree.current.stage > prevTree.current.stage,
+        stageUp,
+        newStage:   newTree.current.stage,
       };
     });
+
+    // Conquista TREE_STAGE_1/4 — FORA da transação, como o
+    // engagement/xp.ts faz. TREE_EVOLUTION é action ABSOLUTA no
+    // AchievementProcessor: currentValue vai direto contra o
+    // target, sem somar.
+    if (result.stageUp && result.newStage !== undefined) {
+      db.collection('achievementTriggers').add({
+        uid,
+        action:       'TREE_EVOLUTION',
+        currentValue: result.newStage,
+        processedAt:  null,
+        timestamp:    FieldValue.serverTimestamp(),
+      }).catch(() => { /* conquista nunca derruba o XP */ });
+    }
+
+    return result;
   },
 };

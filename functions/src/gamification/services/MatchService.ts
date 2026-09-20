@@ -98,6 +98,15 @@ export const MatchService = {
       markSintoniaReveal(uid, targetUid).catch((error) => {
         console.warn('[MatchService] Falha ao marcar revelação:', error);
       });
+
+      // Conquistas FIRST_SINTONIA, SINTONIA_10 e SINTONIA_50.
+      // NINGUÉM disparava CREATE_SINTONIA — "Primeira Sintonia",
+      // a conquista mais simbólica do app, nunca era desbloqueada.
+      //
+      // Action INCREMENTAL no AchievementProcessor: currentValue
+      // é somado ao progresso, por isso 1.
+      markSintoniaAchievement(uid).catch(() => { /* nunca derruba a sintonia */ });
+      markSintoniaAchievement(targetUid).catch(() => { /* idem */ });
     }
 
     return result;
@@ -124,4 +133,19 @@ async function markSintoniaReveal(uidA: string, uidB: string): Promise<void> {
   );
 
   await batch.commit();
+}
+
+/**
+ * Enfileira a conquista de sintonia. O onAchievementTrigger
+ * processa pelo AchievementProcessor, que é quem entrega a
+ * recompensa — cristais, badge, frame e título.
+ */
+async function markSintoniaAchievement(uid: string): Promise<void> {
+  await db.collection('achievementTriggers').add({
+    uid,
+    action:       'CREATE_SINTONIA',
+    currentValue: 1,
+    processedAt:  null,
+    timestamp:    FieldValue.serverTimestamp(),
+  });
 }

@@ -14,6 +14,8 @@
 // Regra 6: ErrorBoundary é o único ponto de captura.
 // ============================================
 
+import * as admin                        from 'firebase-admin';
+import { FieldValue }                    from 'firebase-admin/firestore';
 import { ProfileVisitValidator }         from '../validation/ProfileVisitValidator';
 import { GamificationIntegrationService } from '../GamificationIntegrationService';
 import { handleError }                from '../ErrorBoundary';
@@ -73,5 +75,22 @@ export const ProfileVisitOrchestrator = {
       platform:  input.platform,
       sessionId: input.sessionId,
     });
+
+    // ETAPA 4: conquistas EXPLORER_10/50/100.
+    //
+    // NINGUÉM disparava VISIT_PROFILE — as três conquistas de
+    // explorador nunca avançavam. Fica AQUI, e não no
+    // registerProfileVisit, porque este Orchestrator já roda
+    // depois do ProfileVisitValidator: visita duplicada,
+    // auto-visita e bloqueio já foram descartados.
+    //
+    // Action INCREMENTAL: currentValue é somado ao progresso.
+    admin.firestore().collection('achievementTriggers').add({
+      uid:          visitorUid,
+      action:       'VISIT_PROFILE',
+      currentValue: 1,
+      processedAt:  null,
+      timestamp:    FieldValue.serverTimestamp(),
+    }).catch(() => { /* conquista nunca derruba a visita */ });
   },
 };
