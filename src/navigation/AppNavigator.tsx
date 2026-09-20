@@ -406,6 +406,14 @@ function AppContent() {
         }
         break;
       case 'request':          navigationRef.current.navigate('Requests');     break;
+      // Sintonia fechada pela outra pessoa. O modal aparece pelo
+      // EngagementInitializer ao abrir o app; aqui o toque no
+      // push leva direto ao perfil de quem sintonizou.
+      case 'sintonia_criada':
+        if (data.sintoniaWith) {
+          navigationRef.current.navigate('RealProfile', { userId: data.sintoniaWith });
+        }
+        break;
       case 'sale_completed':
       case 'withdrawal_paid':
       case 'withdrawal_rejected': navigationRef.current.navigate('MyEarnings'); break;
@@ -457,6 +465,7 @@ function AppContent() {
       const typeMap: Record<string, { title: string; onPress: () => void }> = {
         message:              { title: notification.request.content.title ?? 'Nova mensagem', onPress: () => { if (data.senderId) navigationRef.current?.navigate('UserChat', { userId: data.senderId, userName: data.senderName, userPhoto: data.senderPhoto }); } },
         request:              { title: 'Nova solicitação',         onPress: () => navigationRef.current?.navigate('Requests') },
+        sintonia_criada:      { title: '✦ Sintonia!',              onPress: () => { if (data.sintoniaWith) navigationRef.current?.navigate('RealProfile', { userId: data.sintoniaWith }); } },
         sale_completed:       { title: '💰 Venda realizada!',      onPress: () => navigationRef.current?.navigate('MyEarnings') },
         purchase_confirmed:   { title: '📦 Compra confirmada!',    onPress: () => navigationRef.current?.navigate('MyPurchases') },
         creator_approved:     { title: '🎨 Você é um Criador!',    onPress: () => navigationRef.current?.navigate('MyProducts') },

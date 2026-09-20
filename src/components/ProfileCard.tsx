@@ -1,20 +1,24 @@
 // ============================================
-// LUMINA — PROFILE CARD v2.0
+// LUMINA — PROFILE CARD v3.0
 // src/components/ProfileCard.tsx
 //
-// FASE 8 — a moldura virou o fundo do card e o badge ganhou
-// faixa própria.
+// v3.0 — SINTONIZAR NO CARD.
 //
-// v1 tinha a cena num quadrado centralizado, sobrando cinza em
-// volta, e o badge como ícone de 26px ao lado do nome — sumia.
-// Agora: a cena preenche a área da foto inteira, e o badge tem
-// uma faixa com o significado, que é o que ele comunica.
+// Curtir exigia abrir o perfil da pessoa. Além do atrito, isso
+// disparava um PROFILE_VISIT antes de cada PROFILE_LIKE —
+// dois eventos de gamificação onde bastaria um.
 //
-// A validade do aluguel é checada no usersService, não aqui: o
-// card recebe o id já filtrado ou null.
+// O botão ocupa a largura inteira, abaixo do significado do
+// badge, e o toque NÃO propaga para o card: sem
+// stopPropagation o onPress do TouchableOpacity externo
+// dispararia junto e a curtida também navegaria para o perfil.
+//
+// v2.0 — a moldura virou o fundo do card e o badge ganhou
+// faixa própria. A validade do aluguel é checada no
+// usersService, não aqui: o card recebe o id já filtrado.
 // ============================================
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -22,12 +26,16 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  ActivityIndicator,
+  Alert,
+  GestureResponderEvent,
 } from 'react-native';
 import { colors, fonts, spacing, borderRadius } from '../theme';
 import { ProfileCardData } from '../shared/types';
 import BoostBadge from './BoostBadge';
 import { ProfileFrame } from './profile/ProfileFrame';
 import { Badge } from './profile/Badge';
+import { useLike } from '../hooks/useLike';
 import {
   frameAppearanceById, badgeAppearanceById, badgeMeaningById,
   BADGES, RARITY_COLOR, Rarity,
@@ -40,14 +48,23 @@ const PHOTO_RATIO = 1.15;
 interface Props {
   data: ProfileCardData;
   onPress: () => void;
+  /** uid de quem está vendo o feed. Sem ele o botão não aparece. */
+  viewerUid?: string;
 }
 
-export default function ProfileCard({ data, onPress }: Props) {
+export default function ProfileCard({ data, onPress, viewerUid }: Props) {
   const frame = frameAppearanceById(data.equippedFrame);
   const badge = data.equippedBadge
     ? badgeAppearanceById(data.equippedBadge, (data.equippedBadgeRarity as Rarity) ?? 'COMMON')
     : null;
   const meaning = badgeMeaningById(data.equippedBadge);
+
+  // Estado local apenas: consultar no carregamento se cada
+  // perfil já foi curtido custaria uma leitura por card — 20
+  // por página do feed, milhares por minuto em escala. O guard
+  // real está no servidor (onCreateMatch devolve alreadyLiked).
+  const [liked, setLiked] = useState(false);
+  const { like, liking } = useLike(viewerUid);
 
   // Cor da faixa: raridade do badge da loja, ou a que veio do
   // documento para badges de conquista.
@@ -55,6 +72,29 @@ export default function ProfileCard({ data, onPress }: Props) {
     ? BADGES[data.equippedBadge]?.rarity ?? data.equippedBadgeRarity ?? 'COMMON'
     : 'COMMON';
   const stripColor = RARITY_COLOR[badgeRarity] ?? colors.gold;
+
+  async function handleLike(event: GestureResponderEvent) {
+    // Sem isto o onPress do card dispara junto e curtir navega
+    // para o perfil.
+    event.stopPropagation();
+
+    if (liked || liking || !viewerUid) return;
+
+    // Otimista: o coração responde na hora, a CF confirma depois.
+    setLiked(true);
+
+    const result = await like(data.id);
+
+    if (!result.ok) {
+      setLiked(false);
+      Alert.alert('Erro', 'Não foi possível registrar a sintonia.');
+      return;
+    }
+
+    if (result.isMutual) {
+      Alert.alert('✦ Sintonia!', 'Vocês se curtiram. Que tal iniciar uma conversa?');
+    }
+  }
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
@@ -83,16 +123,37 @@ export default function ProfileCard({ data, onPress }: Props) {
 
       {/* Faixa do badge: atravessa o card e separa a foto das
           informações. O badge sozinho não comunica "só de
-          passagem" — é o texto que carrega o sentido. */}
+          passagem" — é o texto que carrega o sentido, e por
+          isso ele aparece INTEIRO, sem numberOfLines. Cards de
+          alturas diferentes no grid são o preço disso. */}
       {badge && (
         <View style={[styles.badgeStrip, { borderTopColor: stripColor }]}>
           <Badge appearance={badge} size={38} />
           {meaning && (
-            <Text style={styles.badgeMeaning} numberOfLines={2}>
-              {meaning}
-            </Text>
+            <Text style={styles.badgeMeaning}>{meaning}</Text>
           )}
         </View>
+      )}
+
+      {/* Sintonizar — largura inteira, abaixo do significado. */}
+      {viewerUid && (
+        <TouchableOpacity
+          style={[styles.likeBar, liked && styles.likeBarActive]}
+          onPress={handleLike}
+          disabled={liked || liking}
+          activeOpacity={0.8}
+        >
+          {liking ? (
+            <ActivityIndicator color={liked ? colors.white : colors.gold} size="small" />
+          ) : (
+            <>
+              <Text style={styles.likeIcon}>{liked ? '❤️' : '🤍'}</Text>
+              <Text style={[styles.likeLabel, liked && styles.likeLabelActive]}>
+                {liked ? 'Sintonizando' : 'Sintonizar'}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
       )}
 
       <View style={styles.info}>
@@ -157,6 +218,32 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontStyle: 'italic',
     lineHeight: 13,
+  },
+  likeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: 10,
+    backgroundColor: colors.gold + '18',
+    borderTopWidth: 1,
+    borderTopColor: colors.gold + '44',
+  },
+  likeBarActive: {
+    backgroundColor: '#E91E63',
+    borderTopColor: '#E91E63',
+  },
+  likeIcon: {
+    fontSize: 16,
+  },
+  likeLabel: {
+    color: colors.gold,
+    fontSize: fonts.sizes.sm,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  likeLabelActive: {
+    color: colors.white,
   },
   info: {
     padding: spacing.sm,

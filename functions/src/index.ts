@@ -151,6 +151,7 @@ import './gamification/registerDispatchers';
 
 export { processGameEvent } from './gamification/GamificationEngine';
 export { onProfileLike } from './engagement/profileLike';
+export { clearSintoniaReveal } from './engagement/clearSintoniaReveal';
 export { gamificationHealthCheck } from './gamification/health/healthCheck';
 export { onProductPending } from "./triggers/onProductPending";
 export { onAchievementTrigger } from "./triggers/onAchievementTrigger";

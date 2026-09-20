@@ -10,12 +10,23 @@
 // Silenciosa por natureza: nada a mostrar quando não há
 // ban vencido, e o push de liberação vem do servidor.
 //
-// v5.6 — FASE 8: revelação de cosmético.
+// v5.8 — REVELAÇÃO DA SINTONIA.
 //
-// Dois modais podem competir ao abrir o app. A ordem é:
-// cosmético primeiro, recompensa diária depois que ele fechar.
-// Ganhar a moldura de Criador é evento raro; a recompensa
-// acontece todo dia e pode esperar trinta segundos.
+// Quando a outra pessoa fecha a sintonia, quem não estava
+// agindo pode ter o app fechado. O MatchService grava
+// progression.pendingSintoniaReveal nos dois lados e o modal
+// aparece na próxima abertura.
+//
+// Guarda só a MAIS RECENTE: cinco modais em sequência para
+// quem voltou depois de um dia é ruim, e uma lista cresceria
+// sem limite no documento. O resto fica no sino.
+//
+// Três modais podem competir ao abrir o app. A ordem é:
+// SINTONIA primeiro, cosmético depois, recompensa diária por
+// último. Sintonia é o momento que define o app e é raro;
+// recompensa acontece todo dia e pode esperar.
+//
+// v5.6 — FASE 8: revelação de cosmético.
 //
 // A flag progression.pendingCosmeticReveal vive no SERVIDOR e
 // não em armazenamento local: quem concede é o backend, só ele
@@ -53,6 +64,7 @@ import { useAuth }      from '../context/AuthContext';
 import { db }           from '../services/firebase';
 import DailyRewardModal from './DailyRewardModal';
 import CosmeticRevealModal from './CosmeticRevealModal';
+import SintoniaRevealModal from './SintoniaRevealModal';
 import { FRAMES } from '../config/cosmeticsCatalog';
 
 const REVEAL_DELAY_MS = 1500;
@@ -72,6 +84,8 @@ export default function EngagementInitializer() {
   const [rewardPending,   setRewardPending]   = useState(false);
   const [revealId,        setRevealId]        = useState<string | null>(null);
   const [photoURL,        setPhotoURL]        = useState('');
+  const [sintoniaUid,     setSintoniaUid]     = useState<string | null>(null);
+  const [sintoniaName,    setSintoniaName]    = useState('');
 
   const checkedRef = useRef<string | null>(null);
   const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -132,6 +146,23 @@ export default function EngagementInitializer() {
         setRevealId(pending);
         setPhotoURL(data?.photoURL ?? '');
       }
+
+      // Sintonia pendente — mesma leitura, sem custo extra.
+      // O nome exige uma segunda leitura, mas só quando há
+      // sintonia a revelar, que é raro.
+      const sintonia = data?.progression?.pendingSintoniaReveal;
+
+      if (typeof sintonia === 'string' && sintonia && mountedRef.current) {
+        setSintoniaUid(sintonia);
+
+        try {
+          const otherSnap = await getDoc(doc(db, 'users', sintonia));
+          const otherName = (otherSnap.data()?.name as string | undefined) ?? 'Alguém';
+          if (mountedRef.current) setSintoniaName(otherName);
+        } catch {
+          if (mountedRef.current) setSintoniaName('Alguém');
+        }
+      }
     } catch (error) {
       if (__DEV__) {
         console.warn('[EngagementInitializer] pendingCosmeticReveal falhou:', error);
@@ -175,6 +206,7 @@ export default function EngagementInitializer() {
   useEffect(() => {
     if (!rewardPending) return;
     if (revealId)       return;
+    if (sintoniaUid)    return;
 
     timerRef.current = setTimeout(() => {
       if (mountedRef.current) setShowDailyReward(true);
@@ -183,7 +215,7 @@ export default function EngagementInitializer() {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [rewardPending, revealId]);
+  }, [rewardPending, revealId, sintoniaUid]);
 
   async function closeReveal() {
     const id = revealId;
@@ -213,10 +245,46 @@ export default function EngagementInitializer() {
     navigation.navigate(id && FRAMES[id] ? 'Frames' : 'Badges');
   }
 
+  async function closeSintonia(): Promise<string | null> {
+    const uid = sintoniaUid;
+    setSintoniaUid(null);
+
+    // Sem isto o modal volta a cada abertura. Falha é
+    // tolerável: o pior caso é ver a comemoração duas vezes.
+    try {
+      await httpsCallable(getFunctions(), 'clearSintoniaReveal')({});
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[EngagementInitializer] clearSintoniaReveal falhou:', error);
+      }
+    }
+
+    return uid;
+  }
+
+  async function handleSintoniaChat() {
+    const uid = await closeSintonia();
+    if (uid) {
+      navigation.navigate('UserChat', {
+        userId:    uid,
+        userName:  sintoniaName,
+        userPhoto: '',
+      });
+    }
+  }
+
   if (!user?.uid) return null;
 
   return (
     <>
+      {/* Sintonia PRIMEIRO: é o momento que define o app. */}
+      <SintoniaRevealModal
+        visible={sintoniaUid !== null}
+        otherName={sintoniaName}
+        onClose={() => { closeSintonia(); }}
+        onOpenChat={handleSintoniaChat}
+      />
+
       <CosmeticRevealModal
         visible={revealId !== null}
         cosmeticId={revealId}

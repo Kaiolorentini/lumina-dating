@@ -1,10 +1,28 @@
 // ============================================
-// LUMINA — MATCH SERVICE v1.1
+// LUMINA — MATCH SERVICE v2.0
 // functions/src/gamification/services/MatchService.ts
 //
 // ADR-001: MatchService emite o evento MATCH_CREATED.
 // Nunca um trigger Firestore.
 // Regra de negócio vive aqui, não na persistência.
+//
+// v2.0 — A SINTONIA É DOS DOIS.
+//
+// A v1.1 emitia handleMatchCreated apenas para quem FECHOU o
+// par. Quem curtiu primeiro não recebia os 50 de XP nem os 50
+// de treeXP — e como CREATE_SINTONIA é de longe o maior valor
+// de treeXP da tabela, a Árvore só crescia para metade das
+// pessoas. Agora emite para ambos.
+//
+// v2.0 — REVELAÇÃO DA SINTONIA.
+// Cada lado recebe `progression.pendingSintoniaReveal` com o
+// uid do outro. O EngagementInitializer lê ao abrir o app e
+// mostra o modal; a CF clearSintoniaReveal limpa depois.
+//
+// Guarda só a MAIS RECENTE, não uma lista: cinco modais em
+// sequência para quem voltou depois de um dia é ruim, e uma
+// lista cresce sem limite no documento do usuário. O resto
+// fica nas notificações, no sino.
 //
 // v1.1 — gamificationProcessed entra na transação.
 // ============================================
@@ -65,12 +83,45 @@ export const MatchService = {
       return { matchId, uid, targetUid, isNew: isMutual };
     });
 
-    // Emite gamificação apenas se é match mútuo novo (ADR-001).
+    // Sintonia nova: gamificação e revelação para OS DOIS.
     // A exclusividade já foi garantida dentro da transação.
     if (result.isNew) {
       GamificationIntegrationService.handleMatchCreated({ uid, targetUid });
+      GamificationIntegrationService.handleMatchCreated({
+        uid:       targetUid,
+        targetUid: uid,
+      });
+
+      // Fire-and-forget: a sintonia já está gravada, e falha na
+      // revelação não pode desfazê-la nem travar a resposta ao
+      // cliente, que está esperando na tela.
+      markSintoniaReveal(uid, targetUid).catch((error) => {
+        console.warn('[MatchService] Falha ao marcar revelação:', error);
+      });
     }
 
     return result;
   },
 };
+
+/**
+ * Grava a flag de revelação nos DOIS usuários, cada um com o
+ * uid do outro. Um batch: duas escritas, uma viagem.
+ */
+async function markSintoniaReveal(uidA: string, uidB: string): Promise<void> {
+  const batch = db.batch();
+
+  batch.set(
+    db.collection('users').doc(uidA),
+    { progression: { pendingSintoniaReveal: uidB } },
+    { merge: true },
+  );
+
+  batch.set(
+    db.collection('users').doc(uidB),
+    { progression: { pendingSintoniaReveal: uidA } },
+    { merge: true },
+  );
+
+  await batch.commit();
+}

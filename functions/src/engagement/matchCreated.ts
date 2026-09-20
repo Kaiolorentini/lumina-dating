@@ -19,6 +19,7 @@ import * as functions from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { MatchService } from '../gamification/services/MatchService';
+import { notifyUser }   from '../utils/notifyUser';
 
 const db = admin.firestore();
 
@@ -83,6 +84,27 @@ export const onCreateMatch = functions.onCall(
     // RECEIVE_LIKE fica pendente pelo mesmo motivo: não dá para
     // conceder XP a OUTRO usuário a partir daqui sem essa função.
     // Registrado no roadmap.
+
+    // Sintonia nova: avisa QUEM NÃO ESTAVA AGINDO. Quem acabou
+    // de curtir vê o modal na resposta desta chamada; o outro
+    // lado pode estar com o app fechado, e sem push só
+    // descobriria ao abrir o app por acaso.
+    //
+    // notifyUser cria a notificação in-app E manda o push, e o
+    // dado `sintoniaWith` leva o AppNavigator ao perfil da
+    // pessoa. Fire-and-forget: a sintonia já está gravada.
+    if (result.isNew) {
+      const likerSnap = await db.collection('users').doc(uid).get();
+      const likerName = (likerSnap.data()?.name as string | undefined) ?? 'Alguém';
+
+      notifyUser({
+        userId: targetUid,
+        title:  '✦ Sintonia!',
+        body:   `Você e ${likerName} se curtiram. Que tal começar a conversa?`,
+        type:   'sintonia_criada',
+        data:   { sintoniaWith: uid },
+      }).catch(() => { /* nunca derruba a curtida */ });
+    }
 
     return {
       success:  true,

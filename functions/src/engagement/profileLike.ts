@@ -15,7 +15,14 @@ function newCorrelationId(): string {
 }
 
 export const onProfileLike = functions.onCall(
-  { region: 'us-central1' },
+  {
+    region: 'us-central1',
+    // 512MiB em vez do padrão 256: no Cloud Functions a CPU
+    // é proporcional à memória, e esta função roda três
+    // transações do Firestore em sequência (Vault, XP,
+    // Ranking). Com 256MiB cada uma levava de 6 a 10s.
+    memory: '512MiB',
+  },
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');

@@ -13,18 +13,26 @@ import { getDispatcher }                     from './DispatcherRegistry';
 import { Logger }                            from './middlewares/LoggingMiddleware';
 import { EventLifecycle }                    from './EventLifecycle';
 
-const DEFAULT_TIMEOUT_MS = 2000;
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  ms:      number,
-  label:   string
-): Promise<T> {
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`Timeout após ${ms}ms em ${label}`)), ms)
-  );
-  return Promise.race([promise, timeout]);
-}
+// withTimeout REMOVIDO.
+//
+// Promise.race NÃO CANCELA a promise perdedora: a transação do
+// Firestore continuava rodando e COMPLETAVA o trabalho depois
+// do timeout. No log via-se "Dispatcher XP falhou — Timeout
+// após 8000ms" e, segundos depois, "XP concedido (modo
+// ENGINE)". O timeout só corrompia o status e as métricas:
+// `executed` saía vazio e o evento ia para o ledger como
+// FAILED mesmo tendo dado certo.
+//
+// Pior, ele CAUSAVA o problema que parecia medir. Ao desistir
+// de esperar, o dispatcher seguinte começava com o anterior
+// ainda em transação, e os dois disputavam o mesmo documento
+// `users/{uid}` — XPService e RankingService escrevem nele.
+// O Firestore serializa e repete a transação perdedora, e cada
+// repetição somava segundos. Sem o timeout os dispatchers
+// rodam de fato em sequência e não há disputa.
+//
+// O limite real continua sendo o timeout da própria Cloud
+// Function, hoje 60s.
 
 async function runDispatcher(
   type:  DispatcherType,
@@ -63,9 +71,6 @@ async function runDispatcher(
     };
   }
 
-  // Usa timeout configurado no metadata do dispatcher (MELHORIA 9)
-  const timeoutMs = dispatcher.getMetadata().timeoutMs ?? DEFAULT_TIMEOUT_MS;
-
   // Verifica se o dispatcher pode processar este evento
   if (!dispatcher.canHandle(input)) {
     return {
@@ -78,11 +83,7 @@ async function runDispatcher(
 
   try {
     // REGRA: usa dispatch() — interface IGameDispatcher
-    const result = await withTimeout(
-      dispatcher.dispatch(input),
-      timeoutMs,
-      type
-    );
+    const result = await dispatcher.dispatch(input);
     return { ...result, durationMs: Date.now() - startMs };
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);

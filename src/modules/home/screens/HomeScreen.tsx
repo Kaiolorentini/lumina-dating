@@ -146,6 +146,7 @@ function ConversasTab({ navigation }: { navigation: any }) {
 }
 
 export default function HomeScreen({ navigation }: Props) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<HomeTab>('perfis');
 
   const {
@@ -358,6 +359,7 @@ export default function HomeScreen({ navigation }: Props) {
                     key={profile.id}
                     data={profile}
                     onPress={() => handleCardPress(profile)}
+                    viewerUid={user?.uid}
                   />
                 ))}
               </View>

@@ -115,7 +115,11 @@ export default function RealProfileScreen() {
         setLiked(alreadyLiked);
 
         if (user?.uid && targetUserId) {
-          await registrarVisita(user.uid, targetUserId);
+          // Sem await: a visita é registro em segundo plano e o
+          // usuário não espera por ela. Com await, a CF
+          // registerProfileVisit — que faz cinco leituras antes
+          // de gravar — segurava o spinner da tela inteira.
+          registrarVisita(user.uid, targetUserId).catch(() => {});
 
           // XP, conquista e cofre NÃO são emitidos aqui.
           //
