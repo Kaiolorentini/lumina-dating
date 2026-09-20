@@ -14,7 +14,10 @@ import { GameLogger }                           from '../GameLogger';
 
 class VaultDispatcher implements IGameDispatcher {
   getMetadata(): DispatcherMetadata {
-    return { name: 'VaultDispatcher', version: 2, type: 'VAULT', timeoutMs: 1000, retryable: false, priority: 'NORMAL' };
+    // 8000ms pelo mesmo motivo do XPDispatcher: 1000 era curto
+    // para a transação em cold start, e o withTimeout marcava
+    // FAILED enquanto a transação seguia e depositava.
+    return { name: 'VaultDispatcher', version: 2, type: 'VAULT', timeoutMs: 8000, retryable: false, priority: 'NORMAL' };
   }
 
   canHandle(input: GameEventInput): boolean {

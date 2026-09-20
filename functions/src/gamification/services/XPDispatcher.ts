@@ -17,7 +17,12 @@ import { GameLogger }                           from '../GameLogger';
 
 class XPDispatcher implements IGameDispatcher {
   getMetadata(): DispatcherMetadata {
-    return { name: 'XPDispatcher', version: 5, type: 'XP', timeoutMs: 1000, retryable: false, priority: 'NORMAL' };
+    // 1000ms era curto demais: a transação do XPService passa
+    // disso em cold start (medido: 1201, 1261 e 1501ms). O
+    // withTimeout marcava FAILED enquanto a transação seguia e
+    // concedia o XP — funcionava por acidente, com o evento
+    // registrado como falho no ledger e métricas erradas.
+    return { name: 'XPDispatcher', version: 5, type: 'XP', timeoutMs: 8000, retryable: false, priority: 'NORMAL' };
   }
 
   canHandle(input: GameEventInput): boolean {

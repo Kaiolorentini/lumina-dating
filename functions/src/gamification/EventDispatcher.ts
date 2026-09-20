@@ -38,11 +38,28 @@ async function runDispatcher(
 
   const dispatcher = getDispatcher(type);
   if (!dispatcher) {
+    // FAILED, não SKIPPED: dispatcher ausente é erro de
+    // configuração, não caso normal. Como SKIPPED, ele não
+    // entrava em `errors` e o evento voltava COMPLETED — o
+    // Engine parecia funcionar enquanto não concedia nada.
+    //
+    // Os nove dispatchers existem e chamam registerDispatcher()
+    // no carregamento do módulo, mas NENHUM arquivo os importa,
+    // então o registry fica vazio. Ver LEIA-ME.md nesta pasta.
+    Logger.error({
+      eventId:    input.eventId,
+      eventType:  input.eventType,
+      uid:        input.uid,
+      lifecycle:  'FAILED' as EventLifecycle,
+      message:    `Dispatcher ${type} NÃO REGISTRADO — o módulo não foi importado`,
+      error:      'DISPATCHER_NOT_REGISTERED',
+      durationMs: 0,
+    });
     return {
       dispatcher: type,
-      status:     'SKIPPED',
+      status:     'FAILED',
       durationMs: 0,
-      warnings:   [`${type} não registrado — implementar no Bloco 5`],
+      errors:     [`${type} não registrado — o módulo não foi importado (ver LEIA-ME.md)`],
     };
   }
 

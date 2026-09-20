@@ -18,15 +18,22 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { todayBr, yesterdayBr } from '../utils/dateBr';
 const db = admin.firestore();
 
-// Recompensas por dia de streak (1–7)
+// Recompensas por dia de streak (1–7).
+//
+// Valores CORTADOS PELA METADE: o ciclo dava 93 cristais por
+// semana só por abrir o app, o que competia com a compra e
+// com o Cofre, que exige interação real. Agora dá 47.
+//
+// A curva foi mantida: o dia 7 continua valendo mais do que o
+// dobro do dia 1, que é o que sustenta o streak.
 const STREAK_REWARDS: Record<number, number> = {
-  1: 5,
-  2: 8,
-  3: 10,
-  4: 12,
-  5: 15,
-  6: 18,
-  7: 25,  // dia 7 — bônus especial
+  1: 3,
+  2: 4,
+  3: 5,
+  4: 6,
+  5: 8,
+  6: 9,
+  7: 12,  // dia 7 — bônus especial
 };
 
 export const claimDailyReward = functions.onCall(
@@ -100,7 +107,7 @@ export const claimDailyReward = functions.onCall(
         );
 
         // Cristais gratuitos a creditar
-        const crystals = STREAK_REWARDS[currentStreak] ?? 5;
+        const crystals = STREAK_REWARDS[currentStreak] ?? STREAK_REWARDS[1];
 
         // Saldo atual (apenas gratuitos — recompensa diária sempre credita gratuitos)
         const coinsGratuitos = walletData.coinsGratuitos ?? 0;

@@ -89,7 +89,19 @@ export { convertFragments }         from "./economy/convertFragments";
 export { updateTrustScore }         from "./security/trustScore";
 
 // Ranking
-export { registerRankingEvent, resetWeeklyRanking } from "./economy/weeklyRanking";
+// weeklyRanking.ts REMOVIDO: era um SEGUNDO sistema de
+// ranking, por categoria (EXPLORADORES/SINTONIAS/MISSOES),
+// escrevendo na mesma coleção `weeklyRanking` com estrutura
+// incompatível — doc {weekId}/{categoria}/{uid} contra
+// {uid}_{weekId} — e com agendamento próprio pagando até 500
+// fragmentos por posição, contra 50 do outro.
+//
+// Ninguém chamava o registerRankingEvent, mas o
+// resetWeeklyRanking era AGENDADO e rodava toda segunda.
+//
+// A ideia de rankings por categoria é boa e fica registrada
+// como melhoria: o RankingService já sabe a categoria de cada
+// evento (SOCIAL, CHAT, MISSION).
 
 // Monitoramento
 export { takeDailyEconomySnapshot, getEconomySnapshots } from "./monitoring/inflationMonitor";
@@ -132,6 +144,11 @@ export { getDashboardSnapshot } from './gamification/dashboard/getDashboardSnaps
 // ============================================
 // GAMIFICATION ENGINE
 // ============================================
+// Importa os dispatchers para que o registerDispatcher() de
+// cada um rode. Sem esta linha o registry fica vazio e o
+// Engine não concede nada. Ver registerDispatchers.ts.
+import './gamification/registerDispatchers';
+
 export { processGameEvent } from './gamification/GamificationEngine';
 export { onProfileLike } from './engagement/profileLike';
 export { gamificationHealthCheck } from './gamification/health/healthCheck';

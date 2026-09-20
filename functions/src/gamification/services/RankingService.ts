@@ -9,6 +9,7 @@
 
 import * as admin from 'firebase-admin';
 import { RankingRepository } from '../repositories/RankingRepository';
+import { weekIdBr, seasonIdBr } from '../../utils/dateBr';
 
 const db = admin.firestore();
 
@@ -29,17 +30,12 @@ function getLeague(xp: number): string {
   return 'Bronze';
 }
 
-function getCurrentWeekId(): string {
-  const now  = new Date();
-  const year = now.getFullYear();
-  const week = Math.ceil((now.getDate() - now.getDay() + 1) / 7);
-  return `${year}_W${String(week).padStart(2, '0')}`;
-}
-
-function getCurrentSeasonId(): string {
-  const now = new Date();
-  return `S${now.getFullYear()}_${Math.ceil(now.getMonth() / 3)}`;
-}
+// Cópias locais REMOVIDAS — a mesma fórmula quebrada estava
+// em quatro arquivos. Se o Engine e o legado discordassem
+// sobre qual é "esta semana", um escreveria num documento e o
+// reset limparia outro. Fonte única em utils/dateBr.
+const getCurrentWeekId   = weekIdBr;
+const getCurrentSeasonId = seasonIdBr;
 
 const EVENT_TO_RANKING_CATEGORY: Record<string, string> = {
   PROFILE_LIKE:      'SOCIAL',

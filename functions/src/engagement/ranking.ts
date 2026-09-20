@@ -14,6 +14,7 @@ import * as admin      from 'firebase-admin';
 import { FieldValue }  from 'firebase-admin/firestore';
 import { LegacyShadowOrchestrator } from '../gamification/compatibility/LegacyShadowOrchestrator';
 import { CompareParams } from '../gamification/compatibility/ICompatibilityAdapter';
+import { weekIdBr, lastWeekIdBr, seasonIdBr } from '../utils/dateBr';
 
 const db = admin.firestore();
 
@@ -38,17 +39,12 @@ function getLeague(xp: number): string {
   return 'Bronze';
 }
 
-function getCurrentWeekId(): string {
-  const now  = new Date();
-  const year = now.getFullYear();
-  const week = Math.ceil((now.getDate() - now.getDay() + 1) / 7);
-  return `${year}_W${String(week).padStart(2, '0')}`;
-}
-
-function getCurrentSeasonId(): string {
-  const now = new Date();
-  return `S${now.getFullYear()}_${Math.ceil(now.getMonth() / 3)}`;
-}
+// getCurrentWeekId e getCurrentSeasonId locais REMOVIDOS: o
+// primeiro usava getDate() (dia do MÊS) e gerava W01..W05
+// repetindo todo mês; o segundo dava T0 em janeiro, porque
+// getMonth() é zero-based. Fonte única agora em utils/dateBr.
+const getCurrentWeekId   = weekIdBr;
+const getCurrentSeasonId = seasonIdBr;
 
 function newEventId(): string {
   return `ranking_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -256,11 +252,13 @@ export const freezeRanking = scheduler.onSchedule(
 export const rewardRanking = scheduler.onSchedule(
   { schedule: 'every monday 00:05', region: 'us-central1' },
   async () => {
-    const lastWeekDate = new Date();
-    lastWeekDate.setDate(lastWeekDate.getDate() - 1);
-    const year   = lastWeekDate.getFullYear();
-    const week   = Math.ceil((lastWeekDate.getDate() - lastWeekDate.getDay() + 1) / 7);
-    const weekId = `${year}_W${String(week).padStart(2, '0')}`;
+    // Rodando segunda 00:05, a semana a premiar é a ANTERIOR.
+    // O código antigo subtraía UM dia e recalculava com a
+    // fórmula quebrada: o id não batia com o que o
+    // freezeRanking gravou no domingo às 23:50, e a function
+    // saía com "Snapshot não encontrado". O top 10 NUNCA foi
+    // recompensado.
+    const weekId = lastWeekIdBr();
 
     console.log(`[rewardRanking] Recompensando semana ${weekId}`);
 
@@ -362,7 +360,12 @@ export const resetRanking = scheduler.onSchedule(
     }
     await batch.commit();
 
+    // O cache da semana que ACABOU também sai: com o id
+    // antigo repetindo todo mês, o cache velho era servido
+    // como se fosse o ranking da semana nova.
+    const previousWeekId = lastWeekIdBr();
     await db.collection('rankingCache').doc(weekId).delete();
+    await db.collection('rankingCache').doc(previousWeekId).delete().catch(() => {});
 
     console.log(`[resetRanking] ${snap.size} usuários resetados`);
   }
