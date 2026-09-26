@@ -30,6 +30,7 @@
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { GamificationIntegrationService } from '../GamificationIntegrationService';
+import { PrestigeService } from '../../engagement/prestigeService';
 
 const db = admin.firestore();
 
@@ -107,6 +108,32 @@ export const MatchService = {
       // é somado ao progresso, por isso 1.
       markSintoniaAchievement(uid).catch(() => { /* nunca derruba a sintonia */ });
       markSintoniaAchievement(targetUid).catch(() => { /* idem */ });
+
+      // Marcos de prestígio SINTONIA_10/50/100_REAL. O catálogo
+      // diz "sintonias reais" (com conversa e resposta mútua),
+      // mas essa checagem exigiria varrer as mensagens de cada
+      // par — caro e frágil. Contamos sintonias mútuas, que já
+      // exigem interesse dos dois lados.
+      checkSintoniaMarcos(uid).catch(() => {});
+      checkSintoniaMarcos(targetUid).catch(() => {});
+
+      // A sintonia vira CONEXÃO ACEITA.
+      //
+      // O app tinha dois sistemas que não se falavam: a
+      // solicitação (connectionRequests com status accepted) e
+      // a sintonia (coleção sintonias). A aba Sintonias, a aba
+      // Conversas, o contador do rodapé e o guard do chat leem
+      // TODOS do primeiro — então quem se curtia mutuamente
+      // ganhava XP, conquista e árvore, mas continuava sem
+      // poder conversar.
+      //
+      // Criar a conexão aqui faz tudo que já existe funcionar,
+      // sem tocar em nenhuma tela. A solicitação manual
+      // continua valendo para quem quer falar sem depender de
+      // ser curtido de volta.
+      createConnectionFromMatch(uid, targetUid).catch((error) => {
+        console.warn('[MatchService] Falha ao criar conexão:', error);
+      });
     }
 
     return result;
@@ -148,4 +175,97 @@ async function markSintoniaAchievement(uid: string): Promise<void> {
     processedAt:  null,
     timestamp:    FieldValue.serverTimestamp(),
   });
+}
+
+/**
+ * Concede o marco de prestígio quando a contagem de sintonias
+ * cruza 10, 50 ou 100.
+ *
+ * A contagem vem de `progression.sintoniaCount`, incrementado
+ * aqui: contar documentos da coleção `sintonias` a cada match
+ * custaria uma query por sintonia, e o Firestore cobra por
+ * documento lido.
+ */
+async function checkSintoniaMarcos(uid: string): Promise<void> {
+  const userRef = db.collection('users').doc(uid);
+
+  const count = await db.runTransaction(async (t) => {
+    const snap = await t.get(userRef);
+    const current = (snap.data()?.progression?.sintoniaCount as number | undefined) ?? 0;
+    const next = current + 1;
+
+    t.set(
+      userRef,
+      { progression: { sintoniaCount: next } },
+      { merge: true },
+    );
+
+    return next;
+  });
+
+  // Ordem decrescente e break no primeiro: o grantMarco já
+  // barra o que foi concedido, mas evitar a transação é melhor
+  // que depender do guard.
+  const marcos: { id: string; at: number }[] = [
+    { id: 'SINTONIA_100_REAL', at: 100 },
+    { id: 'SINTONIA_50_REAL',  at: 50  },
+    { id: 'SINTONIA_10_REAL',  at: 10  },
+  ];
+
+  for (const marco of marcos) {
+    if (count === marco.at) {
+      await PrestigeService.grantMarco(uid, marco.id);
+      break;
+    }
+  }
+}
+
+/**
+ * Cria a conexão aceita entre os dois, se ainda não existir.
+ *
+ * O id é determinístico — os dois uids ordenados — e não
+ * gerado pelo Firestore: sem isso, duas sintonias processadas
+ * quase ao mesmo tempo criariam conexões duplicadas, e o
+ * getConexoesAceitas devolveria a mesma pessoa duas vezes na
+ * lista.
+ *
+ * `fromUserId` é quem fechou o par, por convenção — as telas
+ * tratam os dois lados igual, então a escolha é arbitrária.
+ */
+async function createConnectionFromMatch(
+  uid: string,
+  targetUid: string,
+): Promise<void> {
+  const connectionId = `sintonia_${[uid, targetUid].sort().join('_')}`;
+  const ref = db.collection('connectionRequests').doc(connectionId);
+
+  const [fromSnap, toSnap] = await Promise.all([
+    db.collection('users').doc(uid).get(),
+    db.collection('users').doc(targetUid).get(),
+  ]);
+
+  const fromData = fromSnap.data() ?? {};
+
+  await ref.set(
+    {
+      fromUserId:    uid,
+      toUserId:      targetUid,
+      fromUserName:  (fromData.name as string | undefined) ?? '',
+      fromUserPhoto: (fromData.photoURL as string | undefined) ?? '',
+      status:        'accepted',
+      // Marca a origem: conexões que nasceram de sintonia não
+      // passaram por pedido e aceite, e um dia isso pode
+      // importar para métricas ou para a tela de solicitações.
+      origem:        'sintonia',
+      timestamp:     FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  // O `toSnap` é lido só para garantir que o alvo existe — uma
+  // conexão para um documento apagado deixaria a lista com uma
+  // entrada morta.
+  if (!toSnap.exists) {
+    await ref.delete();
+  }
 }

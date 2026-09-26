@@ -17,6 +17,9 @@ import { useNavigation }    from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth }          from '../../../context/AuthContext';
 import { useRanking, RankingEntry } from '../hooks/useRanking';
+import { useXP }        from '../hooks/useXP';
+import { usePrestige }  from '../hooks/usePrestige';
+import { useXPHistory, labelForAction } from '../hooks/useXPHistory';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
@@ -110,6 +113,9 @@ export default function RankingScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
   const { data, loading, error, refresh } = useRanking(user?.uid);
+  const { status: xp }        = useXP(user?.uid);
+  const { data: prestige }    = usePrestige(user?.uid);
+  const { entries: history }  = useXPHistory(user?.uid);
   const [activeTab,   setActiveTab]   = useState<Tab>('social');
   const [refreshing, setRefreshing]   = useState(false);
 
@@ -190,10 +196,13 @@ export default function RankingScreen() {
               <Text style={styles.sectionTitle}>Recompensas desta semana</Text>
               <View style={styles.rewardsRow}>
                 {[
-                  { pos: '🏆 1º', reward: '50🔮 + Badge' },
-                  { pos: '🥈 2º', reward: '40🔮' },
-                  { pos: '🥉 3º', reward: '30🔮' },
-                  { pos: '4º–10º', reward: '20🔮' },
+                  // O 1º lugar prometia "+ Badge", mas o
+                  // rewardRanking só paga fragmentos — nenhum
+                  // badge é concedido. Promessa retirada.
+                  { pos: '🏆 1º', reward: '50 fragmentos' },
+                  { pos: '🥈 2º', reward: '40 fragmentos' },
+                  { pos: '🥉 3º', reward: '30 fragmentos' },
+                  { pos: '4º–10º', reward: '20 fragmentos' },
                 ].map((item, i) => (
                   <View key={i} style={styles.rewardChip}>
                     <Text style={styles.rewardChipPos}>{item.pos}</Text>
@@ -225,17 +234,97 @@ export default function RankingScreen() {
         )}
 
         {activeTab === 'progresso' && (
-          <View style={styles.progressoInfo}>
-            <Text style={styles.progressoIcon}>📈</Text>
-            <Text style={styles.progressoTitle}>Ranking de Progressão</Text>
-            <Text style={styles.progressoDesc}>
-              Este ranking é informativo e conta todo o XP acumulado — sem recompensas.
-              Serve para mostrar sua evolução geral no Lumina.
-            </Text>
-            <Text style={styles.progressoDesc}>
-              O Ranking Social (aba 🏆) é o competitivo e conta apenas XP de atividade social real.
-            </Text>
-          </View>
+          <>
+            {/* A aba era só um texto explicando o que ela
+                DEVERIA ser, e prometia um "ranking de
+                progressão" que não existe em lugar nenhum do
+                backend. Agora mostra o que a pessoa realmente
+                tem. */}
+
+            {/* Nível e XP */}
+            <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.userCard}>
+              <Text style={styles.userCardLabel}>Seu nível</Text>
+              <Text style={styles.userPosition}>{xp?.level ?? 1}</Text>
+              <Text style={styles.userXP}>{xp?.tier ?? ''}</Text>
+
+              <View style={styles.barWrap}>
+                <View style={styles.barTrack}>
+                  <View style={[
+                    styles.barFill,
+                    { width: `${(xp?.levelProgress ?? 0) * 100}%` as any },
+                  ]} />
+                </View>
+                <Text style={styles.barCaption}>
+                  {xp?.totalXP ?? 0} XP · faltam {Math.max(0, (xp?.nextLevelXP ?? 0) - (xp?.totalXP ?? 0))} para o nível {(xp?.level ?? 1) + 1}
+                </Text>
+              </View>
+            </LinearGradient>
+
+            {/* Árvore e prestígio, lado a lado */}
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statIcon}>{xp?.treeIcon ?? '🌱'}</Text>
+                <Text style={styles.statValue}>{xp?.treeName ?? 'Broto'}</Text>
+                <Text style={styles.statLabel}>Árvore · {xp?.treeXP ?? 0} XP</Text>
+              </View>
+
+              <View style={styles.statBox}>
+                <Text style={styles.statIcon}>{prestige?.prestigeIcon ?? '✨'}</Text>
+                <Text style={styles.statValue}>{prestige?.prestigeName ?? 'Desperto'}</Text>
+                <Text style={styles.statLabel}>{prestige?.prestigePoints ?? 0} pts de Prestígio</Text>
+              </View>
+            </View>
+
+            {/* Marcos de prestígio recentes */}
+            {prestige?.legado && prestige.legado.length > 0 && (
+              <>
+                <Text style={styles.sectionTitleSpaced}>Marcos conquistados</Text>
+                {[...prestige.legado].reverse().slice(0, 5).map((m, i) => (
+                  <View key={i} style={styles.histRow}>
+                    <Text style={styles.histIcon}>✦</Text>
+                    <Text style={styles.histLabel}>{m.label}</Text>
+                    <Text style={styles.histValue}>+{m.points} pts</Text>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* Histórico de XP — o xpLog nunca foi lido por
+                ninguém, e todo o histórico estava lá. */}
+            <Text style={styles.sectionTitleSpaced}>Seus últimos ganhos</Text>
+
+            {history.length === 0 ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyIcon}>📈</Text>
+                <Text style={styles.emptyTitle}>Nada por aqui ainda</Text>
+                <Text style={styles.emptySub}>
+                  Visite perfis, curta e converse — cada ação rende
+                  XP e aparece aqui.
+                </Text>
+              </View>
+            ) : (
+              history.map(e => (
+                <View key={e.id} style={styles.histRow}>
+                  <Text style={styles.histIcon}>⬆️</Text>
+                  <View style={styles.histInfo}>
+                    <Text style={styles.histLabel}>{labelForAction(e.origem)}</Text>
+                    {e.timestamp && (
+                      <Text style={styles.histDate}>
+                        {e.timestamp.toLocaleDateString('pt-BR')} às{' '}
+                        {e.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.histValues}>
+                    <Text style={styles.histValue}>+{e.xpRecebido} XP</Text>
+                    {e.treeXPRecebido > 0 && (
+                      <Text style={styles.histTree}>+{e.treeXPRecebido} 🌱</Text>
+                    )}
+                  </View>
+                </View>
+              ))
+            )}
+          </>
         )}
 
         <View style={{ height: 40 }} />
@@ -297,8 +386,22 @@ const styles = StyleSheet.create({
   emptySub:   { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center' },
 
   // Progressão
-  progressoInfo:  { alignItems: 'center', padding: S.xl, gap: S.lg },
-  progressoIcon:  { fontSize: 60 },
-  progressoTitle: { color: COLORS.surface, fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold },
-  progressoDesc:  { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center', lineHeight: 22 },
+  barWrap:     { width: '100%', gap: 6, marginTop: S.sm },
+  barTrack:    { height: 8, backgroundColor: COLORS.border, borderRadius: R.full, overflow: 'hidden' },
+  barFill:     { height: '100%', borderRadius: R.full, backgroundColor: COLORS.secondary },
+  barCaption:  { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textAlign: 'center' },
+  statsRow:    { flexDirection: 'row', gap: S.sm, marginHorizontal: S.md, marginBottom: S.md },
+  statBox:     { flex: 1, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: COLORS.border },
+  statIcon:    { fontSize: 30 },
+  statValue:   { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
+  statLabel:   { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textAlign: 'center' },
+  sectionTitleSpaced: { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginTop: S.lg, marginBottom: S.sm },
+  histRow:     { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginHorizontal: S.md, paddingVertical: S.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  histIcon:    { fontSize: 16, width: 24, textAlign: 'center' },
+  histInfo:    { flex: 1, gap: 2 },
+  histLabel:   { color: COLORS.surface, fontSize: FONT_SIZE.sm, flex: 1 },
+  histDate:    { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
+  histValues:  { alignItems: 'flex-end' },
+  histValue:   { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  histTree:    { color: '#A8E063', fontSize: FONT_SIZE.xs },
 });

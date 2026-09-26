@@ -29,6 +29,7 @@ import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { ACHIEVEMENTS_CATALOG, ACHIEVEMENTS_BY_ACTION } from '../../config/achievementsCatalog';
 import { COLLECTIONS_CATALOG } from '../../config/collectionsCatalog';
+import { PrestigeService }     from '../../engagement/prestigeService';
 
 const db = admin.firestore();
 
@@ -149,7 +150,20 @@ export const AchievementProcessor = {
         return true;
       });
 
-      if (didUnlock === true) newlyUnlocked.push(achId);
+      if (didUnlock === true) {
+        newlyUnlocked.push(achId);
+
+        // Marco de prestígio ACH_FOUNDER e ACH_STREAK_30. São as
+        // duas únicas conquistas do catálogo que também valem
+        // prestígio — as demais já pagam fragmentos, badge e
+        // frame, e somar prestígio a todas esvaziaria a moeda.
+        if (achId === 'STREAK_30') {
+          PrestigeService.grantMarco(uid, 'ACH_STREAK_30').catch(() => {});
+        }
+        if (achId === 'FOUNDER_EARLY') {
+          PrestigeService.grantMarco(uid, 'ACH_FOUNDER').catch(() => {});
+        }
+      }
     }
 
     // Coleções: uma única passada no fim, com o estado real.
@@ -219,12 +233,42 @@ export const AchievementProcessor = {
         t.set(db.collection('notifications').doc(), {
           userId: uid, type: 'collection_complete',
           title:   `${col.icon} ${col.title} completa!`,
-          message: `+${col.reward.fragments} Fragmentos${col.reward.badge ? ' + Badge exclusivo!' : '!'}`,
+          message: col.reward.title
+            ? `+${col.reward.fragments} Fragmentos + título ${col.reward.title}!`
+            : `+${col.reward.fragments} Fragmentos!`,
           icon:    col.icon, read: false,
           dados:   { collectionId: colId, tier: col.tier, reward: col.reward },
           timestamp: FieldValue.serverTimestamp(),
         });
       });
+
+      // Marcos de prestígio COLLECTION_GOLD_1 e _3. Contados
+      // FORA da transação: dependem de quantas coleções Ouro a
+      // pessoa já completou no total, e ler isso dentro da
+      // transação de cada coleção seria leitura repetida.
+      if (col.tier === 'GOLD') {
+        await this.checkGoldCollectionMarcos(uid);
+      }
+    }
+  },
+
+  /**
+   * Concede o marco quando a pessoa completa a 1ª e a 3ª
+   * coleção Ouro. A contagem sai do próprio documento, sem
+   * campo novo: `completedCollections` já existe.
+   */
+  async checkGoldCollectionMarcos(uid: string): Promise<void> {
+    const snap = await db.collection('users').doc(uid).get();
+    const completed: string[] = snap.data()?.achievements?.completedCollections ?? [];
+
+    const goldCount = completed.filter(
+      (id) => COLLECTIONS_CATALOG[id]?.tier === 'GOLD',
+    ).length;
+
+    if (goldCount === 3) {
+      await PrestigeService.grantMarco(uid, 'COLLECTION_GOLD_3');
+    } else if (goldCount === 1) {
+      await PrestigeService.grantMarco(uid, 'COLLECTION_GOLD_1');
     }
   },
 };

@@ -21,10 +21,20 @@
 // quem voltou depois de um dia é ruim, e uma lista cresceria
 // sem limite no documento. O resto fica no sino.
 //
-// Três modais podem competir ao abrir o app. A ordem é:
-// SINTONIA primeiro, cosmético depois, recompensa diária por
-// último. Sintonia é o momento que define o app e é raro;
-// recompensa acontece todo dia e pode esperar.
+// v5.9 — REVELAÇÃO DE PRESTÍGIO.
+//
+// Subir de estágio acontece CINCO vezes na vida de uma conta.
+// Marco comum vai só para o sino; o estágio merece modal.
+//
+// v5.10 — REVELAÇÃO DE NÍVEL.
+//
+// CINCO modais podem competir ao abrir o app. A ordem é:
+// SINTONIA, PRESTÍGIO, NÍVEL, cosmético, recompensa diária.
+//
+// Sintonia é o momento que define o app; prestígio é o mais
+// raro de todos; nível acontece com frequência mas é o
+// feedback direto do esforço; recompensa acontece todo dia e
+// pode esperar.
 //
 // v5.6 — FASE 8: revelação de cosmético.
 //
@@ -65,6 +75,8 @@ import { db }           from '../services/firebase';
 import DailyRewardModal from './DailyRewardModal';
 import CosmeticRevealModal from './CosmeticRevealModal';
 import SintoniaRevealModal from './SintoniaRevealModal';
+import PrestigeRevealModal from './PrestigeRevealModal';
+import LevelUpModal from './LevelUpModal';
 import { FRAMES } from '../config/cosmeticsCatalog';
 
 const REVEAL_DELAY_MS = 1500;
@@ -86,6 +98,8 @@ export default function EngagementInitializer() {
   const [photoURL,        setPhotoURL]        = useState('');
   const [sintoniaUid,     setSintoniaUid]     = useState<string | null>(null);
   const [sintoniaName,    setSintoniaName]    = useState('');
+  const [prestigeStage,   setPrestigeStage]   = useState<number | null>(null);
+  const [levelUp,         setLevelUp]         = useState<number | null>(null);
 
   const checkedRef = useRef<string | null>(null);
   const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,6 +177,20 @@ export default function EngagementInitializer() {
           if (mountedRef.current) setSintoniaName('Alguém');
         }
       }
+
+      // Prestígio pendente — mesma leitura, sem custo extra.
+      const prestige = data?.progression?.pendingPrestigeReveal;
+
+      if (typeof prestige === 'number' && prestige > 0 && mountedRef.current) {
+        setPrestigeStage(prestige);
+      }
+
+      // Nível pendente — mesma leitura, sem custo extra.
+      const level = data?.progression?.pendingLevelReveal;
+
+      if (typeof level === 'number' && level > 1 && mountedRef.current) {
+        setLevelUp(level);
+      }
     } catch (error) {
       if (__DEV__) {
         console.warn('[EngagementInitializer] pendingCosmeticReveal falhou:', error);
@@ -207,6 +235,8 @@ export default function EngagementInitializer() {
     if (!rewardPending) return;
     if (revealId)       return;
     if (sintoniaUid)    return;
+    if (prestigeStage)  return;
+    if (levelUp)        return;
 
     timerRef.current = setTimeout(() => {
       if (mountedRef.current) setShowDailyReward(true);
@@ -215,7 +245,7 @@ export default function EngagementInitializer() {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [rewardPending, revealId, sintoniaUid]);
+  }, [rewardPending, revealId, sintoniaUid, prestigeStage, levelUp]);
 
   async function closeReveal() {
     const id = revealId;
@@ -273,6 +303,30 @@ export default function EngagementInitializer() {
     }
   }
 
+  async function closePrestige() {
+    setPrestigeStage(null);
+
+    try {
+      await httpsCallable(getFunctions(), 'clearPrestigeReveal')({});
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[EngagementInitializer] clearPrestigeReveal falhou:', error);
+      }
+    }
+  }
+
+  async function closeLevelUp() {
+    setLevelUp(null);
+
+    try {
+      await httpsCallable(getFunctions(), 'clearLevelReveal')({});
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[EngagementInitializer] clearLevelReveal falhou:', error);
+      }
+    }
+  }
+
   if (!user?.uid) return null;
 
   return (
@@ -285,8 +339,29 @@ export default function EngagementInitializer() {
         onOpenChat={handleSintoniaChat}
       />
 
+      {/* Prestígio depois da sintonia: a sintonia é do momento,
+          o prestígio é acúmulo e pode esperar trinta segundos. */}
+      <PrestigeRevealModal
+        visible={prestigeStage !== null && sintoniaUid === null}
+        stage={prestigeStage}
+        onClose={() => { closePrestige(); }}
+      />
+
+      {/* Nível depois do prestígio: subir de nível é frequente,
+          o estágio de prestígio acontece cinco vezes na vida. */}
+      <LevelUpModal
+        visible={levelUp !== null && sintoniaUid === null && prestigeStage === null}
+        level={levelUp}
+        onClose={() => { closeLevelUp(); }}
+      />
+
       <CosmeticRevealModal
-        visible={revealId !== null}
+        visible={
+          revealId !== null &&
+          sintoniaUid === null &&
+          prestigeStage === null &&
+          levelUp === null
+        }
         cosmeticId={revealId}
         photoURL={photoURL}
         onClose={handleRevealClose}

@@ -81,9 +81,14 @@ export type RootStackParamList = {
   AdminInflation:           undefined;
   AdminCuration:            undefined;
   Visitors:                 undefined;
+  Titles: undefined;
+    
 };
 
 export type TabParamList = {
-  Home: undefined; Media: undefined; Sintonias: undefined;
+  // Sintonize (singular) é a aba do carrossel — um perfil por
+  // vez, para decidir. Sintonias (plural) é a lista de quem já
+  // sintonizou. Nomes parecidos, telas diferentes.
+  Home: undefined; Sintonize: undefined; Media: undefined; Sintonias: undefined;
   Store: undefined; Marketplace: undefined; Profile: undefined; Admin: undefined;
 };

@@ -34,6 +34,8 @@ import { Badge } from '../../components/profile/Badge';
 import {
   frameAppearanceById, badgeAppearanceById, badgeMeaningById, Rarity,
 } from '../../config/cosmeticsCatalog';
+import { TitleSeal } from '../../components/profile/TitleSeal';
+import { titleById } from '../../config/titlesCatalog';
 import {
   enviarSolicitacao,
   estaoConectados,
@@ -55,6 +57,23 @@ type NavProp = NativeStackNavigationProp<RootStackParamList>;
 // que é corrompido de forma recorrente no processo de cópia.
 type CreateMatchReq = { targetUid: string };
 type CreateMatchRes = { success: boolean; isMutual: boolean; alreadyLiked: boolean };
+
+interface PublicAchievement {
+  id:          string;
+  title:       string;
+  description: string;
+  icon:        string;
+  category:    string;
+  rarity:      string;
+  unlockedAt:  string | null;
+}
+
+type AchievementsReq = { userId: string };
+type AchievementsRes = {
+  achievements:   PublicAchievement[];
+  totalUnlocked:  number;
+  totalAvailable: number;
+};
 
 // v5.3 — helper: registra progresso de missão (fire-and-forget)
 function notifyMission(missionType: string, targetUid?: string) {
@@ -82,6 +101,8 @@ export default function RealProfileScreen() {
   const [sending,      setSending]      = useState(false);
   const [liked,        setLiked]        = useState(false);
   const [liking,       setLiking]       = useState(false);
+  const [achievements, setAchievements] = useState<PublicAchievement[]>([]);
+  const [totalAch,     setTotalAch]     = useState(0);
 
   useEffect(() => { loadData(); }, []);
 
@@ -113,6 +134,20 @@ export default function RealProfileScreen() {
 
         const alreadyLiked = await checkAlreadyLiked(user.uid, targetUserId);
         setLiked(alreadyLiked);
+
+        // Conquistas desbloqueadas. Sem await no fluxo principal:
+        // é informação complementar e não pode segurar a tela,
+        // como o registrarVisita segurava.
+        const achFn = httpsCallable<AchievementsReq, AchievementsRes>(
+          functions,
+          'getPublicAchievements',
+        );
+        achFn({ userId: targetUserId })
+          .then(res => {
+            setAchievements(res.data.achievements ?? []);
+            setTotalAch(res.data.totalAvailable ?? 0);
+          })
+          .catch(() => { /* perfil sem conquistas não é erro */ });
 
         if (user?.uid && targetUserId) {
           // Sem await: a visita é registro em segundo plano e o
@@ -276,6 +311,19 @@ export default function RealProfileScreen() {
     : null;
   const targetMeaning = badgeMeaningById(targetBadgeId);
 
+  // Todos os títulos conquistados, não só o equipado: aqui há
+  // espaço, e a coleção conta uma história que o card não conta.
+  // O equipado vem PRIMEIRO.
+  const equippedTitleId = (prog.equippedTitle as string | undefined) ?? null;
+  const targetTitles = ((prog.availableTitles as string[] | undefined) ?? [])
+    .map(id => titleById(id))
+    .filter((t): t is NonNullable<ReturnType<typeof titleById>> => t !== null)
+    .sort((a, b) => {
+      if (a.id === equippedTitleId) return -1;
+      if (b.id === equippedTitleId) return 1;
+      return 0;
+    });
+
   function getSintoniaLabel(): string {
     if (sintonia >= 95) return '✦ Sintonia Perfeita';
     if (sintonia >= 85) return '🔥 Alta Sintonia';
@@ -375,6 +423,49 @@ export default function RealProfileScreen() {
             <View style={styles.meaningCard}>
               <Badge appearance={targetBadge} size={44} />
               <Text style={styles.meaningText}>{targetMeaning}</Text>
+            </View>
+          )}
+
+          {/* Títulos conquistados. O equipado vem primeiro e
+              destacado — é o símbolo que aparece no card dela. */}
+          {targetTitles.length > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Títulos</Text>
+              <View style={styles.titlesRow}>
+                {targetTitles.map(t => (
+                  <View
+                    key={t.id}
+                    style={[
+                      styles.titleChip,
+                      t.id === equippedTitleId && styles.titleChipActive,
+                    ]}
+                  >
+                    <TitleSeal title={t} size={26} />
+                    <Text style={styles.titleChipLabel}>{t.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Conquistas — só as desbloqueadas, com descrição.
+              O que falta para ELA conquistar não interessa a
+              quem está visitando. */}
+          {achievements.length > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>
+                Conquistas · {achievements.length}
+                {totalAch > 0 ? ` de ${totalAch}` : ''}
+              </Text>
+              {achievements.map(ach => (
+                <View key={ach.id} style={styles.achRow}>
+                  <Text style={styles.achIcon}>{ach.icon}</Text>
+                  <View style={styles.achInfo}>
+                    <Text style={styles.achTitle}>{ach.title}</Text>
+                    <Text style={styles.achDesc}>{ach.description}</Text>
+                  </View>
+                </View>
+              ))}
             </View>
           )}
 
@@ -514,6 +605,15 @@ const styles = StyleSheet.create({
   meaningCard:          { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.gold + '11', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.gold + '33' },
   meaningText:          { flex: 1, color: colors.gold, fontSize: fonts.sizes.md, fontStyle: 'italic', lineHeight: 20 },
   milestoneText:        { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', textAlign: 'center', marginBottom: spacing.md, letterSpacing: 1 },
+  titlesRow:            { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  titleChip:            { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: borderRadius.full, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.grayDark },
+  titleChipActive:      { borderColor: colors.gold, backgroundColor: colors.gold + '15' },
+  titleChipLabel:       { color: colors.grayLight, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
+  achRow:               { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark + '55' },
+  achIcon:              { fontSize: 22, width: 30, textAlign: 'center' },
+  achInfo:              { flex: 1, gap: 2 },
+  achTitle:             { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  achDesc:              { color: colors.gray, fontSize: fonts.sizes.xs, lineHeight: 16 },
   connectionCard:       { backgroundColor: colors.gold + '22', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.gold + '44', alignItems: 'center' },
   connectionText:       { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', textAlign: 'center' },
   sectionTitle:         { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', letterSpacing: 1, marginBottom: spacing.sm },

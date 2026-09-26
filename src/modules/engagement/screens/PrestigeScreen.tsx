@@ -100,9 +100,12 @@ export default function PrestigeScreen() {
         <View style={styles.manifesto}>
           <Text style={styles.manifestoTitle}>O que é Prestígio</Text>
           <Text style={styles.manifestoText}>
-            Prestígio representa sua história e reputação no Lumina.{'\n'}
-            Não pode ser comprado. Não diminui. Não afeta a economia.{'\n'}
-            É conquistado apenas através do tempo e das conexões reais.
+            Prestígio é a sua história no Lumina — não pode ser
+            comprado, nunca diminui, e não dá vantagem sobre
+            ninguém.{'\n\n'}
+            Ele só cresce com tempo de casa e conexões reais. E
+            o que ele dá é visível: a cada estágio, seu card
+            ganha uma AURA que todo mundo vê no aplicativo.
           </Text>
         </View>
 
@@ -110,11 +113,16 @@ export default function PrestigeScreen() {
         <Text style={styles.sectionTitle}>Jornada do Prestígio</Text>
         <View style={styles.stagesContainer}>
           {[
-            { stage: 0, name: 'Desperto',          icon: '✨', pts: '0',    color: '#C0C0C0' },
-            { stage: 1, name: 'Guardião',           icon: '🌿', pts: '300',  color: '#A8E063' },
-            { stage: 2, name: 'Mentor',             icon: '🌸', pts: '800',  color: '#FF9EBC' },
-            { stage: 3, name: 'Constelação',        icon: '🌌', pts: '1800', color: '#FFD700' },
-            { stage: 4, name: 'Lenda da Sintonia',  icon: '💜', pts: '4000', color: '#B57BEE' },
+            { stage: 0, name: 'Desperto',          icon: '✨', pts: '0',    color: '#C0C0C0',
+              aura: 'Sem aura — seu card ainda é o padrão' },
+            { stage: 1, name: 'Guardião',           icon: '🌿', pts: '300',  color: '#A8E063',
+              aura: 'Borda verde e um brilho discreto no card' },
+            { stage: 2, name: 'Mentor',             icon: '🌸', pts: '800',  color: '#FF9EBC',
+              aura: 'Rosa mais forte, com energia subindo pelas bordas' },
+            { stage: 3, name: 'Constelação',        icon: '🌌', pts: '1800', color: '#FFD700',
+              aura: 'Chamas douradas VIVAS, em movimento' },
+            { stage: 4, name: 'Lenda da Sintonia',  icon: '💜', pts: '4000', color: '#B57BEE',
+              aura: 'O card inteiro banhado em violeta pulsante' },
           ].map(s => {
             const isReached  = stage >= s.stage;
             const isCurrent  = stage === s.stage;
@@ -130,6 +138,9 @@ export default function PrestigeScreen() {
                     {s.name}
                   </Text>
                   <Text style={styles.stageReq}>{s.pts} pontos</Text>
+                  <Text style={[styles.stageAura, isReached && { color: s.color }]}>
+                    {s.aura}
+                  </Text>
                 </View>
                 {isReached && <Text style={[styles.stageDone, { color: s.color }]}>✓</Text>}
                 {isCurrent && !isReached && <Text style={styles.stageCurrent}>← atual</Text>}
@@ -160,14 +171,54 @@ export default function PrestigeScreen() {
         <Text style={styles.sectionTitle}>Como ganhar Pontos de Prestígio</Text>
         <View style={styles.marcosContainer}>
           {[
-            { cat: '⏳ Tempo',       items: ['30 dias ativos (+100)', '90 dias ativos (+250)', '1 ano ativo (+1000)'] },
-            { cat: '✨ Social',      items: ['10 sintonias reais (+80)', '50 sintonias reais (+200)', '100 sintonias (+400)'] },
-            { cat: '🌱 Árvore',     items: ['Florescimento (+150)', 'Constelação (+250)', 'Galáxia (+600)'] },
-            { cat: '📚 Coleções',   items: ['1ª Coleção Ouro (+150)', '3 Coleções Ouro (+300)'] },
-            { cat: '🏆 Conquistas', items: ['Conquista Fundador (+500)', 'Sequência 30 dias (+100)'] },
+            {
+              cat: '⏳ Tempo de casa',
+              how: 'Resgate sua recompensa diária. Cada dia conta — não precisa ser seguido.',
+              items: [
+                'A cada 30 dias ativos (+100, repete sempre)',
+                '90 dias ativos (+250)',
+                '180 dias ativos (+500)',
+                '1 ano ativo (+1000)',
+              ],
+            },
+            {
+              cat: '✨ Sintonias',
+              how: 'Curta perfis na aba Sintonize. Quando a pessoa curte de volta, vira uma Sintonia.',
+              items: [
+                '10 Sintonias (+80)',
+                '50 Sintonias (+200)',
+                '100 Sintonias (+400)',
+              ],
+            },
+            {
+              cat: '🌱 Árvore da Sintonia',
+              how: 'A árvore cresce com conexões reais: cada Sintonia vale 50 de XP da árvore.',
+              items: [
+                'Estágio Florescimento (+150)',
+                'Estágio Constelação (+250)',
+                'Estágio Galáxia (+600)',
+              ],
+            },
+            {
+              cat: '📚 Coleções',
+              how: 'Complete todas as conquistas de uma categoria para fechar a coleção Ouro.',
+              items: [
+                '1ª Coleção Ouro (+150)',
+                '3 Coleções Ouro (+300)',
+              ],
+            },
+            {
+              cat: '🏆 Conquistas especiais',
+              how: 'Duas conquistas do catálogo também valem prestígio.',
+              items: [
+                'Fundador — entre os primeiros do Lumina (+500)',
+                'Sequência de 30 dias (+100)',
+              ],
+            },
           ].map((group, i) => (
             <View key={i} style={styles.marcoGroup}>
               <Text style={styles.marcoGroupTitle}>{group.cat}</Text>
+              <Text style={styles.marcoHow}>{group.how}</Text>
               {group.items.map((item, j) => (
                 <Text key={j} style={styles.marcoItem}>• {item}</Text>
               ))}
@@ -220,6 +271,7 @@ const styles = StyleSheet.create({
   stageInfo:         { flex: 1 },
   stageName:         { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
   stageReq:          { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
+  stageAura:         { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 3, opacity: 0.8 },
   stageDone:         { fontSize: 18, fontWeight: FONT_WEIGHT.bold },
   stageCurrent:      { color: COLORS.secondary, fontSize: FONT_SIZE.xs },
 
@@ -234,6 +286,9 @@ const styles = StyleSheet.create({
   // Marcos
   marcosContainer:   { marginHorizontal: S.md, gap: S.md, marginBottom: S.lg },
   marcoGroup:        { backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.border },
-  marcoGroupTitle:   { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, marginBottom: S.xs },
+  marcoGroupTitle:   { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, marginBottom: 2 },
+  // O "como" antes da lista: sem ele a pessoa vê os pontos e
+  // não sabe o que fazer para consegui-los.
+  marcoHow:          { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, lineHeight: 17, marginBottom: S.xs, fontStyle: 'italic', opacity: 0.85 },
   marcoItem:         { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, lineHeight: 20 },
 });

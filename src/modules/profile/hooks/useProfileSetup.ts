@@ -163,6 +163,12 @@ export function useProfileSetup(
 
       if (!user) return false;
 
+      // randomSeed só na CRIAÇÃO. Ele define a posição da
+      // pessoa no feed aleatório; regravar a cada edição
+      // permitiria ficar editando o perfil até cair numa
+      // posição boa. A rule bloqueia o campo no update.
+      const seedField = isEditing ? {} : { randomSeed: Math.random() };
+
       await saveProfile(user.uid, {
         uid:       user.uid,
         email:     user.email || '',
@@ -176,6 +182,7 @@ export function useProfileSetup(
         preferences,
         bio,
         createdAt: new Date(),
+        ...seedField,
       });
 
       // AGUARDA o upload: disparar sem await fazia a Promise ser

@@ -20,6 +20,7 @@ import AppLoadingScreen from '../screens/Onboarding/LoadingScreen';
 import { LoginScreen, RegisterScreen } from '../modules/auth';
 import { ProfileSetupScreen } from '../modules/profile';
 import { HomeScreen } from '../modules/home';
+import SintonizeScreen from '../modules/home/screens/SintonizeScreen';
 import { ChatScreen } from '../modules/chat';
 import SintoniasScreen from '../screens/Chat/SintoniasScreen';
 import { StoreScreen } from '../modules/economy';
@@ -76,6 +77,7 @@ import MissionsScreen from '../modules/engagement/screens/MissionsScreen';
 import FragmentsScreen from '../modules/engagement/screens/FragmentsScreen';
 import VaultScreen from '../modules/engagement/screens/VaultScreen';
 import XPScreen from '../modules/engagement/screens/XPScreen';
+import { CrystalIcon } from '../components/icons/CrystalIcon';
 import AchievementsScreen from '../modules/engagement/screens/AchievementsScreen';
 import BadgesScreen from '../modules/engagement/screens/BadgesScreen';
 import BadgesShopScreen from '../modules/economy/screens/BadgesShopScreen';
@@ -98,6 +100,7 @@ import {
   AdminReportsScreen,
 } from '../screens/admin/AdminPlaceholderScreens';
 import FramesScreen from '../modules/engagement/screens/FramesScreen';
+import TitlesScreen from '../modules/engagement/screens/TitlesScreen';
 
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -215,12 +218,20 @@ function TabNavigator() {
         }}
       />
 
-      <Tab.Screen name="Media" component={MediaScreen}
+      {/* Sintonize — um perfil por vez, para decidir. Fica logo
+          depois de Descobrir: a grade é para varrer, esta é
+          para escolher, e as duas conversam. */}
+      <Tab.Screen name="Sintonize" component={SintonizeScreen}
         options={{
-          tabBarLabel: 'Mídia',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📸</Text>,
+          tabBarLabel: 'Sintonize',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>💫</Text>,
         }}
       />
+
+      {/* Mídia REMOVIDA do rodapé. O tabBarButton null com
+          tabBarItemStyle zerado — o padrão que o Marketplace
+          usa — ainda deixava um espaço vazio visível entre as
+          abas. Não registrar a tela é o único jeito limpo. */}
 
       <Tab.Screen name="Sintonias" component={SintoniasScreen}
         options={{
@@ -239,10 +250,12 @@ function TabNavigator() {
       />
 
       {/* ✅ FASE 1 — Cristais de Sintonia substituindo Moedas */}
+      {/* Cristais usava ✨, o mesmo da aba Sintonias — as duas
+          ficavam visualmente idênticas no rodapé. */}
       <Tab.Screen name="Store" component={StoreScreen}
         options={{
           tabBarLabel: 'Cristais',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>✨</Text>,
+          tabBarIcon: () => <CrystalIcon size={22} />,
         }}
       />
 
@@ -343,6 +356,7 @@ function MainStack() {
       <Stack.Screen name="Visitors" component={VisitorsScreen} />
       <Stack.Screen name="Frames" component={FramesScreen} />
       <Stack.Screen name="Badges" component={BadgesScreen} />
+      <Stack.Screen name="Titles" component={TitlesScreen} />
       <Stack.Screen name="FramesShop" component={FramesShopScreen} />
       <Stack.Screen name="BadgesShop" component={BadgesShopScreen} />
       <Stack.Screen name="CrystalPacks" component={CrystalPacksScreen} />

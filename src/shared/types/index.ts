@@ -27,6 +27,11 @@ export interface UserProfile {
   cpf?: string; 
   createdAt: Date;
   updatedAt?: Date;
+  /** Número entre 0 e 1, gravado uma vez na criação. Define a
+   *  posição no feed aleatório. Bloqueado no update pelas
+   *  rules: sem isso, daria para editar o perfil até cair numa
+   *  posição boa. */
+  randomSeed?: number;
   // Campos de segurança — obrigatórios para Firestore Rules
   role: 'user' | 'creator' | 'admin' | 'superadmin';
   isBlocked: boolean;
@@ -138,6 +143,20 @@ export interface UserProgression {
   // Badges de conquista não estão no catálogo da loja — sem a
   // raridade, o visualizador não sabe qual aparência desenhar.
   equippedBadgeRarity: string | null;
+
+  // ── Prestígio ──
+  // Gravados pelo PrestigeService ao subir de estágio. Os
+  // campos `prestige` e `prestigeTitle` acima são de uma versão
+  // anterior e não são escritos por ninguém hoje.
+  prestigeStage:         number;
+  prestigeName:          string;
+  availableTitles:       string[];
+  equippedTitle:         string | null;
+  unlockedAuras:         Record<string, boolean>;
+  pendingPrestigeReveal: number | null;
+  pendingSintoniaReveal: string | null;
+  /** Sintonias mútuas acumuladas — base dos marcos SINTONIA_*. */
+  sintoniaCount:         number;
 }
 
 // ------------------------------------------
@@ -318,6 +337,13 @@ export interface ProfileCardData {
   equippedFrame?:       string | null;
   equippedBadge?:       string | null;
   equippedBadgeRarity?: string | null;
+  /** Título equipado — texto, como está em reward.title dos
+   *  catálogos de conquistas e coleções. Conquistado, nunca
+   *  comprado, e sem validade. */
+  equippedTitle?:       string | null;
+  /** Estágio de prestígio, 0 a 4. Estiliza a borda e o brilho
+   *  do card; 0 não estiliza nada. */
+  prestigeStage?:       number;
 }
 
 // ------------------------------------------

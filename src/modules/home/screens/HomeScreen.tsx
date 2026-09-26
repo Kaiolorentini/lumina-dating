@@ -13,11 +13,10 @@
 //   5 = tabsWrapper ← sticky
 // ============================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Image, ActivityIndicator,
-  NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
@@ -171,17 +170,19 @@ export default function HomeScreen({ navigation }: Props) {
     navigation.navigate('RealProfile', { userId: profile.id });
   }
 
-  // Carrega a próxima página ao chegar perto do fim.
-  // 600px de antecedência evita que o usuário veja o vazio.
-  // A trava reentrante está no hook (loadingRef).
-  function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
-    if (activeTab !== 'perfis') return;
+  // O scroll infinito foi REMOVIDO em favor do botão "ver mais".
+  //
+  // Com rolagem infinita, quem percorria 200 perfis ficava com
+  // 200 cards montados na memória — e cada card tem moldura,
+  // badge e aura. O lote de 10 SUBSTITUI o anterior: a memória
+  // fica constante, e quem decide quando avançar é o usuário.
+  const scrollRef = useRef<ScrollView>(null);
 
-    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-    const distanceFromEnd =
-      contentSize.height - (contentOffset.y + layoutMeasurement.height);
-
-    if (distanceFromEnd < 600) loadMoreProfiles();
+  async function handleNextBatch() {
+    await loadMoreProfiles();
+    // Os cards mudaram: continuar no meio da lista antiga
+    // desorienta. Volta ao topo com animação.
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
 
   return (
@@ -216,10 +217,9 @@ export default function HomeScreen({ navigation }: Props) {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[5]}
-        scrollEventThrottle={400}
-        onScroll={handleScroll}
       >
 
         {/* 0 — Faísca do Destino */}
@@ -364,14 +364,27 @@ export default function HomeScreen({ navigation }: Props) {
                 ))}
               </View>
 
-              {loadingMore && (
-                <View style={styles.footerLoading}>
-                  <ActivityIndicator color={colors.gold} size="small" />
-                </View>
-              )}
-
-              {!hasMoreProfiles && realProfiles.length > 0 && (
-                <Text style={styles.endText}>Você viu todos os perfis por aqui</Text>
+              {hasMoreProfiles ? (
+                <TouchableOpacity
+                  style={styles.moreButton}
+                  onPress={handleNextBatch}
+                  disabled={loadingMore}
+                  activeOpacity={0.85}
+                >
+                  {loadingMore ? (
+                    <ActivityIndicator color={colors.gold} size="small" />
+                  ) : (
+                    <Text style={styles.moreButtonText}>Ver mais perfis ›</Text>
+                  )}
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.moreButton}
+                  onPress={() => { refreshProfiles(); scrollRef.current?.scrollTo({ y: 0, animated: true }); }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.moreButtonText}>Começar de novo ↻</Text>
+                </TouchableOpacity>
               )}
             </>
           )
@@ -428,8 +441,8 @@ const styles = StyleSheet.create({
   loadingText:  { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   retryButton:  { marginTop: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.gold + '22' },
   retryText:    { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  footerLoading: { paddingVertical: spacing.lg, alignItems: 'center' },
-  endText:      { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center', paddingVertical: spacing.lg },
+  moreButton:   { marginHorizontal: spacing.lg, marginTop: spacing.md, paddingVertical: spacing.md, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.gold + '55', backgroundColor: colors.gold + '11', alignItems: 'center' },
+  moreButtonText: { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', letterSpacing: 0.5 },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingHorizontal: spacing.xl, gap: spacing.md },
   emptyIcon:    { fontSize: 60 },
   emptyTitle:   { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', textAlign: 'center' },

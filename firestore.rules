@@ -71,6 +71,10 @@ service cloud.firestore {
         'ageVerified', 'ageVerifiedAt', 'birthDate',
         'ageVerificationStatus', 'ageRejectionReason', 'ageRejectionNote',
         'screenshotWarnings', 'screenshotWarningStatus', 'adminFlags', 'creatorStatus',
+        // Posição no feed aleatório, gravada uma vez na criação.
+        // Sem isto, daria para editar o perfil repetidamente até
+        // cair numa posição boa da listagem.
+        'randomSeed',
         // Token de push: a coleção users tem `allow list` aberto,
         // então qualquer conta logada lia o token de todo mundo e
         // mandava push com a marca do Lumina. Agora vive em
@@ -584,6 +588,30 @@ match /coinsPurchases/{docId} {
     }
 
     // ============================================
+    // PRESTÍGIO — escrita exclusiva do backend
+    // ============================================
+    // O prestígio é concedido pelo PrestigeService, chamado
+    // pelas CFs nos pontos onde o marco realmente acontece.
+    // A callable `grantPrestigePoints` foi REMOVIDA: ela
+    // aceitava qualquer marcoId do cliente, então dava para
+    // pedir ACH_FOUNDER (500 pontos) sem nunca ter sido
+    // fundador.
+    match /prestige/{userId} {
+      allow read:  if isAuthenticated() && isOwner(userId);
+      allow write: if false;
+    }
+
+    match /prestigeLog/{logId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    match /prestigeAnalytics/{docId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+        // ============================================
     // MONITOR DE INFLAÇÃO — snapshots diários
     // Leitura restrita a superadmin (mesma regra da CF)
     // ============================================
@@ -713,29 +741,11 @@ match /achievementTriggers/{docId} {
     // Antes ela vivia em appSettings/adminConfig, e appSettings
     // tem `allow read: if true`: QUALQUER PESSOA, até sem login,
     // descobria quem são os superadmins do Lumina e depois lia o
-    // pushToken deles pela coleção users. O alvo mais valioso do
-    // sistema estava público.
+    // pushToken deles pela coleção users.
     //
-    // Só o Admin SDK acessa. Para alterar a lista, editar pelo
-    // console do Firebase.
-    match /internalConfig/{docId} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    // ============================================
-    // CONFIGURAÇÃO INTERNA — fechada ao cliente
-    // ============================================
-    // internalConfig/admins guarda a lista de superadmins.
-    //
-    // Antes ela vivia em appSettings/adminConfig, e appSettings
-    // tem `allow read: if true`: QUALQUER PESSOA, até sem login,
-    // descobria quem são os superadmins do Lumina e depois lia o
-    // pushToken deles pela coleção users. O alvo mais valioso do
-    // sistema estava público.
-    //
-    // Só o Admin SDK acessa. Para alterar a lista, editar pelo
-    // console do Firebase.
+    // A regra explícita fica aqui mesmo com o deny padrão do
+    // Firestore cobrindo: sem ela, a ausência parece
+    // esquecimento e alguém abre a coleção sem saber o histórico.
     match /internalConfig/{docId} {
       allow read:  if false;
       allow write: if false;

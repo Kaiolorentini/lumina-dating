@@ -15,6 +15,7 @@ import { calcLevel }                       from '../../config/xpTable';
 import { calcTreeStage }                   from '../../config/treeTable';
 import { todayBr }                         from '../../utils/dateBr';
 import { FieldValue }                       from 'firebase-admin/firestore';
+import { PrestigeService }                  from '../../engagement/prestigeService';
 
 const db = admin.firestore();
 
@@ -134,7 +135,40 @@ export const XPService = {
         xpAnterior: snapshot.totalXP, xpAtual: newTotalXP,
       });
 
-      const stageUp = newTree.current.stage > prevTree.current.stage;
+      const stageUp   = newTree.current.stage > prevTree.current.stage;
+      const leveledUp = newLevel.level > prevLevel.level;
+
+      // ── SUBIDA DE NÍVEL ──
+      //
+      // O `leveledUp` era calculado e devolvido, mas NINGUÉM
+      // fazia nada com ele: sem flag, sem notificação, sem
+      // modal. A pessoa subia de nível e não ficava sabendo.
+      //
+      // Flag e não aviso na hora: o XP é creditado em segundo
+      // plano, e o cliente já respondeu à ação faz tempo quando
+      // isto roda.
+      if (leveledUp) {
+        t.set(
+          db.collection('users').doc(uid),
+          {
+            progression: {
+              pendingLevelReveal: newLevel.level,
+            },
+          },
+          { merge: true },
+        );
+
+        t.set(db.collection('notifications').doc(), {
+          userId:    uid,
+          type:      'level_up',
+          title:     `⬆️ Nível ${newLevel.level}`,
+          message:   `Você alcançou o nível ${newLevel.level} — ${newLevel.tier}`,
+          icon:      '⬆️',
+          read:      false,
+          dados:     { level: newLevel.level, tier: newLevel.tier },
+          timestamp: FieldValue.serverTimestamp(),
+        });
+      }
 
       // ── EVOLUÇÃO DA ÁRVORE ──
       //
@@ -215,7 +249,7 @@ export const XPService = {
         treeGain,
         newTotalXP,
         newLevel:   newLevel.level,
-        leveledUp:  newLevel.level > prevLevel.level,
+        leveledUp,
         stageUp,
         newStage:   newTree.current.stage,
       };
@@ -233,6 +267,19 @@ export const XPService = {
         processedAt:  null,
         timestamp:    FieldValue.serverTimestamp(),
       }).catch(() => { /* conquista nunca derruba o XP */ });
+
+      // Marcos de prestígio da árvore. Só os estágios 2, 3 e 4
+      // valem ponto — o 1 sai na primeira sintonia e seria
+      // prestígio barato demais.
+      const treeMarco: Record<number, string> = {
+        2: 'TREE_STAGE_2',
+        3: 'TREE_STAGE_3',
+        4: 'TREE_STAGE_4',
+      };
+      const marcoId = treeMarco[result.newStage];
+      if (marcoId) {
+        PrestigeService.grantMarco(uid, marcoId).catch(() => {});
+      }
     }
 
     return result;

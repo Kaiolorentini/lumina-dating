@@ -32,19 +32,34 @@ export const COLLECTIONS_CATALOG: Record<string, CollectionDef> = {
     id: 'SOCIAL_BRONZE', title: 'Coleção Social Bronze', description: 'Dê os primeiros passos sociais',
     category: 'SOCIAL', tier: 'BRONZE', icon: '🥉',
     achievementIds: ['FIRST_SINTONIA', 'CHAT_FIRST'],
-    reward: { fragments: 50,  badge: null,                   title: null },
+    // Coleções dão FRAGMENTOS e TÍTULO — os badges saíram por
+    // decisão de produto: eles já são a recompensa das
+    // conquistas individuais, e repetir aqui esvaziava as duas
+    // coisas. Os valores caíram pela metade junto.
+    reward: { fragments: 25,  badge: null,                   title: null },
   },
   SOCIAL_SILVER: {
     id: 'SOCIAL_SILVER', title: 'Coleção Social Prata', description: 'Construa conexões reais',
     category: 'SOCIAL', tier: 'SILVER', icon: '🥈',
     achievementIds: ['SINTONIA_10', 'CHAT_10'],
-    reward: { fragments: 100, badge: 'badge_social_prata',    title: null },
+    reward: { fragments: 50, badge: null, title: null },
   },
   SOCIAL_GOLD: {
     id: 'SOCIAL_GOLD', title: 'Coleção Social Ouro', description: 'Mestre das conexões',
     category: 'SOCIAL', tier: 'GOLD', icon: '🥇',
-    achievementIds: ['SINTONIA_50', 'SINTONIA_PERFEITA'],
-    reward: { fragments: 250, badge: 'badge_social_ouro',    title: 'Alma Social' },
+    // SINTONIA_PERFEITA saiu daqui: ela exige 95%+ de
+    // compatibilidade, e a sintonia é calculada no CLIENTE —
+    // o servidor não sabe esse número, então NINGUÉM dispara
+    // essa conquista. Com ela na lista, a coleção era
+    // impossível, e o marco de prestígio "3 Coleções Ouro"
+    // ficava fora de alcance junto.
+    //
+    // CHAT_10 no lugar: também é social, também é difícil, e
+    // funciona hoje. A SINTONIA_PERFEITA continua no catálogo
+    // como conquista oculta, para quando houver cálculo de
+    // compatibilidade no servidor.
+    achievementIds: ['SINTONIA_50', 'CHAT_10'],
+    reward: { fragments: 125, badge: null, title: 'Alma Social' },
   },
 
   // ── Explorer ──
@@ -52,19 +67,19 @@ export const COLLECTIONS_CATALOG: Record<string, CollectionDef> = {
     id: 'EXPLORER_BRONZE', title: 'Coleção Explorador Bronze', description: 'Comece a explorar',
     category: 'EXPLORER', tier: 'BRONZE', icon: '🥉',
     achievementIds: ['EXPLORER_10'],
-    reward: { fragments: 50,  badge: null,                    title: null },
+    reward: { fragments: 25,  badge: null,                    title: null },
   },
   EXPLORER_SILVER: {
     id: 'EXPLORER_SILVER', title: 'Coleção Explorador Prata', description: 'Explore o universo Lumina',
     category: 'EXPLORER', tier: 'SILVER', icon: '🥈',
     achievementIds: ['EXPLORER_50'],
-    reward: { fragments: 100, badge: 'badge_explorador_prata', title: null },
+    reward: { fragments: 50, badge: null, title: null },
   },
   EXPLORER_GOLD: {
     id: 'EXPLORER_GOLD', title: 'Coleção Explorador Ouro', description: 'Grande explorador cósmico',
     category: 'EXPLORER', tier: 'GOLD', icon: '🥇',
     achievementIds: ['EXPLORER_100'],
-    reward: { fragments: 250, badge: 'badge_explorador_supremo', title: 'Explorador Supremo' },
+    reward: { fragments: 125, badge: null, title: 'Explorador Supremo' },
   },
 
   // ── Mission ──
@@ -72,19 +87,19 @@ export const COLLECTIONS_CATALOG: Record<string, CollectionDef> = {
     id: 'MISSION_BRONZE', title: 'Coleção Missões Bronze', description: 'Complete as primeiras missões',
     category: 'MISSION', tier: 'BRONZE', icon: '🥉',
     achievementIds: ['MISSION_7'],
-    reward: { fragments: 50,  badge: null,                    title: null },
+    reward: { fragments: 25,  badge: null,                    title: null },
   },
   MISSION_SILVER: {
     id: 'MISSION_SILVER', title: 'Coleção Missões Prata', description: 'Missões mensais completas',
     category: 'MISSION', tier: 'SILVER', icon: '🥈',
     achievementIds: ['MISSION_30'],
-    reward: { fragments: 100, badge: 'badge_missoes_prata',   title: null },
+    reward: { fragments: 50, badge: null, title: null },
   },
   MISSION_GOLD: {
     id: 'MISSION_GOLD', title: 'Coleção Missões Ouro', description: 'Mestre absoluto das missões',
     category: 'MISSION', tier: 'GOLD', icon: '🥇',
     achievementIds: ['MISSION_100'],
-    reward: { fragments: 250, badge: 'badge_mestre_supremo',  title: 'Mestre Supremo' },
+    reward: { fragments: 125, badge: null, title: 'Mestre Supremo' },
   },
 
   // ── Streak ──
@@ -92,13 +107,13 @@ export const COLLECTIONS_CATALOG: Record<string, CollectionDef> = {
     id: 'STREAK_BRONZE', title: 'Coleção Sequência Bronze', description: 'Primeiros dias seguidos',
     category: 'STREAK', tier: 'BRONZE', icon: '🥉',
     achievementIds: ['STREAK_3'],
-    reward: { fragments: 50,  badge: null,                    title: null },
+    reward: { fragments: 25,  badge: null,                    title: null },
   },
   STREAK_GOLD: {
     id: 'STREAK_GOLD', title: 'Coleção Sequência Ouro', description: 'Um mês de dedicação',
     category: 'STREAK', tier: 'GOLD', icon: '🥇',
     achievementIds: ['STREAK_7', 'STREAK_30'],
-    reward: { fragments: 250, badge: 'badge_devoto_supremo',  title: 'Devoto Supremo' },
+    reward: { fragments: 125, badge: null, title: 'Devoto Supremo' },
   },
 
   // ── Fundador (REGRA 18) ──
@@ -106,6 +121,8 @@ export const COLLECTIONS_CATALOG: Record<string, CollectionDef> = {
     id: 'FOUNDER_COLLECTION', title: 'Coleção Fundador', description: 'Pioneiro do Lumina',
     category: 'FOUNDER', tier: 'GOLD', icon: '🌟',
     achievementIds: ['FOUNDER_EARLY'],
-    reward: { fragments: 0, badge: 'badge_fundador_supremo', title: 'Pioneiro' },
+    // Fundador fica só com o título: ela já dava 0 fragmentos, e
+    // o badge saiu como nas outras.
+    reward: { fragments: 0, badge: null, title: 'Pioneiro' },
   },
 };

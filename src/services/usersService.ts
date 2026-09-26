@@ -57,19 +57,34 @@ import { calcularSintonia } from '../utils/sintoniaEngine';
 // CONFIGURAÇÃO
 // ============================================
 
-/** Perfis carregados por página. Equilibra leituras e fluidez do scroll. */
-export const PROFILE_PAGE_SIZE = 20;
+/** Perfis carregados por página. Equilibra leituras e fluidez do scroll.
+ *
+ *  10 e não 20: com a moldura, o badge e a aura, cada card é
+ *  pesado de montar. Meia página a menos por vez deixa a
+ *  primeira pintura mais rápida, e o scroll infinito busca o
+ *  resto antes de o usuário chegar lá. */
+export const PROFILE_PAGE_SIZE = 10;
 
 /** Teto de perfis com boost buscados na 1ª página. */
 const BOOSTED_FETCH_LIMIT = 20;
 
 /**
  * Campo de ordenação da trilha B.
- * Documentos SEM este campo são invisíveis para a query — se o
- * backfill de createdAt não cobrir 100% da base, trocar por
- * documentId() (sempre presente, ordem arbitrária mas completa).
+ *
+ * Era `createdAt`, que é determinístico: todo mundo via os
+ * mesmos perfis na mesma ordem, e os cadastros mais recentes
+ * ficavam eternamente no topo enquanto os antigos nunca
+ * apareciam.
+ *
+ * `randomSeed` é um número entre 0 e 1 gravado uma vez na
+ * criação. A busca começa de um ponto SORTEADO a cada sessão e
+ * dá a volta ao chegar no fim — assim a ordem muda sem custo
+ * extra de leitura, e a cobertura é completa.
+ *
+ * ATENÇÃO: documentos SEM o campo são invisíveis para a query.
+ * O script scripts/backfill-random-seed.js preenche os antigos.
  */
-const ORDER_FIELD = 'createdAt';
+const ORDER_FIELD = 'randomSeed';
 
 // ============================================
 // TIPOS
@@ -91,6 +106,11 @@ export interface RealProfile extends UserProfile {
   equippedFrame:       string | null;
   equippedBadge:       string | null;
   equippedBadgeRarity: string | null;
+  /** Título equipado — texto, como está em reward.title. */
+  equippedTitle:       string | null;
+  /** Estágio de prestígio, 0 a 4. Estiliza a borda e o brilho
+   *  do card; 0 não estiliza nada, porque é o padrão de todos. */
+  prestigeStage:       number;
 }
 
 export interface ProfilePage {
@@ -98,6 +118,11 @@ export interface ProfilePage {
   /** Passar de volta em getCompatibleProfilesPage para a próxima página. */
   cursor: QueryDocumentSnapshot<DocumentData> | null;
   hasMore: boolean;
+  /** Ponto de partida sorteado na primeira página. Volta nas
+   *  seguintes para o feed saber onde dar a volta. */
+  seed: number;
+  /** true depois que a busca deu a volta e voltou ao início. */
+  wrapped: boolean;
 }
 
 interface ActiveBoost {
@@ -238,6 +263,11 @@ function buildProfile(
     equippedFrame: activeCosmetic(prog.equippedFrame, prog.equippedFrameUntil),
     equippedBadge: activeCosmetic(prog.equippedBadge, prog.equippedBadgeUntil),
     equippedBadgeRarity: (prog.equippedBadgeRarity as string) ?? null,
+    // Título não tem validade: é conquistado, não alugado. Por
+    // isso vai direto, sem passar pelo activeCosmetic.
+    equippedTitle: (prog.equippedTitle as string) ?? null,
+    // Prestígio também é permanente — por diretriz, nunca diminui.
+    prestigeStage: (prog.prestigeStage as number) ?? 0,
   };
 }
 
@@ -294,6 +324,10 @@ export async function getCompatibleProfilesPage(
   currentUser: UserProfile,
   pageSize: number = PROFILE_PAGE_SIZE,
   cursor: QueryDocumentSnapshot<DocumentData> | null = null,
+  /** Devolvido pela página anterior. Na primeira, é sorteado. */
+  seed: number | null = null,
+  /** true se a busca já deu a volta — evita buscar em círculo. */
+  wrapped: boolean = false,
 ): Promise<ProfilePage> {
   try {
     const viewerRegiaoId = getRegiaoId(currentUser);
@@ -303,23 +337,55 @@ export async function getCompatibleProfilesPage(
 
     const isFirstPage = cursor === null;
 
+    // Ponto de partida: sorteado na primeira página, mantido nas
+    // seguintes. Sem guardá-lo, a volta ao início não saberia
+    // onde parar e a listagem repetiria em círculo.
+    const startSeed = seed ?? Math.random();
+
     // Trilha A — só na primeira página
     const boosted = isFirstPage
       ? await fetchBoostedProfiles(currentUser, viewerRegiaoId, now)
       : [];
     const boostedIds = new Set(boosted.map(p => p.uid));
 
-    // Trilha B — paginada por cursor
-    const constraints = [
-      orderBy(ORDER_FIELD, 'desc'),
-      ...(cursor ? [startAfter(cursor)] : []),
-      limit(pageSize),
-    ];
+    // Trilha B — do ponto sorteado em diante. Ao esgotar, dá a
+    // volta e varre do zero até o ponto de partida.
+    const constraints = cursor
+      ? [
+          orderBy(ORDER_FIELD, 'asc'),
+          startAfter(cursor),
+          limit(pageSize),
+        ]
+      : [
+          orderBy(ORDER_FIELD, 'asc'),
+          where(ORDER_FIELD, '>=', startSeed),
+          limit(pageSize),
+        ];
 
     const snapshot = await getDocs(query(collection(db, 'users'), ...constraints));
+    let didWrap = wrapped;
+    let docs = snapshot.docs;
+
+    // Página INCOMPLETA e ainda sem a volta: completa buscando
+    // do início da faixa.
+    //
+    // A condição antiga era `snapshot.empty`, e isso quebrava o
+    // caso comum: quem sorteia 0.85 acha um ou dois perfis, a
+    // página não vem vazia, a volta nunca dispara e o feed
+    // mostra dois perfis de uma base inteira.
+    if (docs.length < pageSize && !wrapped) {
+      didWrap = true;
+      const wrapSnapshot = await getDocs(query(
+        collection(db, 'users'),
+        orderBy(ORDER_FIELD, 'asc'),
+        where(ORDER_FIELD, '<', startSeed),
+        limit(pageSize - docs.length),
+      ));
+      docs = [...docs, ...wrapSnapshot.docs];
+    }
 
     const regular: RealProfile[] = [];
-    snapshot.docs.forEach(docSnap => {
+    docs.forEach(docSnap => {
       const profile = buildProfile(docSnap, currentUser, viewerRegiaoId, now);
       if (!profile) return;
       // Deduplica: já veio fixado no topo pela trilha A
@@ -330,19 +396,26 @@ export async function getCompatibleProfilesPage(
     // hasMore usa o tamanho BRUTO da página, não o filtrado:
     // uma página inteira de perfis incompletos ainda tem
     // continuação e não pode encerrar o scroll.
-    const hasMore = snapshot.docs.length === pageSize;
-    const nextCursor = snapshot.docs.length > 0
-      ? snapshot.docs[snapshot.docs.length - 1]
+    // hasMore usa o tamanho BRUTO da página, não o filtrado.
+    // Depois da volta, uma página incompleta significa fim real
+    // da base.
+    // Depois da volta, uma página incompleta significa que a
+    // base acabou de verdade.
+    const hasMore = docs.length === pageSize && !didWrap;
+    const nextCursor = docs.length > 0
+      ? docs[docs.length - 1]
       : null;
 
     return {
       profiles: [...boosted, ...sortByScore(regular)],
       cursor: nextCursor,
       hasMore,
+      seed: startSeed,
+      wrapped: didWrap,
     };
   } catch (error) {
     console.error('[usersService] getCompatibleProfilesPage:', error);
-    return { profiles: [], cursor: null, hasMore: false };
+    return { profiles: [], cursor: null, hasMore: false, seed: 0, wrapped: false };
   }
 }
 
@@ -355,7 +428,7 @@ export async function getCompatibleProfiles(
   currentUser: UserProfile,
   limitCount: number = PROFILE_PAGE_SIZE,
 ): Promise<RealProfile[]> {
-  const page = await getCompatibleProfilesPage(currentUser, limitCount, null);
+  const page = await getCompatibleProfilesPage(currentUser, limitCount, null, null, false);
   return page.profiles;
 }
 

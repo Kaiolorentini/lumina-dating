@@ -67,6 +67,8 @@ function toCardData(p: RealProfile): ProfileCardData {
     equippedFrame:       p.equippedFrame,
     equippedBadge:       p.equippedBadge,
     equippedBadgeRarity: p.equippedBadgeRarity,
+    equippedTitle:       p.equippedTitle,
+    prestigeStage:       p.prestigeStage,
   };
 }
 
@@ -89,6 +91,11 @@ export function useHomeData(): UseHomeDataReturn {
   // Cursor fora do state: mudá-lo não deve disparar re-render,
   // e precisa estar sempre atualizado dentro de loadMoreProfiles.
   const cursorRef  = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  // Ponto de partida sorteado na primeira página. Sem guardá-lo,
+  // cada página sortearia um ponto novo e a listagem repetiria
+  // perfis sem nunca cobrir a base.
+  const seedRef    = useRef<number | null>(null);
+  const wrappedRef = useRef(false);
   // Trava reentrante: o onScroll dispara várias vezes durante o
   // gesto e sem isso a mesma página seria pedida repetidas vezes.
   const loadingRef = useRef(false);
@@ -115,9 +122,13 @@ export function useHomeData(): UseHomeDataReturn {
       setUserProfile(profile);
       profileRef.current = profile;
 
-      const page = await getCompatibleProfilesPage(profile, PROFILE_PAGE_SIZE, null);
+      const page = await getCompatibleProfilesPage(
+        profile, PROFILE_PAGE_SIZE, null, null, false,
+      );
 
-      cursorRef.current = page.cursor;
+      cursorRef.current  = page.cursor;
+      seedRef.current    = page.seed;
+      wrappedRef.current = page.wrapped;
       setRealProfiles(page.profiles.map(toCardData));
       setHasMoreProfiles(page.hasMore);
 
@@ -148,20 +159,19 @@ export function useHomeData(): UseHomeDataReturn {
         profile,
         PROFILE_PAGE_SIZE,
         cursorRef.current,
+        seedRef.current,
+        wrappedRef.current,
       );
 
-      cursorRef.current = page.cursor;
+      cursorRef.current  = page.cursor;
+      wrappedRef.current = page.wrapped;
       setHasMoreProfiles(page.hasMore);
 
-      // Deduplica na junção: um perfil fixado pelo boost na
-      // primeira página pode reaparecer numa página posterior.
-      setRealProfiles(prev => {
-        const seen = new Set(prev.map(p => p.id));
-        const fresh = page.profiles
-          .map(toCardData)
-          .filter(p => !seen.has(p.id));
-        return [...prev, ...fresh];
-      });
+      // SUBSTITUI o lote anterior em vez de acumular. Era
+      // `[...prev, ...fresh]`, e com isso quem percorria 200
+      // perfis ficava com 200 cards montados — cada um com
+      // moldura, badge e aura. Agora a memória é constante.
+      setRealProfiles(page.profiles.map(toCardData));
     } catch (error) {
       console.error('[useHomeData] loadMoreProfiles:', error);
       // Não sobrescreve a lista já carregada — encerra a
@@ -174,7 +184,11 @@ export function useHomeData(): UseHomeDataReturn {
   }, [hasMoreProfiles]);
 
   const refreshProfiles = useCallback(async () => {
-    cursorRef.current = null;
+    cursorRef.current  = null;
+    // seed nulo faz a próxima busca sortear um ponto novo — é o
+    // que dá uma ordem diferente a cada refresh.
+    seedRef.current    = null;
+    wrappedRef.current = false;
     setHasMoreProfiles(true);
     setRealProfiles([]);
     await loadInitialData();

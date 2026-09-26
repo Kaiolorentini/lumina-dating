@@ -77,6 +77,10 @@ export interface PrestigeMarco {
   category:    'TIME' | 'SOCIAL' | 'TREE' | 'COLLECTION' | 'SEASON' | 'ACHIEVEMENT';
   repeatable:  boolean;  // se pode ser conquistado múltiplas vezes
   maxTimes:    number;   // 0 = ilimitado
+  /** Fora da tela enquanto o sistema que o concede não existe.
+   *  O marco continua no catálogo para o `legado` de quem já o
+   *  tiver não apontar para um id inexistente. */
+  hidden?:     boolean;
 }
 
 export const PRESTIGE_MARCOS: Record<string, PrestigeMarco> = {
@@ -100,9 +104,12 @@ export const PRESTIGE_MARCOS: Record<string, PrestigeMarco> = {
   COLLECTION_GOLD_1: { id: 'COLLECTION_GOLD_1', label: '1ª Coleção Ouro',     points: 150, category: 'COLLECTION',  repeatable: false, maxTimes: 1  },
   COLLECTION_GOLD_3: { id: 'COLLECTION_GOLD_3', label: '3 Coleções Ouro',     points: 300, category: 'COLLECTION',  repeatable: false, maxTimes: 1  },
 
-  // Temporadas
-  SEASON_COMPLETE:  { id: 'SEASON_COMPLETE',  label: 'Temporada completa',    points: 80,  category: 'SEASON',      repeatable: true,  maxTimes: 0  },
-  SEASON_3:         { id: 'SEASON_3',         label: '3 temporadas',          points: 200, category: 'SEASON',      repeatable: false, maxTimes: 1  },
+  // Temporadas — OCULTOS: o sistema de temporadas não existe
+  // no app. Ninguém concede estes dois, e mostrá-los na tela
+  // só frustra. Tirar o `hidden` quando as temporadas
+  // existirem.
+  SEASON_COMPLETE:  { id: 'SEASON_COMPLETE',  label: 'Temporada completa',    points: 80,  category: 'SEASON',      repeatable: true,  maxTimes: 0, hidden: true },
+  SEASON_3:         { id: 'SEASON_3',         label: '3 temporadas',          points: 200, category: 'SEASON',      repeatable: false, maxTimes: 1, hidden: true },
 
   // Conquistas especiais
   ACH_FOUNDER:      { id: 'ACH_FOUNDER',      label: 'Conquista Fundador',    points: 500, category: 'ACHIEVEMENT', repeatable: false, maxTimes: 1  },
@@ -124,4 +131,9 @@ export function nextPrestigeStage(points: number): PrestigeStageDef | null {
   const current = calcPrestigeStage(points);
   const next    = PRESTIGE_STAGES.find(s => s.stage === current.stage + 1);
   return next ?? null;
+}
+
+/** Marcos que a tela deve listar — sem os ocultos. */
+export function visibleMarcos(): PrestigeMarco[] {
+  return Object.values(PRESTIGE_MARCOS).filter(m => !m.hidden);
 }

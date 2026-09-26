@@ -129,7 +129,18 @@ export { buyBadgeWithFragments }       from './economy/buyBadgeWithFragments';
 export { earnXP, getXPStatus } from './engagement/xp';
 export { checkAchievements, getAchievementsStatus, repairAchievements } from './engagement/achievements';
 export { registerRankingXP, getRanking, freezeRanking, rewardRanking, resetRanking } from './engagement/ranking';
-export { grantPrestigePoints, getPrestigeStatus, checkPrestigeTimeMarcos } from './engagement/prestige';
+// grantPrestigePoints REMOVIDA: era callable e aceitava
+// qualquer marcoId do cliente — dava para pedir ACH_FOUNDER e
+// ganhar 500 pontos sem ser fundador. Agora os marcos são
+// concedidos pelo PrestigeService, no ponto onde o evento
+// acontece.
+//
+// checkPrestigeTimeMarcos REMOVIDA: gravava em `pendingMarcos`
+// e ninguém lia esse campo — detectava o marco e o abandonava.
+// A checagem de tempo migrou para o claimDailyReward, que já
+// roda uma vez por dia por usuário e escala sem o limite de
+// 200 da varredura.
+export { getPrestigeStatus } from './engagement/prestige';
 export { activateFertilizer, getFertilizerStatus } from './premium/fertilizerService';
 export { activateTurbo, getTurboStatus }            from './premium/turboService';
 export { activateImpulso, getImpulsoStatus }        from './premium/impulsoService';
@@ -152,6 +163,10 @@ import './gamification/registerDispatchers';
 export { processGameEvent } from './gamification/GamificationEngine';
 export { onProfileLike } from './engagement/profileLike';
 export { clearSintoniaReveal } from './engagement/clearSintoniaReveal';
+export { equipTitle, getTitlesStatus } from './engagement/titles';
+export { dismissProfile } from './engagement/dismissProfile';
+export { clearPrestigeReveal } from './engagement/clearPrestigeReveal';
+export { getPublicAchievements } from './users/getPublicAchievements';
 export { gamificationHealthCheck } from './gamification/health/healthCheck';
 export { onProductPending } from "./triggers/onProductPending";
 export { onAchievementTrigger } from "./triggers/onAchievementTrigger";
@@ -174,3 +189,4 @@ export { toggleCoupon }            from './marketplace/coupons/toggleCoupon';
 export { saveCreatorPixKey }       from './payments/saveCreatorPixKey';
 export { onWithdrawalCreated }     from './triggers/onWithdrawalCreated';
 export { onCreatorRequestCreated } from './triggers/onCreatorRequestCreated';
+export { clearLevelReveal } from './engagement/clearLevelReveal';

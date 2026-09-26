@@ -23,6 +23,7 @@ import {
   PRESTIGE_MARCOS,
   calcPrestigeStage,
   nextPrestigeStage,
+  visibleMarcos,
 } from '../config/prestigeTable';
 
 const db = admin.firestore();
@@ -208,6 +209,10 @@ export const getPrestigeStatus = functions.onCall(
       progress,
       pointsToNext:    next ? next.pointsMin - points : 0,
       marcosClaimed:   data.marcosClaimed ?? [],
+      marcosCount:     data.marcosCount   ?? {},
+      // A tela lista a partir daqui: os marcos de temporada
+      // saem porque o sistema não existe e mostrá-los frustra.
+      marcos:          visibleMarcos(),
       legado:          legado.slice(-20), // últimos 20 marcos
       flags:           PRESTIGE_FLAGS,
     };

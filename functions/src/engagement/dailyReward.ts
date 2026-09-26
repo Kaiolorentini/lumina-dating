@@ -16,7 +16,23 @@ import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { todayBr, yesterdayBr } from '../utils/dateBr';
+import { PrestigeService } from './prestigeService';
 const db = admin.firestore();
+
+// Marcos de tempo do prestígio. O `checkPrestigeTimeMarcos`
+// agendado foi REMOVIDO: ele varria 200 usuários por dia,
+// detectava o marco e gravava em `pendingMarcos` — campo que
+// NINGUÉM lia. Os pontos nunca eram creditados.
+//
+// Aqui o custo é zero: o resgate diário já roda uma vez por
+// dia por usuário e já tem a transação aberta. E escala
+// sozinho, sem o teto de 200.
+const TIME_MARCOS: { id: string; days: number }[] = [
+  { id: 'ACTIVE_365_DAYS', days: 365 },
+  { id: 'ACTIVE_180_DAYS', days: 180 },
+  { id: 'ACTIVE_90_DAYS',  days: 90  },
+  { id: 'ACTIVE_30_DAYS',  days: 30  },
+];
 
 // Recompensas por dia de streak (1–7).
 //
@@ -106,6 +122,16 @@ export const claimDailyReward = functions.onCall(
           daysStreak
         );
 
+        // Dias ATIVOS: distintos, não consecutivos. Quem entra
+        // três vezes por semana durante um ano acumula os 30,
+        // só mais devagar. É o comportamento certo para o
+        // prestígio, que por diretriz nunca diminui.
+        //
+        // O incremento é seguro porque este ponto só é alcançado
+        // quando `lastClaimedDate !== todayStr` — o guard de
+        // idempotência acima já barrou o segundo resgate do dia.
+        const activeDays = (rewardData.activeDays ?? 0) + 1;
+
         // Cristais gratuitos a creditar
         const crystals = STREAK_REWARDS[currentStreak] ?? STREAK_REWARDS[1];
 
@@ -121,6 +147,7 @@ export const claimDailyReward = functions.onCall(
           longestStreak,
           daysStreak,
           longestDaysStreak,
+          activeDays,
           totalClaimed: FieldValue.increment(crystals),
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -151,7 +178,8 @@ export const claimDailyReward = functions.onCall(
           longestStreak,
           daysStreak,
           longestDaysStreak,
-          nextReward: STREAK_REWARDS[Math.min(currentStreak + 1, 7)] ?? 25,
+          activeDays,
+          nextReward: STREAK_REWARDS[Math.min(currentStreak + 1, 7)] ?? STREAK_REWARDS[7],
         };
       });
 
@@ -170,6 +198,30 @@ export const claimDailyReward = functions.onCall(
         processedAt:  null,
         timestamp:    FieldValue.serverTimestamp(),
       }).catch(() => {});
+
+      // Marcos de TEMPO do prestígio. Fora da transação e
+      // fire-and-forget: prestígio é cosmético e não pode
+      // derrubar o resgate.
+      //
+      // A lista está em ordem DECRESCENTE e o laço para no
+      // primeiro que bate: quem cruza 365 não precisa que o
+      // ACTIVE_30 seja reavaliado, e o próprio grantMarco
+      // barra o que já foi concedido.
+      //
+      // ACTIVE_30_DAYS é repetível sem limite: a cada 30 dias
+      // ativos rende 100 pontos de novo. Por isso a checagem
+      // por múltiplo, e não por "maior ou igual" simples.
+      for (const marco of TIME_MARCOS) {
+        if (result.activeDays === marco.days) {
+          PrestigeService.grantMarco(uid, marco.id).catch(() => {});
+          break;
+        }
+        // O de 30 dias repete a cada 30: 30, 60, 90, 120…
+        if (marco.id === 'ACTIVE_30_DAYS' && result.activeDays % 30 === 0) {
+          PrestigeService.grantMarco(uid, marco.id).catch(() => {});
+          break;
+        }
+      }
 
       return { success: true, ...result };
 

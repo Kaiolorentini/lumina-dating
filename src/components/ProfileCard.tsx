@@ -36,6 +36,10 @@ import BoostBadge from './BoostBadge';
 import { ProfileFrame } from './profile/ProfileFrame';
 import { Badge } from './profile/Badge';
 import { useLike } from '../hooks/useLike';
+import { TitleSeal } from './profile/TitleSeal';
+import { titleById } from '../config/titlesCatalog';
+import { auraByStage } from '../config/prestigeAura';
+import { PrestigeAura } from './profile/PrestigeAura';
 import {
   frameAppearanceById, badgeAppearanceById, badgeMeaningById,
   BADGES, RARITY_COLOR, Rarity,
@@ -45,19 +49,57 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - spacing.lg * 2 - spacing.sm) / 2;
 const PHOTO_RATIO = 1.15;
 
+/**
+ * Altura aproximada do card, para o SVG da aura preencher tudo.
+ *
+ * É estimativa e não medida real: usar onLayout daria o valor
+ * exato, mas custaria um render a mais por card e o SVG é
+ * recortado pelo `overflow: hidden` de qualquer forma — sobrar
+ * altura é inofensivo, faltar deixaria a base sem aura.
+ *
+ * foto (CARD_WIDTH * 1.15) + faixa do badge (~52) + botão
+ * (~40) + nome e local (~52).
+ */
+const CARD_HEIGHT_ESTIMATE = CARD_WIDTH * PHOTO_RATIO + 150;
+
 interface Props {
   data: ProfileCardData;
   onPress: () => void;
   /** uid de quem está vendo o feed. Sem ele o botão não aparece. */
   viewerUid?: string;
+  /**
+   * Liga a animação da AURA. Padrão false.
+   *
+   * Na grade da Home vários cards ficam visíveis ao mesmo
+   * tempo, e a aura é o elemento mais pesado — três SVGs com
+   * chamas por card. A moldura e o badge continuam animando
+   * nas duas telas: eles são leves e é o que a pessoa comprou.
+   *
+   * A aba Sintonize mostra um card por vez e passa true.
+   */
+  animatedAura?: boolean;
+  /** Chamado depois que a curtida foi registrada. O Sintonize
+   *  usa para comemorar e avançar. */
+  onLiked?: () => void;
 }
 
-export default function ProfileCard({ data, onPress, viewerUid }: Props) {
+export default function ProfileCard({
+  data, onPress, viewerUid, animatedAura = false, onLiked,
+}: Props) {
   const frame = frameAppearanceById(data.equippedFrame);
   const badge = data.equippedBadge
     ? badgeAppearanceById(data.equippedBadge, (data.equippedBadgeRarity as Rarity) ?? 'COMMON')
     : null;
   const meaning = badgeMeaningById(data.equippedBadge);
+  const title   = titleById(data.equippedTitle);
+
+  // A aura estiliza o CARD — borda e brilho —, em vez de
+  // disputar espaço com a moldura. O que a pessoa comprou e o
+  // que conquistou se somam.
+  //
+  // Estágio 0 devolve null de propósito: "Desperto" é o padrão
+  // de todo mundo, e se todo card tem aura, nenhum tem.
+  const aura = auraByStage(data.prestigeStage);
 
   // Estado local apenas: consultar no carregamento se cada
   // perfil já foi curtido custaria uma leitura por card — 20
@@ -94,13 +136,52 @@ export default function ProfileCard({ data, onPress, viewerUid }: Props) {
     if (result.isMutual) {
       Alert.alert('✦ Sintonia!', 'Vocês se curtiram. Que tal iniciar uma conversa?');
     }
+
+    // Avisa a tela. No Sintonize isso dispara os corações e o
+    // avanço para o próximo perfil; na grade ninguém escuta.
+    onLiked?.();
   }
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
+    <TouchableOpacity
+      style={[
+        styles.card,
+        aura && {
+          borderColor: aura.color,
+          // shadowOpacity cresce com o estágio: o Guardião é
+          // quase imperceptível, a Lenda se destaca no feed.
+          shadowColor:   aura.color,
+          shadowOpacity: aura.glow,
+          shadowRadius:  aura.glow * 14,
+          shadowOffset:  { width: 0, height: 0 },
+          elevation:     aura.glow > 0.5 ? 8 : 4,
+        },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.9}
+    >
       {/* Com moldura, a cena preenche a área inteira e a foto
           flutua no centro. Sem moldura, a foto ocupa tudo como
           antes — nada regride para quem não tem cosmético. */}
+      {/* Aura ATRÁS de tudo — é a atmosfera do card, não um
+          enfeite sobre a foto. A primeira versão usava
+          partículas em órbita e elas apareciam por cima da
+          moldura.
+          Animação só nos estágios 3 e 4: o feed mostra vários
+          cards ao mesmo tempo. */}
+      {aura && (
+        <PrestigeAura
+          color={aura.color}
+          intensity={aura.glow}
+          // Dois requisitos: a tela precisa permitir E o estágio
+          // precisa ser alto. Na grade nunca anima; no Sintonize,
+          // só Constelação e Lenda.
+          animated={animatedAura && aura.stage >= 3}
+          width={CARD_WIDTH}
+          height={CARD_HEIGHT_ESTIMATE}
+        />
+      )}
+
       {frame ? (
         <ProfileFrame
           photoURL={data.photoURL}
@@ -114,6 +195,16 @@ export default function ProfileCard({ data, onPress, viewerUid }: Props) {
 
       {(data.boostType === 'turbo' || data.boostType === 'destaque') && (
         <BoostBadge type={data.boostType} />
+      )}
+
+      {/* Símbolo do título — canto ESQUERDO, espelhando o selo
+          de sintonia à direita. Só o símbolo: o nome completo
+          aparece no perfil aberto, onde há espaço. A patente se
+          lê de relance, sem precisar de legenda. */}
+      {title && (
+        <View style={styles.titleContainer}>
+          <TitleSeal title={title} size={26} />
+        </View>
       )}
 
       <View style={styles.sintoniaContainer}>
@@ -183,6 +274,18 @@ const styles = StyleSheet.create({
     height: CARD_WIDTH * PHOTO_RATIO,
     backgroundColor: colors.grayDark,
   },
+  titleContainer: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    // Preenchimento menor que o do símbolo antigo: o selo já
+    // tem o próprio anel, e o fundo circular por baixo só
+    // precisa garantir contraste contra fotos claras.
+    backgroundColor: colors.background + 'CC',
+    borderRadius: borderRadius.full,
+    padding: 3,
+    zIndex: 2,
+  },
   sintoniaContainer: {
     position: 'absolute',
     top: spacing.sm,
@@ -249,13 +352,25 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     gap: 2,
   },
+  // Contorno escuro em vez de fundo sólido: um fundo taparia a
+  // aura justamente na base, que é de onde as chamas sobem. A
+  // sombra de texto funciona contra QUALQUER cor de aura,
+  // inclusive as que ainda não existem.
   name: {
     color: colors.white,
     fontSize: fonts.sizes.md,
     fontWeight: 'bold',
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   location: {
-    color: colors.gray,
+    // Era colors.gray, que sumia sobre a aura dourada e a
+    // vermelha.
+    color: colors.grayLight,
     fontSize: fonts.sizes.xs,
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
 });

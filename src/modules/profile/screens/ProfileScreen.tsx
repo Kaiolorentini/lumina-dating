@@ -30,6 +30,8 @@ import { Badge }             from '../../../components/profile/Badge';
 import {
   frameAppearanceById, badgeAppearanceById, badgeMeaningById, Rarity,
 } from '../../../config/cosmeticsCatalog';
+import { TitleSeal } from '../../../components/profile/TitleSeal';
+import { titleById } from '../../../config/titlesCatalog';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -144,11 +146,8 @@ export default function ProfileScreen() {
     ? badgeAppearanceById(myBadgeId, (prog.equippedBadgeRarity as Rarity) ?? 'COMMON')
     : null;
   const myMeaning = badgeMeaningById(myBadgeId);
+  const myTitle   = titleById(prog.equippedTitle as string | undefined);
 
-    // TEMPORÁRIO — diagnóstico da moldura no próprio perfil
-  console.log('[ProfileScreen] prog:', JSON.stringify(prog));
-  console.log('[ProfileScreen] myFrame:', JSON.stringify(myFrame));
-  
   if (loading) return (
     <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
       <ActivityIndicator color={colors.gold} />
@@ -201,6 +200,9 @@ export default function ProfileScreen() {
           <View style={styles.nameRow}>
             {myBadge && <Badge appearance={myBadge} size={30} />}
             <Text style={styles.name}>{profile?.name ?? 'Usuário'}</Text>
+            {/* O mesmo símbolo que aparece no card, para a pessoa
+                conferir o que escolheu sem sair daqui. */}
+            {myTitle && <TitleSeal title={myTitle} size={28} />}
           </View>
 
           {myMeaning && (
@@ -299,6 +301,12 @@ export default function ProfileScreen() {
             <Text style={styles.menuItemText}>Badges</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Titles' as any)}>
+            <Text style={styles.menuItemIcon}>🎖️</Text>
+            <Text style={styles.menuItemText}>Títulos</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
+          
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PremiumTools' as any)}>
             <Text style={styles.menuItemIcon}>💎</Text>
             <Text style={styles.menuItemText}>Ferramentas Premium</Text>
