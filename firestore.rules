@@ -54,13 +54,15 @@ service cloud.firestore {
         get(/databases/$(database)/documents/appSettings/config).data.maintenanceMode != true;
     }
 
-    // Campos que o cliente NUNCA pode escrever no próprio documento.
-    // affectedKeys() detecta o campo mesmo se o valor não mudar —
-    // por isso o cliente não deve sequer ENVIÁ-LOS no update.
-    function hasNoProtectedFields() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        // Permissões e moderação
-        'role', 'isBlocked', 'blockedReason', 'blockedAt', 'blockedBy',
+    // Campos que o cliente NUNCA escreve no próprio documento —
+    // nem no create, nem no update.
+    // role e isBlocked NÃO estão aqui porque o create os EXIGE com
+    // valor fixo; no update eles entram via hasNoProtectedFields.
+    // randomSeed tem regra própria (isRandomSeedChangeAllowed).
+    function clientBlockedUserFields() {
+      return [
+        // Moderação
+        'blockedReason', 'blockedAt', 'blockedBy',
         // Ban temporário de marketplace: sem isto o cliente apaga
         // o prazo no próprio documento e escapa da punição.
         'marketplaceBanUntil', 'previousRole', 'marketplaceBanRestoredAt', 'blockedSource',
@@ -71,10 +73,6 @@ service cloud.firestore {
         'ageVerified', 'ageVerifiedAt', 'birthDate',
         'ageVerificationStatus', 'ageRejectionReason', 'ageRejectionNote',
         'screenshotWarnings', 'screenshotWarningStatus', 'adminFlags', 'creatorStatus',
-        // Posição no feed aleatório, gravada uma vez na criação.
-        // Sem isto, daria para editar o perfil repetidamente até
-        // cair numa posição boa da listagem.
-        'randomSeed',
         // Token de push: a coleção users tem `allow list` aberto,
         // então qualquer conta logada lia o token de todo mundo e
         // mandava push com a marca do Lumina. Agora vive em
@@ -91,7 +89,34 @@ service cloud.firestore {
         // Lendária e o frame de Fundador escrevendo direto no
         // próprio documento.
         'progression', 'xp', 'achievements',
-      ]);
+      ];
+    }
+
+    // Update: bloqueia a lista acima + role e isBlocked.
+    // affectedKeys() pega campo adicionado, removido ou alterado;
+    // reenviar o mesmo valor não conta como alteração.
+    function hasNoProtectedFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(clientBlockedUserFields().concat(['role', 'isBlocked']));
+    }
+
+    // Se vier, randomSeed precisa ser number em [0, 1). String ou
+    // valor fora da faixa tira a conta das consultas por faixa do
+    // feed, do Sintonize e da Carta do Destino.
+    function isValidRandomSeed(data) {
+      return !('randomSeed' in data) ||
+        (data.randomSeed is number && data.randomSeed >= 0 && data.randomSeed < 1);
+    }
+
+    // randomSeed é gravado UMA VEZ. O documento nasce antes do
+    // perfil (a CF acceptAppTerms cria users/{uid} no aceite dos
+    // termos), então a primeira gravação do seed chega como UPDATE.
+    // Permitido só se o documento ainda não tem seed; depois disso
+    // fica imutável — regravar permitiria editar o perfil até cair
+    // numa posição boa do feed.
+    function isRandomSeedChangeAllowed() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['randomSeed']) ||
+        (!('randomSeed' in resource.data) && isValidRandomSeed(request.resource.data));
     }
 
     // ============================================
@@ -100,16 +125,16 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isAuthenticated();
       allow list: if isAuthenticated();
-      // O CREATE também precisa barrar os campos de economia:
-      // sem isso, uma conta nova nasce com Turbo já ativo.
+      // O CREATE barra TODOS os campos protegidos, não só os de
+      // economia. Antes, uma conta nova podia nascer com
+      // ageVerificationStatus 'approved', xp e conquistas
+      // arbitrárias — furando o gate de idade inteiro.
       allow create: if isOwner(userId) &&
         request.resource.data.role == 'user' &&
         request.resource.data.isBlocked == false &&
-        !request.resource.data.keys().hasAny([
-          'turbo', 'impulso', 'destaqueRegional',
-          'boostActiveUntil', 'boostType', 'regionCount',
-        ]);
-      allow update: if isOwner(userId) && hasNoProtectedFields();
+        !request.resource.data.keys().hasAny(clientBlockedUserFields()) &&
+        isValidRandomSeed(request.resource.data);
+      allow update: if isOwner(userId) && hasNoProtectedFields() && isRandomSeedChangeAllowed();
       allow delete: if false;
 
       match /transactions/{transactionId} {
