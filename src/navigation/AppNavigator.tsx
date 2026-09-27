@@ -87,6 +87,7 @@ import BoostsScreen from '../modules/economy/screens/BoostsScreen';
 import RankingScreen from '../modules/engagement/screens/RankingScreen';
 import PrestigeScreen from '../modules/engagement/screens/PrestigeScreen';
 import PremiumToolsScreen from '../modules/premium/screens/PremiumToolsScreen';
+import GalaxiaPlusScreen from '../modules/premium/screens/GalaxiaPlusScreen';
 import AdminInflationScreen from '../screens/admin/AdminInflationScreen';
 import AdminCurationScreen from '../screens/admin/AdminCurationScreen';
 import VisitorsScreen from '../modules/premium/screens/VisitorsScreen';
@@ -353,6 +354,7 @@ function MainStack() {
       <Stack.Screen name="Ranking" component={RankingScreen} />
       <Stack.Screen name="Prestige" component={PrestigeScreen} />
       <Stack.Screen name="PremiumTools" component={PremiumToolsScreen} />
+      <Stack.Screen name="GalaxiaPlus" component={GalaxiaPlusScreen} />
       <Stack.Screen name="Visitors" component={VisitorsScreen} />
       <Stack.Screen name="Frames" component={FramesScreen} />
       <Stack.Screen name="Badges" component={BadgesScreen} />

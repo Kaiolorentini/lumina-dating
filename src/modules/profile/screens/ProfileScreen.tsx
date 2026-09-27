@@ -213,8 +213,7 @@ export default function ProfileScreen() {
             <View style={styles.levelBadge}>
               <Text style={styles.levelText}>{xpStatus.treeIcon} {xpStatus.tier}</Text>
             </View>
-          )}
-
+          )} 
           <View style={styles.crystalsRow}>
             <Text style={styles.crystalsText}>✨ {wallet?.coinsGratuitos ?? 0}</Text>
             <Text style={styles.crystalsSep}>·</Text>
@@ -347,9 +346,10 @@ export default function ProfileScreen() {
             <Text style={styles.menuItemText}>Notificações</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('GalaxiaPlus')}>
             <Text style={styles.menuItemIcon}>💜</Text>
             <Text style={styles.menuItemText}>Galáxia Plus</Text>
+
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
         </View>

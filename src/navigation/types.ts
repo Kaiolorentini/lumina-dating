@@ -37,6 +37,10 @@ export type RootStackParamList = {
   Ranking:       undefined;
   Prestige:      undefined;
   PremiumTools:  undefined;
+  /** Assinatura Galáxia Plus — status, benefícios e compra.
+   *  A ativação acontece SÓ no onAsaasWebhook, depois do
+   *  pagamento confirmado. */
+  GalaxiaPlus:   undefined;
   Frames:        undefined;
   Badges:        undefined;
   BadgesShop:    undefined;
