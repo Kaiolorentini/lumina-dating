@@ -16,52 +16,51 @@
 //
 // ── ESTADO ──
 //
-// XP — LIGADO.
-//   Resolve cinco ações que não tinham caminho nenhum:
-//   VISIT_PROFILE, GIVE_LIKE, CREATE_SINTONIA,
-//   COMPLETE_MISSION e MESSAGE_REPLY. O XPService grava XP E
-//   treeXP com os valores do xpValues.ts.
-//   Sem duplicação: o cliente só chama earnXP para
-//   START_CONVO e UNLOCK_ACHIEVEMENT, e MESSAGE_REPLY não é
-//   disparado por ninguém hoje.
+// LIGADOS (gravam):
+//   XP       — cobre VISIT_PROFILE, GIVE_LIKE, CREATE_SINTONIA,
+//              COMPLETE_MISSION e MESSAGE_REPLY. Grava XP E
+//              treeXP (xpValues.ts); quando o estágio sobe, paga
+//              a recompensa, notifica e enfileira TREE_EVOLUTION
+//              em achievementTriggers. O cliente só chama earnXP
+//              para START_CONVO e UNLOCK_ACHIEVEMENT — sem
+//              duplicação.
+//   VAULT    — deposita fragmentos no ALVO: 2 por visita, 5 por
+//              curtida, 20 por match. O legado (earnFragments)
+//              é código morto, ninguém o chama.
+//   RANKING  — nem registerRankingXP nem registerRankingEvent
+//              são chamados pelo cliente; ninguém alimentava o
+//              ranking antes. Lê o XP CRU, sem o multiplicador
+//              do fertilizante — de propósito, para não vender
+//              posição.
 //
-// TREE — NÃO LIGAR.
-//   Conflita com o XP. Em MATCH_CREATED o XPService soma 50
-//   de treeXP (xpValues) e o TreeService soma 25 (constante
-//   própria), os dois gravando o estágio no mesmo evento. E o
-//   TreeService.persist grava o ESTÁGIO sem gravar o treeXP
-//   que usou para calculá-lo.
+// STUBS (ligados, não gravam nada):
+//   ANALYTICS, MISSION, NOTIFICATION — devolvem SKIPPED com
+//   "não implementado — Bloco 5". Ligados só para trocar o
+//   erro "não registrado" por um SKIPPED honesto no log.
+//   NOTIFICATION é o que mais falta: pela EventMatrix ele
+//   deveria avisar em LEVEL_UP, TREE_EVOLUTION e
+//   ACHIEVEMENT_UNLOCKED.
 //
-// ACHIEVEMENT, MISSION, VAULT, RANKING, PRESTIGE,
-// NOTIFICATION — não auditados ainda. Cada um tem um caminho
-// legado equivalente em produção (achievementTriggers,
-// progressMission, earnFragments, registerRankingXP) e ligar
-// sem comparar duplicaria economia.
+// NÃO LIGAR — já têm caminho próprio em produção:
+//   ACHIEVEMENT — conquistas entram por achievementTriggers →
+//                 onAchievementTrigger → AchievementProcessor.
+//                 Ligar processaria cada conquista DUAS vezes:
+//                 recompensa, título e notificação em dobro.
+//                 O DISPATCHER_NOT_REGISTERED no log é esperado.
+//   PRESTIGE    — concedido por engagement/prestigeService.ts,
+//                 chamado direto onde o marco acontece.
+//   TREE        — conflita com o XP: em MATCH_CREATED o XPService
+//                 soma 50 de treeXP e o TreeService soma 25, os
+//                 dois gravando o estágio; e o TreeService.persist
+//                 grava o ESTÁGIO sem o treeXP que usou. Exige a
+//                 reescrita "opção B" antes de qualquer ligação.
 // ============================================
 
 import './services/XPDispatcher';
-
-// ── STUBS ──
-// Os três abaixo devolvem SKIPPED com "não implementado —
-// Bloco 5": o Service correspondente nunca foi escrito.
-// Ligar só troca o erro "não registrado" por um SKIPPED
-// honesto no log. Não gravam nada e não têm risco.
-//
-// NOTIFICATION é o que mais falta: pela EventMatrix ele
-// deveria avisar o usuário em LEVEL_UP, TREE_EVOLUTION e
-// ACHIEVEMENT_UNLOCKED. Implementar o NotificationService é
-// pré-requisito para os avisos de gamificação.
-// VAULT — LIGADO. Deposita fragmentos no ALVO: 2 por visita,
-// 5 por curtida, 20 por match. Sem duplicação: o legado
-// (earnFragments) é código morto, ninguém o chama.
-// Teto diário de 20 só para visitas; curtida e match não têm.
 import './services/VaultDispatcher';
-
-// RANKING — LIGADO. Sem duplicação: nem o registerRankingXP
-// nem o registerRankingEvent são chamados pelo cliente, então
-// ninguém alimentava o ranking até agora.
 import './services/RankingDispatcher';
 
+// Stubs
 import './services/AnalyticsDispatcher';
 import './services/MissionDispatcher';
 import './services/NotificationDispatcher';
