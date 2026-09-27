@@ -39,7 +39,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { XP_ACTION_VALUES, DAILY_XP_MAX } from '../config/xpValues';
 import { XP_MULTIPLIERS, XP_FEATURE_FLAGS, ANTI_BOT } from '../config/xpMultipliers';
 import { calcLevel } from '../config/xpTable';
-import { calcTreeStage } from '../config/treeTable';
+import { calcTreeStage, TREE_STAGE_TABLE } from '../config/treeTable';
 import { grantTreeStageReward } from '../services/rewardService';
 import { todayBr } from '../utils/dateBr';
 
@@ -313,6 +313,24 @@ export const earnXP = functions.onCall(
   }
 );
 
+/**
+ * Formas de ganhar XP exibidas na tela "XP & Níveis". Só texto
+ * fica aqui — XP e treeXP são LIDOS de XP_ACTION_VALUES na hora,
+ * então a tela nunca diverge do que o servidor paga. A cópia que
+ * vivia no app estava várias versões atrás.
+ *
+ * Só entram ações que algum evento realmente credita.
+ * RECEIVE_LIKE fica de fora até ser disparada.
+ */
+const XP_ACTIONS_PUBLIC: { action: string; icon: string; label: string; note: string }[] = [
+  { action: 'VISIT_PROFILE',      icon: '👁️', label: 'Visitar perfil',        note: '1x por perfil/dia'            },
+  { action: 'GIVE_LIKE',          icon: '💜', label: 'Curtir perfil',          note: '1x por perfil/dia'            },
+  { action: 'START_CONVO',        icon: '💬', label: 'Iniciar conversa real',  note: 'após resposta, 1x por pessoa' },
+  { action: 'CREATE_SINTONIA',    icon: '✨', label: 'Criar Sintonia',         note: 'quando ambos curtiram'        },
+  { action: 'COMPLETE_MISSION',   icon: '📋', label: 'Completar missão',       note: 'após validação'               },
+  { action: 'UNLOCK_ACHIEVEMENT', icon: '🔓', label: 'Desbloquear galeria',    note: '1x por perfil'                },
+];
+
 // ── 2. Status de XP (REGRA 28: cliente recebe tudo pronto) ──
 export const getXPStatus = functions.onCall(
   { region: 'us-central1' },
@@ -361,6 +379,20 @@ export const getXPStatus = functions.onCall(
 
       // Prestígio (REGRA 27 — reservado)
       prestigeLevel:     xp.prestigeLevel ?? 0,
+
+      // Tabelas para a tela — o app não guarda cópia.
+      treeStages: TREE_STAGE_TABLE.map(s => ({
+        stage:       s.stage,
+        name:        s.name,
+        icon:        s.icon,
+        treeXPMin:   s.treeXPMin,
+        rewardLabel: s.reward.label,
+      })),
+      xpActions: XP_ACTIONS_PUBLIC.flatMap(a => {
+        const def = XP_ACTION_VALUES[a.action];
+        return def ? [{ ...a, xp: def.xp, treeXP: def.treeXP }] : [];
+      }),
+      dailyXPMax: DAILY_XP_MAX,
 
       // Feature flags (REGRA 24)
       features: {

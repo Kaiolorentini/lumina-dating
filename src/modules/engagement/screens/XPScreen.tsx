@@ -1,8 +1,17 @@
 // ============================================
-// LUMINA — XP SCREEN v5.1
+// LUMINA — XP SCREEN v5.2
 // src/modules/engagement/screens/XPScreen.tsx
 //
 // Perfil de progressão: XP, Nível, Árvore da Sintonia
+//
+// v5.2 — as tabelas vêm da getXPStatus. As cópias que viviam
+// aqui estavam várias versões atrás do servidor: a Árvore
+// mostrava 100/300/700/1500 e a lista de ações prometia XP de
+// "Receber curtida", que nada credita. Mudou no servidor, a tela
+// acompanha — sem eas update.
+//
+// Estado de erro próprio: antes, uma falha mostrava valores
+// padrão como se fossem reais.
 // ============================================
 
 import React, { useRef, useEffect } from 'react';
@@ -11,16 +20,13 @@ import {
   TouchableOpacity, ActivityIndicator, Animated,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
-import { useNavigation }   from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth }         from '../../../context/AuthContext';
 import { useXP }           from '../hooks/useXP';
 import XPBar               from '../../../components/XPBar';
-import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
 
-type NavProp = NativeStackNavigationProp<RootStackParamList>;
+const SCREEN_TITLE = 'Progressão & Árvore';
 
 const TREE_GRADIENTS: Record<number, [string, string]> = {
   0: ['#0A1A0A', '#1B2E1B'],
@@ -30,51 +36,31 @@ const TREE_GRADIENTS: Record<number, [string, string]> = {
   4: ['#1A0A2E', '#4E1B7E'],
 };
 
-// ESPELHO de functions/src/config/xpValues.ts (v5.4) — só ações
-// que algum evento realmente credita. "Receber curtida" saiu:
-// existe na tabela do servidor, mas nada a dispara hoje, e a tela
-// prometia XP que ninguém recebia. Ao mudar valores lá, mude aqui.
-const XP_ACTIONS_DISPLAY = [
-  { icon: '👁️', action: 'Visitar perfil',        xp: '+2 XP',  treeXP: '',       note: '1x por perfil/dia'            },
-  { icon: '💜', action: 'Curtir perfil',          xp: '+5 XP',  treeXP: '',       note: '1x por perfil/dia'            },
-  { icon: '💬', action: 'Iniciar conversa real',  xp: '+20 XP', treeXP: '+15 🌳', note: 'após resposta, 1x por pessoa' },
-  { icon: '✨', action: 'Criar Sintonia',         xp: '+50 XP', treeXP: '+50 🌳', note: 'quando ambos curtiram'        },
-  { icon: '📋', action: 'Completar missão',       xp: '+25 XP', treeXP: '',       note: 'após validação'               },
-  { icon: '🔓', action: 'Desbloquear galeria',    xp: '+50 XP', treeXP: '',       note: '1x por perfil'                },
-];
-
-// ESPELHO de functions/src/config/treeTable.ts (v5.4). Esta cópia
-// estava três versões atrás do servidor (100/300/700/1500 contra
-// 50/150/350/700). Ao mudar a curva lá, mude aqui — ou, melhor,
-// passe a receber a tabela pela getXPStatus (melhoria registrada).
-const TREE_STAGES_DISPLAY = [
-  { stage: 0, icon: '🌱', name: 'Broto',         xp: '0',    reward: '10 Cristais Gratuitos' },
-  { stage: 1, icon: '🌿', name: 'Crescimento',   xp: '150',  reward: 'Moldura Nebulosa'      },
-  { stage: 2, icon: '🌸', name: 'Florescimento', xp: '600',  reward: 'Badge Flor'            },
-  { stage: 3, icon: '✨', name: 'Constelação',   xp: '1400', reward: '30 Cristais Gratuitos' },
-  { stage: 4, icon: '💜', name: 'Galáxia',       xp: '2500', reward: 'Animação Exclusiva'    },
-];
+function formatNumber(value: number): string {
+  return value.toLocaleString('pt-BR');
+}
 
 export default function XPScreen() {
-  const navigation = useNavigation<NavProp>();
-  const { user }   = useAuth();
+  const { user } = useAuth();
   const { status, loading, error, refresh } = useXP(user?.uid);
 
   const treeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(treeAnim, { toValue: 1.05, duration: 2000, useNativeDriver: true }),
         Animated.timing(treeAnim, { toValue: 1,    duration: 2000, useNativeDriver: true }),
       ])
-    ).start();
-  }, []);
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [treeAnim]);
 
   if (loading) {
     return (
       <View style={styles.container}>
-        <Header title="Progressão" showBack={true} showHome={true} />
+        <Header title={SCREEN_TITLE} showBack={true} showHome={true} />
         <View style={styles.center}>
           <ActivityIndicator color={COLORS.secondary} size="large" />
         </View>
@@ -82,16 +68,46 @@ export default function XPScreen() {
     );
   }
 
-  const treeStage   = status?.treeStage   ?? 0;
-  const gradient    = TREE_GRADIENTS[treeStage] ?? TREE_GRADIENTS[0];
-  const treeIcon    = status?.treeIcon    ?? '🌱';
-  const treeName    = status?.treeName    ?? 'Broto';
-  const treeProgress = status?.treeProgress ?? 0;
-  const nextStage   = status?.nextTreeStage;
+  if (!status) {
+    return (
+      <View style={styles.container}>
+        <Header title={SCREEN_TITLE} showBack={true} showHome={true} />
+        <View style={styles.center}>
+          <Text style={styles.errorIcon}>🌱</Text>
+          <Text style={styles.errorTitle}>
+            {error ? 'Não foi possível carregar' : 'Entre na sua conta'}
+          </Text>
+          <Text style={styles.errorText}>
+            {error
+              ? 'Verifique sua conexão e tente de novo.'
+              : 'É preciso estar logado para ver sua progressão.'}
+          </Text>
+          {error && (
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={refresh}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Tentar carregar de novo"
+            >
+              <Text style={styles.retryText}>Tentar de novo</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  const treeStage    = status.treeStage ?? 0;
+  const gradient     = TREE_GRADIENTS[treeStage] ?? TREE_GRADIENTS[0];
+  const treeProgress = status.treeProgress ?? 0;
+  const nextStage    = status.nextTreeStage;
+  const treeStages   = status.treeStages ?? [];
+  const xpActions    = status.xpActions  ?? [];
 
   return (
     <View style={styles.container}>
-      <Header title="Progressão & Árvore" showBack={true} showHome={true} />
+      <Header title={SCREEN_TITLE} showBack={true} showHome={true} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
@@ -100,12 +116,12 @@ export default function XPScreen() {
           <Text style={styles.treeCardLabel}>Árvore da Sintonia</Text>
 
           <Animated.Text style={[styles.treeIcon, { transform: [{ scale: treeAnim }] }]}>
-            {treeIcon}
+            {status.treeIcon ?? '🌱'}
           </Animated.Text>
 
-          <Text style={styles.treeName}>{treeName}</Text>
+          <Text style={styles.treeName}>{status.treeName ?? 'Broto'}</Text>
           <Text style={styles.treeXP}>
-            {status?.treeXP ?? 0} XP da Árvore
+            {formatNumber(status.treeXP ?? 0)} XP da Árvore
           </Text>
 
           {nextStage && (
@@ -113,7 +129,7 @@ export default function XPScreen() {
               <View style={styles.treeProgressHeader}>
                 <Text style={styles.treeProgressLabel}>Próximo: {nextStage.icon} {nextStage.name}</Text>
                 <Text style={styles.treeProgressValue}>
-                  {status?.treeXP ?? 0}/{nextStage.treeXPMin}
+                  {formatNumber(status.treeXP ?? 0)}/{formatNumber(nextStage.treeXPMin)}
                 </Text>
               </View>
               <View style={styles.treeProgressBar}>
@@ -122,7 +138,7 @@ export default function XPScreen() {
             </View>
           )}
 
-          {status?.fertilizanteAtivo && (
+          {status.fertilizanteAtivo && (
             <View style={styles.fertBadge}>
               <Text style={styles.fertText}>🌱 Fertilizante ativo — +50% XP</Text>
             </View>
@@ -133,64 +149,75 @@ export default function XPScreen() {
         <View style={styles.levelCard}>
           <Text style={styles.sectionTitle}>Seu Nível</Text>
           <XPBar
-            level={status?.level ?? 1}
-            tier={status?.tier ?? '🌱 Comum'}
-            totalXP={status?.totalXP ?? 0}
-            nextLevelXP={status?.nextLevelXP ?? 100}
-            progress={status?.levelProgress ?? 0}
+            level={status.level ?? 1}
+            tier={status.tier ?? '🌱 Comum'}
+            totalXP={status.totalXP ?? 0}
+            nextLevelXP={status.nextLevelXP ?? 100}
+            progress={status.levelProgress ?? 0}
           />
           <View style={styles.xpTodayRow}>
             <Text style={styles.xpTodayText}>
-              XP hoje: {status?.xpToday ?? 0}/{status?.dailyMax ?? 300}
+              XP hoje: {formatNumber(status.xpToday ?? 0)}
+              {status.dailyMax ? `/${formatNumber(status.dailyMax)}` : ''}
             </Text>
           </View>
         </View>
 
         {/* Estágios da Árvore */}
-        <Text style={styles.sectionTitle}>Estágios da Árvore</Text>
-        <View style={styles.stagesContainer}>
-          {TREE_STAGES_DISPLAY.map(stage => {
-            const isCompleted = treeStage >= stage.stage;
-            const isCurrent   = treeStage === stage.stage;
-            return (
-              <View key={stage.stage} style={[
-                styles.stageRow,
-                isCompleted && styles.stageRowCompleted,
-                isCurrent   && styles.stageRowCurrent,
-              ]}>
-                <Text style={styles.stageIcon}>{stage.icon}</Text>
-                <View style={styles.stageInfo}>
-                  <Text style={[styles.stageName, isCompleted && styles.stageNameCompleted]}>
-                    {stage.name}
-                  </Text>
-                  <Text style={styles.stageReward}>🎁 {stage.reward}</Text>
-                </View>
-                <View style={styles.stageXP}>
-                  <Text style={styles.stageXPText}>{stage.xp} XP</Text>
-                  {isCompleted && <Text style={styles.stageDone}>✅</Text>}
-                </View>
-              </View>
-            );
-          })}
-        </View>
+        {treeStages.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Estágios da Árvore</Text>
+            <View style={styles.stagesContainer}>
+              {treeStages.map(stage => {
+                const isCompleted = treeStage >= stage.stage;
+                const isCurrent   = treeStage === stage.stage;
+                return (
+                  <View key={stage.stage} style={[
+                    styles.stageRow,
+                    isCompleted && styles.stageRowCompleted,
+                    isCurrent   && styles.stageRowCurrent,
+                  ]}>
+                    <Text style={styles.stageIcon}>{stage.icon}</Text>
+                    <View style={styles.stageInfo}>
+                      <Text style={[styles.stageName, isCompleted && styles.stageNameCompleted]}>
+                        {stage.name}
+                      </Text>
+                      <Text style={styles.stageReward}>🎁 {stage.rewardLabel}</Text>
+                    </View>
+                    <View style={styles.stageXP}>
+                      <Text style={styles.stageXPText}>{formatNumber(stage.treeXPMin)} XP</Text>
+                      {isCompleted && <Text style={styles.stageDone}>✅</Text>}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         {/* Como ganhar XP */}
-        <Text style={styles.sectionTitle}>Como ganhar XP</Text>
-        <View style={styles.actionsContainer}>
-          {XP_ACTIONS_DISPLAY.map((item, i) => (
-            <View key={i} style={styles.actionRow}>
-              <Text style={styles.actionIcon}>{item.icon}</Text>
-              <View style={styles.actionInfo}>
-                <Text style={styles.actionLabel}>{item.action}</Text>
-                {item.note ? <Text style={styles.actionNote}>{item.note}</Text> : null}
-              </View>
-              <View style={styles.actionRewards}>
-                <Text style={styles.actionXP}>{item.xp}</Text>
-                {item.treeXP ? <Text style={styles.actionTreeXP}>{item.treeXP}</Text> : null}
-              </View>
+        {xpActions.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Como ganhar XP</Text>
+            <View style={styles.actionsContainer}>
+              {xpActions.map(item => (
+                <View key={item.action} style={styles.actionRow}>
+                  <Text style={styles.actionIcon}>{item.icon}</Text>
+                  <View style={styles.actionInfo}>
+                    <Text style={styles.actionLabel}>{item.label}</Text>
+                    {item.note ? <Text style={styles.actionNote}>{item.note}</Text> : null}
+                  </View>
+                  <View style={styles.actionRewards}>
+                    <Text style={styles.actionXP}>+{item.xp} XP</Text>
+                    {item.treeXP > 0 && (
+                      <Text style={styles.actionTreeXP}>+{item.treeXP} 🌳</Text>
+                    )}
+                  </View>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          </>
+        )}
 
         {/* Info Fertilizante */}
         <View style={styles.fertCard}>
@@ -212,7 +239,14 @@ const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: COLORS.background },
-  center:      { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center:      { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl, gap: S.sm },
+
+  // Erro
+  errorIcon:   { fontSize: 44, opacity: 0.8 },
+  errorTitle:  { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
+  errorText:   { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center', lineHeight: 20 },
+  retryButton: { marginTop: S.md, borderWidth: 1, borderColor: COLORS.secondary, borderRadius: R.full, paddingHorizontal: S.xl, paddingVertical: S.sm },
+  retryText:   { color: COLORS.secondary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
 
   // Árvore
   treeCard:    { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },

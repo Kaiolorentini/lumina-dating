@@ -1,12 +1,37 @@
 // ============================================
-// LUMINA — USE XP HOOK v5.1
+// LUMINA — USE XP HOOK v5.2
 // src/modules/engagement/hooks/useXP.ts
+//
+// v5.2 — as tabelas da tela (estágios da Árvore e formas de
+// ganhar XP) vêm da getXPStatus. A XPScreen guardava cópias que
+// ficaram várias versões atrás do servidor.
+//
+// earn() REMOVIDO: nenhuma tela usava, e mandava actionId e
+// eventMultiplier que o earnXP v5.4 ignora. XP é creditado nos
+// eventos (Engine) ou pelo engagementService — nunca por aqui.
 // ============================================
 
 import { useState, useEffect, useCallback } from 'react';
 import { getFunctions, httpsCallable }      from 'firebase/functions';
 
 const functions = getFunctions();
+
+export interface TreeStagePublic {
+  stage:       number;
+  name:        string;
+  icon:        string;
+  treeXPMin:   number;
+  rewardLabel: string;
+}
+
+export interface XPActionPublic {
+  action: string;
+  icon:   string;
+  label:  string;
+  note:   string;
+  xp:     number;
+  treeXP: number;
+}
 
 export interface XPStatus {
   totalXP:           number;
@@ -24,18 +49,9 @@ export interface XPStatus {
   nextTreeStage:     { stage: number; name: string; icon: string; treeXPMin: number } | null;
   fertilizanteAtivo: boolean;
   fertilizanteExpiraEm: string | null;
-}
-
-export interface EarnXPResult {
-  xpGained:     number;
-  treeXPGain:   number;
-  newTotalXP:   number;
-  newLevel:     number;
-  newTier:      string;
-  leveledUp:    boolean;
-  stageUp:      boolean;
-  newStage:     number;
-  newStageName: string;
+  /** Opcionais: servidores anteriores à v5.4 não devolvem. */
+  treeStages?:       TreeStagePublic[];
+  xpActions?:        XPActionPublic[];
 }
 
 interface State {
@@ -66,48 +82,10 @@ export function useXP(uid: string | undefined) {
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
-  // Ganha XP — servidor decide tudo
-  const earn = useCallback(async (params: {
-    action:          string;
-    targetUid?:      string;
-    actionId:        string;
-    eventMultiplier?: number;
-  }): Promise<EarnXPResult | null> => {
-    if (!uid) return null;
-    try {
-      const fn     = httpsCallable<typeof params, { success: boolean } & EarnXPResult>(
-        functions, 'earnXP'
-      );
-      const result = await fn(params);
-
-      if (result.data.xpGained > 0) {
-        // Atualiza estado local
-        setState(prev => ({
-          ...prev,
-          status: prev.status ? {
-            ...prev.status,
-            totalXP:       result.data.newTotalXP,
-            level:         result.data.newLevel,
-            tier:          result.data.newTier,
-            xpToday:       (prev.status.xpToday ?? 0) + result.data.xpGained,
-            treeStage:     result.data.newStage,
-            treeName:      result.data.newStageName,
-          } : null,
-        }));
-      }
-
-      return result.data;
-    } catch (error) {
-      console.error('[useXP] earn error:', error);
-      return null;
-    }
-  }, [uid]);
-
   return {
-    status:     state.status,
-    loading:    state.loading,
-    error:      state.error,
-    earn,
-    refresh:    loadStatus,
+    status:  state.status,
+    loading: state.loading,
+    error:   state.error,
+    refresh: loadStatus,
   };
 }
