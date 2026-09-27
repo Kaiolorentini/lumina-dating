@@ -19,26 +19,31 @@ export interface TreeStageDef {
     label: string;
   };
 }
-
-// v5.3 — REBALANCEAMENTO
+// v5.4 — ÁRVORE EM ~3 MESES DE USO DIÁRIO
 //
-// Os limiares antigos foram calibrados para treeXP de 20 por
-// sintonia. Com 50, e considerando que só conexão humana real
-// alimenta a árvore (REGRA 14), o estágio 4 exigia 30 sintonias
-// distintas — mais do que um usuário faz em meses.
+// A v5.3 fazia o estágio 1 sair na primeira sintonia (50) — a
+// pessoa evoluía no primeiro dia e a Galáxia vinha em semanas.
+// Decisão de produto: o XP GLOBAL continua livre (teto diário de
+// 400, valores inalterados); só a Árvore exige constância.
 //
-// A curva nova é progressiva: o estágio 1 sai na PRIMEIRA
-// sintonia, porque recompensa imediata é o que prende no início,
-// e cada estágio seguinte custa cerca do dobro do anterior.
+// Referência — uso diário típico, ~3 sintonias e ~3 conversas
+// reais por semana (~28 treeXP/dia):
+//   Crescimento   ~5 dias    · Florescimento ~3 semanas
+//   Constelação   ~7 semanas · Galáxia       ~3 meses
+// Uso leve (1+1/semana) chega à Galáxia em ~9 meses; intenso
+// (1+1/dia), em ~5 semanas.
 //
-// As recompensas em cristais (10 e 30) não mudaram — são as
-// mesmas da economia atual.
+// No primeiro dia, uma sintonia com conversa dá 65 treeXP: a
+// Árvore NÃO evolui no dia 1, e o estágio 1 recompensa quem
+// voltou durante a primeira semana.
+//
+// Recompensas inalteradas.
 export const TREE_STAGE_TABLE: TreeStageDef[] = [
-  { stage: 0, name: 'Broto',         icon: '🌱', treeXPMin: 0,   reward: { type: 'crystals',  value: 10,         label: '10 Cristais Gratuitos' } },
-  { stage: 1, name: 'Crescimento',   icon: '🌿', treeXPMin: 50,  reward: { type: 'frame',     value: 'nebulosa', label: 'Moldura Nebulosa'      } },
-  { stage: 2, name: 'Florescimento', icon: '🌸', treeXPMin: 150, reward: { type: 'badge',     value: 'flor',     label: 'Badge Flor'            } },
-  { stage: 3, name: 'Constelação',   icon: '✨', treeXPMin: 350, reward: { type: 'crystals',  value: 30,         label: '30 Cristais Gratuitos' } },
-  { stage: 4, name: 'Galáxia',       icon: '💜', treeXPMin: 700, reward: { type: 'animation', value: 'galaxia',  label: 'Animação Exclusiva'    } },
+  { stage: 0, name: 'Broto',         icon: '🌱', treeXPMin: 0,    reward: { type: 'crystals',  value: 10,         label: '10 Cristais Gratuitos' } },
+  { stage: 1, name: 'Crescimento',   icon: '🌿', treeXPMin: 150,  reward: { type: 'frame',     value: 'nebulosa', label: 'Moldura Nebulosa'      } },
+  { stage: 2, name: 'Florescimento', icon: '🌸', treeXPMin: 600,  reward: { type: 'badge',     value: 'flor',     label: 'Badge Flor'            } },
+  { stage: 3, name: 'Constelação',   icon: '✨', treeXPMin: 1400, reward: { type: 'crystals',  value: 30,         label: '30 Cristais Gratuitos' } },
+  { stage: 4, name: 'Galáxia',       icon: '💜', treeXPMin: 2500, reward: { type: 'animation', value: 'galaxia',  label: 'Animação Exclusiva'    } },
 ];
 
 export function calcTreeStage(treeXP: number): {

@@ -30,22 +30,29 @@ const TREE_GRADIENTS: Record<number, [string, string]> = {
   4: ['#1A0A2E', '#4E1B7E'],
 };
 
+// ESPELHO de functions/src/config/xpValues.ts (v5.4) — só ações
+// que algum evento realmente credita. "Receber curtida" saiu:
+// existe na tabela do servidor, mas nada a dispara hoje, e a tela
+// prometia XP que ninguém recebia. Ao mudar valores lá, mude aqui.
 const XP_ACTIONS_DISPLAY = [
-  { icon: '👁️', action: 'Visitar perfil',          xp: '+1 XP',  treeXP: '',      note: '1x por perfil/dia'       },
-  { icon: '💜', action: 'Curtir perfil',            xp: '+3 XP',  treeXP: '',      note: '1x por perfil/dia'       },
-  { icon: '💖', action: 'Receber curtida',          xp: '+5 XP',  treeXP: '',      note: 'máx 100 XP/dia'         },
-  { icon: '💬', action: 'Iniciar conversa real',    xp: '+10 XP', treeXP: '+5 🌳', note: 'após resposta mútua'    },
-  { icon: '✨', action: 'Criar Sintonia',           xp: '+20 XP', treeXP: '+20 🌳', note: 'quando ambos curtiram' },
-  { icon: '📋', action: 'Completar missão',        xp: '+15 XP', treeXP: '+5 🌳', note: 'após validação'         },
-  { icon: '🏆', action: 'Desbloquear conquista',   xp: '+30 XP', treeXP: '+10 🌳', note: ''                      },
+  { icon: '👁️', action: 'Visitar perfil',        xp: '+2 XP',  treeXP: '',       note: '1x por perfil/dia'            },
+  { icon: '💜', action: 'Curtir perfil',          xp: '+5 XP',  treeXP: '',       note: '1x por perfil/dia'            },
+  { icon: '💬', action: 'Iniciar conversa real',  xp: '+20 XP', treeXP: '+15 🌳', note: 'após resposta, 1x por pessoa' },
+  { icon: '✨', action: 'Criar Sintonia',         xp: '+50 XP', treeXP: '+50 🌳', note: 'quando ambos curtiram'        },
+  { icon: '📋', action: 'Completar missão',       xp: '+25 XP', treeXP: '',       note: 'após validação'               },
+  { icon: '🔓', action: 'Desbloquear galeria',    xp: '+50 XP', treeXP: '',       note: '1x por perfil'                },
 ];
 
+// ESPELHO de functions/src/config/treeTable.ts (v5.4). Esta cópia
+// estava três versões atrás do servidor (100/300/700/1500 contra
+// 50/150/350/700). Ao mudar a curva lá, mude aqui — ou, melhor,
+// passe a receber a tabela pela getXPStatus (melhoria registrada).
 const TREE_STAGES_DISPLAY = [
   { stage: 0, icon: '🌱', name: 'Broto',         xp: '0',    reward: '10 Cristais Gratuitos' },
-  { stage: 1, icon: '🌿', name: 'Crescimento',   xp: '100',  reward: 'Moldura Nebulosa'      },
-  { stage: 2, icon: '🌸', name: 'Florescimento', xp: '300',  reward: 'Badge Flor'            },
-  { stage: 3, icon: '✨', name: 'Constelação',   xp: '700',  reward: '30 Cristais Gratuitos' },
-  { stage: 4, icon: '💜', name: 'Galáxia',       xp: '1500', reward: 'Animação Exclusiva'    },
+  { stage: 1, icon: '🌿', name: 'Crescimento',   xp: '150',  reward: 'Moldura Nebulosa'      },
+  { stage: 2, icon: '🌸', name: 'Florescimento', xp: '600',  reward: 'Badge Flor'            },
+  { stage: 3, icon: '✨', name: 'Constelação',   xp: '1400', reward: '30 Cristais Gratuitos' },
+  { stage: 4, icon: '💜', name: 'Galáxia',       xp: '2500', reward: 'Animação Exclusiva'    },
 ];
 
 export default function XPScreen() {

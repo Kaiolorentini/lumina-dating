@@ -1,10 +1,36 @@
 // ============================================
-// LUMINA — XP SYSTEM v5.2
+// LUMINA — XP SYSTEM v5.4
 // functions/src/engagement/xp.ts
 //
-// 28 REGRAS IMPLEMENTADAS.
+// v5.4 — earnXP FECHADO AO QUE O APP REALMENTE USA.
+//
+// O cliente escolhia a ação, o alvo, a chave de idempotência,
+// o multiplicador (eventCategory: 'EVENT' = XP em dobro) e
+// DECLARAVA quantas mensagens houve. Qualquer ação da tabela —
+// inclusive CREATE_SINTONIA, 50 de treeXP — era pedida à
+// vontade até o teto diário, e a Árvore chegava à Galáxia em
+// dias, com recompensas de cada estágio.
+//
+// Agora:
+//   • só START_CONVO e UNLOCK_ACHIEVEMENT vêm do app — o resto é
+//     creditado pelo Engine, no servidor, quando o evento ocorre;
+//   • a chave é do servidor: uid + ação + alvo, uma vez por par;
+//   • o alvo precisa existir;
+//   • START_CONVO exige mensagem dos DOIS lados no chat —
+//     conferido aqui, não declarado pelo app;
+//   • multiplicador só do fertilizante, lido do documento.
+//
+// BUG CORRIGIDO: a recompensa do estágio (grantTreeStageReward)
+// faz t.get() e rodava DEPOIS de escritas na transação — o
+// Firestore exige todas as leituras antes, e a chamada falhava
+// justamente quando a Árvore evoluía. Agora roda antes de
+// qualquer escrita.
+//
+// BUG CORRIGIDO: set com merge NÃO interpreta ponto no nome do
+// campo — `xp.stageRewardsClaimed.stage_N` virava um campo com
+// esse nome literal. Agora é o mapa aninhado.
+//
 // XP nunca gerado no cliente.
-// Todos os sistemas independentes.
 // ============================================
 
 import * as functions from 'firebase-functions/v2/https';
@@ -19,6 +45,31 @@ import { todayBr } from '../utils/dateBr';
 
 const db = admin.firestore();
 
+/**
+ * Únicas ações que o APP pode pedir. Visita, curtida, sintonia,
+ * missão e resposta são creditadas pelo Engine, no servidor —
+ * aceitá-las aqui também as creditaria em dobro.
+ */
+const CLIENT_ACTIONS: ReadonlySet<string> = new Set([
+  'START_CONVO',          // ChatScreen, via engagementService.onMessageSent
+  'UNLOCK_ACHIEVEMENT',   // ProgressiveGallery, via engagementService.onContentUnlocked
+]);
+
+/** Mesmo formato das rules (isChatMember) e do messageService. */
+function chatIdFor(a: string, b: string): string {
+  return [a, b].sort().join('_');
+}
+
+/** Conversa real: ao menos uma mensagem de CADA lado. */
+async function hasRealConversation(uid: string, targetUid: string): Promise<boolean> {
+  const messages = db.collection('chats').doc(chatIdFor(uid, targetUid)).collection('messages');
+  const [mine, theirs] = await Promise.all([
+    messages.where('senderId', '==', uid).limit(1).get(),
+    messages.where('senderId', '==', targetUid).limit(1).get(),
+  ]);
+  return !mine.empty && !theirs.empty;
+}
+
 // ── 1. Ganhar XP ──
 export const earnXP = functions.onCall(
   { region: 'us-central1' },
@@ -31,48 +82,54 @@ export const earnXP = functions.onCall(
       return { disabled: true, xpGained: 0 };
     }
 
-    const {
-      action,
-      targetUid,
-      actionId,       // REGRA 3: ID único por ação
-      messageCount,   // REGRA 6: contagem de mensagens para conversas
-      eventCategory,  // REGRA 19: categoria para multiplicador de evento
-    } = request.data as {
-      action:         string;
-      targetUid?:     string;
-      actionId:       string;
-      messageCount?:  number;
-      eventCategory?: string;
+    // actionId, messageCount e eventCategory ainda chegam de
+    // versões antigas do app — e são IGNORADOS de propósito.
+    const { action, targetUid } = request.data as {
+      action?:    unknown;
+      targetUid?: unknown;
     };
+
+    if (typeof action !== 'string' || !CLIENT_ACTIONS.has(action)) {
+      throw new functions.HttpsError('permission-denied', 'Ação não permitida.');
+    }
 
     const actionDef = XP_ACTION_VALUES[action];
     if (!actionDef) {
       throw new functions.HttpsError('invalid-argument', `Ação inválida: ${action}`);
     }
 
-    // REGRA 6: conversa exige mínimo de mensagens
-    if (actionDef.minMessages && (!messageCount || messageCount < actionDef.minMessages)) {
-      throw new functions.HttpsError(
-        'failed-precondition',
-        `Conversa precisa de ao menos ${actionDef.minMessages} mensagens trocadas.`
-      );
+    if (typeof targetUid !== 'string' || !targetUid || targetUid === uid || targetUid.includes('/')) {
+      throw new functions.HttpsError('invalid-argument', 'Alvo inválido.');
+    }
+
+    const targetSnap = await db.collection('users').doc(targetUid).get();
+    if (!targetSnap.exists) {
+      throw new functions.HttpsError('not-found', 'Perfil não encontrado.');
+    }
+
+    // REGRA 6, conferida no servidor. Sem resposta ainda não é
+    // erro: a próxima mensagem da conversa chama de novo.
+    if (action === 'START_CONVO' && !(await hasRealConversation(uid, targetUid))) {
+      return { success: true, pending: true, xpGained: 0 };
     }
 
     // BRT: em UTC o teto diário (DAILY_XP_MAX) zerava às 21h,
     // liberando até 800 XP no mesmo dia civil.
-    const todayStr        = todayBr();
-    const userRef         = db.collection('users').doc(uid);
-    const xpLogRef        = db.collection('xpLog');
-    const notifRef        = db.collection('notifications');
-    const idempotencyRef  = db.collection('xpIdempotency').doc(`${uid}_${actionId}`);
+    const todayStr       = todayBr();
+    const idempotencyKey = `${uid}_${action}_${targetUid}`;
+    const userRef        = db.collection('users').doc(uid);
+    const xpLogRef       = db.collection('xpLog');
+    const notifRef       = db.collection('notifications');
+    const idempotencyRef = db.collection('xpIdempotency').doc(idempotencyKey);
 
     const result = await db.runTransaction(async (t) => {
+      // ── LEITURAS — todas antes de qualquer escrita ──
       const [userDoc, idempotencyDoc] = await Promise.all([
         t.get(userRef),
         t.get(idempotencyRef),
       ]);
 
-      // REGRA 4: idempotência
+      // REGRA 4: idempotência — uma vez por par
       if (idempotencyDoc.exists) {
         return { alreadyProcessed: true, xpGained: 0 };
       }
@@ -98,31 +155,16 @@ export const earnXP = functions.onCall(
         return { limitReached: true, xpGained: 0 };
       }
 
-      // REGRA 7: curtida/visita — 1x por usuário alvo/dia
-      if (actionDef.perUser && targetUid) {
-        const perUserRef = db.collection('xpIdempotency').doc(`${uid}_peruser_${action}_${targetUid}_${todayStr}`);
-        const perUserDoc = await t.get(perUserRef);
-        if (perUserDoc.exists) {
-          return { perUserDuplicate: true, xpGained: 0 };
-        }
-        t.set(perUserRef, {
-          uid, action, targetUid, date: todayStr,
-          timestamp: FieldValue.serverTimestamp(),
-        });
-      }
-
-      // REGRA 19: Multiplicador centralizado
-      const fertAtivo   = userData.progression?.arvore?.fertilizanteAtivo === true;
-      const fertExpira  = userData.progression?.arvore?.fertilizanteExpiraEm?.toDate?.() ?? null;
-      const fertActive  = XP_FEATURE_FLAGS.FERTILIZER_ENABLED && fertAtivo && fertExpira && fertExpira > new Date();
-
-      let multiplier = XP_MULTIPLIERS.NORMAL;
-      if (fertActive) multiplier = XP_MULTIPLIERS.FERTILIZER;
-      if (eventCategory === 'EVENT') multiplier = Math.max(multiplier, XP_MULTIPLIERS.EVENT_DOUBLE);
+      // REGRA 19: multiplicador — só o fertilizante, lido do
+      // documento. eventCategory do cliente não conta mais.
+      const fertAtivo  = userData.progression?.arvore?.fertilizanteAtivo === true;
+      const fertExpira = userData.progression?.arvore?.fertilizanteExpiraEm?.toDate?.() ?? null;
+      const fertActive = XP_FEATURE_FLAGS.FERTILIZER_ENABLED && fertAtivo && fertExpira && fertExpira > new Date();
+      const multiplier = fertActive ? XP_MULTIPLIERS.FERTILIZER : XP_MULTIPLIERS.NORMAL;
 
       // XP final respeitando teto diário
-      const rawXP     = Math.floor(actionDef.xp * multiplier);
-      const xpGained  = Math.min(rawXP, DAILY_XP_MAX - xpToday);
+      const rawXP      = Math.floor(actionDef.xp * multiplier);
+      const xpGained   = Math.min(rawXP, DAILY_XP_MAX - xpToday);
       const treeXPGain = XP_FEATURE_FLAGS.TREE_ENABLED && actionDef.treeXP > 0
         ? Math.floor(actionDef.treeXP * multiplier)
         : 0;
@@ -140,6 +182,15 @@ export const earnXP = functions.onCall(
       const prevTree = calcTreeStage(treeXP);
       const newTree  = calcTreeStage(newTreeXP);
       const stageUp  = newTree.current.stage > prevTree.current.stage;
+
+      // REGRA 21: recompensa do estágio ANTES de qualquer escrita.
+      // O grantTreeStageReward faz t.get() — depois de uma escrita
+      // o Firestore recusaria a transação inteira.
+      if (stageUp) {
+        await grantTreeStageReward(t, uid, newTree.current);
+      }
+
+      // ── ESCRITAS ──
 
       // REGRA 22: treeProgress salvo
       t.set(userRef, {
@@ -164,7 +215,7 @@ export const earnXP = functions.onCall(
 
       // REGRA 4: registra idempotência
       t.set(idempotencyRef, {
-        uid, action, actionId, xpGained,
+        uid, action, targetUid, xpGained,
         timestamp: FieldValue.serverTimestamp(),
       });
 
@@ -172,7 +223,7 @@ export const earnXP = functions.onCall(
       t.set(xpLogRef.doc(), {
         uid,
         origem:         action,
-        actionId,
+        actionId:       idempotencyKey,
         category:       actionDef.category,
         xpRecebido:     xpGained,
         treeXPRecebido: treeXPGain,
@@ -185,58 +236,47 @@ export const earnXP = functions.onCall(
         imutavel:       true,
       });
 
-      // REGRA 13+16+23: fila de eventos — nunca simultâneo
-      const events: { type: string; data: Record<string, unknown> }[] = [];
+      // REGRA 13+16+23: notificações em fila ordenada
+      let priority = 0;
 
       if (leveledUp) {
-        events.push({ type: 'LEVEL_UP', data: { level: newLevelInfo.level, tier: newLevelInfo.tier } });
+        t.set(notifRef.doc(), {
+          userId:    uid,
+          type:      'level_up',
+          title:     `🎉 Nível ${newLevelInfo.level}!`,
+          message:   `Você alcançou ${newLevelInfo.tier}. Continue evoluindo!`,
+          icon:      '⬆️',
+          read:      false,
+          dados:     { level: newLevelInfo.level, tier: newLevelInfo.tier },
+          priority:  priority++,
+          timestamp: FieldValue.serverTimestamp(),
+        });
       }
+
       if (stageUp) {
-        events.push({ type: 'TREE_EVOLUTION', data: { stage: newTree.current.stage, name: newTree.current.name } });
+        t.set(notifRef.doc(), {
+          userId:    uid,
+          type:      'tree_evolution',
+          title:     `${newTree.current.icon} Árvore evoluiu!`,
+          message:   `Estágio ${newTree.current.name} desbloqueado! ${newTree.current.reward.label}`,
+          icon:      newTree.current.icon,
+          read:      false,
+          dados:     { stage: newTree.current.stage, reward: newTree.current.reward },
+          priority:  priority++,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+
+        // REGRA 15: marca recompensa como concedida — mapa
+        // aninhado. Com set+merge, o nome com pontos gravava um
+        // campo literal "xp.stageRewardsClaimed.stage_N".
+        t.set(userRef, {
+          xp: { stageRewardsClaimed: { [`stage_${newTree.current.stage}`]: true } },
+        }, { merge: true });
       }
 
-      // REGRA 16+23: notificações em fila (delay incremental)
-      for (let i = 0; i < events.length; i++) {
-        const ev = events[i];
-        if (ev.type === 'LEVEL_UP') {
-          t.set(notifRef.doc(), {
-            userId:    uid,
-            type:      'level_up',
-            title:     `🎉 Nível ${ev.data.level}!`,
-            message:   `Você alcançou ${ev.data.tier}. Continue evoluindo!`,
-            icon:      '⬆️',
-            read:      false,
-            dados:     ev.data,
-            priority:  i,  // REGRA 23: fila ordenada
-            timestamp: FieldValue.serverTimestamp(),
-          });
-        }
-
-        if (ev.type === 'TREE_EVOLUTION') {
-          // REGRA 21: recompensa via RewardService — XP não conhece Cristais
-          await grantTreeStageReward(t, uid, newTree.current);
-
-          t.set(notifRef.doc(), {
-            userId:    uid,
-            type:      'tree_evolution',
-            title:     `${newTree.current.icon} Árvore evoluiu!`,
-            message:   `Estágio ${newTree.current.name} desbloqueado! ${newTree.current.reward.label}`,
-            icon:      newTree.current.icon,
-            read:      false,
-            dados:     { stage: newTree.current.stage, reward: newTree.current.reward },
-            priority:  i,  // REGRA 23
-            timestamp: FieldValue.serverTimestamp(),
-          });
-
-          // REGRA 15: marca recompensa como concedida
-          t.set(userRef, {
-            [`xp.stageRewardsClaimed.stage_${newTree.current.stage}`]: true,
-          }, { merge: true });
-        }
-      }
-
-      // REGRA 18: atualiza risk score (ação muito rápida = risco)
-      // Implementação simples: incrementa e decai ao longo do tempo
+      // REGRA 18: decai o risk score.
+      // ATENÇÃO: nada o incrementa hoje — o anti-bot está inerte.
+      // Pendência registrada; não alterado nesta versão.
       if (riskScore < ANTI_BOT.BLOCK_THRESHOLD) {
         t.set(userRef, { xp: { xpRiskScore: Math.max(0, riskScore - 1) } }, { merge: true });
       }
@@ -247,14 +287,14 @@ export const earnXP = functions.onCall(
         treeXPGain,
         newTotalXP,
         newTreeXP,
-        newLevel:     newLevelInfo.level,
-        newTier:      newLevelInfo.tier,
+        newLevel:      newLevelInfo.level,
+        newTier:       newLevelInfo.tier,
         levelProgress: newLevelInfo.progress,
         leveledUp,
         stageUp,
-        newStage:     newTree.current.stage,
-        newStageName: newTree.current.name,
-        treeProgress: newTree.progress,  // REGRA 22
+        newStage:      newTree.current.stage,
+        newStageName:  newTree.current.name,
+        treeProgress:  newTree.progress,  // REGRA 22
       };
     });
 

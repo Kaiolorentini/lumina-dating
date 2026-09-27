@@ -40,7 +40,11 @@ export const XP_ACTION_VALUES: Record<string, XPActionDef> = {
   CREATE_SINTONIA:     { xp: 50, treeXP: 50, category: 'SOCIAL',      dailyMax: 0,   perUser: true                },
   COMPLETE_MISSION:    { xp: 25, treeXP: 0,  category: 'MISSION',     dailyMax: 0,   perUser: false               },
   COMPLETE_SOCIAL_MISSION: { xp: 25, treeXP: 10, category: 'MISSION', dailyMax: 0,   perUser: false               },
-  UNLOCK_ACHIEVEMENT:  { xp: 50, treeXP: 20, category: 'ACHIEVEMENT', dailyMax: 0,   perUser: false               },
+  // treeXP 0: disparada ao desbloquear GALERIA de um perfil, não
+  // numa conexão humana (REGRA 14). Com 20 e sem limite, sozinha
+  // levava à Galáxia em dias. O XP global segue livre, uma vez
+  // por perfil (chave do servidor no earnXP).
+  UNLOCK_ACHIEVEMENT:  { xp: 50, treeXP: 0,  category: 'ACHIEVEMENT', dailyMax: 0,   perUser: false               },
 };
 
 export const DAILY_XP_MAX = 400; // REGRA 5 — teto global
