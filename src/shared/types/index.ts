@@ -45,6 +45,10 @@ export interface UserProfile {
 // ------------------------------------------
 export interface Wallet {
   uid: string;
+  /** Gravado pelo onAsaasWebhook quando o bônus de primeira
+   *  compra é concedido. A tela só promete o "dobro" quando
+   *  isto não é true. Só leitura no cliente. */
+  firstPurchaseUsed?: boolean;
 
   // REGRA 18: separados obrigatoriamente
   coinsGratuitos: number;

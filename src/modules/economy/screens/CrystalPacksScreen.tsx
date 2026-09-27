@@ -1,6 +1,19 @@
 // ============================================
-// LUMINA — CRYSTAL PACKS SCREEN v1.0
+// LUMINA — CRYSTAL PACKS SCREEN v1.1
 // src/modules/economy/screens/CrystalPacksScreen.tsx
+//
+// v1.1 — GALÁXIA PLUS PELO SERVIDOR.
+//
+// O card que INICIA a cobrança anunciava "R$ 19,90/mês",
+// "Assinatura mensal", 10 cartas por dia e 300 cristais
+// gratuitos todo mês. O Pix cobra R$ 24,99 ÚNICO, sem
+// renovação, com 4 cartas e 300 premium na ativação. Oferta
+// anunciada vincula (CDC art. 30).
+//
+// Agora preço, duração e benefícios vêm da
+// getGalaxiaPlusStatus. SEM PREÇO CONFIRMADO, O TOQUE NÃO
+// COBRA: abre a GalaxiaPlusScreen. O modal de CPF só aparece
+// quando o valor na tela veio do servidor.
 //
 // FASE 7 — recorte do StoreScreen: pacotes de cristais e
 // Galáxia Plus, com o fluxo de CPF preservado na íntegra.
@@ -30,6 +43,8 @@ import Header from '../../../components/Header';
 import CpfPromptModal from '../../../components/CpfPromptModal';
 import { CrystalFieldBackground } from '../../../components/CrystalFieldBackground';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { formatPrice, galaxiaPlusBenefitLines } from '../../premium/services/galaxiaPlusService';
+import { useGalaxiaPlusStatus } from '../../premium/hooks/useGalaxiaPlusStatus';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -37,19 +52,12 @@ const PACK_ICONS: Record<string, string> = {
   starter: '✨', popular: '💎', supremo: '👑', galaxia: '🌌',
 };
 
-const GALAXIA_PLUS_BENEFITS = [
-  '💜 10 Cartas do Destino por dia',
-  '✨ 300 Cristais Gratuitos todo mês',
-  '⚡ Faísca com bônus +20%',
-  '🔓 Revelações mais baratas',
-  '🏅 Badge exclusivo Galáxia',
-  '📊 Ver quem visitou seu perfil',
-];
-
 function PackageCard({
-  pkg, onPress, loading,
+  pkg, onPress, loading, firstPurchaseAvailable,
 }: {
   pkg: CoinPackageDisplay; onPress: () => void; loading: boolean;
+  /** true só quando a carteira carregou e o bônus nunca foi usado. */
+  firstPurchaseAvailable: boolean;
 }) {
   const isPopular = pkg.highlighted;
 
@@ -75,7 +83,7 @@ function PackageCard({
             {pkg.coinsPremium.toLocaleString()} Cristais Premium
           </Text>
           {pkg.bonus > 0 && <Text style={styles.packageBonus}>+{pkg.bonus} bônus</Text>}
-          {pkg.isFirstPurchasePkg && (
+          {pkg.isFirstPurchasePkg && firstPurchaseAvailable && (
             <Text style={styles.packageFirst}>🎁 Dobro na 1ª compra!</Text>
           )}
         </View>
@@ -96,8 +104,15 @@ export default function CrystalPacksScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
   const { wallet } = useCoins();
+  const galaxia    = useGalaxiaPlusStatus();
 
   const coinsPremium = wallet?.coinsPremium ?? 0;
+
+  // A tela só promete o dobro quando TEM CERTEZA: carteira
+  // carregada e bônus nunca usado. Antes o selo aparecia para
+  // todo mundo, inclusive para quem o servidor não ia dobrar.
+  const firstPurchaseAvailable = wallet !== null && wallet.firstPurchaseUsed !== true;
+  const galaxiaPrice = formatPrice(galaxia?.price);
 
   const [loadingPkg,     setLoadingPkg]     = useState<string | null>(null);
   const [loadingGalaxia, setLoadingGalaxia] = useState(false);
@@ -106,6 +121,12 @@ export default function CrystalPacksScreen() {
   // permite um único modal servir pacotes e Galáxia Plus.
   const [pendingPackageId, setPendingPackageId] = useState<string | null>(null);
 
+  const galaxiaLine = galaxia?.active
+    ? `Ativa · ${galaxia.daysLeft} ${galaxia.daysLeft === 1 ? 'dia' : 'dias'} · renovar soma +${galaxia.duration}`
+    : galaxia && galaxiaPrice
+      ? `R$ ${galaxiaPrice} · ${galaxia.duration} dias`
+      : 'Ver detalhes';
+
   function handlePurchase(pkg: CoinPackageDisplay) {
     if (!user?.uid) return;
     setPendingPackageId(pkg.id);
@@ -113,6 +134,12 @@ export default function CrystalPacksScreen() {
 
   function handleGalaxiaPlus() {
     if (!user?.uid) return;
+    // Sem o preço confirmado pelo servidor, ninguém inicia uma
+    // cobrança: a pessoa vai para a tela que explica tudo.
+    if (!galaxia || !galaxiaPrice) {
+      navigation.navigate('GalaxiaPlus');
+      return;
+    }
     setPendingPackageId('galaxia_plus');
   }
 
@@ -139,7 +166,7 @@ export default function CrystalPacksScreen() {
         // pelo Asaas, e fechar obrigaria a redigitar tudo.
         Alert.alert(
           'Erro',
-          result.error ?? (isGalaxia ? 'Erro ao iniciar assinatura.' : 'Erro ao iniciar pagamento.'),
+          result.error ?? (isGalaxia ? 'Erro ao iniciar a Galáxia Plus.' : 'Erro ao iniciar pagamento.'),
         );
       }
     } catch {
@@ -178,36 +205,54 @@ export default function CrystalPacksScreen() {
               pkg={pkg}
               loading={loadingPkg === pkg.id}
               onPress={() => handlePurchase(pkg)}
+              firstPurchaseAvailable={firstPurchaseAvailable}
             />
           ))}
         </View>
 
         <Text style={styles.sectionTitle}>💜 Galáxia Plus</Text>
-        <Text style={styles.sectionSub}>Assinatura mensal com benefícios contínuos</Text>
+        <Text style={styles.sectionSub}>
+          {galaxia
+            ? `${galaxia.duration} dias de benefícios · pagamento único, sem renovação automática`
+            : 'Benefícios contínuos por tempo determinado'}
+        </Text>
         <TouchableOpacity
           style={styles.galaxiaCard}
           onPress={handleGalaxiaPlus}
           disabled={loadingGalaxia}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Galáxia Plus. ${galaxiaLine}`}
         >
           <LinearGradient colors={['#2A0A4E', '#4E1B7E']} style={styles.galaxiaInner}>
             <View style={styles.galaxiaHeader}>
               <Text style={styles.galaxiaIcon}>💜</Text>
               <View style={styles.galaxiaInfo}>
                 <Text style={styles.galaxiaTitle}>Galáxia Plus</Text>
-                <Text style={styles.galaxiaPrice}>R$ 19,90/mês</Text>
+                <Text style={styles.galaxiaPrice}>{galaxiaLine}</Text>
               </View>
               {loadingGalaxia
                 ? <ActivityIndicator color={COLORS.secondary} />
                 : <Text style={styles.galaxiaArrow}>›</Text>
               }
             </View>
-            <View style={styles.galaxiaBenefits}>
-              {GALAXIA_PLUS_BENEFITS.map((b, i) => (
-                <Text key={i} style={styles.galaxiaBenefit}>{b}</Text>
-              ))}
-            </View>
+            {galaxia && (
+              <View style={styles.galaxiaBenefits}>
+                {galaxiaPlusBenefitLines(galaxia).map(line => (
+                  <Text key={line} style={styles.galaxiaBenefit}>{line}</Text>
+                ))}
+              </View>
+            )}
           </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.galaxiaDetailsLink}
+          onPress={() => navigation.navigate('GalaxiaPlus')}
+          accessibilityRole="button"
+          accessibilityLabel="Como funciona a Galáxia Plus"
+        >
+          <Text style={styles.galaxiaDetailsText}>Como funciona ›</Text>
         </TouchableOpacity>
 
         <View style={styles.infoCard}>
@@ -270,6 +315,8 @@ const styles = StyleSheet.create({
   galaxiaArrow:           { color: COLORS.secondary, fontSize: 28, fontWeight: FONT_WEIGHT.bold },
   galaxiaBenefits:        { gap: S.xs },
   galaxiaBenefit:         { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },
+  galaxiaDetailsLink:     { alignSelf: 'center', paddingVertical: S.sm, paddingHorizontal: S.md, marginTop: S.xs },
+  galaxiaDetailsText:     { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
   infoCard:               { marginHorizontal: S.md, marginTop: S.lg, backgroundColor: COLORS.card + 'F2', borderRadius: R.lg, padding: S.lg, gap: S.xs, borderWidth: 1, borderColor: COLORS.border },
   infoTitle:              { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, marginBottom: S.xs },
   infoText:               { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, lineHeight: 18 },
