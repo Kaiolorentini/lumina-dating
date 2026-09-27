@@ -1,6 +1,19 @@
 // ============================================
-// LUMINA — STORE SCREEN v6.0
+// LUMINA — STORE SCREEN v6.1
 // src/modules/economy/screens/StoreScreen.tsx
+//
+// v6.1 — GALÁXIA PLUS PELO SERVIDOR.
+//
+// O card anunciava "R$ 19,90/mês", 10 Cartas do Destino por
+// dia e 300 cristais gratuitos todo mês. A cobrança real é
+// R$ 24,99 ÚNICO por 30 dias, com 4 cartas e 300 premium na
+// ativação. Oferta anunciada vincula (CDC art. 30): o card
+// agora não tem NENHUM número escrito à mão — tudo vem da
+// getGalaxiaPlusStatus, a mesma fonte da cobrança. Sem
+// resposta, mostra só "Ver detalhes": nunca um preço errado.
+//
+// O toque leva à GalaxiaPlusScreen, que explica as regras,
+// em vez de ir direto aos pacotes.
 //
 // v6.0 — FASE 7: a loja virou índice.
 //
@@ -22,24 +35,20 @@ import {
   TouchableOpacity, useWindowDimensions,
 } from 'react-native';
 import { LinearGradient }   from 'expo-linear-gradient';
-import { useNavigation }    from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCoins }         from '../../../context/CoinsContext';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { formatPrice, galaxiaPlusBenefitLines } from '../../premium/services/galaxiaPlusService';
+import { useGalaxiaPlusStatus } from '../../premium/hooks/useGalaxiaPlusStatus';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-const GALAXIA_PLUS_BENEFITS = [
-  '💜 10 Cartas do Destino por dia',
-  '✨ 300 Cristais Gratuitos todo mês',
-  '⚡ Faísca com bônus +20%',
-  '🔓 Revelações mais baratas',
-  '📊 Ver quem visitou seu perfil',
-];
-
 type CategoryRoute = 'CrystalPacks' | 'Boosts' | 'FramesShop' | 'BadgesShop';
+
+
 
 const CATEGORIES: {
   route:    CategoryRoute;
@@ -54,10 +63,13 @@ const CATEGORIES: {
   { route: 'BadgesShop',   icon: '✦',  title: 'Badges',   sub: 'Diga o que você procura',   gradient: ['#4E3A1A', '#7E5E2B'] },
 ];
 
+
 export default function StoreScreen() {
   const navigation = useNavigation<NavProp>();
   const { wallet } = useCoins();
   const { width }  = useWindowDimensions();
+
+  const galaxia = useGalaxiaPlusStatus();
 
   const coinsGratuitos = wallet?.coinsGratuitos ?? 0;
   const coinsPremium   = wallet?.coinsPremium   ?? 0;
@@ -65,6 +77,13 @@ export default function StoreScreen() {
 
   // Duas colunas quando há espaço; uma só em telas estreitas.
   const cardWidth = width >= 380 ? '48%' : '100%';
+
+  const galaxiaPrice = formatPrice(galaxia?.price);
+  const galaxiaLine = galaxia?.active
+    ? `Ativa · ${galaxia.daysLeft} ${galaxia.daysLeft === 1 ? 'dia restante' : 'dias restantes'}`
+    : galaxia && galaxiaPrice
+      ? `R$ ${galaxiaPrice} · ${galaxia.duration} dias`
+      : 'Ver detalhes';
 
   return (
     <View style={styles.container}>
@@ -90,7 +109,7 @@ export default function StoreScreen() {
           {fragments > 0 && (
             <TouchableOpacity
               style={styles.fragmentsRow}
-              onPress={() => navigation.navigate('Fragments' as any)}
+              onPress={() => navigation.navigate('Fragments')}
               activeOpacity={0.85}
             >
               <Text style={styles.fragmentsText}>
@@ -122,13 +141,13 @@ export default function StoreScreen() {
         <View style={styles.myItemsRow}>
           <TouchableOpacity
             style={styles.myItemsBtn}
-            onPress={() => navigation.navigate('Frames' as any)}
+            onPress={() => navigation.navigate('Frames')}
           >
             <Text style={styles.myItemsText}>🖼️ Minhas molduras</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.myItemsBtn}
-            onPress={() => navigation.navigate('Badges' as any)}
+            onPress={() => navigation.navigate('Badges')}
           >
             <Text style={styles.myItemsText}>✦ Meus badges</Text>
           </TouchableOpacity>
@@ -138,23 +157,34 @@ export default function StoreScreen() {
         <Text style={styles.sectionTitle}>💜 Galáxia Plus</Text>
         <TouchableOpacity
           style={styles.galaxiaCard}
-          onPress={() => navigation.navigate('CrystalPacks' as any)}
+          onPress={() => navigation.navigate('GalaxiaPlus')}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Galáxia Plus. ${galaxiaLine}`}
         >
           <LinearGradient colors={['#2A0A4E', '#4E1B7E']} style={styles.galaxiaInner}>
             <View style={styles.galaxiaHeader}>
               <Text style={styles.galaxiaIcon}>💜</Text>
               <View style={styles.galaxiaInfo}>
                 <Text style={styles.galaxiaTitle}>Galáxia Plus</Text>
-                <Text style={styles.galaxiaPrice}>R$ 19,90/mês</Text>
+                <Text style={styles.galaxiaPrice}>{galaxiaLine}</Text>
               </View>
               <Text style={styles.galaxiaArrow}>›</Text>
             </View>
-            <View style={styles.galaxiaBenefits}>
-              {GALAXIA_PLUS_BENEFITS.map((benefit, i) => (
-                <Text key={i} style={styles.galaxiaBenefit}>{benefit}</Text>
-              ))}
-            </View>
+            {galaxia && (
+              <>
+                <View style={styles.galaxiaBenefits}>
+                  {galaxiaPlusBenefitLines(galaxia).map(line => (
+                    <Text key={line} style={styles.galaxiaBenefit}>{line}</Text>
+                  ))}
+                </View>
+                {!galaxia.active && (
+                  <Text style={styles.galaxiaNote}>
+                    Pagamento único por Pix · sem renovação automática
+                  </Text>
+                )}
+              </>
+            )}
           </LinearGradient>
         </TouchableOpacity>
 
@@ -208,6 +238,7 @@ const styles = StyleSheet.create({
   galaxiaArrow:         { color: COLORS.secondary, fontSize: 28, fontWeight: FONT_WEIGHT.bold },
   galaxiaBenefits:      { gap: S.xs },
   galaxiaBenefit:       { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },
+  galaxiaNote:          { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, fontStyle: 'italic' },
   infoCard:             { marginHorizontal: S.md, marginTop: S.lg, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.xs, borderWidth: 1, borderColor: COLORS.border },
   infoTitle:            { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, marginBottom: S.xs },
   infoText:             { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, lineHeight: 18 },

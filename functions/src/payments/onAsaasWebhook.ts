@@ -1,14 +1,43 @@
 // ============================================
-// LUMINA — ASAAS WEBHOOK v5.3
+// LUMINA — ASAAS WEBHOOK v5.4
 // functions/src/payments/onAsaasWebhook.ts
 //
-// v5.3: adiciona suporte a coins_purchase.
-// Todo o resto é idêntico ao original v5.2.
+// v5.4 — SEGURANÇA E IDEMPOTÊNCIA.
+//
+// 1. AUTENTICAÇÃO. O Asaas envia o token configurado no painel
+//    no cabeçalho `asaas-access-token`. Sem conferir, qualquer
+//    pessoa com o id de um pagamento pendente mandava
+//    PAYMENT_CONFIRMED e recebia cristais, produto ou Galáxia
+//    Plus sem pagar. Sem o secret configurado, nega TUDO —
+//    falha fechada.
+//
+// 2. EFEITOS SÓ QUANDO CREDITA. A transação já barrava crédito
+//    duplo, mas notificação, métricas, FIRST_PURCHASE e a
+//    ATIVAÇÃO DA GALÁXIA PLUS rodavam de novo a cada reenvio
+//    (e o Asaas manda PAYMENT_CONFIRMED e PAYMENT_RECEIVED para
+//    o mesmo pagamento). Agora a transação devolve se creditou.
+//
+// 3. IDEMPOTÊNCIA POR EVENTO. A chave era só o payment.id:
+//    depois do pagamento, o estorno do MESMO pagamento caía em
+//    "Already processed" e o chargeback nunca rodava. Agora a
+//    chave é payment.id + evento.
+//
+// 4. ESTORNO SÓ DO QUE FOI PAGO. PAYMENT_DELETED de um Pix
+//    expirado chamava handleCoinsChargeback e tirava cristais
+//    que nunca foram creditados.
+//
+// 5. VALOR CONFERIDO. payment.value diferente de sale.amount
+//    gera alerta ao admin. NÃO bloqueia: o efeito dos cupons
+//    sobre `amount` ainda não foi auditado.
+//
+// v5.3: suporte a coins_purchase.
 // ============================================
 
 import * as functions  from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 import * as admin       from 'firebase-admin';
 import { FieldValue }   from 'firebase-admin/firestore';
+import { timingSafeEqual } from 'crypto';
 import { notifyUser }   from '../utils/notifyUser';
 import { notifyAdmins } from '../utils/notifyAdmins';
 import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
@@ -18,11 +47,52 @@ import { incrementMetrics }      from '../utils/incrementMetric';
 
 const db = admin.firestore();
 
+// Mesmo valor do campo "Token de autenticação" do webhook no
+// painel do Asaas. Configurar com:
+//   firebase functions:secrets:set ASAAS_WEBHOOK_TOKEN
+const ASAAS_WEBHOOK_TOKEN = defineSecret('ASAAS_WEBHOOK_TOKEN');
+
+// ids do Asaas são alfanuméricos com _ e -. Qualquer outra
+// coisa (como "/") quebraria o caminho do documento e faria o
+// Asaas reenviar para sempre.
+const PAYMENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
+
+/** Comparação em tempo constante: não vaza, pelo tempo de
+ *  resposta, quantos caracteres do token estão certos. */
+function isValidToken(received: string | undefined, expected: string): boolean {
+  if (!received || !expected) return false;
+  const a = Buffer.from(received);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Alerta, sem bloquear, quando o valor pago diverge do da venda. */
+function checkPaidAmount(paymentValue: unknown, saleAmount: unknown, saleId: string, paymentId: string): void {
+  const paid     = Number(paymentValue);
+  const expected = Number(saleAmount);
+  if (!Number.isFinite(paid) || !Number.isFinite(expected)) return;
+  if (Math.abs(paid - expected) <= 0.01) return;
+
+  console.warn('[onAsaasWebhook] Valor divergente:', { saleId, paymentId, paid, expected });
+  notifyAdmins({
+    title: '⚠️ Valor pago divergente',
+    body:  `sale ${saleId} — pago R$ ${paid.toFixed(2)}, esperado R$ ${expected.toFixed(2)}`,
+    type:  'promocao',
+  }).catch(() => {});
+}
+
 export const onAsaasWebhook = functions.onRequest(
-  { region: 'us-central1' },
+  { region: 'us-central1', secrets: [ASAAS_WEBHOOK_TOKEN] },
   async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).send('Method Not Allowed');
+      return;
+    }
+
+    // ── Autenticação ───────────────────────────────────────
+    if (!isValidToken(req.get('asaas-access-token'), ASAAS_WEBHOOK_TOKEN.value())) {
+      console.warn('[onAsaasWebhook] Token inválido ou ausente. IP:', req.ip);
+      res.status(401).send('Unauthorized');
       return;
     }
 
@@ -35,13 +105,22 @@ export const onAsaasWebhook = functions.onRequest(
     const payment   = event.payment;
     const eventType = event.event;
 
-    console.log('[onAsaasWebhook] Full payload:', JSON.stringify({ eventType, paymentId: payment?.id, externalRef: payment?.externalReference, value: payment?.value }));
+    if (typeof eventType !== 'string' ||
+        typeof payment.id !== 'string' ||
+        !PAYMENT_ID_PATTERN.test(payment.id)) {
+      res.status(400).send('Invalid payload');
+      return;
+    }
 
-    // ── Idempotência: verifica se já processamos este payment ──
-    const idempotencyRef  = db.collection('processedWebhooks').doc(payment.id);
+    console.log('[onAsaasWebhook] Payload:', JSON.stringify({ eventType, paymentId: payment.id, externalRef: payment.externalReference, value: payment.value }));
+
+    // ── Idempotência POR EVENTO ────────────────────────────
+    // payment.id sozinho descartava o estorno de um pagamento
+    // já processado.
+    const idempotencyRef  = db.collection('processedWebhooks').doc(`${payment.id}_${eventType}`);
     const idempotencySnap = await idempotencyRef.get();
     if (idempotencySnap.exists) {
-      console.log('[onAsaasWebhook] Already processed:', payment.id);
+      console.log('[onAsaasWebhook] Already processed:', payment.id, eventType);
       res.status(200).send('Already processed');
       return;
     }
@@ -68,14 +147,24 @@ export const onAsaasWebhook = functions.onRequest(
     // ── PAYMENT_RECEIVED ou PAYMENT_CONFIRMED ──────────────────
     if (eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED') {
 
+      checkPaidAmount(payment.value, sale.amount, saleId, payment.id);
+
       // ── v5.3: CRISTAIS PREMIUM ─────────────────────────────
       if (sale.type === 'coins_purchase') {
-        const uid        = sale.uid ?? buyerId;
-        const totalCoins = sale.totalCoins ?? 0;
+        const uid            = sale.uid ?? buyerId;
+        const isSubscription = sale.isSubscription === true;
+        // Galáxia Plus: os cristais são creditados SÓ pelo
+        // activateGalaxiaPlus, que cobre ativação e renovação.
+        // Creditar aqui também dava 600 em vez de 300. Esta
+        // transação continua marcando a venda como paga e
+        // registrando o pagamento — com zero cristais.
+        const totalCoins = isSubscription ? 0 : (sale.totalCoins ?? 0);
 
-        await db.runTransaction(async (t) => {
+        // true só quando ESTA execução creditou. Tudo o que vem
+        // depois da transação depende disso.
+        const credited = await db.runTransaction(async (t) => {
           const freshSale = await t.get(saleDoc.ref);
-          if (freshSale.data()?.status === 'paid') return; // idempotência
+          if (freshSale.data()?.status === 'paid') return false; // idempotência
 
           const walletRef  = db.collection('wallets').doc(uid);
           const walletSnap = await t.get(walletRef);
@@ -118,7 +207,7 @@ export const onAsaasWebhook = functions.onRequest(
           // economyLedger
           t.set(db.collection('economyLedger').doc(), {
             uid,
-            tipo:         'COINS_PURCHASE',
+            tipo:         isSubscription ? 'GALAXIA_PLUS_PAGAMENTO' : 'COINS_PURCHASE',
             saleId,
             packageId:    sale.packageId,
             coinsPremium: totalCoins,
@@ -162,7 +251,21 @@ export const onAsaasWebhook = functions.onRequest(
               asaasPaymentId: payment.id,
             },
           }, t);
+
+          return true;
         });
+
+        // Segunda confirmação do mesmo pagamento (CONFIRMED depois
+        // de RECEIVED, ou reenvio): nada a fazer além de registrar.
+        if (!credited) {
+          await idempotencyRef.set({
+            processedAt: FieldValue.serverTimestamp(),
+            saleId,
+            type:        'coins_purchase_duplicate',
+          });
+          res.status(200).send('Already credited');
+          return;
+        }
 
         // Métricas — compra de cristais é receita direta da
         // plataforma, sem comissão de criador.
@@ -174,12 +277,16 @@ export const onAsaasWebhook = functions.onRequest(
         }).catch(() => {});
 
         // Notificações — fire-and-forget
-        notifyUser({
-          userId: uid,
-          type:   'promocao',
-          title:  '✨ Cristais recebidos!',
-          body:   `+${totalCoins} Cristais Premium foram adicionados à sua carteira.`,
-        }).catch(() => {});
+        // Assinatura tem notificação própria, mais abaixo — esta
+        // diria "+0 Cristais".
+        if (!isSubscription) {
+          notifyUser({
+            userId: uid,
+            type:   'coins_purchased',
+            title:  '✨ Cristais recebidos!',
+            body:   `+${totalCoins} Cristais Premium foram adicionados à sua carteira.`,
+          }).catch(() => {});
+        }
 
         notifyAdmins({
           title: '💎 Nova compra de cristais',
@@ -198,9 +305,13 @@ export const onAsaasWebhook = functions.onRequest(
 
         // ── GALÁXIA PLUS ──
         //
-        // Roda DEPOIS do crédito dos cristais: a transação acima
-        // já somou os 300 premium do pacote, e esta ativa os 30
-        // dias, credita os Turbos e concede o badge.
+        // Roda DEPOIS de a venda ser marcada como paga. É ESTA
+        // chamada que credita os cristais da assinatura, além de
+        // ativar os 30 dias, os Turbos e o badge — a transação
+        // acima registra o pagamento com zero cristais.
+        //
+        // Só roda quando `credited` é true: um reenvio do Asaas
+        // não pode estender o acesso nem dar Turbos em dobro.
         //
         // Com await, e não fire-and-forget: se a ativação falhar,
         // a pessoa pagou e não recebeu o acesso. O erro precisa
@@ -216,7 +327,7 @@ export const onAsaasWebhook = functions.onRequest(
 
               notifyUser({
                 userId: uid,
-                type:   'promocao',
+                type:   'galaxia_plus_activated',
                 title:  activation.isFirstTime
                   ? '💜 Galáxia Plus ativada!'
                   : '💜 Galáxia Plus renovada!',
@@ -258,6 +369,11 @@ export const onAsaasWebhook = functions.onRequest(
       // Idempotência: verifica se sale já está paga
       if (sale.status === 'paid') {
         console.log('[onAsaasWebhook] Sale already paid:', saleId);
+        await idempotencyRef.set({
+          processedAt: FieldValue.serverTimestamp(),
+          saleId,
+          type:        'product_purchase_duplicate',
+        });
         res.status(200).send('Already paid');
         return;
       }
@@ -278,10 +394,10 @@ export const onAsaasWebhook = functions.onRequest(
       const platformFee      = parseFloat((saleAmount * platformFeeRate).toFixed(2));
       const sellerAmount     = parseFloat((saleAmount - platformFee).toFixed(2));
 
-      // Transaction principal
-      await db.runTransaction(async (t) => {
+      // Transaction principal — true só quando ESTA execução pagou.
+      const credited = await db.runTransaction(async (t) => {
         const freshSale = await t.get(saleDoc.ref);
-        if (freshSale.data()?.status === 'paid') return;
+        if (freshSale.data()?.status === 'paid') return false;
 
         // Busca wallet do seller
         const sellerWalletRef  = db.collection('creatorWallets').doc(sellerId);
@@ -345,7 +461,19 @@ export const onAsaasWebhook = functions.onRequest(
           timestamp:    FieldValue.serverTimestamp(),
           imutavel:     true,
         });
+
+        return true;
       });
+
+      if (!credited) {
+        await idempotencyRef.set({
+          processedAt: FieldValue.serverTimestamp(),
+          saleId,
+          type:        'product_purchase_duplicate',
+        });
+        res.status(200).send('Already paid');
+        return;
+      }
 
       // Métricas do painel admin — fire-and-forget.
       // O webhook processa TODA venda paga e nunca incrementava nada:
@@ -423,10 +551,13 @@ export const onAsaasWebhook = functions.onRequest(
 
     // ── PAYMENT_DELETED / PAYMENT_REFUNDED ─────────────────────
     if (eventType === 'PAYMENT_DELETED' || eventType === 'PAYMENT_REFUNDED') {
-      await db.runTransaction(async (t) => {
+      // Devolve o status ANTERIOR, ou null se já estava encerrada.
+      // O estorno de cristais depende dele: só se reverte o que
+      // foi pago.
+      const previousStatus = await db.runTransaction(async (t) => {
         const freshSale = await t.get(saleDoc.ref);
-        const currentStatus = freshSale.data()?.status;
-        if (currentStatus === 'refunded' || currentStatus === 'cancelled') return;
+        const currentStatus = freshSale.data()?.status as string | undefined;
+        if (currentStatus === 'refunded' || currentStatus === 'cancelled') return null;
 
         t.update(saleDoc.ref, {
           status:    eventType === 'PAYMENT_REFUNDED' ? 'refunded' : 'cancelled',
@@ -443,6 +574,8 @@ export const onAsaasWebhook = functions.onRequest(
             updatedAt: FieldValue.serverTimestamp(),
           });
         }
+
+        return currentStatus ?? 'unknown';
       });
 
       // ── Estorno de compra de cristais ──
@@ -451,8 +584,16 @@ export const onAsaasWebhook = functions.onRequest(
       // Cristais não são reembolsáveis, mas o chargeback chega pelo
       // banco de qualquer forma — sem isto, o usuário recebe o
       // dinheiro de volta E fica com os cristais.
-      if (sale.type === 'coins_purchase') {
+      //
+      // Só quando a venda ESTAVA paga: um Pix expirado ou
+      // cancelado antes do pagamento não creditou nada, e
+      // reverter criaria dívida sobre cristais que não existem.
+      if (sale.type === 'coins_purchase' && previousStatus === 'paid') {
         const cbUid   = sale.uid ?? buyerId;
+        // Galáxia Plus: sale.totalCoins guarda os mesmos 300 que o
+        // activateGalaxiaPlus creditou (GALAXIA_PLUS.CRYSTALS_ON_ACTIVATION),
+        // então o valor revertido bate. Turbos e dias NÃO são
+        // revogados aqui — pendência registrada.
         const cbCoins = sale.totalCoins ?? 0;
 
         try {

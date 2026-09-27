@@ -430,6 +430,11 @@ function AppContent() {
           navigationRef.current.navigate('RealProfile', { userId: data.sintoniaWith });
         }
         break;
+      // Compras de cristais e Galáxia Plus. Saíam como 'promocao',
+      // tipo que nenhum case tratava: o toque no push não levava
+      // a lugar nenhum.
+      case 'galaxia_plus_activated': navigationRef.current.navigate('GalaxiaPlus'); break;
+      case 'coins_purchased':        break;
       case 'sale_completed':
       case 'withdrawal_paid':
       case 'withdrawal_rejected': navigationRef.current.navigate('MyEarnings'); break;
@@ -489,6 +494,8 @@ function AppContent() {
         refund_processed:     { title: '↩️ Reembolso processado',  onPress: () => navigationRef.current?.navigate('MyPurchases') },
         withdrawal_paid:      { title: '💸 Saque pago!',           onPress: () => navigationRef.current?.navigate('MyEarnings') },
         withdrawal_rejected:  { title: '❌ Saque rejeitado',       onPress: () => navigationRef.current?.navigate('MyEarnings') },
+        coins_purchased:        { title: '✨ Cristais recebidos!', onPress: () => {} },
+        galaxia_plus_activated: { title: '💜 Galáxia Plus',        onPress: () => navigationRef.current?.navigate('GalaxiaPlus') },
         marketplace_banned:   { title: '🚫 Marketplace suspenso',  onPress: () => {} },
         marketplace_unbanned: { title: '✅ Acesso liberado',       onPress: () => {} },
       };

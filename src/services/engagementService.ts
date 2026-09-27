@@ -34,37 +34,15 @@ function newActionId(prefix: string): string {
 }
 
 // ------------------------------------------
-// Login diário — credita via Cloud Function
+// Login diário — REMOVIDO
 // ------------------------------------------
-export async function onAppOpen(userId: string): Promise<void> {
-  try {
-    await createNotification(
-      userId,
-      'sintonia',
-      'Bem-vindo de volta! Confira perfis compatíveis ✦'
-    );
-
-    const fn = httpsCallable<
-      { origin: string; amount: number; idempotencyKey: string },
-      { success: boolean; amount?: number }
-    >(functions, 'earnCoins');
-
-    await fn({
-      origin:         'LOGIN_DIARIO',
-      amount:         10,
-      idempotencyKey: getDailyKey(userId, 'LOGIN_DIARIO'),
-    });
-
-    console.log('✅ Login diário enviado para CF');
-  } catch (error: unknown) {
-    const e = error as { code?: string };
-    if (e?.code === 'already-exists') {
-      console.log('[engagementService] Login diário já resgatado hoje.');
-      return;
-    }
-    console.error('[engagementService] Erro no onAppOpen:', error);
-  }
-}
+// Creditava 10 cristais por dia pela callable earnCoins, com o
+// valor escolhido pelo APP — e a mesma callable aceitava crédito
+// PREMIUM sem teto. Somava 70 cristais por semana por fora da
+// recompensa diária (claimDailyReward), que já paga o login e
+// teve o teto cortado para 47 por ciclo justamente para não
+// desestimular a compra. Também criava uma notificação "Bem-vindo
+// de volta" a cada abertura do app.
 
 // ------------------------------------------
 // Conteúdo desbloqueado — registra XP e notificação

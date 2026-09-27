@@ -18,6 +18,7 @@ import {
   formatDueDate,
 }                               from '../utils/asaasClient';
 import { assertValidCpf }       from '../utils/validateCpf';
+import { GALAXIA_PLUS }         from '../config/economy';
 
 const db = admin.firestore();
 
@@ -76,12 +77,16 @@ const PACKAGES: Record<string, {
   // 19,99, e entregar o mesmo aqui — mais 4 Turbos, que valem
   // 480 cristais — faria ninguém comprar pacote avulso nunca
   // mais. A assinatura vende ACESSO, não moeda.
+  // Valores do economy.ts — a mesma fonte do activateGalaxiaPlus
+  // e da getGalaxiaPlusStatus. `total` aqui é só REGISTRO na
+  // venda (e o valor que o estorno reverte): quem credita é o
+  // activateGalaxiaPlus.
   galaxia_plus: {
     label:          'Galáxia Plus',
-    coinsPremium:   300,
+    coinsPremium:   GALAXIA_PLUS.CRYSTALS_ON_ACTIVATION,
     bonus:          0,
-    total:          300,
-    priceValue:     24.99,
+    total:          GALAXIA_PLUS.CRYSTALS_ON_ACTIVATION,
+    priceValue:     GALAXIA_PLUS.PRICE,
     isFirstPkg:     false,
     isSubscription: true,
   },

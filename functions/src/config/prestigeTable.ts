@@ -112,7 +112,7 @@ export const PRESTIGE_MARCOS: Record<string, PrestigeMarco> = {
   SEASON_3:         { id: 'SEASON_3',         label: '3 temporadas',          points: 200, category: 'SEASON',      repeatable: false, maxTimes: 1, hidden: true },
 
   // Conquistas especiais
-  ACH_FOUNDER:      { id: 'ACH_FOUNDER',      label: 'Conquista Fundador',    points: 500, category: 'ACHIEVEMENT', repeatable: false, maxTimes: 1  },
+  ACH_FOUNDER:      { id: 'ACH_FOUNDER',      label: 'Conquista Fundador',    points: 100, category: 'ACHIEVEMENT', repeatable: false, maxTimes: 1  },
   ACH_STREAK_30:    { id: 'ACH_STREAK_30',    label: 'Sequência 30 dias',     points: 100, category: 'ACHIEVEMENT', repeatable: false, maxTimes: 1  },
 };
 

@@ -225,7 +225,7 @@ export default function ProfileScreen() {
         {/* XP Card */}
         <TouchableOpacity
           style={styles.xpCard}
-          onPress={() => navigation.navigate('XP' as any)}
+          onPress={() => navigation.navigate('XP')}
           activeOpacity={0.85}
         >
           <View style={styles.xpCardHeader}>
@@ -257,56 +257,56 @@ export default function ProfileScreen() {
         {/* Gamificação */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🎮 Gamificação</Text>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('XP' as any)}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('XP')}>
             <Text style={styles.menuItemIcon}>⬆️</Text>
             <Text style={styles.menuItemText}>XP & Níveis</Text>
             <Text style={styles.menuItemSubtext}>Nível {xpStatus?.level ?? 1}</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Achievements' as any)}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Achievements')}>
             <Text style={styles.menuItemIcon}>🏆</Text>
             <Text style={styles.menuItemText}>Conquistas</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Vault' as any)}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Vault')}>
             <Text style={styles.menuItemIcon}>🗝️</Text>
             <Text style={styles.menuItemText}>Cofre de Sintonia</Text>
             <Text style={styles.menuItemSubtext}>{wallet?.vaultFragments ?? 0} fragmentos</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Missions' as any)}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Missions')}>
             <Text style={styles.menuItemIcon}>📋</Text>
             <Text style={styles.menuItemText}>Missões do Dia</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Ranking' as any)}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Ranking')}>
             <Text style={styles.menuItemIcon}>🏆</Text>
             <Text style={styles.menuItemText}>Ranking Semanal</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Prestige' as any)}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Prestige')}>
             <Text style={styles.menuItemIcon}>💜</Text>
             <Text style={styles.menuItemText}>Prestígio</Text>
             <Text style={styles.menuItemSubtext}>{prestigeData?.prestigeName ?? 'Desperto'}</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Frames' as any)}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Frames')}>
             <Text style={styles.menuItemIcon}>🖼️</Text>
             <Text style={styles.menuItemText}>Molduras</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Badges' as any)}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Badges')}>
             <Text style={styles.menuItemIcon}>✦</Text>
             <Text style={styles.menuItemText}>Badges</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Titles' as any)}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Titles')}>
             <Text style={styles.menuItemIcon}>🎖️</Text>
             <Text style={styles.menuItemText}>Títulos</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PremiumTools' as any)}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PremiumTools')}>
             <Text style={styles.menuItemIcon}>💎</Text>
             <Text style={styles.menuItemText}>Ferramentas Premium</Text>
             <Text style={styles.menuItemArrow}>›</Text>

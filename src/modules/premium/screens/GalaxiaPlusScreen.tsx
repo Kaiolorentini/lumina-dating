@@ -12,6 +12,18 @@
 // te deu 34 cristais" é fato. A renovação se decide olhando o
 // que a assinatura entregou, não o que ela promete.
 //
+// ── ATALHOS PARA USAR ──
+//
+// Benefício pago que a pessoa não sabe onde usar é benefício
+// que não existe. Cada linha ativa leva direto à tela onde ele
+// é gasto — e só aparece quando há o que usar.
+//
+// ── ESTADO DE ERRO ──
+//
+// Sem ele, uma falha da CF mostrava a tela bloqueada com
+// números vazios e "Ativar por R$ undefined". Se já havia
+// dados carregados, eles continuam na tela.
+//
 // ── ACESSO DE 30 DIAS, NÃO ASSINATURA ──
 //
 // Nada é cobrado automaticamente. Quando expira, os benefícios
@@ -28,7 +40,9 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import {
+  fetchGalaxiaPlusStatus, formatPrice, GalaxiaPlusStatus,
+} from '../services/galaxiaPlusService';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { RootStackParamList } from '../../../navigation/types';
 import { useAuth } from '../../../context/AuthContext';
@@ -62,21 +76,30 @@ interface Status {
   };
 }
 
+interface BenefitAction {
+  label:   string;
+  onPress: () => void;
+}
+
 export default function GalaxiaPlusScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
 
-  const [status,  setStatus]  = useState<Status | null>(null);
+  const [status,  setStatus]  = useState<GalaxiaPlusStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(false);
 
   const load = useCallback(async () => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      setLoading(false);
+      return;
+    }
+    setError(false);
     try {
-      const fn = httpsCallable<void, Status>(getFunctions(), 'getGalaxiaPlusStatus');
-      const res = await fn();
-      setStatus(res.data);
-    } catch (error) {
-      console.error('[GalaxiaPlus] load:', error);
+      setStatus(await fetchGalaxiaPlusStatus());
+    } catch (err) {
+      console.error('[GalaxiaPlus] load:', err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -85,6 +108,11 @@ export default function GalaxiaPlusScreen() {
   // Recarrega ao voltar da loja: a pessoa pode ter acabado de
   // comprar, e a tela precisa refletir isso.
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  function retry() {
+    setLoading(true);
+    load();
+  }
 
   if (loading) {
     return (
@@ -98,8 +126,42 @@ export default function GalaxiaPlusScreen() {
     );
   }
 
-  const active = status?.active ?? false;
-  const b      = status?.benefits;
+  // Sem dados para mostrar. Com dados de uma carga anterior, a
+  // falha ao voltar à tela não esconde o que já estava certo.
+  if (!status) {
+    return (
+      <View style={styles.container}>
+        <CrystalFieldBackground />
+        <Header title="Galáxia Plus" showBack showHome />
+        <View style={styles.center}>
+          <Text style={styles.errorIcon}>🌌</Text>
+          <Text style={styles.errorTitle}>
+            {error ? 'Não foi possível carregar' : 'Entre na sua conta'}
+          </Text>
+          <Text style={styles.errorText}>
+            {error
+              ? 'Verifique sua conexão e tente de novo.'
+              : 'É preciso estar logado para ver a Galáxia Plus.'}
+          </Text>
+          {error && (
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={retry}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Tentar carregar de novo"
+            >
+              <Text style={styles.retryText}>Tentar de novo</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  const active = status.active;
+  const b      = status.benefits;
+  const price  = formatPrice(status.price);
 
   return (
     <View style={styles.container}>
@@ -118,12 +180,12 @@ export default function GalaxiaPlusScreen() {
               <Text style={styles.heroIcon}>💜</Text>
               <Text style={styles.heroTitle}>Galáxia Plus ativa</Text>
               <View style={styles.daysBox}>
-                <Text style={styles.daysNumber}>{status?.daysLeft}</Text>
+                <Text style={styles.daysNumber}>{status.daysLeft}</Text>
                 <Text style={styles.daysLabel}>
-                  {status?.daysLeft === 1 ? 'dia restante' : 'dias restantes'}
+                  {status.daysLeft === 1 ? 'dia restante' : 'dias restantes'}
                 </Text>
               </View>
-              {status?.totalRenewals && status.totalRenewals > 1 ? (
+              {status.totalRenewals > 1 ? (
                 <Text style={styles.heroNote}>
                   {status.totalRenewals}ª vez com a gente 💜
                 </Text>
@@ -135,12 +197,12 @@ export default function GalaxiaPlusScreen() {
                   atrás desta tela. */}
               <Text style={styles.lockIcon}>🔒</Text>
               <Text style={styles.heroTitleLocked}>
-                {status?.everSubscribed ? 'Seu acesso expirou' : 'Galáxia Plus'}
+                {status.everSubscribed ? 'Seu acesso expirou' : 'Galáxia Plus'}
               </Text>
               <Text style={styles.heroSubLocked}>
-                {status?.everSubscribed
+                {status.everSubscribed
                   ? 'Os benefícios pararam, mas tudo que você recebeu continua seu.'
-                  : `${status?.duration ?? 30} dias de acesso por R$ ${status?.price?.toFixed(2).replace('.', ',') ?? '24,99'}`}
+                  : `${status.duration ?? 30} dias de acesso por R$ ${price ?? '24,99'}`}
               </Text>
             </>
           )}
@@ -152,11 +214,11 @@ export default function GalaxiaPlusScreen() {
             <Text style={styles.sectionTitle}>Ao ativar, você recebe na hora</Text>
             <View style={styles.grantsRow}>
               <View style={styles.grantBox}>
-                <Text style={styles.grantValue}>{status?.grants.crystals}</Text>
+                <Text style={styles.grantValue}>{status.grants.crystals}</Text>
                 <Text style={styles.grantLabel}>cristais{'\n'}premium</Text>
               </View>
               <View style={styles.grantBox}>
-                <Text style={styles.grantValue}>{status?.grants.turbos}</Text>
+                <Text style={styles.grantValue}>{status.grants.turbos}</Text>
                 <Text style={styles.grantLabel}>Turbos{'\n'}Sintonia</Text>
               </View>
               <View style={styles.grantBox}>
@@ -182,11 +244,14 @@ export default function GalaxiaPlusScreen() {
           title="Cartas do Destino"
           locked={!active}
           summary={active
-            ? `${b?.destinyCards.left} de ${b?.destinyCards.perDay} hoje`
-            : `${status?.grants ? 4 : 4} por dia, todas grátis`}
-          detail={active && (b?.destinyCards.totalDrawn ?? 0) > 0
-            ? `${b?.destinyCards.totalDrawn} cartas abertas desde que você assinou`
+            ? `${b.destinyCards.left} de ${b.destinyCards.perDay} hoje`
+            : `${b.destinyCards.perDay ?? 4} por dia, todas grátis`}
+          detail={active && b.destinyCards.totalDrawn > 0
+            ? `${b.destinyCards.totalDrawn} cartas abertas desde que você assinou`
             : 'Sem a assinatura é 1 grátis e 3 pagas por dia'}
+          action={active && b.destinyCards.left > 0
+            ? { label: 'Abrir', onPress: () => navigation.navigate('DestinyCard') }
+            : undefined}
         />
 
         <BenefitRow
@@ -194,21 +259,27 @@ export default function GalaxiaPlusScreen() {
           title="Turbos Sintonia"
           locked={!active}
           summary={active
-            ? `${b?.turbos.available} disponíveis`
+            ? `${b.turbos.available} disponíveis`
             : '4 na ativação'}
           detail={active
-            ? `${b?.turbos.used} de ${b?.turbos.granted} usados`
+            ? `${b.turbos.used} de ${b.turbos.granted} usados`
             : 'Cada um vale 120 cristais premium'}
+          action={active && b.turbos.available > 0
+            ? { label: 'Usar', onPress: () => navigation.navigate('PremiumTools') }
+            : undefined}
         />
 
         <BenefitRow
           icon="✨"
           title="Faísca turbinada"
           locked={!active}
-          summary={`+${b?.faisca.bonusPercent ?? 20}% em todo resgate`}
-          detail={active && (b?.faisca.crystalsEarned ?? 0) > 0
-            ? `Já te rendeu ${b?.faisca.crystalsEarned} cristais a mais`
+          summary={`+${b.faisca.bonusPercent ?? 20}% em todo resgate`}
+          detail={active && b.faisca.crystalsEarned > 0
+            ? `Já te rendeu ${b.faisca.crystalsEarned} cristais a mais`
             : 'O bônus entra em cada Faísca do dia'}
+          action={active
+            ? { label: 'Abrir', onPress: () => navigation.navigate('Faisca') }
+            : undefined}
         />
 
         <BenefitRow
@@ -216,9 +287,12 @@ export default function GalaxiaPlusScreen() {
           title="Ver quem visitou"
           locked={!active}
           summary="Sem gastar cristais"
-          detail={active && (b?.visitors.crystalsSaved ?? 0) > 0
-            ? `${b?.visitors.timesRevealed} revelações · ${b?.visitors.crystalsSaved} cristais economizados`
-            : `Normalmente custa ${b?.visitors.normalCost ?? 50} cristais cada vez`}
+          detail={active && b.visitors.crystalsSaved > 0
+            ? `${b.visitors.timesRevealed} revelações · ${b.visitors.crystalsSaved} cristais economizados`
+            : `Normalmente custa ${b.visitors.normalCost ?? 50} cristais cada vez`}
+          action={active
+            ? { label: 'Ver', onPress: () => navigation.navigate('Visitors') }
+            : undefined}
         />
 
         <BenefitRow
@@ -226,9 +300,12 @@ export default function GalaxiaPlusScreen() {
           title="Saque imediato do Cofre"
           locked={!active}
           summary="Sem as 48 horas de espera"
-          detail={active && (b?.vault.instantWithdraws ?? 0) > 0
-            ? `${b?.vault.instantWithdraws} saques sem espera · ${b?.vault.crystalsFromInstant} cristais`
+          detail={active && b.vault.instantWithdraws > 0
+            ? `${b.vault.instantWithdraws} saques sem espera · ${b.vault.crystalsFromInstant} cristais`
             : 'Fragmentos viram cristais na hora'}
+          action={active
+            ? { label: 'Abrir', onPress: () => navigation.navigate('Vault') }
+            : undefined}
         />
 
         {/* ── AÇÃO ── */}
@@ -236,11 +313,11 @@ export default function GalaxiaPlusScreen() {
           style={[styles.cta, active && styles.ctaRenew]}
           onPress={() => navigation.navigate('CrystalPacks')}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={active ? `Renovar por ${price} reais` : `Ativar por ${price} reais`}
         >
           <Text style={[styles.ctaText, active && styles.ctaTextRenew]}>
-            {active
-              ? `Renovar por R$ ${status?.price?.toFixed(2).replace('.', ',')}`
-              : `Ativar por R$ ${status?.price?.toFixed(2).replace('.', ',')}`}
+            {active ? `Renovar por R$ ${price}` : `Ativar por R$ ${price}`}
           </Text>
         </TouchableOpacity>
 
@@ -249,7 +326,7 @@ export default function GalaxiaPlusScreen() {
           <Text style={styles.rulesTitle}>Como funciona</Text>
           <Text style={styles.rulesText}>
             • Pagamento único por Pix. <Text style={styles.rulesStrong}>Nada é cobrado
-            automaticamente</Text> — quando os {status?.duration ?? 30} dias acabam, acaba.
+            automaticamente</Text> — quando os {status.duration ?? 30} dias acabam, acaba.
           </Text>
           <Text style={styles.rulesText}>
             • Renovar antes de expirar <Text style={styles.rulesStrong}>soma</Text> os
@@ -262,7 +339,7 @@ export default function GalaxiaPlusScreen() {
           </Text>
           <Text style={styles.rulesText}>
             • O badge Constelação Guia vem na primeira ativação. Nas
-            renovações você recebe {status?.grants.renewalFragments ?? 20} fragmentos
+            renovações você recebe {status.grants.renewalFragments ?? 20} fragmentos
             no lugar, já que o badge já é seu.
           </Text>
         </View>
@@ -274,9 +351,11 @@ export default function GalaxiaPlusScreen() {
 }
 
 function BenefitRow({
-  icon, title, summary, detail, locked,
+  icon, title, summary, detail, locked, action,
 }: {
   icon: string; title: string; summary: string; detail: string | false; locked: boolean;
+  /** Atalho para onde o benefício é usado. Só com assinatura ativa. */
+  action?: BenefitAction;
 }) {
   return (
     <View style={[styles.benefit, locked && styles.benefitLocked]}>
@@ -288,14 +367,31 @@ function BenefitRow({
         </Text>
         {detail ? <Text style={styles.benefitDetail}>{detail}</Text> : null}
       </View>
+      {action && !locked ? (
+        <TouchableOpacity
+          style={styles.benefitAction}
+          onPress={action.onPress}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`${action.label}: ${title}`}
+        >
+          <Text style={styles.benefitActionText}>{action.label} ›</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  center:    { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center:    { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.sm },
   scroll:    { paddingBottom: spacing.xl },
+
+  errorIcon:   { fontSize: 44, opacity: 0.8 },
+  errorTitle:  { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', textAlign: 'center' },
+  errorText:   { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center', lineHeight: 20 },
+  retryButton: { marginTop: spacing.md, borderWidth: 1, borderColor: '#B57BEE', borderRadius: borderRadius.full, paddingHorizontal: spacing.xl, paddingVertical: spacing.sm },
+  retryText:   { color: '#B57BEE', fontSize: fonts.sizes.md, fontWeight: 'bold' },
 
   hero: {
     margin: spacing.md,
@@ -334,6 +430,7 @@ const styles = StyleSheet.create({
 
   benefit: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
@@ -350,6 +447,14 @@ const styles = StyleSheet.create({
   benefitSummary:       { color: colors.gray, fontSize: fonts.sizes.sm },
   benefitSummaryActive: { color: '#B57BEE', fontWeight: 'bold' },
   benefitDetail:        { color: colors.gray, fontSize: fonts.sizes.xs, lineHeight: 16, marginTop: 2 },
+  benefitAction: {
+    borderWidth: 1,
+    borderColor: '#B57BEE',
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  benefitActionText: { color: '#B57BEE', fontSize: fonts.sizes.xs, fontWeight: 'bold' },
 
   cta: {
     marginHorizontal: spacing.md,

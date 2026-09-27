@@ -76,7 +76,11 @@ export { getSignedUrl }             from "./content/getSignedUrl";
 export { initWallet }               from "./economy/initWallet";
 
 // Cristais
-export { earnCoins }                from "./economy/earnCoins";
+// earnCoins REMOVIDA: callable em que o cliente escolhia origem,
+// valor e chave de idempotência — com 'GALAXIA_PLUS_MENSAL'
+// creditava cristais PREMIUM sem teto. Seu único uso (bônus de
+// login de 10 cristais) foi retirado: a recompensa diária
+// (claimDailyReward) já cumpre esse papel, calculada no servidor.
 export { spendCoins }               from "./economy/spendCoins";
 
 // Fragmentos (moeda secundária — v5.1)

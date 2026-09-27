@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { onAppOpen } from '../services/engagementService';
 
 // ============================================
 // HOOK DE ENGAJAMENTO
@@ -22,6 +21,6 @@ export function useEngagement() {
     if (!user || initialized.current) return;
     initialized.current = true;
 
-    onAppOpen(user.uid).catch(console.error);
+   
   }, [user]);
 }
