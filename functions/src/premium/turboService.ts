@@ -158,7 +158,8 @@ export const activateTurbo = functions.onCall(
         expiresAt:    admin.firestore.Timestamp.fromDate(expiresAt),
         status:       'ACTIVE',
         version:      PREMIUM_VERSIONS.TURBO,
-        cost:         PREMIUM_COSTS.TURBO,
+        cost,
+        fromSubscription: hasFreeTurbo,
         boostScore:   boostFinal,
       });
 
@@ -168,7 +169,8 @@ export const activateTurbo = functions.onCall(
         feature:     'TURBO',
         activatedAt: FieldValue.serverTimestamp(),
         expiresAt:   admin.firestore.Timestamp.fromDate(expiresAt),
-        cost:        PREMIUM_COSTS.TURBO,
+        cost,
+        fromSubscription: hasFreeTurbo,
         boostScore:  boostFinal,
         version:     PREMIUM_VERSIONS.TURBO,
       });
