@@ -28,6 +28,7 @@ import VisitsBanner           from '../../../components/VisitsBanner';
 import DestinyCardBanner      from '../../../components/DestinyCardBanner';
 import MissionsBanner         from '../../../components/MissionsBanner';
 import { useHomeData, HomeTab } from '../hooks/useHomeData';
+import { useMissionsSummary } from '../../engagement/hooks/useMissionsSummary';
 import { useAuth }            from '../../../context/AuthContext';
 import { useCoins }           from '../../../context/CoinsContext';
 import { getConexoesAceitas } from '../../profile/services/requestsService';
@@ -157,6 +158,7 @@ export default function HomeScreen({ navigation }: Props) {
   } = useHomeData();
 
   const { wallet } = useCoins();
+  const missionsSummary = useMissionsSummary(user?.uid);
   const coinsGratuitos = wallet?.coinsGratuitos ?? 0;
   const coinsPremium   = wallet?.coinsPremium   ?? 0;
 
@@ -243,8 +245,8 @@ export default function HomeScreen({ navigation }: Props) {
 
         {/* 2 — Missões */}
         <MissionsBanner
-          completedCount={0}
-          totalCount={3}
+          completedCount={missionsSummary.completed}
+          totalCount={missionsSummary.total}
           onPress={() => navigation.navigate('Missions' as any)}
         />
 

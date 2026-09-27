@@ -50,6 +50,7 @@ import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { GamificationIntegrationService } from '../GamificationIntegrationService';
 import { PrestigeService } from '../../engagement/prestigeService';
+import { MissionService } from './MissionService';
 
 const db = admin.firestore();
 
@@ -170,6 +171,11 @@ async function runSintoniaChain(uid: string, otherUid: string): Promise<void> {
   // onAchievementTrigger, que também escreve em users/{uid}.
   await markSintoniaAchievement(uid).catch((error) => {
     console.warn('[MatchService] Falha ao enfileirar conquista:', error);
+  });
+
+  // Missão especial "Criar uma nova Sintonia" — para cada lado.
+  await MissionService.recordEvent(uid, 'create_sintonia').catch((error) => {
+    console.warn('[MatchService] Falha ao registrar missão:', error);
   });
 }
 

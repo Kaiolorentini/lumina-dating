@@ -108,9 +108,10 @@ export const PRIVACY_2026_09_17_DRAFT: LegalDocument = {
       ],
     },
     {
-      heading: '11. Visitas a perfis',
+      heading: '11. Visitas e curtidas',
       body: [
         'A Lumina poderá registrar o perfil visitado; o usuário visitante; a data e hora; e informações técnicas necessárias.',
+        'Quando um usuário curte outro perfil, o usuário curtido é notificado. O texto da notificação não identifica quem curtiu, mas, ao abri-la, o usuário curtido pode visualizar o perfil de quem realizou a curtida. Curtidas vindas de usuários bloqueados não geram notificação.',
         'Esses dados poderão ser utilizados para fornecer a funcionalidade de visitantes e, quando disponível, permitir a revelação da identidade do visitante mediante recurso pago.',
       ],
     },
@@ -135,13 +136,13 @@ export const PRIVACY_2026_09_17_DRAFT: LegalDocument = {
       heading: '14. Notificações push',
       body: [
         'A Lumina poderá tratar token de notificação push; identificador do dispositivo; e informações necessárias ao envio. O serviço de notificações poderá utilizar infraestrutura da Expo e outros fornecedores tecnológicos necessários.',
-        'A finalidade é enviar mensagens; conexões; visitas; alertas de conta; segurança; transações; e outras notificações autorizadas.',
+        'A finalidade é enviar avisos de mensagens; conexões; curtidas recebidas; visitas; recompensas e liberação do Cofre de Sintonia; alertas de conta; segurança; transações; e outras notificações autorizadas.',
       ],
     },
     {
       heading: '15. Economia virtual e gamificação',
       body: [
-        'Poderão ser tratados dados sobre Cristais Gratuitos; Cristais Premium; Fragmentos; itens virtuais; assinaturas; XP; níveis; conquistas; ranking; streaks; e Árvore da Sintonia.',
+        'Poderão ser tratados dados sobre Cristais Gratuitos; Cristais Premium; Fragmentos; Cofre de Sintonia; itens virtuais; assinaturas; XP; níveis e recompensas de nível; missões diárias; conquistas; ranking; streaks; e Árvore da Sintonia.',
         'Esses dados são necessários para execução e gerenciamento das funcionalidades correspondentes.',
       ],
     },

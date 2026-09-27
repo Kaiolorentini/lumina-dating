@@ -1,21 +1,23 @@
 // ============================================
-// LUMINA — MISSIONS SCREEN v5.3
+// LUMINA — MISSIONS SCREEN v6.0
 // src/modules/engagement/screens/MissionsScreen.tsx
 //
-// v5.3: correção do bug onde handleMissionPress só navegava
-// sem nunca chamar progressMission. Lógica unificada:
-// — Missões de ação direta → progressMission()
-// — Missões de outra tela → navega (progresso registrado lá)
-// — Missões mistas → navega + toast orientando
+// v6.0 — AS MISSÕES SÃO REGISTRADAS PELO SERVIDOR.
+// Tocar numa missão leva à tela da ação; o progresso aparece
+// sozinho quando a ação é feita. Só "Perfil 100% completo" é
+// pedida daqui — o servidor lê o perfil e confere.
+//
+// Recarrega (sem piscar) ao voltar para a tela: o progresso pode
+// ter mudado em segundo plano.
 // ============================================
 
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
-import { useNavigation }   from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth }          from '../../../context/AuthContext';
 import { useCoins }         from '../../../context/CoinsContext';
@@ -26,30 +28,12 @@ import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../..
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-// Missões que têm progresso registrado NA OUTRA TELA ao executar a ação.
-// Aqui só navegamos — não chamamos progressMission.
-const NAVIGATE_ONLY_MISSIONS = new Set([
-  'open_destiny',   // registrado em DestinyCardScreen ao abrir
-  'claim_faisca',   // registrado em FaiscaScreen ao resgatar
-  'claim_daily',    // registrado em DailyRewardModal ao resgatar
-  'create_sintonia',// registrado pelo trigger de match
-  'receive_like',   // registrado pelo trigger de curtida recebida
-  'long_chat',      // registrado pelo trigger de mensagens
-  'send_message',   // registrado pelo trigger de mensagem enviada
-  'visit_profiles', // registrado pelo trigger de visita
-  'like_profiles',  // registrado pelo trigger de curtida
-]);
-
-// Destino de navegação por tipo de missão
-function getNavDestination(type: string): (() => void) | null {
-  return null; // resolvido dentro do componente com acesso ao navigation
-}
+// Única missão que o app pede — o servidor confere o perfil.
+const CLIENT_CLAIMABLE = new Set(['complete_profile']);
 
 // ── Card missão comum ──────────────────────────────────────────────
 function CommonMissionCard({
-  mission,
-  onPress,
-  loading,
+  mission, onPress, loading,
 }: {
   mission: CommonMission;
   onPress: () => void;
@@ -65,6 +49,8 @@ function CommonMissionCard({
       onPress={onPress}
       activeOpacity={mission.completed ? 1 : 0.85}
       disabled={mission.completed || loading}
+      accessibilityRole="button"
+      accessibilityLabel={`${mission.label}. ${mission.completed ? 'Concluída' : `${mission.progress} de ${mission.target}`}`}
     >
       <View style={[styles.cardIcon, mission.completed && styles.cardIconDone]}>
         <Text style={styles.cardIconText}>{mission.completed ? '✅' : mission.icon}</Text>
@@ -96,9 +82,7 @@ function CommonMissionCard({
 
 // ── Card missão especial ───────────────────────────────────────────
 function SpecialMissionCard({
-  mission,
-  onPress,
-  loading,
+  mission, onPress, loading,
 }: {
   mission: SpecialMission;
   onPress: () => void;
@@ -110,6 +94,8 @@ function SpecialMissionCard({
       onPress={onPress}
       activeOpacity={mission.completed ? 1 : 0.85}
       disabled={mission.completed || loading}
+      accessibilityRole="button"
+      accessibilityLabel={`Missão especial: ${mission.label}`}
     >
       <LinearGradient
         colors={mission.completed ? ['#0A2E0A', '#1B4E1B'] : ['#2A0A4E', '#4E1B7E']}
@@ -125,8 +111,13 @@ function SpecialMissionCard({
             </Text>
           </View>
           <View style={styles.specialReward}>
-            <Text style={styles.specialRewardValue}>+{mission.crystals}</Text>
-            <Text style={styles.specialRewardUnit}>✨ cristal</Text>
+            {loading
+              ? <ActivityIndicator color={COLORS.premium} />
+              : <>
+                  <Text style={styles.specialRewardValue}>+{mission.crystals}</Text>
+                  <Text style={styles.specialRewardUnit}>✨ cristal</Text>
+                </>
+            }
           </View>
         </View>
       </LinearGradient>
@@ -136,9 +127,9 @@ function SpecialMissionCard({
 
 // ── Tela principal ─────────────────────────────────────────────────
 export default function MissionsScreen() {
-  const navigation                = useNavigation<NavProp>();
-  const { user }                  = useAuth();
-  const { refreshWallet }         = useCoins();
+  const navigation        = useNavigation<NavProp>();
+  const { user }          = useAuth();
+  const { refreshWallet } = useCoins();
   const {
     data, loading, error,
     progressing, progressMission, refresh,
@@ -146,61 +137,61 @@ export default function MissionsScreen() {
 
   const [toast, setToast] = useState<string | null>(null);
 
+  // Recarrega ao VOLTAR (o primeiro foco já é coberto pelo hook).
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) { firstFocus.current = false; return; }
+      refresh(true);
+    }, [refresh]),
+  );
+
   function showToast(msg: string) {
     setToast(msg);
-    setTimeout(() => setToast(null), 2500);
+    setTimeout(() => setToast(null), 2800);
   }
 
-  // Destino de navegação por tipo — centralizado
   function navigateByType(type: string) {
     const map: Record<string, () => void> = {
       visit_profiles:   () => navigation.navigate('MainTabs'),
       like_profiles:    () => navigation.navigate('MainTabs'),
-      view_media:       () => navigation.navigate('MainTabs'),
       receive_like:     () => navigation.navigate('MainTabs'),
       send_message:     () => navigation.navigate('MainTabs', { screen: 'Sintonias' } as any),
       long_chat:        () => navigation.navigate('MainTabs', { screen: 'Sintonias' } as any),
-      create_sintonia:  () => navigation.navigate('MainTabs', { screen: 'Sintonias' } as any),
-      open_destiny:     () => navigation.navigate('DestinyCard' as any),
-      claim_faisca:     () => navigation.navigate('Faisca' as any),
+      create_sintonia:  () => navigation.navigate('MainTabs', { screen: 'Sintonize' } as any),
+      open_destiny:     () => navigation.navigate('DestinyCard'),
+      claim_faisca:     () => navigation.navigate('Faisca'),
       claim_daily:      () => navigation.navigate('MainTabs'),
-      update_profile:   () => navigation.navigate('ProfileSetup'),
+      buy_product:      () => navigation.navigate('MainTabs', { screen: 'Marketplace' } as any),
+      update_photo:     () => navigation.navigate('MainTabs', { screen: 'Profile' } as any),
       complete_profile: () => navigation.navigate('ProfileSetup'),
     };
     map[type]?.();
   }
 
-  // ── Lógica unificada de press ──────────────────────────────────
-  // Missões NAVIGATE_ONLY: progresso registrado na outra tela → só navega.
-  // Missões diretas (update_profile, complete_profile, view_media):
-  //   → chama progressMission E navega.
   async function handleMissionPress(missionId: string, type: string) {
-    if (NAVIGATE_ONLY_MISSIONS.has(type)) {
-      // Navega e mostra dica — progresso é automático ao executar a ação
+    // Automáticas: leva à ação; o servidor registra ao acontecer.
+    if (!CLIENT_CLAIMABLE.has(type)) {
       navigateByType(type);
       return;
     }
 
-    // Missões que registramos progresso aqui diretamente
     const result = await progressMission({ missionIdParam: missionId });
     if (!result) return;
 
-    if (result.duplicate) {
-      showToast('Já contamos essa ação hoje!');
+    if (result.error) {
+      showToast(result.error);
+      navigateByType(type);
       return;
     }
 
     if (result.completed) {
       await refreshWallet();
       if (result.fragments > 0) showToast(`+${result.fragments} 🔮 Fragmentos!`);
-      if (result.crystals  > 0) showToast(`+${result.crystals} ✨ Cristal(is) Gratuito(s)!`);
-    } else {
-      // Progrediu mas não concluiu ainda — navega para a ação
-      navigateByType(type);
+      if (result.crystals  > 0) showToast(`+${result.crystals} ✨ Cristal Gratuito!`);
     }
   }
 
-  // ── Loading ────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={styles.container}>
@@ -212,14 +203,13 @@ export default function MissionsScreen() {
     );
   }
 
-  // ── Error ──────────────────────────────────────────────────────
   if (error) {
     return (
       <View style={styles.container}>
         <Header title="Missões do Dia" showBack={true} showHome={true} />
         <View style={styles.center}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={refresh}>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => refresh()}>
             <Text style={styles.retryBtnText}>Tentar novamente</Text>
           </TouchableOpacity>
         </View>
@@ -237,7 +227,6 @@ export default function MissionsScreen() {
     <View style={styles.container}>
       <Header title="Missões do Dia" showBack={true} showHome={true} />
 
-      {/* Toast */}
       {toast && (
         <View style={styles.toast}>
           <Text style={styles.toastText}>{toast}</Text>
@@ -246,7 +235,6 @@ export default function MissionsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* Hero */}
         <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.hero}>
           <Text style={styles.heroTitle}>📋 Missões de hoje</Text>
           <Text style={styles.heroSub}>
@@ -275,7 +263,6 @@ export default function MissionsScreen() {
           </View>
         </LinearGradient>
 
-        {/* Missão especial */}
         {special && (
           <>
             <Text style={styles.sectionTitle}>Missão Especial do Dia</Text>
@@ -289,7 +276,6 @@ export default function MissionsScreen() {
           </>
         )}
 
-        {/* Missões comuns */}
         <Text style={styles.sectionTitle}>Missões Comuns</Text>
         <View style={styles.section}>
           {missions.map(mission => (
@@ -302,13 +288,12 @@ export default function MissionsScreen() {
           ))}
         </View>
 
-        {/* Info */}
         <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>🔮 Sobre os Fragmentos</Text>
+          <Text style={styles.infoTitle}>🔮 Como funciona</Text>
+          <Text style={styles.infoText}>• Toque numa missão para ir até a ação — o progresso conta sozinho</Text>
           <Text style={styles.infoText}>• Missões comuns pagam Fragmentos de Sintonia</Text>
-          <Text style={styles.infoText}>• Missão especial paga 1 Cristal Gratuito diretamente</Text>
-          <Text style={styles.infoText}>• 100 Fragmentos = 1 Cristal Gratuito (converter na tela de Cristais)</Text>
-          <Text style={styles.infoText}>• Fragmentos expiram 10% a cada 7 dias sem converter</Text>
+          <Text style={styles.infoText}>• A missão especial paga 1 Cristal Gratuito</Text>
+          <Text style={styles.infoText}>• 100 Fragmentos = 1 Cristal Gratuito (converta no Cofre ou em Fragmentos)</Text>
           <Text style={styles.infoText}>• Limite: 300 fragmentos/dia · 5 cristais/dia via missões</Text>
         </View>
 
@@ -323,13 +308,13 @@ const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: COLORS.background },
-  center:      { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.md },
+  center:      { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.md, padding: S.xl },
   errorText:   { color: COLORS.textMuted, fontSize: FONT_SIZE.md, textAlign: 'center' },
   retryBtn:    { backgroundColor: COLORS.primary, borderRadius: R.lg, paddingVertical: S.sm, paddingHorizontal: S.xl },
   retryBtnText: { color: COLORS.surface, fontWeight: FONT_WEIGHT.bold },
 
-  toast:     { position: 'absolute', top: 80, alignSelf: 'center', backgroundColor: COLORS.primary, borderRadius: R.full, paddingVertical: S.sm, paddingHorizontal: S.lg, zIndex: 999 },
-  toastText: { color: COLORS.surface, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.sm },
+  toast:     { position: 'absolute', top: 80, alignSelf: 'center', maxWidth: '90%', backgroundColor: COLORS.primary, borderRadius: R.full, paddingVertical: S.sm, paddingHorizontal: S.lg, zIndex: 999 },
+  toastText: { color: COLORS.surface, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.sm, textAlign: 'center' },
 
   hero:         { margin: S.md, borderRadius: R.xl, padding: S.xl, gap: S.sm, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
   heroTitle:    { color: COLORS.surface, fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.extrabold },

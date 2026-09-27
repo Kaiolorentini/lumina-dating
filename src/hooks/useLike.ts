@@ -15,7 +15,7 @@
 
 import { useState, useCallback } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { todayBrUnderscore } from '../utils/dateBr';
+
 
 const functions = getFunctions();
 
@@ -25,18 +25,14 @@ type CreateMatchReq = { targetUid: string };
 type CreateMatchRes = { success: boolean; isMutual: boolean; alreadyLiked: boolean };
 
 type ProfileLikeReq = { likerUid: string; targetUid: string };
-type MissionReq     = { missionIdParam: string; targetUid?: string };
+
 
 export interface LikeResult {
   ok:       boolean;
   isMutual: boolean;
 }
 
-function notifyMission(missionType: string, targetUid?: string): void {
-  const missionId = `daily_${todayBrUnderscore()}_${missionType}`;
-  const fn = httpsCallable<MissionReq, unknown>(functions, 'progressMission');
-  fn({ missionIdParam: missionId, targetUid }).catch(() => { /* silencioso */ });
-}
+
 
 export function useLike(likerUid: string | undefined) {
   const [liking, setLiking] = useState(false);
@@ -65,7 +61,8 @@ export function useLike(likerUid: string | undefined) {
           console.warn('[useLike] onProfileLike falhou:', err);
         });
 
-        notifyMission('like_profiles', targetUid);
+        // Missão "Curtir 3 perfis": registrada pelo onCreateMatch,
+        // no servidor, quando a curtida é nova.
       }
 
       return { ok: true, isMutual: result.data.isMutual };

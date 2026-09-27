@@ -73,10 +73,11 @@ export function applyLevelRewards(
     walletUpdate.vaultFragments        = FieldValue.increment(totalFragments);
     walletUpdate.vaultLastContribution = FieldValue.serverTimestamp();
 
-    // Mesma regra do VaultService: sem ciclo ativo, abre um.
-    const needsNewCycle = !wallet.vaultUnlockAt || Date.now() > wallet.vaultUnlockAt.getTime();
-    if (needsNewCycle) {
-      walletUpdate.vaultUnlockAt = Timestamp.fromDate(new Date(Date.now() + VAULT_CYCLE_MS));
+    // Mesma regra do VaultService: ciclo novo só sem ciclo aberto.
+    // Um ciclo vencido continua liberado até o saque.
+    if (!wallet.vaultUnlockAt) {
+      walletUpdate.vaultUnlockAt            = Timestamp.fromDate(new Date(Date.now() + VAULT_CYCLE_MS));
+      walletUpdate.vaultUnlockNotifyPending = true;
     }
   }
 

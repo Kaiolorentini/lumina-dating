@@ -96,9 +96,13 @@ export const getGalaxiaPlusStatus = onCall(
           timesRevealed:  (sub.visitorsRevealed as number) ?? 0,
           crystalsSaved:  (sub.crystalsSavedTotal as number) ?? 0,
         },
+        // Desde a v6.0 do Cofre, o saque move FRAGMENTOS para a
+        // carteira (withdrawFromVault grava fragmentsFromInstant).
+        // crystalsFromInstant fica pelo histórico e pelo app antigo.
         vault: {
-          instantWithdraws:    (sub.instantWithdraws as number) ?? 0,
-          crystalsFromInstant: (sub.crystalsFromInstant as number) ?? 0,
+          instantWithdraws:     (sub.instantWithdraws     as number) ?? 0,
+          fragmentsFromInstant: (sub.fragmentsFromInstant as number) ?? 0,
+          crystalsFromInstant:  (sub.crystalsFromInstant  as number) ?? 0,
         },
       },
     };

@@ -36,14 +36,7 @@ type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 const fns = getFunctions();
 
-// Fire-and-forget: registra progresso da missão send_message
-function notifyMissionSendMessage(messageLength: number) {
-  const missionId = `daily_${todayBrUnderscore()}_send_message`;
-  httpsCallable(fns, 'progressMission')({
-    missionIdParam: missionId,
-    messageLength,
-  }).catch(() => { /* silencioso */ });
-}
+
 
 function TypingDots() {
   const dot1 = useRef(new Animated.Value(0.3)).current;
@@ -161,15 +154,9 @@ export default function UserChatScreen() {
   async function handleSend() {
     const text = inputText.trim();
     await sendUserMessage();
-    if (text.length >= 10 && user?.uid) {
-      notifyMissionSendMessage(text.length);
-
-      // v5.3 — conquista START_CONVO (fire-and-forget)
-      httpsCallable(fns, 'checkAchievements')({
-        action:       'START_CONVO',
-        currentValue: 1,
-      }).catch(() => {});
-    }
+    // Missões de mensagem: registradas pelo gatilho
+    // onChatMessageCreated, a partir da mensagem gravada.
+    // A conquista START_CONVO vem do earnXP, no servidor.
   }
 
   async function handleStartRecording() {

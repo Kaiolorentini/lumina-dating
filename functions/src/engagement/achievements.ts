@@ -1,72 +1,35 @@
 ﻿// ============================================
-// LUMINA — ACHIEVEMENTS SYSTEM v5.3
+// LUMINA — ACHIEVEMENTS SYSTEM v5.4
 // functions/src/engagement/achievements.ts
 //
-// v5.3: corrige bug de currentValue não incrementar.
-// Actions incrementais (visit, mission, chat, sintonia, vault)
-// acumulam progress[achId] + 1 no servidor.
-// Actions absolutas (streak, tree) usam currentValue direto.
+// v5.4 — checkAchievements REMOVIDA (CRÍTICO).
+//
+// Era callable e repassava ao AchievementProcessor a AÇÃO e o
+// VALOR enviados pelo app. Ações absolutas (sequência, árvore)
+// usam o valor direto: um app modificado mandava
+// TREE_EVOLUTION = 4 ou STREAK_UPDATE = 30 e desbloqueava
+// conquistas com fragmentos, badges, molduras e prestígio.
+// Ações incrementais somavam +1 por chamada, sem limite.
+//
+// Conquistas entram SÓ pelo servidor: cada CF grava em
+// achievementTriggers no ponto em que o evento acontece, e o
+// onAchievementTrigger processa. Os três chamadores do app
+// eram duplicados ou passaram para o servidor:
+//   STREAK_UPDATE → claimDailyReward (já registrava, com dias reais)
+//   START_CONVO   → earnXP (uma vez por par, conversa verificada)
+//   VAULT_WITHDRAW→ withdrawFromVault (já registrava)
+//
+// v5.3: actions incrementais acumulam progress[achId] + 1 no
+// servidor; actions absolutas usam currentValue direto.
 // ============================================
 
 import * as functions from 'firebase-functions/v2/https';
 import * as scheduler from 'firebase-functions/v2/scheduler';
 import * as admin     from 'firebase-admin';
-import { ACHIEVEMENTS_CATALOG, ACHIEVEMENTS_BY_ACTION } from '../config/achievementsCatalog';
+import { ACHIEVEMENTS_CATALOG } from '../config/achievementsCatalog';
 import { COLLECTIONS_CATALOG } from '../config/collectionsCatalog';
-import { LegacyShadowOrchestrator } from '../gamification/compatibility/LegacyShadowOrchestrator';
-import { CompareParams } from '../gamification/compatibility/ICompatibilityAdapter';
-import { AchievementProcessor } from '../gamification/services/AchievementProcessor';
 
 const db = admin.firestore();
-
-function newEventId(): string {
-  return `ach_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-}
-
-// ── Verifica e desbloqueia conquistas por ação ──
-export const checkAchievements = functions.onCall(
-  { region: 'us-central1' },
-  async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
-
-    const { action, currentValue } = request.data as { action: string; currentValue: number };
-
-       const relatedIds = ACHIEVEMENTS_BY_ACTION[action] ?? [];
-    if (relatedIds.length === 0) return { unlocked: [] };
-
-    // Estado anterior, capturado antes do processamento — o Shadow
-    // compara contra ele.
-    const userDoc  = await db.collection('users').doc(uid).get();
-    const userData = userDoc.data() ?? {};
-    const preUnlocked: string[]              = userData.achievements?.unlocked ?? [];
-    const preProgress: Record<string, number> = userData.achievements?.progress ?? {};
-
-    // FASE 2G: toda a lógica vive no AchievementProcessor. Esta CF
-    // é apenas a porta de entrada do cliente; o onAchievementTrigger
-    // é a porta das CFs internas. Ambas chamam o mesmo núcleo.
-    const newlyUnlocked = await AchievementProcessor.processAction(uid, action, currentValue);
-
-    // Shadow — fire-and-forget
-    const eventId = newEventId();
-    const params: CompareParams = {
-      uid, eventId, legacyActionKey: action,
-      legacyResult: { unlockedIds: newlyUnlocked },
-      calculatorInput: {
-        actionKey:       action,
-        currentUnlocked: preUnlocked,
-        currentProgress: preProgress,
-      },
-    };
-    LegacyShadowOrchestrator
-      .dispatchComparisons(action, { ACHIEVEMENT: params })
-      .catch(() => {});
-
-    return { unlocked: newlyUnlocked };
-  }
-);
-
-
 
 // ── Status de conquistas ── (inalterada)
 export const getAchievementsStatus = functions.onCall(

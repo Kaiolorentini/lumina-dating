@@ -11,10 +11,10 @@ import {
   TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+
 import { useDailyReward } from '../modules/engagement/hooks/useDailyReward';
 import { useCoins }       from '../context/CoinsContext';
-import { todayBrUnderscore } from '../utils/dateBr';
+
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../theme/tokens';
 
 interface Props {
@@ -23,7 +23,7 @@ interface Props {
   onClose: () => void;
 }
 
-const fns = getFunctions();
+
 
 const STREAK_ICONS: Record<number, string> = {
   1: '✨', 2: '✨', 3: '⚡', 4: '⚡', 5: '💜', 6: '💜', 7: '👑',
@@ -42,17 +42,14 @@ export default function DailyRewardModal({ uid, visible, onClose }: Props) {
       setClaimed(true);
       await refreshWallet();
 
-      // v5.2 — registra progresso da missão claim_daily (fire-and-forget)
-      const missionId = `daily_${todayBrUnderscore()}_claim_daily`;
-      httpsCallable(fns, 'progressMission')({ missionIdParam: missionId }).catch(() => {});
+      // Missão "Resgatar recompensa diária": registrada pelo
+      // claimDailyReward, no servidor.
 
-      // v5.3 — conquista STREAK_UPDATE (fire-and-forget)
-      if (res.currentStreak >= 3) {
-        httpsCallable(fns, 'checkAchievements')({
-          action:       'STREAK_UPDATE',
-          currentValue: res.currentStreak,
-        }).catch(() => {});
-      }
+      // A conquista de sequência é registrada pelo próprio
+      // claimDailyReward, no servidor, com os dias REAIS
+      // (daysStreak). A chamada que havia aqui enviava o
+      // currentStreak, que para em 7, pelo checkAchievements —
+      // callable removida.
     }
   }
 

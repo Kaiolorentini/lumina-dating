@@ -59,9 +59,9 @@ export default function NotificationsScreen() {
   const [triggerModal, setTriggerModal] = useState<{
     visible:    boolean;
     type:       TriggerType;
-    sintonia?:  number;
-    visitorId?: string;
-    fragments?: number;
+    sintonia?:       number;
+    notificationId?: string;
+    fragments?:      number;
   }>({
     visible:   false,
     type:      'quase_sintonia',
@@ -76,9 +76,11 @@ export default function NotificationsScreen() {
       setTriggerModal({
         visible:   true,
         type:      item.type as TriggerType,
-        sintonia:  item.dados?.sintonia,
-        visitorId: item.dados?.visitorId,
-        fragments: item.dados?.fragments,
+        sintonia:       item.dados?.sintonia,
+        // Só o id da notificação: quem visitou é revelado pelo
+        // servidor (revealTrigger), nunca lido daqui.
+        notificationId: item.id,
+        fragments:      item.dados?.fragments,
       });
       return;
     }
@@ -109,6 +111,9 @@ export default function NotificationsScreen() {
       }
       case 'galaxia_plus_activated':
         navigation.navigate('GalaxiaPlus');
+        break;
+      case 'cofre_pronto':
+        navigation.navigate('Vault');
         break;
       // Gamificação: cada aviso leva à tela onde o ganho aparece.
       case 'level_up':
@@ -214,11 +219,12 @@ export default function NotificationsScreen() {
         visible={triggerModal.visible}
         type={triggerModal.type}
         sintonia={triggerModal.sintonia}
-        visitorId={triggerModal.visitorId}
+        notificationId={triggerModal.notificationId}
         fragments={triggerModal.fragments}
         onClose={() => setTriggerModal(prev => ({ ...prev, visible: false }))}
         onNavigate={(userId) => navigation.navigate('RealProfile', { userId })}
         onGoToStore={() => navigation.navigate('MainTabs', { screen: 'Store' } as any)}
+        onOpenVault={() => navigation.navigate('Vault')}
       />
     </View>
   );

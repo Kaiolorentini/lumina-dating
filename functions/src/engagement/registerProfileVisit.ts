@@ -33,6 +33,7 @@ import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { todayBr }   from '../utils/dateBr';
+import { MissionService } from '../gamification/services/MissionService';
 const db = admin.firestore();
 
 // Janela de deduplicação: revisitas dentro deste intervalo não
@@ -144,6 +145,11 @@ export const registerProfileVisit = functions.onCall(
 
     // onProfileVisit (emotionalTriggers.ts) dispara a partir da
     // criação em profile_visits — nada a fazer aqui.
+
+    // Missão "Visitar 3 perfis": só visita realmente registrada
+    // (fora da janela de 5 min, sem bloqueio, perfil existente).
+    await MissionService.recordEvent(visitorId, 'visit_profiles', profileId)
+      .catch(error => console.warn('[registerProfileVisit] missão falhou:', error));
 
     return { registered: true };
   },

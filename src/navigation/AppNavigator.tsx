@@ -435,6 +435,8 @@ function AppContent() {
       // a lugar nenhum.
       case 'galaxia_plus_activated': navigationRef.current.navigate('GalaxiaPlus'); break;
       case 'coins_purchased':        break;
+      case 'cofre_pronto':           navigationRef.current.navigate('Vault'); break;
+      case 'galaxia_turbos_expiring': navigationRef.current.navigate('GalaxiaPlus'); break;
       // Curtida recebida: o texto do push é anônimo (tela
       // bloqueada); o toque revela quem curtiu.
       case 'like_received':
@@ -495,6 +497,8 @@ function AppContent() {
         request:              { title: 'Nova solicitação',         onPress: () => navigationRef.current?.navigate('Requests') },
         sintonia_criada:      { title: '✦ Sintonia!',              onPress: () => { if (data.sintoniaWith) navigationRef.current?.navigate('RealProfile', { userId: data.sintoniaWith }); } },
         like_received:        { title: '✦ Alguém sintonizou com você', onPress: () => { if (data.likedBy) navigationRef.current?.navigate('RealProfile', { userId: data.likedBy }); } },
+        cofre_pronto:         { title: '🗝️ Seu Cofre está liberado',   onPress: () => navigationRef.current?.navigate('Vault') },
+        galaxia_turbos_expiring: { title: '⚡ Seus Turbos expiram em breve', onPress: () => navigationRef.current?.navigate('GalaxiaPlus') },
         sale_completed:       { title: '💰 Venda realizada!',      onPress: () => navigationRef.current?.navigate('MyEarnings') },
         purchase_confirmed:   { title: '📦 Compra confirmada!',    onPress: () => navigationRef.current?.navigate('MyPurchases') },
         creator_approved:     { title: '🎨 Você é um Criador!',    onPress: () => navigationRef.current?.navigate('MyProducts') },

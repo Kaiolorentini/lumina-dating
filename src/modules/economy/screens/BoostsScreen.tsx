@@ -1,19 +1,23 @@
 // ============================================
-// LUMINA — BOOSTS SCREEN v1.0
+// LUMINA — BOOSTS SCREEN v1.1
 // src/modules/economy/screens/BoostsScreen.tsx
 //
-// FASE 7 — recorte do Mercado Cósmico do StoreScreen.
+// v1.1 (27/09):
+// - Sintonia Perdida REMOVIDA da loja (decisão de produto).
+// - Destaque Regional só com Cristais Premium.
+// - Texto do Turbo corrigido: prometia "1.8×", que não existe
+//   no código. Até a Fase 2 (Turbo no Sintonize e no Em Alta),
+//   a tela descreve exatamente o que ele faz.
 //
 // Cada item tem uma ACTION, e ela existe para não cobrar por
 // efeito inexistente:
 //   TURBO / FERTILIZER / IMPULSO / DESTAQUE → CF própria que
 //     debita E ativa. Usar spendCoins aqui cobraria sem ativar.
 //   VISITORS → tela própria, com o número de visitas à vista
-//   SPEND    → spendCoins (só debita; exige efeito implementado)
 //   SOON     → sem efeito no backend, card bloqueado
 // ============================================
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator, Alert,
@@ -30,39 +34,66 @@ import { usePremiumTools }                 from '../../premium/hooks/usePremiumT
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-type BoostAction = 'TURBO' | 'FERTILIZER' | 'IMPULSO' | 'DESTAQUE' | 'VISITORS' | 'SPEND' | 'SOON';
+type BoostAction = 'TURBO' | 'FERTILIZER' | 'IMPULSO' | 'DESTAQUE' | 'VISITORS' | 'SOON';
 
 const BOOSTS: {
   key: SpendableFeature; icon: string; label: string; sub: string;
   cost: number; action: BoostAction;
 }[] = [
-  { key: 'REVEAL_VISITORS',         icon: '👁️', label: 'Ver Visitantes',    sub: 'Descubra quem visitou seu perfil', cost: 50,  action: 'VISITORS' },
-  { key: 'IMPULSO_PERFIL',          icon: '🚀', label: 'Impulso de Perfil', sub: 'Mais visibilidade por 30 min',     cost: 80,  action: 'IMPULSO' },
-  { key: 'TURBO_SINTONIA',          icon: '⚡', label: 'Turbo Sintonia',    sub: 'Impulso 1.8× por 30 min',          cost: 120, action: 'TURBO' },
-  { key: 'DESTAQUE_REGIONAL',       icon: '📍', label: 'Destaque Regional', sub: 'Destaque na sua região por 4h',    cost: 150, action: 'DESTAQUE' },
-  { key: 'FERTILIZANTE_SINTONIA',   icon: '🌱', label: 'Fertilizante',      sub: '+50% XP da Árvore por 24h',        cost: 80,  action: 'FERTILIZER' },
-  { key: 'REVEAL_QUASE_SINTONIA',   icon: '💜', label: 'Quase Sintonia',    sub: 'Revele quem quase deu match',      cost: 25,  action: 'SOON' },
-  { key: 'SEGUNDA_CHANCE',          icon: '🔄', label: 'Segunda Chance',    sub: 'Reveja um perfil descartado',      cost: 15,  action: 'SOON' },
-  { key: 'REVEAL_SINTONIA_PERDIDA', icon: '💔', label: 'Sintonia Perdida',  sub: 'Recupere uma conexão perdida',     cost: 35,  action: 'SOON' },
+  { key: 'REVEAL_VISITORS',       icon: '👁️', label: 'Ver Visitantes',    sub: 'Descubra quem visitou seu perfil', cost: 50,  action: 'VISITORS' },
+  { key: 'IMPULSO_PERFIL',        icon: '🚀', label: 'Impulso de Perfil', sub: 'Topo da Home por 30 min',          cost: 80,  action: 'IMPULSO' },
+  { key: 'TURBO_SINTONIA',        icon: '⚡', label: 'Turbo Sintonia',    sub: 'Topo da Home por 30 min',          cost: 120, action: 'TURBO' },
+  { key: 'DESTAQUE_REGIONAL',     icon: '📍', label: 'Destaque Regional', sub: 'Topo da Home na sua cidade por 4h', cost: 150, action: 'DESTAQUE' },
+  { key: 'FERTILIZANTE_SINTONIA', icon: '🌱', label: 'Fertilizante',      sub: '+50% XP da Árvore por 24h',        cost: 80,  action: 'FERTILIZER' },
+  { key: 'REVEAL_QUASE_SINTONIA', icon: '💜', label: 'Quase Sintonia',    sub: 'Quem visitou você com alta Sintonia', cost: 25, action: 'SOON' },
+  { key: 'SEGUNDA_CHANCE',        icon: '🔄', label: 'Segunda Chance',    sub: 'Reveja um perfil descartado',      cost: 15,  action: 'SOON' },
 ];
 
 export default function BoostsScreen() {
-  const navigation        = useNavigation<NavProp>();
-  const { user }          = useAuth();
-  const { wallet, spend } = useCoins();
+  const navigation = useNavigation<NavProp>();
+  const { user }   = useAuth();
+  const { wallet } = useCoins();
 
   const coinsGratuitos = wallet?.coinsGratuitos ?? 0;
   const coinsPremium   = wallet?.coinsPremium   ?? 0;
-
-  const [spending, setSpending] = useState<string | null>(null);
 
   const {
     fertilizer, turbo, impulso, destaque, activating,
     activateFertilizer, activateTurbo, activateImpulso, activateDestaqueRegional,
   } = usePremiumTools(user?.uid);
 
-  async function handleBoost(item: typeof BOOSTS[number]) {
-    if (!user?.uid || spending || activating) return;
+  function confirmActivation(
+    title: string,
+    message: string,
+    activate: () => Promise<{ ok: boolean; error?: string }>,
+    successTitle: string,
+    successMessage: string,
+  ) {
+    Alert.alert(title, message, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Ativar',
+        onPress: async () => {
+          const res = await activate();
+          if (res.ok) {
+            Alert.alert(successTitle, successMessage);
+          } else if (res.error) {
+            Alert.alert('Não foi possível ativar', res.error);
+          }
+        },
+      },
+    ]);
+  }
+
+  function premiumShort(label: string, cost: number): boolean {
+    if (coinsPremium >= cost) return false;
+    Alert.alert('💎 Cristais Premium insuficientes',
+      `${label} custa ${cost} Cristais Premium. Você tem ${coinsPremium}.`);
+    return true;
+  }
+
+  function handleBoost(item: typeof BOOSTS[number]) {
+    if (!user?.uid || activating) return;
 
     if (item.action === 'SOON') {
       Alert.alert('Em breve', `${item.label} está sendo finalizado e chega logo.`);
@@ -72,7 +103,7 @@ export default function BoostsScreen() {
     // A compra acontece na própria tela, com o número de visitas
     // à vista — decisão informada em vez de compra às cegas.
     if (item.action === 'VISITORS') {
-      navigation.navigate('Visitors' as any);
+      navigation.navigate('Visitors');
       return;
     }
 
@@ -85,25 +116,14 @@ export default function BoostsScreen() {
         Alert.alert('Aguarde', 'Há um intervalo de 5 minutos entre ativações.');
         return;
       }
-      if (coinsPremium < item.cost) {
-        Alert.alert('💎 Cristais Premium insuficientes',
-          `Turbo custa ${item.cost} Premium. Você tem ${coinsPremium}.`);
-        return;
-      }
-      Alert.alert(item.label, `Ativar por ${item.cost} Cristais Premium?`, [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Ativar',
-          onPress: async () => {
-            const res = await activateTurbo();
-            if (res.ok) {
-              Alert.alert('⚡ Turbo ativado!', 'Seu perfil terá mais visibilidade nos próximos 30 minutos.');
-            } else if (res.error) {
-              Alert.alert('Não foi possível ativar', res.error);
-            }
-          },
-        },
-      ]);
+      if (premiumShort(item.label, item.cost)) return;
+      confirmActivation(
+        item.label,
+        `Ativar por ${item.cost} Cristais Premium?`,
+        activateTurbo,
+        '⚡ Turbo ativado!',
+        'Seu perfil fica no topo da Home pelos próximos 30 minutos.',
+      );
       return;
     }
 
@@ -112,25 +132,14 @@ export default function BoostsScreen() {
         Alert.alert('Fertilizante já ativo', 'Aguarde o atual terminar.');
         return;
       }
-      if (coinsPremium < item.cost) {
-        Alert.alert('💎 Cristais Premium insuficientes',
-          `Fertilizante custa ${item.cost} Premium. Você tem ${coinsPremium}.`);
-        return;
-      }
-      Alert.alert(item.label, `Ativar por ${item.cost} Cristais Premium?`, [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Ativar',
-          onPress: async () => {
-            const res = await activateFertilizer();
-            if (res.ok) {
-              Alert.alert('🌱 Fertilizante ativado!', 'Você ganha +50% de XP na Árvore pelas próximas 24 horas.');
-            } else if (res.error) {
-              Alert.alert('Não foi possível ativar', res.error);
-            }
-          },
-        },
-      ]);
+      if (premiumShort(item.label, item.cost)) return;
+      confirmActivation(
+        item.label,
+        `Ativar por ${item.cost} Cristais Premium?`,
+        activateFertilizer,
+        '🌱 Fertilizante ativado!',
+        'Você ganha +50% de XP na Árvore pelas próximas 24 horas.',
+      );
       return;
     }
 
@@ -143,26 +152,19 @@ export default function BoostsScreen() {
         Alert.alert('Aguarde', 'Há um intervalo de 5 minutos entre ativações.');
         return;
       }
-      // Impulso aceita gratuitos + premium (R19)
+      // Impulso aceita gratuitos + premium (porta de entrada).
       if ((coinsGratuitos + coinsPremium) < item.cost) {
         Alert.alert('Saldo insuficiente',
           `Impulso custa ${item.cost} cristais. Você tem ${coinsGratuitos + coinsPremium}.`);
         return;
       }
-      Alert.alert(item.label, `Ativar por ${item.cost} cristais?`, [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Ativar',
-          onPress: async () => {
-            const res = await activateImpulso();
-            if (res.ok) {
-              Alert.alert('🚀 Impulso ativado!', 'Seu perfil terá mais visibilidade nos próximos 30 minutos.');
-            } else if (res.error) {
-              Alert.alert('Não foi possível ativar', res.error);
-            }
-          },
-        },
-      ]);
+      confirmActivation(
+        item.label,
+        `Ativar por ${item.cost} cristais?`,
+        activateImpulso,
+        '🚀 Impulso ativado!',
+        'Seu perfil fica no topo da Home pelos próximos 30 minutos.',
+      );
       return;
     }
 
@@ -175,73 +177,26 @@ export default function BoostsScreen() {
         Alert.alert('Aguarde', 'Há um intervalo de 5 minutos entre ativações.');
         return;
       }
-      if ((coinsGratuitos + coinsPremium) < item.cost) {
-        Alert.alert('Saldo insuficiente',
-          `Destaque Regional custa ${item.cost} cristais. Você tem ${coinsGratuitos + coinsPremium}.`);
-        return;
-      }
+      if (premiumShort(item.label, item.cost)) return;
 
       const regiao = destaque?.city && destaque?.state
         ? `${destaque.city}, ${destaque.state}`
         : 'sua região';
 
-      // Mostrar a audiência real antes da compra vale mais que
-      // qualquer piso que a gente escolha: em região cheia o
-      // número vende, em região vazia ele evita o arrependimento.
+      // A audiência real antes da compra: em região cheia o
+      // número vende, em região vazia evita o arrependimento.
       const audiencia = typeof destaque?.usersInRegion === 'number'
         ? `\n\n👥 ${destaque.usersInRegion} pessoas cadastradas na sua região.`
         : '';
 
-      Alert.alert(
+      confirmActivation(
         item.label,
-        `Destacar seu perfil em ${regiao} por 4 horas, por ${item.cost} cristais?${audiencia}`,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Ativar',
-            onPress: async () => {
-              const res = await activateDestaqueRegional();
-              if (res.ok) {
-                Alert.alert('📍 Destaque ativado!',
-                  `Seu perfil aparece em evidência em ${regiao} pelas próximas 4 horas.`);
-              } else if (res.error) {
-                Alert.alert('Não foi possível ativar', res.error);
-              }
-            },
-          },
-        ]);
-      return;
-    }
-
-    // action === 'SPEND'
-    const premiumOnly = isPremiumOnly(item.key);
-    const saldo = premiumOnly ? coinsPremium : coinsGratuitos + coinsPremium;
-
-    if (saldo < item.cost) {
-      Alert.alert(
-        premiumOnly ? '💎 Cristais Premium insuficientes' : 'Saldo insuficiente',
-        premiumOnly
-          ? `${item.label} custa ${item.cost} Cristais Premium. Você tem ${coinsPremium}.`
-          : `${item.label} custa ${item.cost} cristais. Você tem ${coinsGratuitos + coinsPremium}.`
+        `Destacar seu perfil em ${regiao} por 4 horas, por ${item.cost} Cristais Premium?${audiencia}`,
+        activateDestaqueRegional,
+        '📍 Destaque ativado!',
+        `Seu perfil aparece em evidência em ${regiao} pelas próximas 4 horas.`,
       );
-      return;
     }
-
-    Alert.alert(item.label, `Confirmar por ${item.cost} cristais?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Confirmar',
-        onPress: async () => {
-          setSpending(item.key);
-          const ok = await spend(item.key);
-          setSpending(null);
-          Alert.alert(
-            ok ? '✨ Ativado!' : 'Erro',
-            ok ? `${item.label} foi ativado com sucesso.` : 'Não foi possível concluir. Tente novamente.'
-          );
-        },
-      },
-    ]);
   }
 
   return (
@@ -265,11 +220,7 @@ export default function BoostsScreen() {
           {BOOSTS.map(item => {
             const premiumOnly = isPremiumOnly(item.key);
             const isSoon      = item.action === 'SOON';
-            const isBusy      = spending === item.key
-              || (item.action === 'TURBO'      && activating === 'TURBO')
-              || (item.action === 'FERTILIZER' && activating === 'FERTILIZER')
-              || (item.action === 'IMPULSO'    && activating === 'IMPULSO')
-              || (item.action === 'DESTAQUE'   && activating === 'DESTAQUE');
+            const isBusy      = activating !== null && activating === item.action;
             const isActive    = (item.action === 'TURBO'      && turbo?.status      === 'ACTIVE')
               || (item.action === 'FERTILIZER' && fertilizer?.status === 'ACTIVE')
               || (item.action === 'IMPULSO'    && impulso?.status    === 'ACTIVE')
@@ -290,6 +241,8 @@ export default function BoostsScreen() {
                 onPress={() => handleBoost(item)}
                 disabled={isBusy}
                 activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.label}. ${item.sub}. ${item.cost} ${premiumOnly ? 'cristais premium' : 'cristais'}`}
               >
                 <Text style={styles.icon}>{item.icon}</Text>
                 <View style={styles.info}>

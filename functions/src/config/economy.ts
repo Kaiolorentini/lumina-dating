@@ -30,7 +30,10 @@ export const COSTS = {
   REVEAL_SINTONIA_PERDIDA: 35,  // Sintonia Perdida — premium only
 
   // Destaques — acessíveis com Gratuitos
-  IMPULSO_PERFIL:          80,  // 30 minutos
+  IMPULSO_PERFIL:          80,  // 30 minutos — porta de entrada
+  // Destaque Regional — PREMIUM ONLY desde 27/09: os impulsos mais
+  // valiosos são só premium (decisão de produto). Ver
+  // PREMIUM_ONLY_FEATURES.
   DESTAQUE_REGIONAL:      150,  // 4 horas
   MEGA_DESTAQUE:          500,  // 24 horas
   SEGUNDA_CHANCE:          15,  // rever perfil descartado
@@ -267,6 +270,7 @@ export type CoinPackageId = keyof typeof COIN_PACKAGES;
 export const PREMIUM_ONLY_FEATURES = [
   'REVEAL_SINTONIA_PERDIDA',   // Gatilho emocional mais forte
   'TURBO_SINTONIA',            // Aceleração de visibilidade
+  'DESTAQUE_REGIONAL',         // Visibilidade regional 4h — premium desde 27/09
   'FERTILIZANTE_SINTONIA',     // Aceleração da Árvore
   'EFEITO_AURORA',             // Mercado Cósmico Lendário
   'TEMA_GALAXIA',

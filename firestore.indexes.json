@@ -1,5 +1,30 @@
 {
   "indexes": [
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "boostType", "order": "ASCENDING" },
+        { "fieldPath": "boostActiveUntil", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "boostType", "order": "ASCENDING" },
+        { "fieldPath": "destaqueRegional.regiaoId", "order": "ASCENDING" },
+        { "fieldPath": "boostActiveUntil", "order": "DESCENDING" }
+      ]
+    },
+        {
+      "collectionGroup": "wallets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "vaultUnlockNotifyPending", "order": "ASCENDING" },
+        { "fieldPath": "vaultUnlockAt", "order": "ASCENDING" }
+      ]
+    },
         {
       "collectionGroup": "ageVerifications",
       "queryScope": "COLLECTION",

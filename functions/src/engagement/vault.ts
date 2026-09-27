@@ -1,47 +1,52 @@
 // ============================================
-// LUMINA — COFRE DE SINTONIA v5.2
+// LUMINA — COFRE DE SINTONIA v6.0
 // functions/src/engagement/vault.ts
 //
-// REGRAS IMPLEMENTADAS:
-// 1.  Cofre armazena apenas Fragmentos — nunca cristais
-// 2.  Limite: 5.000 Fragmentos (= 50 cristais na conversão)
-// 3.  Ciclo de saque: unlockAt = depósito + 48h
-// 4.  Saque Premium: imediato (30s anti-spam)
-// 5.  Fontes válidas: visitas, curtidas, sintonias, eventos
-// 6.  Anti-farm: 1x por perfil/usuário a cada 24h
-// 7.  Limite por evento: visita=2, curtida=5, sintonia=20
-// 8.  Cofre cheio: bloqueia entrada, notifica
-// 9.  Saque sempre inteiro (nunca parcial)
-// 10. Limite diário: 100 cristais via cofre
-// 11. Status: EMPTY / FILLING / READY / FULL
-// 12. Cooldown 30s anti-spam entre saques
-// 13. Economy Ledger imutável em todo saque
-// 14. serverTimestamp() obrigatório
-// 15. runTransaction() em toda operação financeira
+// v6.0 — O SAQUE MOVE FRAGMENTOS, NÃO GERA CRISTAIS.
+//
+// Decisão de produto: o Cofre tem dois botões. Este arquivo é o
+// primeiro — sacar os fragmentos do Cofre para a CARTEIRA. A
+// conversão em cristais é o segundo botão (convertFragments),
+// escolhida pela pessoa, sem teto, a 100 por 1.
+//
+// REGRAS:
+//  1. Cofre armazena apenas Fragmentos
+//  2. Limite: 5.000 fragmentos no Cofre (depósitos de eventos;
+//     recompensas de nível entram mesmo acima)
+//  3. Ciclo: 48h a partir do primeiro depósito; vencido, fica
+//     liberado ATÉ o saque (não tranca de novo)
+//  4. Galáxia Plus: saque sem esperar o ciclo
+//  5. Saque sempre inteiro — move tudo do Cofre
+//  6. Anti-spam: 30s entre saques
+//  7. Ledger imutável e runTransaction() em todo saque
+//
+// Saíram: o teto de 100 cristais/dia e o limite de 50 por saque
+// — o saque não gera mais cristais.
 // ============================================
 
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-import { todayBr }   from '../utils/dateBr';
 import { isGalaxiaPlusActive } from '../payments/activateGalaxiaPlus';
+
 const db = admin.firestore();
 
-const VAULT_MAX_FRAGMENTS    = 5000;
-const FRAGMENTS_PER_CRYSTAL  = 100;
-const MAX_CRYSTALS_PER_SWEEP = 50;   // saque inteiro máximo
-const ANTI_SPAM_SECONDS      = 30;
-const DAILY_CRYSTAL_LIMIT    = 100;
+const VAULT_MAX_FRAGMENTS   = 5000;
+/** Só para exibir quanto o Cofre vale em cristais na conversão. */
+const FRAGMENTS_PER_CRYSTAL = 100;
+const ANTI_SPAM_SECONDS     = 30;
 
-// As fontes e valores do Cofre vivem em VAULT_SOURCES no
-// VaultService.ts — fonte única desde a FASE 2F.
+type VaultStatus = 'EMPTY' | 'FILLING' | 'READY' | 'FULL';
 
-function calcVaultStatus(fragments: number): 'EMPTY' | 'FILLING' | 'READY' | 'FULL' {
-  if (fragments <= 0)                      return 'EMPTY';
-  if (fragments >= VAULT_MAX_FRAGMENTS)    return 'FULL';
-  if (fragments >= FRAGMENTS_PER_CRYSTAL)  return 'READY';
+function calcVaultStatus(fragments: number, withdrawable: boolean): VaultStatus {
+  if (fragments <= 0)                   return 'EMPTY';
+  if (fragments >= VAULT_MAX_FRAGMENTS) return 'FULL';
+  if (withdrawable)                     return 'READY';
   return 'FILLING';
 }
+
+// As fontes e valores de depósito vivem em VAULT_SOURCES no
+// VaultService.ts — fonte única desde a FASE 2F.
 
 // ── 1. Status do Cofre ──
 export const getVaultStatus = functions.onCall(
@@ -56,51 +61,33 @@ export const getVaultStatus = functions.onCall(
     ]);
     const wallet = walletDoc.data() ?? {};
 
-    const vaultFragments = wallet.vaultFragments      ?? 0;
-    const unlockAt       = wallet.vaultUnlockAt?.toDate?.() ?? null;
-    const lastWithdrawAt = wallet.vaultLastWithdrawAt?.toDate?.() ?? null;
-    // Era `wallet.galaxiaPlus?.ativo`, campo que NINGUÉM grava —
-    // o saque imediato nunca funcionou. A assinatura vive na
-    // coleção galaxiaPlus, com data de expiração.
-    const todayCrystals  = wallet.vaultCrystalsToday  ?? 0;
-    const todayStr       = todayBr();
-    const lastDay        = wallet.vaultCrystalsTodayDate ?? '';
+    const vaultFragments  = (wallet.vaultFragments as number) ?? 0;
+    const walletFragments = (wallet.fragments      as number) ?? 0;
+    const unlockAt        = wallet.vaultUnlockAt?.toDate?.()       ?? null;
+    const lastWithdrawAt  = wallet.vaultLastWithdrawAt?.toDate?.() ?? null;
 
-    // Reset contador diário se mudou o dia
-    const crystalsToday = lastDay === todayStr ? todayCrystals : 0;
+    const now          = Date.now();
+    const lockedByTime = unlockAt ? now < unlockAt.getTime() : false;
+    // A Galáxia Plus ignora o ciclo.
+    const isLocked     = lockedByTime && !isGalaxiaPlus;
 
-    const now            = Date.now();
-    const isLocked       = unlockAt ? now < unlockAt.getTime() : false;
-    const cooldownRemaining = isLocked && !isGalaxiaPlus
-      ? unlockAt!.getTime() - now
-      : 0;
-
-    // Anti-spam: 30s entre saques (inclusive Premium)
     const lastWithdrawMs = lastWithdrawAt ? now - lastWithdrawAt.getTime() : Infinity;
     const antiSpamActive = lastWithdrawMs < ANTI_SPAM_SECONDS * 1000;
 
-    const crystalsEquivalent = Math.floor(vaultFragments / FRAGMENTS_PER_CRYSTAL);
-    const status             = calcVaultStatus(vaultFragments);
-    const canWithdraw        = (
-      vaultFragments >= FRAGMENTS_PER_CRYSTAL &&
-      !antiSpamActive &&
-      crystalsToday < DAILY_CRYSTAL_LIMIT &&
-      (isGalaxiaPlus || !isLocked)
-    );
+    const canWithdraw = vaultFragments > 0 && !isLocked && !antiSpamActive;
 
     return {
       vaultFragments,
+      walletFragments,
       vaultMax:            VAULT_MAX_FRAGMENTS,
       vaultPercent:        Math.min((vaultFragments / VAULT_MAX_FRAGMENTS) * 100, 100),
-      crystalsEquivalent,
-      status,
+      crystalsEquivalent:  Math.floor(vaultFragments / FRAGMENTS_PER_CRYSTAL),
+      status:              calcVaultStatus(vaultFragments, vaultFragments > 0 && !isLocked),
       canWithdraw,
       isGalaxiaPlus,
-      isLocked:            !isGalaxiaPlus && isLocked,
-      cooldownRemainingMs: Math.max(0, cooldownRemaining),
+      isLocked,
+      cooldownRemainingMs: isLocked && unlockAt ? Math.max(0, unlockAt.getTime() - now) : 0,
       antiSpamActive,
-      crystalsToday,
-      dailyLimit:          DAILY_CRYSTAL_LIMIT,
       unlockAt:            unlockAt?.toISOString() ?? null,
       lastWithdrawAt:      lastWithdrawAt?.toISOString() ?? null,
     };
@@ -108,21 +95,10 @@ export const getVaultStatus = functions.onCall(
 );
 
 // ── 2. Depósito no Cofre — REMOVIDO na FASE 2F ──
-//
-// depositToVault era onCall e ficou órfão após a FASE 2D: nenhum
-// cliente o chamava mais. Quem deposita agora é o VaultService,
-// acionado pelos orchestrators de visita, curtida e sintonia.
-//
-// Removido em vez de mantido dormente porque seu anti-farm era
-// INCOMPATÍVEL com o caminho ativo: gravava em vaultControl com
-// chave `{source}_{uid}`, enquanto o VaultService usa
-// `vault_{eventType}_{fromUid}_{data}`. Mesma coleção, formatos
-// que não se cruzam — reativá-lo permitiria depósito duplo.
-//
-// O teto diário de fragmentos por visitas (R12) vive no
-// VaultService desde a 2F.
+// Quem deposita é o VaultService, acionado pelos orchestrators
+// de visita, curtida e sintonia, e o levelRewardService.
 
-// ── 3. Sacar do Cofre → converte em Cristais Gratuitos ──
+// ── 3. Sacar do Cofre → fragmentos vão para a CARTEIRA ──
 export const withdrawFromVault = functions.onCall(
   { region: 'us-central1' },
   async (request) => {
@@ -130,12 +106,9 @@ export const withdrawFromVault = functions.onCall(
     if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
 
     const walletRef = db.collection('wallets').doc(uid);
-    // Mesma fronteira do getVaultStatus — se divergirem, a tela
-    // mostra saque liberado e a CF nega, ou o contrário.
-    const todayStr  = todayBr();
 
-    // FORA da transação: o Firestore exige todas as leituras
-    // antes das escritas, e esta consulta outro documento.
+    // FORA da transação: consulta outro documento, e o Firestore
+    // exige todas as leituras antes das escritas.
     const isPlus = await isGalaxiaPlusActive(uid);
 
     const result = await db.runTransaction(async (t) => {
@@ -144,23 +117,17 @@ export const withdrawFromVault = functions.onCall(
         throw new functions.HttpsError('not-found', 'Carteira não encontrada.');
       }
 
-      const wallet         = walletDoc.data()!;
-      const vaultFragments = wallet.vaultFragments      ?? 0;
-      const isGalaxiaPlus  = isPlus;
-      const lastWithdrawAt = wallet.vaultLastWithdrawAt?.toDate?.() ?? null;
-      const todayCrystals  = wallet.vaultCrystalsToday  ?? 0;
-      const lastDay        = wallet.vaultCrystalsTodayDate ?? '';
-      const crystalsToday  = lastDay === todayStr ? todayCrystals : 0;
+      const wallet          = walletDoc.data()!;
+      const vaultFragments  = (wallet.vaultFragments as number) ?? 0;
+      const walletFragments = (wallet.fragments      as number) ?? 0;
+      const lastWithdrawAt  = wallet.vaultLastWithdrawAt?.toDate?.() ?? null;
+      const unlockAt        = wallet.vaultUnlockAt?.toDate?.()       ?? null;
 
-      // Mínimo para sacar
-      if (vaultFragments < FRAGMENTS_PER_CRYSTAL) {
-        throw new functions.HttpsError(
-          'failed-precondition',
-          `Mínimo de ${FRAGMENTS_PER_CRYSTAL} fragmentos para sacar.`
-        );
+      if (vaultFragments <= 0) {
+        throw new functions.HttpsError('failed-precondition', 'Seu Cofre está vazio.');
       }
 
-      // REGRA 12: anti-spam 30s
+      // Anti-spam: 30s entre saques
       if (lastWithdrawAt) {
         const elapsed = Date.now() - lastWithdrawAt.getTime();
         if (elapsed < ANTI_SPAM_SECONDS * 1000) {
@@ -168,75 +135,53 @@ export const withdrawFromVault = functions.onCall(
         }
       }
 
-      // REGRA 3: cooldown 48h para não-Premium
-      if (!isGalaxiaPlus) {
-        const unlockAt = wallet.vaultUnlockAt?.toDate?.() ?? null;
-        if (unlockAt && Date.now() < unlockAt.getTime()) {
-          const hoursLeft = Math.ceil((unlockAt.getTime() - Date.now()) / 3600000);
-          throw new functions.HttpsError(
-            'resource-exhausted',
-            `Cofre disponível em ${hoursLeft}h. Galáxia Plus libera saque imediato.`
-          );
-        }
+      // Ciclo de 48h — a Galáxia Plus ignora
+      const lockedByTime = !!unlockAt && Date.now() < unlockAt.getTime();
+      if (lockedByTime && !isPlus) {
+        const hoursLeft = Math.ceil((unlockAt!.getTime() - Date.now()) / 3600000);
+        throw new functions.HttpsError(
+          'resource-exhausted',
+          `Cofre disponível em ${hoursLeft}h. Galáxia Plus libera saque imediato.`
+        );
       }
 
-      // REGRA 10: limite diário 100 cristais via cofre
-      if (crystalsToday >= DAILY_CRYSTAL_LIMIT) {
-        throw new functions.HttpsError('resource-exhausted', 'Limite diário de saques do Cofre atingido.');
-      }
-
-      // REGRA 9: saque inteiro
-      const crystalsToGain   = Math.min(
-        Math.floor(vaultFragments / FRAGMENTS_PER_CRYSTAL),
-        MAX_CRYSTALS_PER_SWEEP,
-        DAILY_CRYSTAL_LIMIT - crystalsToday
-      );
-      const fragmentsToSpend = crystalsToGain * FRAGMENTS_PER_CRYSTAL;
-      const newVault         = Math.max(0, vaultFragments - fragmentsToSpend);
-      const currentGratuitos = wallet.coinsGratuitos ?? 0;
-      const newGratuitos     = currentGratuitos + crystalsToGain;
-      const newStatus        = calcVaultStatus(newVault);
+      const newWalletFragments = walletFragments + vaultFragments;
 
       t.set(walletRef, {
-        vaultFragments:         newVault,
-        vaultLastWithdrawAt:    FieldValue.serverTimestamp(),
-        vaultFullNotified:      false,
-        vaultUnlockAt:          null, // reseta ciclo após saque
-        coinsGratuitos:         newGratuitos,
-        vaultCrystalsToday:     crystalsToday + crystalsToGain,
-        vaultCrystalsTodayDate: todayStr,
-        updatedAt:              FieldValue.serverTimestamp(),
+        vaultFragments:           0,
+        fragments:                newWalletFragments,
+        vaultLastWithdrawAt:      FieldValue.serverTimestamp(),
+        vaultFullNotified:        false,
+        vaultUnlockAt:            null, // reseta o ciclo
+        vaultUnlockNotifyPending: false,
+        updatedAt:                FieldValue.serverTimestamp(),
       }, { merge: true });
 
       // Ledger imutável
       t.set(db.collection('economyLedger').doc(), {
         uid,
-        tipo:                 'COFRE_SAQUE',
-        origem:               'withdrawFromVault',
-        isGalaxiaPlus,
-        fragmentosGastos:     fragmentsToSpend,
-        cristaisGerados:      crystalsToGain,
-        saldoVaultAntes:      vaultFragments,
-        saldoVaultDepois:     newVault,
-        saldoGratuitosAntes:  currentGratuitos,
-        saldoGratuitosDepois: newGratuitos,
-        timestamp:            FieldValue.serverTimestamp(),
-        imutavel:             true,
+        tipo:              'COFRE_SAQUE',
+        origem:            'withdrawFromVault',
+        isGalaxiaPlus:     isPlus,
+        saqueImediato:     lockedByTime && isPlus,
+        fragmentosMovidos: vaultFragments,
+        cofreAntes:        vaultFragments,
+        cofreDepois:       0,
+        carteiraAntes:     walletFragments,
+        carteiraDepois:    newWalletFragments,
+        timestamp:         FieldValue.serverTimestamp(),
+        imutavel:          true,
       });
 
       return {
-        crystalsGained:      crystalsToGain,
-        fragmentsUsed:       fragmentsToSpend,
-        vaultRemaining:      newVault,
-        vaultStatus:         newStatus,
-        newBalanceGratuitos: newGratuitos,
-        isGalaxiaPlus,
+        fragmentsMoved:  vaultFragments,
+        walletFragments: newWalletFragments,
+        usedPlusBypass:  lockedByTime && isPlus,
       };
     });
 
-    // Conquistas VAULT_FIRST e VAULT_10 — fire-and-forget, fora da
-    // transaction. Action incremental: o onAchievementTrigger soma
-    // +1 ao progresso, então currentValue é sempre 1.
+    // Conquistas VAULT_FIRST e VAULT_10 — fire-and-forget. Action
+    // incremental: currentValue é sempre 1.
     db.collection('achievementTriggers').add({
       uid,
       action:       'VAULT_WITHDRAW',
@@ -245,13 +190,12 @@ export const withdrawFromVault = functions.onCall(
       timestamp:    FieldValue.serverTimestamp(),
     }).catch(() => {});
 
-    // Conta o saque imediato para a tela da Galáxia Plus
-    // mostrar o que a assinatura já rendeu. Só quando a
-    // assinatura foi o motivo de não haver espera.
-    if (isPlus) {
+    // Conta para a tela da Galáxia Plus só quando a assinatura foi
+    // o motivo de não haver espera.
+    if (result.usedPlusBypass) {
       db.collection('galaxiaPlus').doc(uid).set({
-        instantWithdraws:      FieldValue.increment(1),
-        crystalsFromInstant:   FieldValue.increment(result.crystalsGained),
+        instantWithdraws:     FieldValue.increment(1),
+        fragmentsFromInstant: FieldValue.increment(result.fragmentsMoved),
       }, { merge: true }).catch(() => {});
     }
 

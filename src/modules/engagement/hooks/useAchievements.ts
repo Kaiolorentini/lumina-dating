@@ -74,31 +74,14 @@ export function useAchievements(uid: string | undefined) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Verifica conquistas após uma ação
-  const check = useCallback(async (params: {
-    action:       string;
-    currentValue: number;
-    meta?:        Record<string, unknown>;
-  }): Promise<string[]> => {
-    if (!uid) return [];
-    try {
-      const fn     = httpsCallable<typeof params, { unlocked: string[] }>(
-        functions, 'checkAchievements'
-      );
-      const result = await fn(params);
-      if (result.data.unlocked.length > 0) await load(); // recarrega
-      return result.data.unlocked;
-    } catch (error) {
-      console.error('[useAchievements] check error:', error);
-      return [];
-    }
-  }, [uid, load]);
+  // check() REMOVIDO: chamava a callable checkAchievements, que
+  // aceitava ação e valor do app e foi apagada. Nenhuma tela o
+  // usava. Conquistas entram só pelo servidor.
 
   return {
     data:    state.data,
     loading: state.loading,
     error:   state.error,
-    check,
     refresh: load,
   };
 }

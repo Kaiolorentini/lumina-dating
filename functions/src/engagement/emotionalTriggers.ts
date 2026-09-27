@@ -13,7 +13,7 @@ import * as scheduledFunctions  from 'firebase-functions/v2/scheduler';
 import * as admin               from 'firebase-admin';
 import { FieldValue }           from 'firebase-admin/firestore';
 import { ProfileVisitOrchestrator } from '../gamification/orchestrators/ProfileVisitOrchestrator';
-import { EmotionalTriggersService } from './EmotionalTriggersService';
+import { EmotionalTriggersService, createTriggerNotification } from './EmotionalTriggersService';
 import { LegacyShadowOrchestrator } from '../gamification/compatibility/LegacyShadowOrchestrator';
 import { CompareParams } from '../gamification/compatibility/ICompatibilityAdapter';
 import { todayBr } from '../utils/dateBr';
@@ -140,12 +140,13 @@ export const checkLostSintonia = scheduledFunctions.onSchedule(
           const perdidaKey = `perdida_${visitorId}`;
 
           if (!control[perdidaKey] && (control.perdidaCount ?? 0) < 3) {
-            await db.collection('notifications').add({
-              userId: profileId, type: 'sintonia_perdida',
-              title: '💔 Sintonia Perdida', message: 'Uma conexão especial não voltou.',
-              read: false, dados: { visitorId, sintonia, borrado: true, podeRevelar: true },
-              timestamp: FieldValue.serverTimestamp(),
-            });
+            // A identidade vai para triggerSecrets, não para a
+            // notificação — revelada só pela CF revealTrigger.
+            await createTriggerNotification(
+              profileId, 'sintonia_perdida', '💔 Sintonia Perdida',
+              'Uma conexão especial não voltou.',
+              visitorId, sintonia,
+            );
             await controlRef.set({
               [perdidaKey]: true,
               perdidaCount: FieldValue.increment(1),

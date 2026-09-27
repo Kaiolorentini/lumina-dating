@@ -245,7 +245,8 @@ export type NotificationType =
   | 'sintonia_criada'
   | 'like_received'
   | 'coins_purchased'
-  | 'galaxia_plus_activated';
+  | 'galaxia_plus_activated'
+  | 'cofre_pronto';
 
 export interface AppNotification {
   id:        string;

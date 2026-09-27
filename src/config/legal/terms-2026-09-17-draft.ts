@@ -14,9 +14,16 @@
 // calculateCommission usa 0.20 de taxa padrão e é chamado
 // só pelo createAsaasPayment, sem sobrescrever.
 //
-// Seção 12 (Galáxia Plus): a assinatura NÃO existe no app
-// ainda. Mantida com preço a preencher — remover esta
-// seção se o lançamento acontecer antes da funcionalidade.
+// Seção 12 (Galáxia Plus): reflete o código em 27/09 — acesso
+// de 30 dias por pagamento único, SEM renovação automática;
+// nova compra soma 30 dias ao prazo restante.
+//
+// Seção 10 (Fragmentos e Cofre): 100 fragmentos = 1 cristal
+// gratuito, na quantidade que o usuário escolher; fragmentos
+// não expiram; o saque do Cofre é manual e libera depois de um
+// prazo (hoje 48h), imediato para a Galáxia Plus.
+//
+// SE O CÓDIGO MUDAR, ESTAS SEÇÕES MUDAM JUNTO.
 // ============================================
 
 import { LegalDocument } from './index';
@@ -118,7 +125,9 @@ export const TERMS_2026_09_17_DRAFT: LegalDocument = {
       body: [
         'Os Cristais Gratuitos são unidades virtuais disponibilizadas pela Plataforma em razão de determinadas atividades ou critérios de engajamento.',
         'Os Cristais Premium são unidades virtuais adquiridas mediante pagamento ou disponibilizadas conforme regras comerciais específicas.',
-        'Os Fragmentos são unidades virtuais que poderão ser convertidas em Cristais conforme as regras vigentes na Plataforma. A taxa de conversão será de [PREENCHER: taxa de conversão Fragmentos para Cristais].',
+        'Os Fragmentos são unidades virtuais obtidas por atividades na Plataforma, como missões, conquistas, recompensas de nível e interações recebidas. Podem ser convertidos em Cristais Gratuitos na proporção de 100 (cem) Fragmentos para 1 (um) Cristal Gratuito, na quantidade escolhida pelo usuário, conforme as regras vigentes na Plataforma.',
+        'Parte dos Fragmentos é acumulada no Cofre de Sintonia. Os Fragmentos do Cofre podem ser transferidos para a carteira do usuário depois do prazo informado no aplicativo, contado do primeiro depósito do ciclo; assinantes da Galáxia Plus podem transferi-los sem aguardar esse prazo. A transferência depende sempre de ação do próprio usuário.',
+        'Os Fragmentos não possuem prazo de validade enquanto a conta estiver ativa.',
         'Cristais, Fragmentos e demais unidades virtuais não constituem moeda oficial; não constituem depósito bancário; não constituem valor mobiliário; não constituem investimento; não constituem criptoativo; não representam participação societária; não constituem dinheiro eletrônico; e não possuem valor monetário fora da Plataforma.',
         'A aquisição ou recebimento de unidades virtuais concede ao usuário uma licença limitada, pessoal, revogável e não transferível para utilização dentro da Plataforma. O usuário não adquire propriedade sobre o sistema econômico da Lumina.',
         'É proibida a venda, troca, doação, cessão ou transferência de Cristais ou Fragmentos entre usuários, salvo funcionalidade expressamente disponibilizada pela Lumina.',
@@ -139,16 +148,17 @@ export const TERMS_2026_09_17_DRAFT: LegalDocument = {
     {
       heading: '12. Galáxia Plus',
       body: [
-        'A Lumina poderá disponibilizar a assinatura mensal denominada "Galáxia Plus", ao preço de [PREENCHER: preço mensal].',
-        'A assinatura concederá os benefícios descritos na tela de contratação vigente no momento da aquisição.',
-        'A modalidade de renovação será: [PREENCHER: automática ou manual].',
-        'O assinante poderá solicitar o cancelamento pelos mecanismos disponibilizados pela Plataforma. O cancelamento não implica automaticamente restituição proporcional de período já utilizado, sem prejuízo dos direitos previstos na legislação aplicável.',
+        'A Lumina disponibiliza a Galáxia Plus, que concede acesso a benefícios adicionais por 30 (trinta) dias, mediante pagamento único pelo valor informado na tela de contratação no momento da compra.',
+        'A Galáxia Plus NÃO possui renovação nem cobrança automática. Encerrado o período contratado, os benefícios contínuos deixam de valer, salvo nova contratação.',
+        'Uma nova contratação realizada antes do término do período vigente acrescenta 30 (trinta) dias ao prazo restante.',
+        'Os benefícios incluídos, os itens creditados na contratação e as condições de uso de cada um são os descritos na tela de contratação vigente no momento da aquisição.',
+        'O exercício do direito de arrependimento e dos demais direitos do consumidor observará a legislação aplicável.',
       ],
     },
     {
       heading: '13. Gamificação',
       body: [
-        'A Lumina poderá oferecer recursos de gamificação, incluindo XP; níveis; conquistas; coleções; ranking semanal; recompensas diárias; sequência de utilização ("streak"); e Árvore da Sintonia.',
+        'A Lumina poderá oferecer recursos de gamificação, incluindo XP; níveis e recompensas de nível; conquistas; coleções; missões diárias; ranking semanal; recompensas diárias; sequência de utilização ("streak"); Cofre de Sintonia; e Árvore da Sintonia.',
         'Esses recursos possuem finalidade de entretenimento e engajamento e não representam patrimônio, investimento ou direito adquirido a benefícios futuros, salvo quando expressamente indicado.',
         'A Lumina poderá alterar critérios de pontuação, classificação e recompensas.',
       ],

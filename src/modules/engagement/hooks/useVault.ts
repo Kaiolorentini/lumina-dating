@@ -1,6 +1,11 @@
 // ============================================
-// LUMINA — USE VAULT HOOK v5.2
+// LUMINA — USE VAULT HOOK v6.0
 // src/modules/engagement/hooks/useVault.ts
+//
+// v6.0 — o saque move fragmentos do Cofre para a carteira. Depois
+// dele, o estado vem do SERVIDOR (recarga silenciosa): a versão
+// anterior inventava 48h de bloqueio local, e o servidor zera o
+// ciclo no saque — tela e servidor discordavam.
 // ============================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -12,6 +17,7 @@ export type VaultStatus = 'EMPTY' | 'FILLING' | 'READY' | 'FULL';
 
 export interface VaultData {
   vaultFragments:      number;
+  walletFragments:     number;
   vaultMax:            number;
   vaultPercent:        number;
   crystalsEquivalent:  number;
@@ -21,19 +27,18 @@ export interface VaultData {
   isLocked:            boolean;
   cooldownRemainingMs: number;
   antiSpamActive:      boolean;
-  crystalsToday:       number;
-  dailyLimit:          number;
   unlockAt:            string | null;
   lastWithdrawAt:      string | null;
 }
 
 export interface WithdrawResult {
-  crystalsGained:      number;
-  fragmentsUsed:       number;
-  vaultRemaining:      number;
-  vaultStatus:         VaultStatus;
-  newBalanceGratuitos: number;
-  isGalaxiaPlus:       boolean;
+  fragmentsMoved:  number;
+  walletFragments: number;
+  usedPlusBypass:  boolean;
+}
+
+interface WithdrawResponse extends WithdrawResult {
+  success: boolean;
 }
 
 interface State {
@@ -51,16 +56,17 @@ export function useVault(uid: string | undefined) {
     error:       null,
   });
 
-  const loadStatus = useCallback(async () => {
+  /** silent: recarrega sem voltar para a tela de loading. */
+  const loadStatus = useCallback(async (silent = false) => {
     if (!uid) return;
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    if (!silent) setState(prev => ({ ...prev, loading: true, error: null }));
     try {
       const fn     = httpsCallable<void, VaultData>(functions, 'getVaultStatus');
       const result = await fn();
       setState(prev => ({ ...prev, data: result.data, loading: false }));
     } catch (error) {
       console.error('[useVault] load error:', error);
-      setState(prev => ({ ...prev, loading: false, error: 'Erro ao carregar Cofre.' }));
+      setState(prev => ({ ...prev, loading: false, error: 'Erro ao carregar o Cofre.' }));
     }
   }, [uid]);
 
@@ -70,35 +76,17 @@ export function useVault(uid: string | undefined) {
     if (!uid || state.withdrawing || !state.data?.canWithdraw) return null;
     setState(prev => ({ ...prev, withdrawing: true, error: null }));
     try {
-      const fn     = httpsCallable<void, { success: boolean } & WithdrawResult>(
-        functions, 'withdrawFromVault'
-      );
+      const fn     = httpsCallable<void, WithdrawResponse>(functions, 'withdrawFromVault');
       const result = await fn();
-
-      // Atualiza estado local com resultado do servidor
-      setState(prev => ({
-        ...prev,
-        withdrawing: false,
-        data: prev.data ? {
-          ...prev.data,
-          vaultFragments:      result.data.vaultRemaining,
-          vaultPercent:        (result.data.vaultRemaining / (prev.data?.vaultMax ?? 5000)) * 100,
-          crystalsEquivalent:  Math.floor(result.data.vaultRemaining / 100),
-          status:              result.data.vaultStatus,
-          canWithdraw:         false,
-          isLocked:            !result.data.isGalaxiaPlus,
-          cooldownRemainingMs: !result.data.isGalaxiaPlus ? 48 * 60 * 60 * 1000 : 0,
-          crystalsToday:       (prev.data?.crystalsToday ?? 0) + result.data.crystalsGained,
-        } : null,
-      }));
-
+      setState(prev => ({ ...prev, withdrawing: false }));
+      await loadStatus(true);
       return result.data;
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Erro ao sacar do Cofre.';
       setState(prev => ({ ...prev, withdrawing: false, error: msg }));
       return null;
     }
-  }, [uid, state.withdrawing, state.data?.canWithdraw]);
+  }, [uid, state.withdrawing, state.data?.canWithdraw, loadStatus]);
 
   return {
     data:        state.data,

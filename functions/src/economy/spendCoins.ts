@@ -19,6 +19,10 @@ import { auditLogFinanceiro, AuditTipo } from '../utils/auditLogFinanceiro';
 
 export type SpendableFeature = keyof typeof COSTS;
 
+// Só molduras e badges passam por aqui (entrega nesta função).
+// Revelações têm CF própria desde 27/09: revealTrigger (gatilhos)
+// e revealVisitors (Ver Visitantes).
+
 interface SpendCoinsRequest {
   feature:          SpendableFeature;
   idempotencyKey?:  string;
@@ -73,6 +77,11 @@ export const spendCoins = onCall(
         ? { id: badgeId, rentalDays: BADGES_CATALOG[badgeId].rentalDays,
             rarity: BADGES_CATALOG[badgeId].rarity, kind: 'BADGE' as const }
         : null;
+
+    // Nunca cobrar sem entregar: só itens entregues aqui mesmo.
+    if (!cosmetic) {
+      throw new HttpsError('failed-precondition', 'Este item não pode ser comprado por aqui.');
+    }
 
     // Molduras e badges vivem em campos separados: o usuário pode
     // ter uma de cada equipada ao mesmo tempo.

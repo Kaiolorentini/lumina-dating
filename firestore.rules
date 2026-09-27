@@ -723,9 +723,18 @@ match /coinsPurchases/{docId} {
     }
 
     match /dailyMissions/{docId} {
+      // resource == null: o documento do dia ainda não existe. A
+      // Home escuta antes de ele ser gerado; sem isto a escuta era
+      // negada, morria, e o contador ficava parado em 0.
       allow read: if isAuthenticated() &&
-        resource.data.uid == request.auth.uid;
+        (resource == null || resource.data.uid == request.auth.uid);
       allow write: if false;
+    }
+
+    // Quem está por trás de um gatilho emocional. Só o servidor lê:
+    // a revelação é paga e feita pela CF revealTrigger.
+    match /triggerSecrets/{notificationId} {
+      allow read, write: if false;
     }
 
     match /xpLog/{logId} {

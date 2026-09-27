@@ -1,12 +1,19 @@
 // ============================================
-// LUMINA — CONVERT FRAGMENTS → CRYSTALS
+// LUMINA — CONVERT FRAGMENTS → CRYSTALS v6.0
 // functions/src/economy/convertFragments.ts
 //
-// v5.1
+// v6.0 — A PESSOA ESCOLHE QUANTO CONVERTE. SEM TETO, SEM ESPERA.
 //
-// CRÍTICO 11: runTransaction() + conversionLock
-// Cooldown 24h. Máx 5 cristais por conversão.
+// Decisão de produto: teto frustra. O limite natural é o saldo:
 // 100 fragmentos = 1 cristal gratuito.
+//
+// `crystals` é quantos cristais a pessoa quer. Sem o parâmetro
+// (versões antigas do app), converte tudo o que der — nada
+// quebra antes da atualização chegar.
+//
+// Saíram: o teto de 5 por conversão, a espera de 24h e o
+// `conversionLock`, que nunca era ligado (só desligado). A
+// transação já impede conversão dupla.
 // ============================================
 
 import * as admin from 'firebase-admin';
@@ -20,63 +27,56 @@ export const convertFragments = onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Não autenticado.');
 
+    const { crystals } = (request.data ?? {}) as { crystals?: unknown };
+
+    if (crystals !== undefined) {
+      if (typeof crystals !== 'number' || !Number.isInteger(crystals) || crystals < 1) {
+        throw new HttpsError('invalid-argument', 'Quantidade inválida.');
+      }
+    }
+
     const db        = admin.firestore();
     const walletRef = db.collection('wallets').doc(uid);
+    const perCrystal = FRAGMENTS.FRAGMENTS_PER_CRYSTAL;
 
     try {
-      const result = await db.runTransaction(async (t) => {
+      return await db.runTransaction(async (t) => {
         const walletSnap = await t.get(walletRef);
         if (!walletSnap.exists) {
           throw new HttpsError('not-found', 'Carteira não encontrada.');
         }
 
-        const wallet = walletSnap.data()!;
+        const wallet           = walletSnap.data()!;
+        const currentFragments = (wallet.fragments as number) ?? 0;
+        const available        = Math.floor(currentFragments / perCrystal);
 
-        // CRÍTICO 11: conversionLock — evita dupla conversão simultânea
-        if (wallet.conversionLock === true) {
-          throw new HttpsError('failed-precondition', 'Conversão já em andamento.');
-        }
-
-        // Cooldown 24h
-        const lastConversion = wallet.lastFragmentConversion?.toDate?.() ?? null;
-        if (lastConversion) {
-          const hoursSince = (Date.now() - lastConversion.getTime()) / (1000 * 60 * 60);
-          if (hoursSince < FRAGMENTS.CONVERSION_COOLDOWN_HOURS) {
-            const hoursLeft = Math.ceil(FRAGMENTS.CONVERSION_COOLDOWN_HOURS - hoursSince);
-            throw new HttpsError(
-              'resource-exhausted',
-              `Próxima conversão disponível em ${hoursLeft}h.`
-            );
-          }
-        }
-
-        const currentFragments = wallet.fragments ?? 0;
-        if (currentFragments < FRAGMENTS.FRAGMENTS_PER_CRYSTAL) {
+        if (available < 1) {
           throw new HttpsError(
             'failed-precondition',
-            `Fragmentos insuficientes. Necessário: ${FRAGMENTS.FRAGMENTS_PER_CRYSTAL}. Disponível: ${currentFragments}.`
+            `Fragmentos insuficientes. Necessário: ${perCrystal}. Disponível: ${currentFragments}.`
           );
         }
 
-        // Calcula cristais obtidos (máx 5 por conversão)
-        const maxCrystals     = Math.min(
-          Math.floor(currentFragments / FRAGMENTS.FRAGMENTS_PER_CRYSTAL),
-          FRAGMENTS.MAX_CRYSTALS_PER_CONVERSION
-        );
-        const fragmentsUsed   = maxCrystals * FRAGMENTS.FRAGMENTS_PER_CRYSTAL;
-        const newFragments     = currentFragments - fragmentsUsed;
+        const toConvert = (crystals as number | undefined) ?? available;
+        if (toConvert > available) {
+          throw new HttpsError(
+            'failed-precondition',
+            `Você pode converter até ${available} ${available === 1 ? 'cristal' : 'cristais'}.`
+          );
+        }
 
-        const prevGratuitos   = wallet.coinsGratuitos ?? 0;
-        const prevPremium     = wallet.coinsPremium   ?? 0;
-        const newGratuitos    = prevGratuitos + maxCrystals;
-        const now             = admin.firestore.FieldValue.serverTimestamp();
+        const fragmentsUsed = toConvert * perCrystal;
+        const newFragments  = currentFragments - fragmentsUsed;
+        const prevGratuitos = (wallet.coinsGratuitos as number) ?? 0;
+        const prevPremium   = (wallet.coinsPremium   as number) ?? 0;
+        const newGratuitos  = prevGratuitos + toConvert;
+        const now           = admin.firestore.FieldValue.serverTimestamp();
 
         t.update(walletRef, {
           fragments:              newFragments,
           coinsGratuitos:         newGratuitos,
-          totalEarned:            admin.firestore.FieldValue.increment(maxCrystals),
+          totalEarned:            admin.firestore.FieldValue.increment(toConvert),
           lastFragmentConversion: now,
-          conversionLock:         false,
           updatedAt:              now,
         });
 
@@ -84,7 +84,7 @@ export const convertFragments = onCall(
           uid,
           tipo:                   'FRAGMENTOS_CONVERSAO',
           coinTipo:               'gratuito',
-          valor:                  maxCrystals,
+          valor:                  toConvert,
           origem:                 'convertFragments',
           saldoAnteriorGratuito:  prevGratuitos,
           saldoAnteriorPremium:   prevPremium,
@@ -92,21 +92,19 @@ export const convertFragments = onCall(
           saldoPosteriorPremium:  prevPremium,
           metadata: {
             fragmentsUsed,
-            crystalsGained: maxCrystals,
+            crystalsGained:     toConvert,
             fragmentsRemaining: newFragments,
           },
         }, t);
 
         return {
-          success:           true,
-          crystalsGained:    maxCrystals,
+          success:             true,
+          crystalsGained:      toConvert,
           fragmentsUsed,
-          fragmentsRemaining: newFragments,
+          fragmentsRemaining:  newFragments,
           newBalanceGratuitos: newGratuitos,
         };
       });
-
-      return result;
     } catch (error: unknown) {
       if (error instanceof HttpsError) throw error;
       console.error('[convertFragments] Erro:', error);

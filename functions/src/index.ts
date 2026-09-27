@@ -127,15 +127,25 @@ export {
 // trigger notifications
 export { onProfileVisit, checkLostSintonia } from './engagement/emotionalTriggers';
 export { getUserPublicProfile }              from './engagement/getUserPublicProfile';
+export { revealTrigger }                     from './engagement/revealTrigger';
 export { generateDailyMissions, getDailyMissions, progressMission } from './engagement/dailyMissions';
-export { getFragmentsStatus, expireFragments } from './engagement/fragments';
+// expireFragments REMOVIDA: sem expiração de fragmentos.
+export { getFragmentsStatus } from './engagement/fragments';
 export { getVaultStatus, withdrawFromVault } from './engagement/vault';
+export { notifyVaultUnlocked } from './engagement/notifyVaultUnlocked';
+export { notifyGalaxiaTurbosExpiring } from './engagement/notifyGalaxiaTurbosExpiring';
+// Missões registradas pelo servidor
+export { onProfilePhotoUploaded } from './engagement/onProfilePhotoUploaded';
+export { onChatMessageCreated }   from './engagement/onChatMessageCreated';
 export { equipFrame, getFramesStatus } from './engagement/frames';
 export { equipBadge, getBadgesStatus } from './engagement/badges';
 export { clearCosmeticReveal }         from './engagement/cosmeticReveal';
 export { buyBadgeWithFragments }       from './economy/buyBadgeWithFragments';
 export { earnXP, getXPStatus } from './engagement/xp';
-export { checkAchievements, getAchievementsStatus, repairAchievements } from './engagement/achievements';
+// checkAchievements REMOVIDA: callable que aceitava ação e valor do
+// app e desbloqueava qualquer conquista. Conquistas entram só pelo
+// servidor, via achievementTriggers → onAchievementTrigger.
+export { getAchievementsStatus, repairAchievements } from './engagement/achievements';
 export { registerRankingXP, getRanking, freezeRanking, rewardRanking, resetRanking } from './engagement/ranking';
 // grantPrestigePoints REMOVIDA: era callable e aceitava
 // qualquer marcoId do cliente — dava para pedir ACH_FOUNDER e

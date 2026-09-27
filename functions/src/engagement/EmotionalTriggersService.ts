@@ -1,51 +1,67 @@
 // ============================================
-// LUMINA — EMOTIONAL TRIGGERS SERVICE v1.0
+// LUMINA — EMOTIONAL TRIGGERS SERVICE v2.0
 // functions/src/engagement/EmotionalTriggersService.ts
 //
-// RESPONSABILIDADE ÚNICA: lógica dos gatilhos emocionais.
-// Separado do trigger do Firestore para facilitar testes.
+// v2.0 (27/09):
+// - QUEM VISITOU NÃO VAI MAIS NA NOTIFICAÇÃO. O id ficava em
+//   dados.visitorId, legível pelo dono da notificação — a
+//   revelação paga era só uma trava na tela. Agora vai para
+//   triggerSecrets/{notificationId}, que só o servidor lê, e a
+//   revelação é feita pela CF revealTrigger.
+// - Compatibilidade pela fonte única (utils/compatibility). A cópia
+//   local comparava preferência com gênero e a Quase Sintonia
+//   (85+) nunca disparava.
 // ============================================
 
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { todayBr }    from '../utils/dateBr';
+import { calcCompatibilidade } from '../utils/compatibility';
+
 const db = admin.firestore();
 
-function calcCompatibilidade(
-  userA: Record<string, unknown>,
-  userB: Record<string, unknown>
-): number {
-  let score = 50;
-  const prefsA = userA.preferences as string[] | undefined;
-  const prefsB = userB.preferences as string[] | undefined;
-  if (prefsA?.includes(userB.gender as string)) score += 20;
-  if (prefsB?.includes(userA.gender as string)) score += 10;
-  const ageDiff = Math.abs(((userA.age as number) ?? 25) - ((userB.age as number) ?? 25));
-  if (ageDiff <= 3) score += 15;
-  else if (ageDiff <= 7) score += 8;
-  else if (ageDiff <= 12) score += 3;
-  if (userA.city && userA.city === userB.city) score += 5;
-  return Math.min(Math.max(score, 30), 99);
-}
+export type RevealableTrigger = 'quase_sintonia' | 'pensou_em_voce' | 'sintonia_perdida';
 
-async function criarNotificacao(
-  userId:   string,
-  tipo:     string,
-  titulo:   string,
-  mensagem: string,
-  dados?:   Record<string, unknown>
+/**
+ * Notificação de gatilho SEM a identidade de quem visitou. A
+ * identidade vai para triggerSecrets, no mesmo batch.
+ */
+export async function createTriggerNotification(
+  userId:    string,
+  type:      RevealableTrigger,
+  title:     string,
+  message:   string,
+  visitorId: string,
+  sintonia:  number,
 ): Promise<void> {
-  await db.collection('notifications').add({
-    userId, type: tipo, title: titulo, message: mensagem,
-    read: false, dados: dados ?? {}, timestamp: FieldValue.serverTimestamp(),
+  const notifRef = db.collection('notifications').doc();
+  const batch    = db.batch();
+
+  batch.set(notifRef, {
+    userId,
+    type,
+    title,
+    message,
+    read:      false,
+    dados:     { sintonia, borrado: true, title },
+    timestamp: FieldValue.serverTimestamp(),
   });
+
+  batch.set(db.collection('triggerSecrets').doc(notifRef.id), {
+    userId,
+    visitorId,
+    type,
+    revealed:  false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  await batch.commit();
 }
 
 export const EmotionalTriggersService = {
   async runProfileVisitTriggers(visitorId: string, profileId: string): Promise<void> {
     // BRT: a chave triggerControl/{profileId}_{data} governa o teto
-    // de 3 Sintonias Perdidas/dia. Em UTC o contador zerava às 21h
-    // e o usuário podia receber até 6 no mesmo dia.
+    // de 3 Sintonias Perdidas/dia.
     const todayStr = todayBr();
 
     const [visitorDoc, profileDoc] = await Promise.all([
@@ -55,6 +71,7 @@ export const EmotionalTriggersService = {
 
     if (!visitorDoc.exists || !profileDoc.exists) return;
 
+    // Do ponto de vista de quem RECEBE a visita.
     const sintonia   = calcCompatibilidade(profileDoc.data()!, visitorDoc.data()!);
     const controlRef = db.collection('triggerControl').doc(`${profileId}_${todayStr}`);
     const controlDoc = await controlRef.get();
@@ -63,9 +80,11 @@ export const EmotionalTriggersService = {
     // Quase Sintonia
     if (sintonia >= 85 && !control[`quase_${visitorId}`]) {
       await Promise.all([
-        criarNotificacao(profileId, 'quase_sintonia', '💜 Quase Sintonia',
+        createTriggerNotification(
+          profileId, 'quase_sintonia', '💜 Quase Sintonia',
           `Alguém com ${sintonia}% de compatibilidade viu seu perfil!`,
-          { visitorId, sintonia, borrado: true }),
+          visitorId, sintonia,
+        ),
         controlRef.set({ [`quase_${visitorId}`]: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true }),
       ]);
     }
@@ -75,12 +94,14 @@ export const EmotionalTriggersService = {
     const newCount      = (control[visitCountKey] ?? 0) + 1;
     await controlRef.set({ [visitCountKey]: newCount, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     if (newCount === 3) {
-      await criarNotificacao(profileId, 'pensou_em_voce', '✨ Pensou em Você',
+      await createTriggerNotification(
+        profileId, 'pensou_em_voce', '✨ Pensou em Você',
         'Alguém visitou seu perfil 3 vezes hoje.',
-        { visitorId, sintonia, borrado: true });
+        visitorId, sintonia,
+      );
     }
 
-    // Sintonia Perdida (pendente)
+    // Sintonia Perdida (pendente — pendingLostSintonia é só do servidor)
     const perdidaKey = `perdida_${visitorId}`;
     if (!control[perdidaKey] && (control.perdidaCount ?? 0) < 3) {
       await db.collection('pendingLostSintonia').add({

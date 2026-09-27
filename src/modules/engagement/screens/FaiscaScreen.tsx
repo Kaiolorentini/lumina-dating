@@ -13,18 +13,18 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation }  from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+
 import { useAuth }         from '../../../context/AuthContext';
 import { useCoins }        from '../../../context/CoinsContext';
 import { useFaisca, FaiscaTier } from '../hooks/useFaisca';
 import { RootStackParamList }    from '../../../navigation/types';
 import Header from '../../../components/Header';
-import { todayBrUnderscore } from '../../../utils/dateBr';
+
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-const fns = getFunctions();
+
 
 const TIER_CONFIG: Record<FaiscaTier, {
   icon:      string;
@@ -40,11 +40,7 @@ const TIER_CONFIG: Record<FaiscaTier, {
   legendary: { icon: '👑', label: 'LENDÁRIA!',     color: '#FFD700',        gradient: ['#2E1A00','#4E3200'], message: '✦ Evento Raro — Conte para alguém! ✦',   particles: '👑 ✨ 👑' },
 };
 
-// Fire-and-forget: registra progresso da missão claim_faisca
-function notifyMissionProgress(uid: string, missionId: string) {
-  const fn = httpsCallable(fns, 'progressMission');
-  fn({ missionIdParam: missionId }).catch(() => { /* silencioso */ });
-}
+
 
 export default function FaiscaScreen() {
   const navigation        = useNavigation<NavProp>();
@@ -83,10 +79,7 @@ export default function FaiscaScreen() {
       setRevealed(true);
       await refreshWallet();
 
-      // v5.2 — registra progresso da missão claim_faisca (fire-and-forget)
-      if (user?.uid) {
-        notifyMissionProgress(user.uid, `daily_${todayBrUnderscore()}_claim_faisca`);
-      }
+      // Missão "Resgatar Faísca": registrada pelo claimDailyFaisca.
     }
   }
 
@@ -172,10 +165,13 @@ export default function FaiscaScreen() {
         <View style={styles.probCard}>
           <Text style={styles.probTitle}>Probabilidades</Text>
           {[
-            { tier: 'Comum ✨',   chance: '50%', crystals: '2–5',  color: COLORS.secondary },
-            { tier: 'Rara ⚡',    chance: '30%', crystals: '8–12', color: '#56CCF2' },
-            { tier: 'Épica 💜',   chance: '15%', crystals: '15–20',color: '#B57BEE' },
-            { tier: 'Lendária 👑',chance: '5%',  crystals: '50',   color: '#FFD700' },
+            // IGUAL ao sorteio do servidor (dailyFaisca.ts). A tabela
+            // anterior mostrava 5% de lendária para um prêmio de 1% —
+            // chance divulgada errada em prêmio sorteado.
+            { tier: 'Comum ✨',   chance: '85%', crystals: '2 ou 5', color: COLORS.secondary },
+            { tier: 'Rara ⚡',    chance: '10%', crystals: '10',     color: '#56CCF2' },
+            { tier: 'Épica 💜',   chance: '4%',  crystals: '20',     color: '#B57BEE' },
+            { tier: 'Lendária 👑',chance: '1%',  crystals: '50',     color: '#FFD700' },
           ].map(row => (
             <View key={row.tier} style={styles.probRow}>
               <Text style={[styles.probTier,   { color: row.color }]}>{row.tier}</Text>

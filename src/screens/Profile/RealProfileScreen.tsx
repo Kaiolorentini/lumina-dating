@@ -28,7 +28,7 @@ import { RootStackParamList } from '../../navigation/types';
 import Header from '../../components/Header';
 import SintoniaBar from '../../components/SintoniaBar';
 import { calcularSintonia } from '../../utils/sintoniaEngine';
-import { todayBr, todayBrUnderscore } from '../../utils/dateBr';
+import { todayBr } from '../../utils/dateBr';
 import { ProfileFrame } from '../../components/profile/ProfileFrame';
 import { Badge } from '../../components/profile/Badge';
 import {
@@ -75,12 +75,7 @@ type AchievementsRes = {
   totalAvailable: number;
 };
 
-// v5.3 — helper: registra progresso de missão (fire-and-forget)
-function notifyMission(missionType: string, targetUid?: string) {
-  const missionId = `daily_${todayBrUnderscore()}_${missionType}`;
-  const fn        = httpsCallable(functions, 'progressMission');
-  fn({ missionIdParam: missionId, targetUid }).catch(() => { /* silencioso */ });
-}
+
 
 export default function RealProfileScreen() {
   const { user }     = useAuth();
@@ -167,9 +162,8 @@ export default function RealProfileScreen() {
           // cliente e o do servidor são chaves diferentes, então a
           // idempotência do earnXP não pegava.
 
-          // Missão diária continua no cliente: não há equivalente
-          // no caminho do PROFILE_VISIT.
-          notifyMission('visit_profiles', targetUserId);
+          // Missão "Visitar 3 perfis": registrada pelo
+          // registerProfileVisit, no servidor.
         }
       }
     } catch (error) {
@@ -269,8 +263,7 @@ export default function RealProfileScreen() {
           console.warn('[RealProfileScreen] onProfileLike falhou:', err);
         });
 
-        // v5.3 — missão like_profiles (fire-and-forget)
-        notifyMission('like_profiles', targetUserId);
+        // Missão "Curtir 3 perfis": registrada pelo onCreateMatch.
 
         // XP GIVE_LIKE e depósito no cofre NÃO são emitidos aqui.
         // O onProfileLike acima já dispara ambos pela via correta:

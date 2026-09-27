@@ -44,6 +44,7 @@ import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import { handleCoinsChargeback } from './handleCoinsChargeback';
 import { activateGalaxiaPlus }   from './activateGalaxiaPlus';
 import { incrementMetrics }      from '../utils/incrementMetric';
+import { MissionService }        from '../gamification/services/MissionService';
 
 const db = admin.firestore();
 
@@ -516,6 +517,11 @@ export const onAsaasWebhook = functions.onRequest(
         sellerId,
         activatedAt: FieldValue.serverTimestamp(),
       }, { merge: true }).catch(() => {});
+
+      // Missão "Comprar um produto no Marketplace" — só compra PAGA
+      // e confirmada. Falha aqui nunca impede o 200 ao Asaas.
+      await MissionService.recordEvent(buyerId, 'buy_product')
+        .catch(error => console.warn('[onAsaasWebhook] missão falhou:', error));
 
       // Marca como processado
       await idempotencyRef.set({

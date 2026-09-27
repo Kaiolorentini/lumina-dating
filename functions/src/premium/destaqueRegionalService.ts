@@ -177,8 +177,8 @@ export const activateDestaqueRegional = functions.onCall(
     if (usersInRegion < DESTAQUE_MIN_USERS_IN_REGION) {
       throw new functions.HttpsError(
         'failed-precondition',
-        'Sua região ainda não tem gente suficiente para o Destaque valer a pena. ' +
-          'Avisamos você assim que abrir.',
+        `Sua cidade tem ${usersInRegion} de ${DESTAQUE_MIN_USERS_IN_REGION} pessoas. ` +
+          'O Destaque Regional libera quando chegar a esse número.',
       );
     }
 
@@ -194,12 +194,13 @@ export const activateDestaqueRegional = functions.onCall(
 
       const gratuitos = wallet.coinsGratuitos ?? 0;
       const premium   = wallet.coinsPremium   ?? 0;
-      const total     = gratuitos + premium;
 
-      if (total < cost) {
+      // Só premium desde 27/09: os impulsos mais valiosos não
+      // aceitam cristais gratuitos (decisão de produto).
+      if (premium < cost) {
         throw new functions.HttpsError(
           'failed-precondition',
-          `Saldo insuficiente. Necessário: ${cost}. Disponível: ${total}.`,
+          `Cristais Premium insuficientes. Necessário: ${cost}. Disponível: ${premium}.`,
         );
       }
 
@@ -223,11 +224,11 @@ export const activateDestaqueRegional = functions.onCall(
         }
       }
 
-      // R19: Gratuitos primeiro, Premium depois
-      const spentFromGratuitos = Math.min(cost, gratuitos);
-      const spentFromPremium   = cost - spentFromGratuitos;
-      const newGratuitos = gratuitos - spentFromGratuitos;
-      const newPremium   = premium   - spentFromPremium;
+      // Premium-only: nada sai dos gratuitos.
+      const spentFromGratuitos = 0;
+      const spentFromPremium   = cost;
+      const newGratuitos = gratuitos;
+      const newPremium   = premium - cost;
 
       if (newGratuitos < 0 || newPremium < 0) {
         throw new functions.HttpsError('failed-precondition', 'Saldo insuficiente.');
@@ -305,7 +306,7 @@ export const activateDestaqueRegional = functions.onCall(
       auditLogFinanceiro({
         uid,
         tipo:                   'SPEND_DESTAQUE_REGIONAL',
-        coinTipo:               spentFromPremium > 0 ? 'mixed' : 'gratuito',
+        coinTipo:               'premium',
         valor:                  -cost,
         origem:                 'activateDestaqueRegional',
         saldoAnteriorGratuito:  gratuitos,
@@ -364,7 +365,8 @@ export const getDestaqueRegionalStatus = functions.onCall(
 
     const gratuitos = wallet.coinsGratuitos ?? 0;
     const premium   = wallet.coinsPremium   ?? 0;
-    const total     = gratuitos + premium;
+    // Premium-only: gratuitos não contam para liberar o Destaque.
+    const total     = premium;
     const cost      = COSTS.DESTAQUE_REGIONAL;
 
     const temRegiao = isRegiaoIdCoerente(user.regiaoId, user.estadoId);

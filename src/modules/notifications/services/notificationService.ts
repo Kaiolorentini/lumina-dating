@@ -47,6 +47,7 @@ export function getNotificationIcon(type: NotificationType): string {
     like_received:          '💜',
     coins_purchased:        '💎',
     galaxia_plus_activated: '🌌',
+    cofre_pronto:           '🗝️',
   };
   return icons[type] ?? '🔔';
 }

@@ -12,7 +12,7 @@
 // dias, com recompensas de cada estágio.
 //
 // Agora:
-//   • só START_CONVO e UNLOCK_ACHIEVEMENT vêm do app — o resto é
+//   • só START_CONVO vem do app — o resto é
 //     creditado pelo Engine, no servidor, quando o evento ocorre;
 //   • a chave é do servidor: uid + ação + alvo, uma vez por par;
 //   • o alvo precisa existir;
@@ -57,7 +57,8 @@ const db = admin.firestore();
  */
 const CLIENT_ACTIONS: ReadonlySet<string> = new Set([
   'START_CONVO',          // ChatScreen, via engagementService.onMessageSent
-  'UNLOCK_ACHIEVEMENT',   // ProgressiveGallery, via engagementService.onContentUnlocked
+  // UNLOCK_ACHIEVEMENT saiu em 27/09: só a galeria progressiva
+  // (removida) pedia, e o app não pode se dar XP.
 ]);
 
 /** Mesmo formato das rules (isChatMember) e do messageService. */
@@ -315,6 +316,22 @@ export const earnXP = functions.onCall(
       };
     });
 
+    // Conquistas de conversa (CHAT_FIRST, CHAT_10) — contadas pelo
+    // SERVIDOR, uma vez por par, só com conversa verificada (as duas
+    // pessoas mandaram mensagem). Antes vinham do checkAchievements,
+    // chamado pelo app a cada envio: cada toque somava +1.
+    // alreadyProcessed === false só no caminho que gravou a
+    // idempotência do par — então conta exatamente uma vez.
+    if (action === 'START_CONVO' && result.alreadyProcessed === false) {
+      db.collection('achievementTriggers').add({
+        uid,
+        action:       'START_CONVO',
+        currentValue: 1,
+        processedAt:  null,
+        timestamp:    FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
+
     // v5.3 — conquista TREE_EVOLUTION (fire-and-forget, só se evoluiu)
     if (result.stageUp && result.newStage !== undefined) {
       db.collection('achievementTriggers').add({
@@ -345,7 +362,7 @@ const XP_ACTIONS_PUBLIC: { action: string; icon: string; label: string; note: st
   { action: 'START_CONVO',        icon: '💬', label: 'Iniciar conversa real',  note: 'após resposta, 1x por pessoa' },
   { action: 'CREATE_SINTONIA',    icon: '✨', label: 'Criar Sintonia',         note: 'quando ambos curtiram'        },
   { action: 'COMPLETE_MISSION',   icon: '📋', label: 'Completar missão',       note: 'após validação'               },
-  { action: 'UNLOCK_ACHIEVEMENT', icon: '🔓', label: 'Desbloquear galeria',    note: '1x por perfil'                },
+
 ];
 
 // ── 2. Status de XP (REGRA 28: cliente recebe tudo pronto) ──

@@ -62,6 +62,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { todayBr }    from '../utils/dateBr';
 import { isGalaxiaPlusActive } from '../payments/activateGalaxiaPlus';
 import { GALAXIA_PLUS } from '../config/economy';
+import { MissionService } from '../gamification/services/MissionService';
+import { calcCompatibilidade, gendersFromPreferences } from '../utils/compatibility';
 
 const db = admin.firestore();
 
@@ -106,29 +108,7 @@ const CANDIDATE_POOL = 50;
  */
 const VERIFICATION_APPROVED = 'approved';
 
-/**
- * Preferência → gêneros que ela cobre.
- *
- * Os dois campos usam VOCABULÁRIOS DIFERENTES: a preferência
- * é 'homens'|'mulheres'|'trans'|'todos' e o gênero é
- * 'masculino'|'feminino'|'trans'|'nao-binario'. Comparar um
- * com o outro direto fazia `where('gender','in',['mulheres'])`
- * nunca casar com 'feminino', e a carta voltava SEMPRE VAZIA.
- */
-const PREFERENCE_TO_GENDERS: Record<string, string[]> = {
-  homens:   ['masculino'],
-  mulheres: ['feminino'],
-  trans:    ['trans'],
-  todos:    ['masculino', 'feminino', 'trans', 'nao-binario'],
-};
-
-function gendersFromPreferences(preferences: string[]): string[] {
-  const set = new Set<string>();
-  for (const pref of preferences) {
-    for (const g of PREFERENCE_TO_GENDERS[pref] ?? []) set.add(g);
-  }
-  return [...set];
-}
+// Preferência → gêneros: ver utils/compatibility.ts (fonte única).
 
 interface DestinyProfile {
   uid:      string;
@@ -159,39 +139,8 @@ interface Candidate {
   data: Record<string, unknown>;
 }
 
-/**
- * Compatibilidade no servidor, para ESCOLHER quem mostrar.
- *
- * DÍVIDA: o cálculo do cliente considera interesses e bio, e
- * este não. Por isso a tela recalcula no cliente antes de
- * exibir — o número que a pessoa vê é o mesmo do perfil
- * aberto. Portar o calcularSintonia inteiro duplicaria ~100
- * linhas, e o projeto já sofreu com catálogos divergindo.
- */
-function calcCompatibilidade(
-  a: Record<string, unknown>,
-  b: Record<string, unknown>,
-): number {
-  let score = 45;
-
-  const prefA = (a.preferences as string[] | undefined) ?? [];
-  const prefB = (b.preferences as string[] | undefined) ?? [];
-
-  if (gendersFromPreferences(prefA).includes(b.gender as string)) score += 20;
-  if (gendersFromPreferences(prefB).includes(a.gender as string)) score += 15;
-
-  const ageA = (a.age as number | undefined) ?? 25;
-  const ageB = (b.age as number | undefined) ?? 25;
-  const ageDiff = Math.abs(ageA - ageB);
-  if (ageDiff <= 3)       score += 12;
-  else if (ageDiff <= 7)  score += 7;
-  else if (ageDiff <= 12) score += 3;
-
-  if (a.regiaoId && b.regiaoId && a.regiaoId === b.regiaoId) score += 10;
-  else if (a.state && b.state && a.state === b.state) score += 4;
-
-  return Math.min(Math.max(score, 30), 99);
-}
+// Compatibilidade: ver utils/compatibility.ts (fonte única, também
+// usada pelos gatilhos emocionais).
 
 // ── Estado da carta do dia ──
 export const getDestinyCard = functions.onCall(
@@ -301,6 +250,10 @@ export const drawDestinyCard = functions.onCall(
         cardsDrawnTotal: FieldValue.increment(1),
       }, { merge: true }).catch(() => {});
     }
+
+    // Missão "Abrir Carta do Destino" — só carta realmente aberta.
+    await MissionService.recordEvent(uid, 'open_destiny')
+      .catch(error => console.warn('[drawDestinyCard] missão falhou:', error));
 
     return {
       profiles,

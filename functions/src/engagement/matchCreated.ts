@@ -19,6 +19,7 @@ import * as functions from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { MatchService } from '../gamification/services/MatchService';
+import { MissionService } from '../gamification/services/MissionService';
 import { notifyUser }   from '../utils/notifyUser';
 
 const db = admin.firestore();
@@ -75,6 +76,18 @@ export const onCreateMatch = functions.onCall(
     // (ADR-001). Ele já cuida do earnXP CREATE_SINTONIA e do
     // trigger de conquista via GamificationIntegrationService.
     const result = await MatchService.createMatch(uid, targetUid);
+
+    // Missões: "Curtir 3 perfis" (quem curtiu) e "Receber uma
+    // curtida" (quem recebeu). Só curtida NOVA — a repetição do
+    // dia já foi barrada pelo create() acima.
+    if (!alreadyLiked) {
+      await Promise.all([
+        MissionService.recordEvent(uid, 'like_profiles', targetUid)
+          .catch(error => console.warn('[onCreateMatch] missão like falhou:', error)),
+        MissionService.recordEvent(targetUid, 'receive_like')
+          .catch(error => console.warn('[onCreateMatch] missão receive_like falhou:', error)),
+      ]);
+    }
 
     // GIVE_LIKE continua sendo emitido pelo cliente (o earnXP é
     // onCall e não há função interna reutilizável — extrair uma

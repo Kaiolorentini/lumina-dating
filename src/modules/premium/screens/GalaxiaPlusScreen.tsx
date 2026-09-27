@@ -27,9 +27,11 @@
 // ── ACESSO DE 30 DIAS, NÃO ASSINATURA ──
 //
 // Nada é cobrado automaticamente. Quando expira, os benefícios
-// param — mas os cristais, fragmentos, Turbos e o badge ficam.
-// A tela diz isso em todos os estados, para ninguém se sentir
-// enganado.
+// param — mas os cristais, fragmentos e o badge ficam. Os Turbos
+// valem só com o acesso ativo (decisão de 27/09, igual ao
+// turboService); a pessoa é avisada 3 dias e 1 dia antes
+// (notifyGalaxiaTurbosExpiring). A tela diz isso em todos os
+// estados, para ninguém se sentir enganado.
 // ============================================
 
 import React, { useState, useCallback } from 'react';
@@ -201,7 +203,7 @@ export default function GalaxiaPlusScreen() {
               </Text>
               <Text style={styles.heroSubLocked}>
                 {status.everSubscribed
-                  ? 'Os benefícios pararam, mas tudo que você recebeu continua seu.'
+                  ? 'Os benefícios pararam. Cristais, fragmentos e o badge continuam seus.'
                   : `${status.duration ?? 30} dias de acesso por R$ ${price ?? '24,99'}`}
               </Text>
             </>
@@ -262,8 +264,8 @@ export default function GalaxiaPlusScreen() {
             ? `${b.turbos.available} disponíveis`
             : '4 na ativação'}
           detail={active
-            ? `${b.turbos.used} de ${b.turbos.granted} usados`
-            : 'Cada um vale 120 cristais premium'}
+            ? `${b.turbos.used} de ${b.turbos.granted} usados · valem até o fim do acesso`
+            : 'Valem enquanto o acesso estiver ativo'}
           action={active && b.turbos.available > 0
             ? { label: 'Usar', onPress: () => navigation.navigate('PremiumTools') }
             : undefined}
@@ -301,8 +303,8 @@ export default function GalaxiaPlusScreen() {
           locked={!active}
           summary="Sem as 48 horas de espera"
           detail={active && b.vault.instantWithdraws > 0
-            ? `${b.vault.instantWithdraws} saques sem espera · ${b.vault.crystalsFromInstant} cristais`
-            : 'Fragmentos viram cristais na hora'}
+            ? `${b.vault.instantWithdraws} saques sem espera · ${b.vault.fragmentsFromInstant ?? 0} fragmentos`
+            : 'Fragmentos vão para a carteira na hora'}
           action={active
             ? { label: 'Abrir', onPress: () => navigation.navigate('Vault') }
             : undefined}
@@ -333,9 +335,14 @@ export default function GalaxiaPlusScreen() {
             dias: você não perde o que sobrou.
           </Text>
           <Text style={styles.rulesText}>
-            • Ao expirar, os cristais, fragmentos, Turbos e o badge
-            que você recebeu <Text style={styles.rulesStrong}>continuam seus para
-            sempre</Text>. Só os benefícios contínuos param.
+            • Ao expirar, os cristais, fragmentos e o badge que você
+            recebeu <Text style={styles.rulesStrong}>continuam seus para
+            sempre</Text>. Os benefícios contínuos param.
+          </Text>
+          <Text style={styles.rulesText}>
+            • Os <Text style={styles.rulesStrong}>Turbos valem enquanto o acesso
+            estiver ativo</Text>. Avisamos 3 dias e 1 dia antes de expirar, se
+            ainda houver Turbos para usar.
           </Text>
           <Text style={styles.rulesText}>
             • O badge Constelação Guia vem na primeira ativação. Nas

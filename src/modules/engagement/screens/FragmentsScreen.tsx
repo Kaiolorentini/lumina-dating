@@ -1,12 +1,19 @@
 // ============================================
-// LUMINA — FRAGMENTS SCREEN v5.2
+// LUMINA — FRAGMENTS SCREEN v6.0
 // src/modules/engagement/screens/FragmentsScreen.tsx
+//
+// v6.0 — mesmo painel de conversão do Cofre (FragmentConverter):
+// a pessoa escolhe quanto converte. Sem teto, sem espera, sem
+// expiração.
+//
+// "Como ganhar" corrigido: visitas, curtidas e sintonias vão para
+// o COFRE (+2/+5/+20), não para a carteira (a tela dizia +1/+1/+3).
 // ============================================
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Animated,
+  TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { useNavigation }   from '@react-navigation/native';
@@ -14,18 +21,14 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth }         from '../../../context/AuthContext';
 import { useCoins }        from '../../../context/CoinsContext';
 import { useFragments }    from '../hooks/useFragments';
+import FragmentConverter   from '../components/FragmentConverter';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-function formatCooldown(ms: number): string {
-  const hours   = Math.floor(ms / (1000 * 60 * 60));
-  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-  if (hours > 0) return `${hours}h ${minutes}min`;
-  return `${minutes} minutos`;
-}
+const SCREEN_TITLE = 'Fragmentos de Sintonia';
 
 export default function FragmentsScreen() {
   const navigation = useNavigation<NavProp>();
@@ -33,30 +36,10 @@ export default function FragmentsScreen() {
   const { refreshWallet } = useCoins();
   const { status, loading, converting, error, convert, refresh } = useFragments(user?.uid);
 
-  const [converted,    setConverted]    = useState<{ crystals: number; fragments: number } | null>(null);
-  const [cooldownLeft, setCooldownLeft] = useState(0);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [converted, setConverted] = useState<{ crystals: number; fragments: number } | null>(null);
 
-  useEffect(() => {
-    if (!status?.cooldownRemainingMs) return;
-    setCooldownLeft(status.cooldownRemainingMs);
-    const interval = setInterval(() => {
-      setCooldownLeft(prev => {
-        const next = prev - 1000;
-        if (next <= 0) { clearInterval(interval); return 0; }
-        return next;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [status?.cooldownRemainingMs]);
-
-  async function handleConvert() {
-    Animated.sequence([
-      Animated.spring(scaleAnim, { toValue: 0.95, useNativeDriver: true, speed: 30 }),
-      Animated.spring(scaleAnim, { toValue: 1,    useNativeDriver: true, speed: 20 }),
-    ]).start();
-
-    const result = await convert();
+  async function handleConvert(crystals: number) {
+    const result = await convert(crystals);
     if (result) {
       setConverted({ crystals: result.crystalsGained, fragments: result.fragmentsUsed });
       await refreshWallet();
@@ -66,7 +49,7 @@ export default function FragmentsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Header title="Fragmentos" showBack={true} showHome={true} />
+        <Header title={SCREEN_TITLE} showBack={true} showHome={true} />
         <View style={styles.center}>
           <ActivityIndicator color={COLORS.secondary} size="large" />
         </View>
@@ -74,17 +57,33 @@ export default function FragmentsScreen() {
     );
   }
 
-  const fragments         = status?.fragments         ?? 0;
-  const coinsGratuitos    = status?.coinsGratuitos    ?? 0;
-  const canConvert        = status?.canConvert        ?? false;
-  const crystalsAvailable = status?.crystalsAvailable ?? 0;
-  const fragmentsNeeded   = status?.fragmentsNeeded   ?? 100;
-  const cooldownActive    = status?.cooldownActive    ?? false;
-  const progress          = Math.min(fragments / fragmentsNeeded, 1);
+  if (!status) {
+    return (
+      <View style={styles.container}>
+        <Header title={SCREEN_TITLE} showBack={true} showHome={true} />
+        <View style={styles.center}>
+          <Text style={styles.errorIcon}>🔮</Text>
+          <Text style={styles.errorTitle}>Não foi possível carregar</Text>
+          <Text style={styles.errorSub}>Verifique sua conexão e tente de novo.</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => refresh()}
+            accessibilityRole="button"
+            accessibilityLabel="Tentar carregar de novo"
+          >
+            <Text style={styles.retryText}>Tentar de novo</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  const fragments  = status.fragments ?? 0;
+  const perCrystal = status.fragmentsPerCrystal ?? status.fragmentsNeeded ?? 100;
 
   return (
     <View style={styles.container}>
-      <Header title="Fragmentos de Sintonia" showBack={true} showHome={true} />
+      <Header title={SCREEN_TITLE} showBack={true} showHome={true} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
@@ -92,102 +91,54 @@ export default function FragmentsScreen() {
         <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.hero}>
           <Text style={styles.heroIcon}>🔮</Text>
           <Text style={styles.heroFragments}>{fragments}</Text>
-          <Text style={styles.heroLabel}>Fragmentos de Sintonia</Text>
+          <Text style={styles.heroLabel}>Fragmentos na carteira</Text>
 
-          <View style={styles.progressSection}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressLabel}>Próximo cristal</Text>
-              <Text style={styles.progressValue}>{fragments}/{fragmentsNeeded}</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${progress * 100}%` as any }]} />
-            </View>
-            {fragments >= fragmentsNeeded && (
-              <Text style={styles.progressReady}>✨ Pronto para converter!</Text>
-            )}
-          </View>
-
-          <View style={styles.balanceRow}>
-            <View style={styles.balancePill}>
-              <Text style={styles.balanceIcon}>✨</Text>
-              <Text style={styles.balanceValue}>{coinsGratuitos}</Text>
-              <Text style={styles.balanceLabel}>Cristais Gratuitos</Text>
-            </View>
+          <View style={styles.balancePill}>
+            <Text style={styles.balanceIcon}>✨</Text>
+            <Text style={styles.balanceValue}>{status.coinsGratuitos ?? 0}</Text>
+            <Text style={styles.balanceLabel}>Cristais Gratuitos</Text>
           </View>
         </LinearGradient>
 
-        {/* Resultado */}
         {converted && (
           <View style={styles.convertedCard}>
             <Text style={styles.convertedIcon}>✨</Text>
             <Text style={styles.convertedText}>
-              +{converted.crystals} Cristal{converted.crystals > 1 ? 'is' : ''} Gratuito{converted.crystals > 1 ? 's' : ''}!
+              +{converted.crystals} {converted.crystals === 1 ? 'Cristal Gratuito' : 'Cristais Gratuitos'}!
             </Text>
-            <Text style={styles.convertedSub}>
-              {converted.fragments} fragmentos convertidos
-            </Text>
+            <Text style={styles.convertedSub}>{converted.fragments} fragmentos convertidos</Text>
           </View>
         )}
 
-        {/* Conversão */}
-        <View style={styles.convertSection}>
-          <Text style={styles.convertTitle}>Converter Fragmentos</Text>
-          <Text style={styles.convertFormula}>
-            {fragmentsNeeded} 🔮 = 1 ✨ Cristal Gratuito
-          </Text>
-
-          {crystalsAvailable > 0 && (
-            <Text style={styles.convertAvailable}>
-              Você pode converter {crystalsAvailable} cristal{crystalsAvailable > 1 ? 'is' : ''} agora
-            </Text>
-          )}
-
-          {cooldownActive && cooldownLeft > 0 && !converted && (
-            <View style={styles.cooldownCard}>
-              <Text style={styles.cooldownIcon}>⏳</Text>
-              <Text style={styles.cooldownText}>
-                Próxima conversão em {formatCooldown(cooldownLeft)}
-              </Text>
-            </View>
-          )}
-
-          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-            <TouchableOpacity
-              style={[styles.convertBtn, (!canConvert || converting) && styles.convertBtnDisabled]}
-              onPress={handleConvert}
-              disabled={!canConvert || converting}
-              activeOpacity={0.85}
-            >
-              {converting ? (
-                <ActivityIndicator color={COLORS.background} />
-              ) : (
-                <>
-                  <Text style={styles.convertBtnIcon}>🔮</Text>
-                  <Text style={styles.convertBtnText}>
-                    {canConvert
-                      ? `Converter ${crystalsAvailable * fragmentsNeeded} fragmentos`
-                      : fragments < fragmentsNeeded
-                        ? `Faltam ${fragmentsNeeded - fragments} fragmentos`
-                        : 'Aguarde o cooldown'}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </Animated.View>
-
+        <View style={styles.converterWrap}>
+          <FragmentConverter
+            fragments={fragments}
+            fragmentsPerCrystal={perCrystal}
+            converting={converting}
+            onConvert={handleConvert}
+          />
           {error && <Text style={styles.errorText}>{error}</Text>}
+
+          <TouchableOpacity
+            style={styles.vaultLink}
+            onPress={() => navigation.navigate('Vault')}
+            accessibilityRole="button"
+            accessibilityLabel="Abrir o Cofre de Sintonia"
+          >
+            <Text style={styles.vaultLinkText}>🗝️ Tem fragmentos no Cofre? Sacar ›</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Como ganhar */}
         <Text style={styles.sectionTitle}>Como ganhar Fragmentos</Text>
         <View style={styles.infoList}>
           {[
-            { icon: '📋', text: 'Completar missões diárias',  value: '10–15 🔮' },
-            { icon: '👁️', text: 'Receber visitas no perfil',   value: '+1 🔮'    },
-            { icon: '💜', text: 'Receber curtidas',            value: '+1 🔮'    },
-            { icon: '✨', text: 'Criar uma nova Sintonia',     value: '+3 🔮'    },
-          ].map((item, i) => (
-            <View key={i} style={styles.infoItem}>
+            { icon: '📋', text: 'Missões diárias',                      value: '8–15 🔮'   },
+            { icon: '🗝️', text: 'Cofre: visitas, curtidas e sintonias', value: '+2 a +20 🔮' },
+            { icon: '🎁', text: 'Marcos de nível (10 a 50)',            value: '10–300 🔮' },
+            { icon: '🏆', text: 'Conquistas e coleções',                value: 'variável'  },
+          ].map(item => (
+            <View key={item.text} style={styles.infoItem}>
               <Text style={styles.infoItemIcon}>{item.icon}</Text>
               <Text style={styles.infoItemText}>{item.text}</Text>
               <Text style={styles.infoItemValue}>{item.value}</Text>
@@ -197,10 +148,10 @@ export default function FragmentsScreen() {
 
         {/* Regras */}
         <View style={styles.rulesCard}>
-          <Text style={styles.rulesTitle}>⚠️ Regras importantes</Text>
-          <Text style={styles.rulesText}>• Cooldown de 24h entre conversões</Text>
-          <Text style={styles.rulesText}>• Máximo de 5 cristais por conversão</Text>
-          <Text style={styles.rulesText}>• Fragmentos expiram 10% a cada 7 dias sem converter</Text>
+          <Text style={styles.rulesTitle}>ℹ️ Regras</Text>
+          <Text style={styles.rulesText}>• {perCrystal} fragmentos = 1 cristal gratuito</Text>
+          <Text style={styles.rulesText}>• Converta a quantidade que quiser, quando quiser</Text>
+          <Text style={styles.rulesText}>• Fragmentos não expiram</Text>
           <Text style={styles.rulesText}>• Fragmentos não são compráveis — apenas ganháveis</Text>
         </View>
 
@@ -214,47 +165,36 @@ const S = SPACING;
 const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
-  container:         { flex: 1, backgroundColor: COLORS.background },
-  center:            { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  hero:              { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
-  heroIcon:          { fontSize: 56 },
-  heroFragments:     { color: COLORS.secondary, fontSize: 64, fontWeight: FONT_WEIGHT.extrabold, lineHeight: 70 },
-  heroLabel:         { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textTransform: 'uppercase', letterSpacing: 1 },
-  progressSection:   { width: '100%', gap: S.xs },
-  progressHeader:    { flexDirection: 'row', justifyContent: 'space-between' },
-  progressLabel:     { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
-  progressValue:     { color: COLORS.secondary, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
-  progressBar:       { height: 10, backgroundColor: COLORS.border, borderRadius: R.full, overflow: 'hidden' },
-  progressFill:      { height: '100%', backgroundColor: COLORS.secondary, borderRadius: R.full },
-  progressReady:     { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
-  balanceRow:        { flexDirection: 'row', justifyContent: 'center' },
-  balancePill:       { flexDirection: 'row', alignItems: 'center', gap: S.xs, backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: R.full, paddingHorizontal: S.lg, paddingVertical: S.sm, borderWidth: 1, borderColor: 'rgba(255,215,0,0.3)' },
-  balanceIcon:       { fontSize: 16 },
-  balanceValue:      { color: '#FFD700', fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.extrabold },
-  balanceLabel:      { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
-  convertedCard:     { marginHorizontal: S.md, marginBottom: S.md, backgroundColor: 'rgba(181,123,238,0.15)', borderRadius: R.lg, padding: S.lg, alignItems: 'center', gap: S.xs, borderWidth: 1, borderColor: COLORS.secondary },
-  convertedIcon:     { fontSize: 36 },
-  convertedText:     { color: COLORS.secondary, fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.extrabold },
-  convertedSub:      { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
-  convertSection:    { marginHorizontal: S.md, gap: S.md, marginBottom: S.lg },
-  convertTitle:      { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
-  convertFormula:    { color: COLORS.textMuted, fontSize: FONT_SIZE.md, textAlign: 'center' },
-  convertAvailable:  { color: COLORS.secondary, fontSize: FONT_SIZE.sm, textAlign: 'center', fontWeight: FONT_WEIGHT.semibold },
-  cooldownCard:      { flexDirection: 'row', alignItems: 'center', gap: S.sm, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.border },
-  cooldownIcon:      { fontSize: 24 },
-  cooldownText:      { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
-  convertBtn:        { backgroundColor: COLORS.primary, borderRadius: R.lg, paddingVertical: S.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: S.sm },
-  convertBtnDisabled: { opacity: 0.4 },
-  convertBtnIcon:    { fontSize: 20 },
-  convertBtnText:    { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  errorText:         { color: '#FF6B6B', fontSize: FONT_SIZE.sm, textAlign: 'center' },
-  sectionTitle:      { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginBottom: S.sm },
-  infoList:          { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg },
-  infoItem:          { flexDirection: 'row', alignItems: 'center', padding: S.md, gap: S.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  infoItemIcon:      { fontSize: 22, width: 32 },
-  infoItemText:      { flex: 1, color: COLORS.surface, fontSize: FONT_SIZE.sm },
-  infoItemValue:     { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
-  rulesCard:         { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.sm, borderWidth: 1, borderColor: COLORS.border },
-  rulesTitle:        { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginBottom: S.xs },
-  rulesText:         { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },
+  container:      { flex: 1, backgroundColor: COLORS.background },
+  center:         { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl, gap: S.sm },
+  errorIcon:      { fontSize: 44 },
+  errorTitle:     { color: COLORS.surface, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
+  errorSub:       { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center' },
+  retryBtn:       { marginTop: S.md, borderWidth: 1, borderColor: COLORS.secondary, borderRadius: R.full, paddingHorizontal: S.xl, paddingVertical: S.sm },
+  retryText:      { color: COLORS.secondary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
+  hero:           { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.md, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
+  heroIcon:       { fontSize: 56 },
+  heroFragments:  { color: COLORS.secondary, fontSize: 64, fontWeight: FONT_WEIGHT.extrabold, lineHeight: 70 },
+  heroLabel:      { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textTransform: 'uppercase', letterSpacing: 1 },
+  balancePill:    { flexDirection: 'row', alignItems: 'center', gap: S.xs, backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: R.full, paddingHorizontal: S.lg, paddingVertical: S.sm, borderWidth: 1, borderColor: 'rgba(255,215,0,0.3)' },
+  balanceIcon:    { fontSize: 16 },
+  balanceValue:   { color: '#FFD700', fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.extrabold },
+  balanceLabel:   { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
+  convertedCard:  { marginHorizontal: S.md, marginBottom: S.md, backgroundColor: 'rgba(181,123,238,0.15)', borderRadius: R.lg, padding: S.lg, alignItems: 'center', gap: S.xs, borderWidth: 1, borderColor: COLORS.secondary },
+  convertedIcon:  { fontSize: 36 },
+  convertedText:  { color: COLORS.secondary, fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.extrabold },
+  convertedSub:   { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
+  converterWrap:  { marginHorizontal: S.md, gap: S.md, marginBottom: S.lg },
+  errorText:      { color: '#FF6B6B', fontSize: FONT_SIZE.sm, textAlign: 'center' },
+  vaultLink:      { alignSelf: 'center', paddingVertical: S.xs },
+  vaultLinkText:  { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  sectionTitle:   { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginBottom: S.sm },
+  infoList:       { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg },
+  infoItem:       { flexDirection: 'row', alignItems: 'center', padding: S.md, gap: S.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  infoItemIcon:   { fontSize: 22, width: 32 },
+  infoItemText:   { flex: 1, color: COLORS.surface, fontSize: FONT_SIZE.sm },
+  infoItemValue:  { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  rulesCard:      { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.sm, borderWidth: 1, borderColor: COLORS.border },
+  rulesTitle:     { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginBottom: S.xs },
+  rulesText:      { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },
 });

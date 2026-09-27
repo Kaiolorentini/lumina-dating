@@ -1,9 +1,9 @@
 // ============================================
-// LUMINA — USE FRAGMENTS HOOK v5.2
+// LUMINA — USE FRAGMENTS HOOK v6.0
 // src/modules/engagement/hooks/useFragments.ts
 //
-// Usa getFragmentsStatus (novo) +
-// convertFragments (existente em economy/)
+// v6.0 — convert(cristais): a pessoa escolhe quanto converte.
+// Sem teto, sem espera, sem expiração.
 // ============================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -12,15 +12,14 @@ import { getFunctions, httpsCallable }      from 'firebase/functions';
 const functions = getFunctions();
 
 export interface FragmentsStatus {
-  fragments:           number;
-  coinsGratuitos:      number;
-  coinsPremium:        number;
-  canConvert:          boolean;
-  crystalsAvailable:   number;
-  fragmentsNeeded:     number;
-  cooldownActive:      boolean;
-  cooldownRemainingMs: number;
-  lastConversionAt:    string | null;
+  fragments:            number;
+  coinsGratuitos:       number;
+  coinsPremium:         number;
+  canConvert:           boolean;
+  crystalsAvailable:    number;
+  fragmentsPerCrystal?: number;
+  fragmentsNeeded:      number;
+  lastConversionAt:     string | null;
 }
 
 export interface ConversionResult {
@@ -28,6 +27,10 @@ export interface ConversionResult {
   fragmentsUsed:       number;
   fragmentsRemaining:  number;
   newBalanceGratuitos: number;
+}
+
+interface ConvertPayload {
+  crystals: number;
 }
 
 interface State {
@@ -45,9 +48,10 @@ export function useFragments(uid: string | undefined) {
     error:      null,
   });
 
-  const loadStatus = useCallback(async () => {
+  /** silent: recarrega sem voltar para a tela de loading. */
+  const loadStatus = useCallback(async (silent = false) => {
     if (!uid) return;
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    if (!silent) setState(prev => ({ ...prev, loading: true, error: null }));
     try {
       const fn     = httpsCallable<void, FragmentsStatus>(functions, 'getFragmentsStatus');
       const result = await fn();
@@ -60,25 +64,23 @@ export function useFragments(uid: string | undefined) {
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
-  const convert = useCallback(async (): Promise<ConversionResult | null> => {
-    if (!uid || state.converting || !state.status?.canConvert) return null;
+  const convert = useCallback(async (crystals: number): Promise<ConversionResult | null> => {
+    if (!uid || state.converting || crystals < 1) return null;
     setState(prev => ({ ...prev, converting: true, error: null }));
     try {
-      // Usa convertFragments existente do economy/
-      const fn     = httpsCallable<void, ConversionResult>(functions, 'convertFragments');
-      const result = await fn();
+      const fn     = httpsCallable<ConvertPayload, ConversionResult>(functions, 'convertFragments');
+      const result = await fn({ crystals });
+      const perCrystal = state.status?.fragmentsPerCrystal ?? state.status?.fragmentsNeeded ?? 100;
 
       setState(prev => ({
         ...prev,
         converting: false,
         status: prev.status ? {
           ...prev.status,
-          fragments:           result.data.fragmentsRemaining,
-          coinsGratuitos:      result.data.newBalanceGratuitos,
-          canConvert:          result.data.fragmentsRemaining >= (prev.status?.fragmentsNeeded ?? 100),
-          cooldownActive:      true,
-          cooldownRemainingMs: 24 * 60 * 60 * 1000,
-          crystalsAvailable:   Math.floor(result.data.fragmentsRemaining / (prev.status?.fragmentsNeeded ?? 100)),
+          fragments:         result.data.fragmentsRemaining,
+          coinsGratuitos:    result.data.newBalanceGratuitos,
+          canConvert:        result.data.fragmentsRemaining >= perCrystal,
+          crystalsAvailable: Math.floor(result.data.fragmentsRemaining / perCrystal),
         } : null,
       }));
 

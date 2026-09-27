@@ -152,6 +152,8 @@ export function isPremiumOnly(feature: SpendableFeature): boolean {
   const premiumFeatures: SpendableFeature[] = [
     'REVEAL_SINTONIA_PERDIDA',
     'TURBO_SINTONIA',
+    // Premium-only desde 27/09. Espelha PREMIUM_ONLY_FEATURES.
+    'DESTAQUE_REGIONAL',
     'FERTILIZANTE_SINTONIA',
     'EFEITO_AURORA',
     'TEMA_GALAXIA',

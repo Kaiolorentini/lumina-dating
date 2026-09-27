@@ -55,7 +55,8 @@ export type PremiumFeatureStatus =
   | 'ACTIVE'    // ativado e correndo
   | 'EXPIRED'   // expirou
   | 'COOLDOWN'; // aguardando cooldown
-  // Mínimo de usuários na região para liberar o Destaque Regional.
-// ⚠️ EM TESTE: 1. Subir para 15 antes do lançamento — abaixo disso
-// o comprador não tem audiência e o produto não entrega.
-export const DESTAQUE_MIN_USERS_IN_REGION = 3;
+// Mínimo de usuários na cidade para liberar o Destaque Regional.
+// Decisão de 27/09: 15. Abaixo disso o comprador não tem audiência e
+// o produto não entrega o que promete. Para testar, é preciso ter 15
+// contas na mesma cidade.
+export const DESTAQUE_MIN_USERS_IN_REGION = 15;

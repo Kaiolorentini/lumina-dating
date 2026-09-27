@@ -25,6 +25,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { todayBr }   from '../utils/dateBr';
 import { isGalaxiaPlusActive } from '../payments/activateGalaxiaPlus';
 import { GALAXIA_PLUS } from '../config/economy';
+import { MissionService } from '../gamification/services/MissionService';
 const db = admin.firestore();
 
 // Tabela de probabilidades acumuladas
@@ -142,6 +143,10 @@ export const claimDailyFaisca = functions.onCall(
           faiscaBonusTotal: FieldValue.increment(result.bonus),
         }, { merge: true }).catch(() => {});
       }
+
+      // Missão "Resgatar Faísca" — registrada aqui, no resgate real.
+      await MissionService.recordEvent(uid, 'claim_faisca')
+        .catch(error => console.warn('[claimDailyFaisca] missão falhou:', error));
 
       return { success: true, ...result, isGalaxiaPlus: isPlus };
 

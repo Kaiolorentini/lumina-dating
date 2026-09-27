@@ -65,7 +65,13 @@ export const VaultService = {
       const newVault   = snapshot.vaultFragments + canDeposit;
       const nowFull    = newVault >= VAULT_MAX;
 
-      const needsNewCycle = !snapshot.vaultUnlockAt || Date.now() > snapshot.vaultUnlockAt.getTime();
+      // Ciclo NOVO só quando não há ciclo aberto: primeiro depósito,
+      // ou depois de um saque (que zera vaultUnlockAt). Antes,
+      // qualquer depósito com o ciclo JÁ vencido abria outro de 48h —
+      // quem não sacou na hora e recebeu uma visita via o Cofre
+      // trancar de novo, e um perfil popular podia nunca sacar.
+      // Vencido o prazo, o Cofre fica liberado até o saque.
+      const needsNewCycle = !snapshot.vaultUnlockAt;
       const updates: Record<string, unknown> = {
         vaultFragments:        newVault,
         vaultLastContribution: admin.firestore.FieldValue.serverTimestamp(),
@@ -78,6 +84,8 @@ export const VaultService = {
       }
       if (needsNewCycle) {
         updates.vaultUnlockAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 48 * 3600000));
+        // A função agendada notifyVaultUnlocked avisa quando vencer.
+        updates.vaultUnlockNotifyPending = true;
       }
 
       VaultRepository.write(t, targetUid, updates);

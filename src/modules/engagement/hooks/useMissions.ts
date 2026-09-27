@@ -53,9 +53,10 @@ export function useMissions(uid: string | undefined) {
   const [state,       setState]       = useState<State>({ data: null, loading: true, error: null });
   const [progressing, setProgressing] = useState<string | null>(null);
 
-  const loadMissions = useCallback(async () => {
+  /** silent: recarrega sem voltar para a tela de loading. */
+  const loadMissions = useCallback(async (silent = false) => {
     if (!uid) return;
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    if (!silent) setState(prev => ({ ...prev, loading: true, error: null }));
     try {
       const fn     = httpsCallable<void, MissionsData>(functions, 'getDailyMissions');
       const result = await fn();
@@ -77,6 +78,8 @@ export function useMissions(uid: string | undefined) {
     fragments:  number;
     crystals:   number;
     duplicate?: boolean;
+    /** Mensagem do servidor quando recusa (ex.: campos do perfil). */
+    error?:     string;
   } | null> => {
     if (!uid || progressing) return null;
     setProgressing(params.missionIdParam);
@@ -126,8 +129,9 @@ export function useMissions(uid: string | undefined) {
         duplicate:  result.data.duplicate,
       };
     } catch (error: unknown) {
-      console.error('[useMissions] progress error:', error);
-      return null;
+      // O servidor explica o que falta (ex.: campos do perfil).
+      const message = error instanceof Error ? error.message : 'Não foi possível registrar.';
+      return { completed: false, fragments: 0, crystals: 0, error: message };
     } finally {
       setProgressing(null);
     }

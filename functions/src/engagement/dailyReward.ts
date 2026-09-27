@@ -17,6 +17,7 @@ import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { todayBr, yesterdayBr } from '../utils/dateBr';
 import { PrestigeService } from './prestigeService';
+import { MissionService } from '../gamification/services/MissionService';
 const db = admin.firestore();
 
 // Marcos de tempo do prestígio. O `checkPrestigeTimeMarcos`
@@ -222,6 +223,11 @@ export const claimDailyReward = functions.onCall(
           break;
         }
       }
+
+
+      // Missão "Resgatar recompensa diária" — no resgate real.
+      await MissionService.recordEvent(uid, 'claim_daily')
+        .catch(error => console.warn('[claimDailyReward] missão falhou:', error));
 
       return { success: true, ...result };
 

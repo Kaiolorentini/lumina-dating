@@ -30,7 +30,7 @@ export interface GalaxiaPlusStatus {
     turbos:       { granted: number; used: number; available: number };
     faisca:       { bonusPercent: number; crystalsEarned: number };
     visitors:     { normalCost: number; timesRevealed: number; crystalsSaved: number };
-    vault:        { instantWithdraws: number; crystalsFromInstant: number };
+    vault:        { instantWithdraws: number; fragmentsFromInstant?: number; crystalsFromInstant: number };
   };
 }
 
