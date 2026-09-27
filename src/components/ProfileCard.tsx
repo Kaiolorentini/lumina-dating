@@ -1,6 +1,22 @@
 // ============================================
-// LUMINA — PROFILE CARD v3.0
+// LUMINA — PROFILE CARD v3.1
 // src/components/ProfileCard.tsx
+//
+// v3.1 — PERFORMANCE E ACESSIBILIDADE.
+//
+// React.memo com comparação pelos campos que o card desenha:
+// qualquer mudança de estado na Home re-renderizava TODOS os
+// cards da grade, cada um com moldura, badge e aura em SVG.
+// Os callbacks são comparados por identidade, de propósito —
+// ignorá-los deixaria o card preso a uma função antiga.
+//
+// Acessibilidade: o card é um botão com rótulo completo. No
+// iOS, um botão DENTRO de outro fica invisível para o
+// VoiceOver, por isso "Sintonizar" também é exposto como AÇÃO
+// do card (gesto de ações do leitor de tela).
+//
+// Sem foto e sem moldura: a inicial do nome no lugar do
+// retângulo cinza, que parecia card quebrado.
 //
 // v3.0 — SINTONIZAR NO CARD.
 //
@@ -18,7 +34,7 @@
 // usersService, não aqui: o card recebe o id já filtrado.
 // ============================================
 
-import React, { useState } from 'react';
+import React, { memo, useState } from 'react';
 import {
   View,
   Text,
@@ -29,6 +45,7 @@ import {
   ActivityIndicator,
   Alert,
   GestureResponderEvent,
+  AccessibilityActionEvent,
 } from 'react-native';
 import { colors, fonts, spacing, borderRadius } from '../theme';
 import { ProfileCardData } from '../shared/types';
@@ -48,6 +65,9 @@ import {
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - spacing.lg * 2 - spacing.sm) / 2;
 const PHOTO_RATIO = 1.15;
+
+/** Nome da ação de acessibilidade que curte pelo leitor de tela. */
+const A11Y_ACTION_LIKE = 'sintonizar';
 
 /**
  * Altura aproximada do card, para o SVG da aura preencher tudo.
@@ -83,7 +103,7 @@ interface Props {
   onLiked?: () => void;
 }
 
-export default function ProfileCard({
+function ProfileCard({
   data, onPress, viewerUid, animatedAura = false, onLiked,
 }: Props) {
   const frame = frameAppearanceById(data.equippedFrame);
@@ -115,10 +135,18 @@ export default function ProfileCard({
     : 'COMMON';
   const stripColor = RARITY_COLOR[badgeRarity] ?? colors.gold;
 
-  async function handleLike(event: GestureResponderEvent) {
+  const canLike = Boolean(viewerUid) && !liked && !liking;
+
+  // Inicial para o placeholder sem foto. `|| '?'` cobre nome
+  // vazio, que charAt(0) devolveria como string vazia.
+  const initial = (data.name?.trim().charAt(0) || '?').toUpperCase();
+
+  // O evento é opcional: pelo toque ele existe e precisa parar
+  // a propagação; pela ação de acessibilidade não há toque.
+  async function handleLike(event?: GestureResponderEvent) {
     // Sem isto o onPress do card dispara junto e curtir navega
     // para o perfil.
-    event.stopPropagation();
+    event?.stopPropagation();
 
     if (liked || liking || !viewerUid) return;
 
@@ -142,6 +170,12 @@ export default function ProfileCard({
     onLiked?.();
   }
 
+  function handleAccessibilityAction(event: AccessibilityActionEvent) {
+    if (event.nativeEvent.actionName === A11Y_ACTION_LIKE) {
+      handleLike();
+    }
+  }
+
   return (
     <TouchableOpacity
       style={[
@@ -159,6 +193,11 @@ export default function ProfileCard({
       ]}
       onPress={onPress}
       activeOpacity={0.9}
+      accessibilityRole="button"
+      accessibilityLabel={`${data.name}, ${data.age} anos, ${data.location}. ${data.sintonia}% de sintonia.`}
+      accessibilityHint="Abre o perfil"
+      accessibilityActions={canLike ? [{ name: A11Y_ACTION_LIKE, label: 'Sintonizar' }] : undefined}
+      onAccessibilityAction={handleAccessibilityAction}
     >
       {/* Com moldura, a cena preenche a área inteira e a foto
           flutua no centro. Sem moldura, a foto ocupa tudo como
@@ -189,8 +228,12 @@ export default function ProfileCard({
           ratio={PHOTO_RATIO}
           frame={frame}
         />
-      ) : (
+      ) : data.photoURL ? (
         <Image source={{ uri: data.photoURL }} style={styles.photo} />
+      ) : (
+        <View style={[styles.photo, styles.photoPlaceholder]}>
+          <Text style={styles.photoInitial}>{initial}</Text>
+        </View>
       )}
 
       {(data.boostType === 'turbo' || data.boostType === 'destaque') && (
@@ -233,6 +276,9 @@ export default function ProfileCard({
           onPress={handleLike}
           disabled={liked || liking}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={liked ? `Sintonizando com ${data.name}` : `Sintonizar com ${data.name}`}
+          accessibilityState={{ disabled: liked || liking, busy: liking }}
         >
           {liking ? (
             <ActivityIndicator color={liked ? colors.white : colors.gold} size="small" />
@@ -259,6 +305,47 @@ export default function ProfileCard({
   );
 }
 
+/**
+ * Re-renderiza só quando algo que o card DESENHA muda.
+ *
+ * Os campos de `data` são comparados um a um porque a Home
+ * pode montar objetos novos a cada render com o mesmo
+ * conteúdo — a comparação rasa padrão do memo falharia sempre.
+ *
+ * Callbacks entram por identidade: ignorá-los faria o card
+ * guardar um onPress antigo. Se a tela passar arrow function
+ * nova a cada render, o memo não economiza nada, mas também
+ * não quebra — o ganho completo pede useCallback na tela.
+ *
+ * Campo novo desenhado no card PRECISA entrar aqui, senão ele
+ * não atualiza na tela.
+ */
+function areEqual(prev: Props, next: Props): boolean {
+  if (prev.viewerUid    !== next.viewerUid)    return false;
+  if (prev.animatedAura !== next.animatedAura) return false;
+  if (prev.onPress      !== next.onPress)      return false;
+  if (prev.onLiked      !== next.onLiked)      return false;
+
+  const a = prev.data;
+  const b = next.data;
+  return (
+    a.id                  === b.id &&
+    a.photoURL            === b.photoURL &&
+    a.name                === b.name &&
+    a.age                 === b.age &&
+    a.location            === b.location &&
+    a.sintonia            === b.sintonia &&
+    a.boostType           === b.boostType &&
+    a.equippedFrame       === b.equippedFrame &&
+    a.equippedBadge       === b.equippedBadge &&
+    a.equippedBadgeRarity === b.equippedBadgeRarity &&
+    a.equippedTitle       === b.equippedTitle &&
+    a.prestigeStage       === b.prestigeStage
+  );
+}
+
+export default memo(ProfileCard, areEqual);
+
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
@@ -273,6 +360,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: CARD_WIDTH * PHOTO_RATIO,
     backgroundColor: colors.grayDark,
+  },
+  photoPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoInitial: {
+    color: colors.gold,
+    fontSize: 48,
+    fontWeight: 'bold',
+    opacity: 0.6,
   },
   titleContainer: {
     position: 'absolute',
