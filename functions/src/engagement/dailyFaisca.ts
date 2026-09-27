@@ -23,6 +23,8 @@ import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { todayBr }   from '../utils/dateBr';
+import { isGalaxiaPlusActive } from '../payments/activateGalaxiaPlus';
+import { GALAXIA_PLUS } from '../config/economy';
 const db = admin.firestore();
 
 // Tabela de probabilidades acumuladas
@@ -57,6 +59,10 @@ export const claimDailyFaisca = functions.onCall(
 
     const todayStr = todayBr();
 
+    // FORA da transação: o Firestore exige as leituras antes
+    // das escritas, e esta consulta outro documento.
+    const isPlus = await isGalaxiaPlusActive(uid);
+
     try {
       const result = await db.runTransaction(async (t) => {
         const [faiscaDoc, walletDoc] = await Promise.all([
@@ -76,7 +82,15 @@ export const claimDailyFaisca = functions.onCall(
         }
 
         // Rola o dado — server-side, não manipulável
-        const crystals       = rollFaisca();
+        const base = rollFaisca();
+
+        // Galáxia Plus: 20% a mais, arredondado para cima. Num
+        // sorteio de 2 vira 3; num de 50, vira 60. O arredondamento
+        // para cima garante que o bônus SEMPRE se note, mesmo no
+        // prêmio mais comum.
+        const bonus    = isPlus ? Math.ceil(base * GALAXIA_PLUS.FAISCA_BONUS) : 0;
+        const crystals = base + bonus;
+
         const coinsGratuitos = walletData.coinsGratuitos ?? 0;
 
         // Classificação do prêmio para UI emocional
@@ -91,6 +105,7 @@ export const claimDailyFaisca = functions.onCall(
           uid,
           lastClaimedDate: todayStr,
           lastValue:       crystals,
+          lastBonus:       bonus,
           lastTier:        tier,
           totalClaimed:    FieldValue.increment(crystals),
           claimsCount:     FieldValue.increment(1),
@@ -116,10 +131,19 @@ export const claimDailyFaisca = functions.onCall(
           timestamp:      FieldValue.serverTimestamp(),
         });
 
-        return { crystals, tier };
+        return { crystals, tier, bonus, base };
       });
 
-      return { success: true, ...result };
+      // Acumula o bônus para a tela da Galáxia Plus mostrar
+      // quanto a assinatura já rendeu a mais. É o que transforma
+      // "tem 20% de bônus" em "esse bônus já te deu 34 cristais".
+      if (isPlus && result.bonus > 0) {
+        db.collection('galaxiaPlus').doc(uid).set({
+          faiscaBonusTotal: FieldValue.increment(result.bonus),
+        }, { merge: true }).catch(() => {});
+      }
+
+      return { success: true, ...result, isGalaxiaPlus: isPlus };
 
     } catch (error: unknown) {
       if (error instanceof functions.HttpsError) throw error;

@@ -1,10 +1,29 @@
 // ============================================
-// LUMINA — MATCH SERVICE v2.0
+// LUMINA — MATCH SERVICE v2.1
 // functions/src/gamification/services/MatchService.ts
 //
 // ADR-001: MatchService emite o evento MATCH_CREATED.
 // Nunca um trigger Firestore.
 // Regra de negócio vive aqui, não na persistência.
+//
+// v2.1 — NADA MAIS FICA SOLTO.
+//
+// Até a v2.0 os sete efeitos da sintonia (XP dos dois lados,
+// revelação, conquistas, marcos de prestígio e conexão) eram
+// disparados sem await. A Cloud Function respondia ao cliente
+// e o Google estrangulava a CPU da instância: o trabalho seguia
+// a conta-gotas (dispatchers de 6 a 10s, evento de 23s) e podia
+// ser perdido se a instância fosse reciclada.
+//
+// Pior, rodavam TODOS AO MESMO TEMPO. O XP, o checkSintoniaMarcos
+// e a revelação escreviam no mesmo users/{uid}, e o Firestore
+// repetia as transações perdedoras.
+//
+// Agora: revelação primeiro (escrita simples, antes de qualquer
+// transação); depois as cadeias dos dois usuários em paralelo,
+// cada uma em sequência por dentro, para que duas transações
+// nunca disputem o mesmo documento. Cada passo tem catch
+// próprio: nenhuma falha desfaz a sintonia.
 //
 // v2.0 — A SINTONIA É DOS DOIS.
 //
@@ -87,58 +106,72 @@ export const MatchService = {
     // Sintonia nova: gamificação e revelação para OS DOIS.
     // A exclusividade já foi garantida dentro da transação.
     if (result.isNew) {
-      GamificationIntegrationService.handleMatchCreated({ uid, targetUid });
-      GamificationIntegrationService.handleMatchCreated({
-        uid:       targetUid,
-        targetUid: uid,
-      });
-
-      // Fire-and-forget: a sintonia já está gravada, e falha na
-      // revelação não pode desfazê-la nem travar a resposta ao
-      // cliente, que está esperando na tela.
-      markSintoniaReveal(uid, targetUid).catch((error) => {
-        console.warn('[MatchService] Falha ao marcar revelação:', error);
-      });
-
-      // Conquistas FIRST_SINTONIA, SINTONIA_10 e SINTONIA_50.
-      // NINGUÉM disparava CREATE_SINTONIA — "Primeira Sintonia",
-      // a conquista mais simbólica do app, nunca era desbloqueada.
-      //
-      // Action INCREMENTAL no AchievementProcessor: currentValue
-      // é somado ao progresso, por isso 1.
-      markSintoniaAchievement(uid).catch(() => { /* nunca derruba a sintonia */ });
-      markSintoniaAchievement(targetUid).catch(() => { /* idem */ });
-
-      // Marcos de prestígio SINTONIA_10/50/100_REAL. O catálogo
-      // diz "sintonias reais" (com conversa e resposta mútua),
-      // mas essa checagem exigiria varrer as mensagens de cada
-      // par — caro e frágil. Contamos sintonias mútuas, que já
-      // exigem interesse dos dois lados.
-      checkSintoniaMarcos(uid).catch(() => {});
-      checkSintoniaMarcos(targetUid).catch(() => {});
-
-      // A sintonia vira CONEXÃO ACEITA.
-      //
-      // O app tinha dois sistemas que não se falavam: a
-      // solicitação (connectionRequests com status accepted) e
-      // a sintonia (coleção sintonias). A aba Sintonias, a aba
-      // Conversas, o contador do rodapé e o guard do chat leem
-      // TODOS do primeiro — então quem se curtia mutuamente
-      // ganhava XP, conquista e árvore, mas continuava sem
-      // poder conversar.
-      //
-      // Criar a conexão aqui faz tudo que já existe funcionar,
-      // sem tocar em nenhuma tela. A solicitação manual
-      // continua valendo para quem quer falar sem depender de
-      // ser curtido de volta.
-      createConnectionFromMatch(uid, targetUid).catch((error) => {
-        console.warn('[MatchService] Falha ao criar conexão:', error);
-      });
+      await runSintoniaEffects(uid, targetUid);
     }
 
     return result;
   },
 };
+
+/**
+ * Todos os efeitos de uma sintonia nova, aguardados.
+ *
+ * Nunca lança: cada passo tem catch próprio, e a sintonia já
+ * está gravada quando chegamos aqui.
+ */
+async function runSintoniaEffects(uid: string, targetUid: string): Promise<void> {
+  // 1. Revelação primeiro, sozinha. É escrita simples nos dois
+  //    users/{uid}; terminando antes das cadeias, não disputa
+  //    com as transações de XP e de marcos.
+  await markSintoniaReveal(uid, targetUid).catch((error) => {
+    console.warn('[MatchService] Falha ao marcar revelação:', error);
+  });
+
+  // 2. As duas cadeias e a conexão em paralelo. Cada cadeia só
+  //    toca o documento do próprio usuário, e a conexão grava
+  //    em connectionRequests.
+  await Promise.all([
+    runSintoniaChain(uid, targetUid),
+    runSintoniaChain(targetUid, uid),
+    createConnectionFromMatch(uid, targetUid).catch((error) => {
+      console.warn('[MatchService] Falha ao criar conexão:', error);
+    }),
+  ]);
+}
+
+/**
+ * Efeitos de UM lado da sintonia, em sequência: XP e treeXP,
+ * depois o marco de prestígio, depois a conquista. Em sequência
+ * porque o XP e o checkSintoniaMarcos são transações no mesmo
+ * users/{uid}; juntos, um faria o outro repetir.
+ */
+async function runSintoniaChain(uid: string, otherUid: string): Promise<void> {
+  // Nunca lança: o run() do GamificationIntegrationService
+  // engole e registra o erro.
+  await GamificationIntegrationService.handleMatchCreated({ uid, targetUid: otherUid });
+
+  // Marcos de prestígio SINTONIA_10/50/100_REAL. O catálogo
+  // diz "sintonias reais" (com conversa e resposta mútua),
+  // mas essa checagem exigiria varrer as mensagens de cada
+  // par — caro e frágil. Contamos sintonias mútuas, que já
+  // exigem interesse dos dois lados.
+  await checkSintoniaMarcos(uid).catch((error) => {
+    console.warn('[MatchService] Falha ao checar marcos:', error);
+  });
+
+  // Conquistas FIRST_SINTONIA, SINTONIA_10 e SINTONIA_50.
+  // NINGUÉM disparava CREATE_SINTONIA — "Primeira Sintonia",
+  // a conquista mais simbólica do app, nunca era desbloqueada.
+  //
+  // Action INCREMENTAL no AchievementProcessor: currentValue
+  // é somado ao progresso, por isso 1.
+  //
+  // Por último: o documento criado aqui dispara o
+  // onAchievementTrigger, que também escreve em users/{uid}.
+  await markSintoniaAchievement(uid).catch((error) => {
+    console.warn('[MatchService] Falha ao enfileirar conquista:', error);
+  });
+}
 
 /**
  * Grava a flag de revelação nos DOIS usuários, cada um com o
@@ -231,6 +264,11 @@ async function checkSintoniaMarcos(uid: string): Promise<void> {
  *
  * `fromUserId` é quem fechou o par, por convenção — as telas
  * tratam os dois lados igual, então a escolha é arbitrária.
+ *
+ * A sintonia vira CONEXÃO ACEITA: a aba Sintonias, a aba
+ * Conversas, o contador do rodapé e o guard do chat leem de
+ * connectionRequests. Sem isso, quem se curtia mutuamente
+ * ganhava XP, conquista e árvore, mas não podia conversar.
  */
 async function createConnectionFromMatch(
   uid: string,

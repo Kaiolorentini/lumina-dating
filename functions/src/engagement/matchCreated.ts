@@ -92,18 +92,28 @@ export const onCreateMatch = functions.onCall(
     //
     // notifyUser cria a notificação in-app E manda o push, e o
     // dado `sintoniaWith` leva o AppNavigator ao perfil da
-    // pessoa. Fire-and-forget: a sintonia já está gravada.
+    // pessoa.
+    //
+    // AGUARDADO. Solto, o push ficava parado com a CPU da
+    // instância cortada depois da resposta, e só saía quando
+    // outra requisição acordava a instância (no log, 3s depois,
+    // junto da chamada seguinte). O catch continua: falha no
+    // aviso nunca derruba a curtida, a sintonia já está gravada.
     if (result.isNew) {
-      const likerSnap = await db.collection('users').doc(uid).get();
-      const likerName = (likerSnap.data()?.name as string | undefined) ?? 'Alguém';
+      try {
+        const likerSnap = await db.collection('users').doc(uid).get();
+        const likerName = (likerSnap.data()?.name as string | undefined) ?? 'Alguém';
 
-      notifyUser({
-        userId: targetUid,
-        title:  '✦ Sintonia!',
-        body:   `Você e ${likerName} se curtiram. Que tal começar a conversa?`,
-        type:   'sintonia_criada',
-        data:   { sintoniaWith: uid },
-      }).catch(() => { /* nunca derruba a curtida */ });
+        await notifyUser({
+          userId: targetUid,
+          title:  '✦ Sintonia!',
+          body:   `Você e ${likerName} se curtiram. Que tal começar a conversa?`,
+          type:   'sintonia_criada',
+          data:   { sintoniaWith: uid },
+        });
+      } catch (error) {
+        console.warn('[onCreateMatch] Falha ao notificar sintonia:', error);
+      }
     }
 
     return {

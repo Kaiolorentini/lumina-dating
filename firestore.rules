@@ -588,6 +588,18 @@ match /coinsPurchases/{docId} {
     }
 
     // ============================================
+    // GALÁXIA PLUS — escrita exclusiva do backend
+    // ============================================
+    // O dono lê para ver o prazo e o consumo dos benefícios na
+    // tela. Escrita fechada: o documento guarda a data de
+    // expiração, e um cliente que pudesse escrever estenderia o
+    // próprio acesso de graça.
+    match /galaxiaPlus/{userId} {
+      allow read:  if isAuthenticated() && isOwner(userId);
+      allow write: if false;
+    }
+
+    // ============================================
     // PRESTÍGIO — escrita exclusiva do backend
     // ============================================
     // O prestígio é concedido pelo PrestigeService, chamado

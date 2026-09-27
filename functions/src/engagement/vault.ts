@@ -24,6 +24,7 @@ import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { todayBr }   from '../utils/dateBr';
+import { isGalaxiaPlusActive } from '../payments/activateGalaxiaPlus';
 const db = admin.firestore();
 
 const VAULT_MAX_FRAGMENTS    = 5000;
@@ -49,13 +50,18 @@ export const getVaultStatus = functions.onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
 
-    const walletDoc = await db.collection('wallets').doc(uid).get();
-    const wallet    = walletDoc.data() ?? {};
+    const [walletDoc, isGalaxiaPlus] = await Promise.all([
+      db.collection('wallets').doc(uid).get(),
+      isGalaxiaPlusActive(uid),
+    ]);
+    const wallet = walletDoc.data() ?? {};
 
     const vaultFragments = wallet.vaultFragments      ?? 0;
     const unlockAt       = wallet.vaultUnlockAt?.toDate?.() ?? null;
     const lastWithdrawAt = wallet.vaultLastWithdrawAt?.toDate?.() ?? null;
-    const isGalaxiaPlus  = wallet.galaxiaPlus?.ativo  === true;
+    // Era `wallet.galaxiaPlus?.ativo`, campo que NINGUÉM grava —
+    // o saque imediato nunca funcionou. A assinatura vive na
+    // coleção galaxiaPlus, com data de expiração.
     const todayCrystals  = wallet.vaultCrystalsToday  ?? 0;
     const todayStr       = todayBr();
     const lastDay        = wallet.vaultCrystalsTodayDate ?? '';
@@ -128,6 +134,10 @@ export const withdrawFromVault = functions.onCall(
     // mostra saque liberado e a CF nega, ou o contrário.
     const todayStr  = todayBr();
 
+    // FORA da transação: o Firestore exige todas as leituras
+    // antes das escritas, e esta consulta outro documento.
+    const isPlus = await isGalaxiaPlusActive(uid);
+
     const result = await db.runTransaction(async (t) => {
       const walletDoc = await t.get(walletRef);
       if (!walletDoc.exists) {
@@ -136,7 +146,7 @@ export const withdrawFromVault = functions.onCall(
 
       const wallet         = walletDoc.data()!;
       const vaultFragments = wallet.vaultFragments      ?? 0;
-      const isGalaxiaPlus  = wallet.galaxiaPlus?.ativo  === true;
+      const isGalaxiaPlus  = isPlus;
       const lastWithdrawAt = wallet.vaultLastWithdrawAt?.toDate?.() ?? null;
       const todayCrystals  = wallet.vaultCrystalsToday  ?? 0;
       const lastDay        = wallet.vaultCrystalsTodayDate ?? '';
@@ -234,6 +244,16 @@ export const withdrawFromVault = functions.onCall(
       processedAt:  null,
       timestamp:    FieldValue.serverTimestamp(),
     }).catch(() => {});
+
+    // Conta o saque imediato para a tela da Galáxia Plus
+    // mostrar o que a assinatura já rendeu. Só quando a
+    // assinatura foi o motivo de não haver espera.
+    if (isPlus) {
+      db.collection('galaxiaPlus').doc(uid).set({
+        instantWithdraws:      FieldValue.increment(1),
+        crystalsFromInstant:   FieldValue.increment(result.crystalsGained),
+      }, { merge: true }).catch(() => {});
+    }
 
     return { success: true, ...result };
   }

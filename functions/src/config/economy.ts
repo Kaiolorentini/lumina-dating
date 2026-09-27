@@ -317,16 +317,38 @@ export const COSMIC_MARKET_ROTATION = [
 // ------------------------------------------
 // GALÁXIA PLUS — Assinatura
 // ------------------------------------------
+/**
+ * Galáxia Plus — ACESSO DE 30 DIAS, não assinatura recorrente.
+ *
+ * A versão anterior deste bloco prometia benefícios que NÃO
+ * EXISTIAM no código: 500 cristais mensais, desconto em
+ * revelações, Sintonia Perdida e Quase Sintonia grátis. A tela
+ * de compra listava tudo isso e nada era concedido — quem
+ * assinasse pagava e não recebia. Ficaram só os que funcionam.
+ */
 export const GALAXIA_PLUS = {
-  MONTHLY_PRICE:           19.90,
-  MONTHLY_CRYSTALS:         500,   // mix gratuito + premium
-  DESTINY_CARDS_PER_DAY:    10,    // vs 1 gratuito (não ilimitado)
-  TURBO_SINTONIAS_PER_WEEK:  1,    // grátis (valor: 120 cristais)
-  REVEAL_DISCOUNT:           0.10, // 10% desconto em revelações com Gratuitos
-  VAULT_INSTANT_WITHDRAW:    true, // saque imediato do Cofre
-  SINTONIA_PERDIDA_FREE:     true, // Sintonia Perdida sem custo extra
-  QUASE_SINTONIA_FREE:       true, // Quase Sintonia sem custo extra
-  CARD_ASSET:               'galaxia-plus-card', // assets/premium/galaxia-plus-card.png
+  PRICE:                 24.99,
+  DURATION_DAYS:            30,
+  /** Creditados na ativação, de uma vez. Não são 600 porque o
+   *  pacote Popular dá isso por R$ 19,99 — a assinatura vende
+   *  acesso, não moeda. */
+  CRYSTALS_ON_ACTIVATION:  300,
+  /** 4 Turbos de uma vez, e não 1 por semana: sem recorrência,
+   *  "por semana" não teria como ser controlado. */
+  TURBOS_ON_ACTIVATION:      4,
+  /** 4 por dia, TODAS grátis. Sem assinatura são 1 grátis e 3
+   *  pagas. */
+  DESTINY_CARDS_PER_DAY:     4,
+  /** A Faísca rende 20% a mais, arredondado para cima. */
+  FAISCA_BONUS:            0.20,
+  /** Ver quem visitou sem gastar os 50 cristais. */
+  VISITORS_FREE:          true,
+  /** Saque do Cofre sem esperar o desbloqueio. */
+  VAULT_INSTANT_WITHDRAW: true,
+  /** Concedido UMA vez, na primeira ativação. Nas renovações
+   *  vêm fragmentos no lugar. */
+  BADGE_ID:     'badge_constelacao_guia',
+  RENEWAL_FRAGMENTS:        20,
 } as const;
 
 // ------------------------------------------

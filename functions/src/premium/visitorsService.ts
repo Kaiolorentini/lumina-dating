@@ -21,6 +21,7 @@ import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { COSTS }      from '../config/economy';
+import { isGalaxiaPlusActive } from '../payments/activateGalaxiaPlus';
 import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import {
   PREMIUM_FLAGS,
@@ -59,7 +60,12 @@ export const revealVisitors = functions.onCall(
       );
     }
 
-    const cost      = COSTS.REVEAL_VISITORS;
+    // Galáxia Plus vê os visitantes sem gastar. A leitura vem
+    // antes da transação: o Firestore exige todas as leituras
+    // antes das escritas.
+    const isPlus = await isGalaxiaPlusActive(uid);
+    const cost   = isPlus ? 0 : COSTS.REVEAL_VISITORS;
+
     const walletRef = db.collection('wallets').doc(uid);
     const accessRef = db.collection('visitorsAccess').doc(uid);
     const ledgerRef = db.collection('economyLedger');
@@ -99,6 +105,8 @@ export const revealVisitors = functions.onCall(
       const premium   = wallet.coinsPremium   ?? 0;
       const total     = gratuitos + premium;
 
+      // Com Galáxia Plus o custo é zero, então a checagem passa
+      // sempre — mas o guard fica para quando não há assinatura.
       if (total < cost) {
         throw new functions.HttpsError(
           'failed-precondition',
@@ -197,8 +205,18 @@ export const revealVisitors = functions.onCall(
         spentFromPremium,
         newBalanceGratuitos: newGratuitos,
         newBalancePremium:   newPremium,
+        isGalaxiaPlus:       isPlus,
       };
     });
+
+    // Conta para a tela da Galáxia Plus mostrar o que a
+    // assinatura já economizou.
+    if (isPlus) {
+      db.collection('galaxiaPlus').doc(uid).set({
+        visitorsRevealed:  FieldValue.increment(1),
+        crystalsSavedTotal: FieldValue.increment(COSTS.REVEAL_VISITORS),
+      }, { merge: true }).catch(() => {});
+    }
 
     return { success: true, ...result };
   }
@@ -213,10 +231,11 @@ export const getVisitorsStatus = functions.onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
 
-    const [accessDoc, walletDoc, countDoc] = await Promise.all([
+    const [accessDoc, walletDoc, countDoc, isPlus] = await Promise.all([
       db.collection('visitorsAccess').doc(uid).get(),
       db.collection('wallets').doc(uid).get(),
       db.collection('profile_visit_counts').doc(uid).get(),
+      isGalaxiaPlusActive(uid),
     ]);
 
     const access    = accessDoc.data();
@@ -227,7 +246,7 @@ export const getVisitorsStatus = functions.onCall(
     const gratuitos = wallet.coinsGratuitos ?? 0;
     const premium   = wallet.coinsPremium   ?? 0;
     const total     = gratuitos + premium;
-    const cost      = COSTS.REVEAL_VISITORS;
+    const cost      = isPlus ? 0 : COSTS.REVEAL_VISITORS;
 
     // Status padronizado (LOCKED / READY / ACTIVE)
     let status: string = 'READY';

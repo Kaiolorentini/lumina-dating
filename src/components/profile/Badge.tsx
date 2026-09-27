@@ -31,9 +31,15 @@ export type BadgeShape =
   | 'wanderer' | 'greenhouse'
   | 'ice_ring' | 'stardust' | 'solar_crown'
   | 'crimson_nebula' | 'eclipse' | 'prism'
-  | 'quasar' | 'singularity' | 'genesis' | 'milky_way';
+  | 'quasar' | 'singularity' | 'genesis' | 'milky_way'
+  | 'guide_constellation';
 
-export type BadgeMotion = 'none' | 'breathe' | 'rotate' | 'orbit_particles';
+export type BadgeMotion =
+  | 'none' | 'breathe' | 'rotate' | 'orbit_particles'
+  /** Exclusivo do Constelação Guia: o halo gira enquanto as
+   *  estrelas respiram, em tempos diferentes. Nenhum outro
+   *  badge tem duas camadas com movimento independente. */
+  | 'dual_layer';
 
 export interface BadgeAppearance {
   shape:       BadgeShape;
@@ -478,6 +484,93 @@ function ShapeMilkyWay({ core, accent, uid }: ShapeProps) {
   );
 }
 
+// ── MYTHIC — exclusivo da Galáxia Plus ──
+
+/**
+ * Constelação Guia — três estrelas que apontam o caminho.
+ *
+ * O badge de quem sustenta o Lumina. Precisa se distinguir dos
+ * outros à primeira vista, e por isso tem mais camadas que
+ * qualquer um: halo duplo, linhas de ligação com brilho, três
+ * estrelas de tamanhos diferentes com fulgor próprio, e poeira
+ * entre elas.
+ *
+ * A estrela do topo é a maior: é ela que guia.
+ */
+function ShapeGuideConstellation({ core, accent, uid }: ShapeProps) {
+  // Triângulo com a ponta para cima, ligeiramente inclinado —
+  // simétrico demais leria como sinal de trânsito.
+  const stars: { x: number; y: number; r: number }[] = [
+    { x: C,      y: 26, r: 7.5 },
+    { x: C - 22, y: 64, r: 5   },
+    { x: C + 20, y: 60, r: 5.8 },
+  ];
+
+  return (
+    <G>
+      <Defs>
+        <RadialGradient id={`guideHalo${uid}`} cx="50%" cy="50%" r="50%">
+          <Stop offset="25%" stopColor={accent} stopOpacity="0" />
+          <Stop offset="58%" stopColor={accent} stopOpacity="0.4" />
+          <Stop offset="78%" stopColor={core}   stopOpacity="0.22" />
+          <Stop offset="100%" stopColor={core}  stopOpacity="0" />
+        </RadialGradient>
+        <RadialGradient id={`guideStar${uid}`} cx="50%" cy="50%" r="50%">
+          <Stop offset="0%"   stopColor="#FFFFFF" stopOpacity="1" />
+          <Stop offset="40%"  stopColor={core}    stopOpacity="0.9" />
+          <Stop offset="100%" stopColor={accent}  stopOpacity="0" />
+        </RadialGradient>
+        <LinearGradient id={`guideLink${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <Stop offset="0%"   stopColor={accent} stopOpacity="0.15" />
+          <Stop offset="50%"  stopColor={core}   stopOpacity="0.75" />
+          <Stop offset="100%" stopColor={accent} stopOpacity="0.15" />
+        </LinearGradient>
+      </Defs>
+
+      <Circle cx={C} cy={C} r={46} fill={`url(#guideHalo${uid})`} />
+
+      {/* Poeira entre as estrelas — enche o vazio do triângulo
+          sem competir com os três pontos principais. */}
+      {[[C - 10, 44, 1.2], [C + 9, 42, 1], [C, 58, 1.4],
+        [C - 15, 50, 0.9], [C + 14, 52, 1.1]].map(([x, y, r], i) => (
+        <Circle key={i} cx={x} cy={y} r={r} fill="#FFFFFF" opacity={0.5} />
+      ))}
+
+      {/* Linhas de ligação, com brilho no meio */}
+      {stars.map((s, i) => {
+        const n = stars[(i + 1) % stars.length];
+        return (
+          <Line key={i} x1={s.x} y1={s.y} x2={n.x} y2={n.y}
+                stroke={`url(#guideLink${uid})`} strokeWidth={1.8} />
+        );
+      })}
+
+      {/* As três estrelas: fulgor, corpo e cruz de luz */}
+      {stars.map((s, i) => (
+        <G key={`s${i}`}>
+          <Circle cx={s.x} cy={s.y} r={s.r * 2.6} fill={`url(#guideStar${uid})`} opacity={0.5} />
+          <Path
+            d={[
+              `M ${s.x} ${s.y - s.r}`,
+              `Q ${s.x + s.r * 0.26} ${s.y - s.r * 0.26} ${s.x + s.r} ${s.y}`,
+              `Q ${s.x + s.r * 0.26} ${s.y + s.r * 0.26} ${s.x} ${s.y + s.r}`,
+              `Q ${s.x - s.r * 0.26} ${s.y + s.r * 0.26} ${s.x - s.r} ${s.y}`,
+              `Q ${s.x - s.r * 0.26} ${s.y - s.r * 0.26} ${s.x} ${s.y - s.r}`,
+              'Z',
+            ].join(' ')}
+            fill="#FFFFFF"
+          />
+          {/* Cruz de luz — o que faz ler como estrela e não bola */}
+          <Line x1={s.x - s.r * 2.2} y1={s.y} x2={s.x + s.r * 2.2} y2={s.y}
+                stroke="#FFFFFF" strokeWidth={0.8} opacity={0.6} />
+          <Line x1={s.x} y1={s.y - s.r * 2.2} x2={s.x} y2={s.y + s.r * 2.2}
+                stroke="#FFFFFF" strokeWidth={0.8} opacity={0.6} />
+        </G>
+      ))}
+    </G>
+  );
+}
+
 const SHAPES: Record<BadgeShape, React.FC<ShapeProps>> = {
   spark:          ShapeSpark,
   orbit:          ShapeOrbit,
@@ -499,6 +592,7 @@ const SHAPES: Record<BadgeShape, React.FC<ShapeProps>> = {
   singularity:    ShapeSingularity,
   genesis:        ShapeGenesis,
   milky_way:      ShapeMilkyWay,
+  guide_constellation: ShapeGuideConstellation,
 };
 
 // Formas em que girar a peça inteira fica esquisito: bússola,
@@ -525,6 +619,38 @@ export function Badge({ appearance, size = 64, dimmed = false }: BadgeProps) {
   const pulses = motion === 'breathe'
     || motion === 'orbit_particles'
     || ((motion === 'rotate') && NO_SPIN.includes(shape));
+
+  // O dual_layer gira o HALO e faz as estrelas respirarem, em
+  // tempos diferentes. É o único badge com duas camadas de
+  // movimento independente — reservado para a Galáxia Plus.
+  const dual = motion === 'dual_layer';
+
+  useEffect(() => {
+    if (!dual) return;
+
+    const halo = Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1, duration: 22000,
+        easing: Easing.linear, useNativeDriver: true,
+      }),
+    );
+    const stars = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathe, {
+          toValue: 0.7, duration: 1900,
+          easing: Easing.inOut(Easing.sin), useNativeDriver: true,
+        }),
+        Animated.timing(breathe, {
+          toValue: 1, duration: 1900,
+          easing: Easing.inOut(Easing.sin), useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    halo.start();
+    stars.start();
+    return () => { halo.stop(); stars.stop(); };
+  }, [dual]);
 
   useEffect(() => {
     if (!spins) return;
@@ -595,11 +721,38 @@ export function Badge({ appearance, size = 64, dimmed = false }: BadgeProps) {
               stroke="#FFFFFF" strokeWidth={1.6} fill="none" opacity={0.16} />
       </Svg>
 
-      {/* Forma, com o pulso e a rotação aplicados só nela */}
+      {/* dual_layer: o halo gira numa camada e as estrelas
+          respiram noutra. Os demais badges têm um movimento só. */}
+      {dual && (
+        <Animated.View
+          style={[StyleSheet.absoluteFill, { transform: [{ rotate: rotation }] }]}
+        >
+          <Svg width={size} height={size} viewBox={`0 0 ${VB} ${VB}`}>
+            <Defs>
+              <RadialGradient id={`spin${uid}`} cx="50%" cy="50%" r="50%">
+                <Stop offset="55%" stopColor={accentColor} stopOpacity="0" />
+                <Stop offset="72%" stopColor={accentColor} stopOpacity="0.5" />
+                <Stop offset="100%" stopColor={accentColor} stopOpacity="0" />
+              </RadialGradient>
+            </Defs>
+            {/* Arcos que giram por trás das estrelas */}
+            {[0, 120, 240].map(deg => (
+              <Path
+                key={deg}
+                d={`M ${C} 8 A 42 42 0 0 1 ${C + 36} 71`}
+                stroke={accentColor} strokeWidth={1.6} fill="none" opacity={0.35}
+                transform={`rotate(${deg} ${C} ${C})`}
+              />
+            ))}
+            <Circle cx={C} cy={C} r={44} fill={`url(#spin${uid})`} />
+          </Svg>
+        </Animated.View>
+      )}
+
       <Animated.View
         style={[
-          spins  ? { transform: [{ rotate: rotation }] } : null,
-          pulses ? { opacity: breathe } : null,
+          spins ? { transform: [{ rotate: rotation }] } : null,
+          (pulses || dual) ? { opacity: breathe } : null,
         ]}
       >
         <Svg width={size} height={size} viewBox={`0 0 ${VB} ${VB}`}>

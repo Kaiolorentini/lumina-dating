@@ -29,6 +29,9 @@ const PACKAGES: Record<string, {
   total:        number;
   priceValue:   number;
   isFirstPkg:   boolean;
+  /** Galáxia Plus: além dos cristais, ativa 30 dias de
+   *  benefícios. O webhook trata esta venda de outro jeito. */
+  isSubscription?: boolean;
 }> = {
   starter: {
     label:        'Iniciante',
@@ -62,13 +65,25 @@ const PACKAGES: Record<string, {
     priceValue:   99.99,
     isFirstPkg:   false,
   },
+  // Galáxia Plus — ACESSO DE 30 DIAS, não assinatura recorrente.
+  //
+  // Sem cobrança automática: a pessoa paga por Pix e tem 30
+  // dias. Comprar de novo SOMA ao prazo que resta. Quando
+  // expira, os benefícios param; os cristais, fragmentos,
+  // Turbos e o badge já recebidos ficam.
+  //
+  // 300 cristais e não 600: o pacote Popular dá 600 por R$
+  // 19,99, e entregar o mesmo aqui — mais 4 Turbos, que valem
+  // 480 cristais — faria ninguém comprar pacote avulso nunca
+  // mais. A assinatura vende ACESSO, não moeda.
   galaxia_plus: {
-    label:        'Galáxia Plus',
-    coinsPremium: 300,
-    bonus:        0,
-    total:        300,
-    priceValue:   19.90,
-    isFirstPkg:   false,
+    label:          'Galáxia Plus',
+    coinsPremium:   300,
+    bonus:          0,
+    total:          300,
+    priceValue:     24.99,
+    isFirstPkg:     false,
+    isSubscription: true,
   },
 };
 
@@ -176,6 +191,9 @@ export const createCoinsPurchase = onCall(
       // Marca a venda que carrega o bônus de primeira compra.
       // O webhook usa isso para travar a flag na wallet.
       isFirstPurchaseBonus: pkg.isFirstPkg && isFirstPurchase,
+      // O webhook ramifica por aqui: venda de assinatura ativa
+      // os 30 dias, credita os Turbos e concede o badge.
+      isSubscription: pkg.isSubscription === true,
       amount:         pkg.priceValue,
       asaasPaymentId: payment.id,
       checkoutUrl,

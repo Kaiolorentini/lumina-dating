@@ -46,3 +46,15 @@ firebase-debug.log
 firestore-debug.log
 
 serviceAccountKey.json
+# segredos
+.env
+.env.*
+*.keystore
+*adminsdk*.json
+*serviceAccount*.json
+
+# build das Cloud Functions
+functions/lib/
+
+# backups locais
+*.bak

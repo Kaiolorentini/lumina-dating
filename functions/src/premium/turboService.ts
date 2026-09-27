@@ -15,6 +15,7 @@ import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { assertSingleBoost } from './utils/assertSingleBoost';
+import { isGalaxiaPlusActive } from '../payments/activateGalaxiaPlus';
 import {
   PREMIUM_FLAGS, PREMIUM_COSTS,
   PREMIUM_DURATIONS, PREMIUM_VERSIONS,
@@ -36,21 +37,42 @@ export const activateTurbo = functions.onCall(
 
     const walletRef = db.collection('wallets').doc(uid);
     const userRef   = db.collection('users').doc(uid);
+    const subRef    = db.collection('galaxiaPlus').doc(uid);
     const logRef    = db.collection('premiumUsageLog');
     const ledgerRef = db.collection('economyLedger');
 
+    // Assinatura ativa fora da transação: a checagem consulta
+    // outro documento, e o Firestore exige todas as leituras
+    // antes das escritas.
+    const isPlus = await isGalaxiaPlusActive(uid);
+
     const result = await db.runTransaction(async (t) => {
-      const [walletDoc, userDoc] = await Promise.all([
+      const [walletDoc, userDoc, subDoc] = await Promise.all([
         t.get(walletRef),
         t.get(userRef),
+        t.get(subRef),
       ]);
 
       const wallet = walletDoc.data() ?? {};
       const user   = userDoc.data()   ?? {};
+      const sub    = subDoc.data()    ?? {};
 
-      // Verifica saldo
+      // ── TURBOS DA GALÁXIA PLUS ──
+      //
+      // A ativação dá 4 Turbos. Sem isto, quem tem os 4 ainda
+      // pagaria 120 cristais por cada um — o benefício existiria
+      // no papel e não na prática.
+      //
+      // Só vale com a assinatura ATIVA: os Turbos não usados
+      // ficam guardados, mas param de ser gastáveis quando o
+      // acesso expira. É o que separa "recebeu" de "tem direito".
+      const turbosGranted = (sub.turbosGranted as number) ?? 0;
+      const turbosUsed    = (sub.turbosUsed    as number) ?? 0;
+      const hasFreeTurbo  = isPlus && turbosGranted > turbosUsed;
+
       const coinsPremium = wallet.coinsPremium ?? 0;
-      if (coinsPremium < PREMIUM_COSTS.TURBO) {
+
+      if (!hasFreeTurbo && coinsPremium < PREMIUM_COSTS.TURBO) {
         throw new functions.HttpsError(
           'failed-precondition',
           `Cristais Premium insuficientes. Necessário: ${PREMIUM_COSTS.TURBO}. Disponível: ${coinsPremium}.`
@@ -79,12 +101,21 @@ export const activateTurbo = functions.onCall(
       // REGRA 4: boostScore = base × multiplier (não hardcoded)
       const boostFinal = TURBO_SCORE.BASE * TURBO_SCORE.MULTIPLIER;
 
+      // Quanto saiu de fato. Com Turbo da assinatura, zero.
+      const cost = hasFreeTurbo ? 0 : PREMIUM_COSTS.TURBO;
+
       // REGRA 9: Transaction única
-      // 1. Debita Premium
-      t.set(walletRef, {
-        coinsPremium: FieldValue.increment(-PREMIUM_COSTS.TURBO),
-        updatedAt:    FieldValue.serverTimestamp(),
-      }, { merge: true });
+      // 1. Debita Premium — ou consome um Turbo da assinatura
+      if (hasFreeTurbo) {
+        t.set(subRef, {
+          turbosUsed: FieldValue.increment(1),
+        }, { merge: true });
+      } else {
+        t.set(walletRef, {
+          coinsPremium: FieldValue.increment(-PREMIUM_COSTS.TURBO),
+          updatedAt:    FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
 
       // 2. Ativa Turbo no perfil
       t.set(userRef, {
@@ -104,11 +135,12 @@ export const activateTurbo = functions.onCall(
       // 3. Economy Ledger
       t.set(ledgerRef.doc(), {
         uid,
-        tipo:            'PREMIUM_PURCHASE',
+        tipo:            hasFreeTurbo ? 'GALAXIA_PLUS_TURBO' : 'PREMIUM_PURCHASE',
         feature:         'TURBO',
-        cristaisPremium: -PREMIUM_COSTS.TURBO,
+        cristaisPremium: -cost,
+        fromSubscription: hasFreeTurbo,
         saldoAntes:      prevPremium,
-        saldoDepois:     prevPremium - PREMIUM_COSTS.TURBO,
+        saldoDepois:     prevPremium - cost,
         boostScore:      boostFinal,
         expiresAt:       admin.firestore.Timestamp.fromDate(expiresAt),
         timestamp:       FieldValue.serverTimestamp(),
@@ -148,8 +180,10 @@ export const activateTurbo = functions.onCall(
         boostScore:        boostFinal,
         baseBoostScore:    TURBO_SCORE.BASE,
         turboMultiplier:   TURBO_SCORE.MULTIPLIER,
-        crystalsSpent:     PREMIUM_COSTS.TURBO,
-        newBalancePremium: prevPremium - PREMIUM_COSTS.TURBO,
+        crystalsSpent:     cost,
+        fromSubscription:  hasFreeTurbo,
+        turbosLeft:        hasFreeTurbo ? turbosGranted - turbosUsed - 1 : 0,
+        newBalancePremium: prevPremium - cost,
       };
     });
 
@@ -179,14 +213,24 @@ export const getTurboStatus = functions.onCall(
       : 0;
     const inCooldown    = !isActive && cooldownMs > 0;
 
-    const walletDoc     = await db.collection('wallets').doc(uid).get();
-    const premium       = walletDoc.data()?.coinsPremium ?? 0;
+    const [walletDoc, subDoc, isPlus] = await Promise.all([
+      db.collection('wallets').doc(uid).get(),
+      db.collection('galaxiaPlus').doc(uid).get(),
+      isGalaxiaPlusActive(uid),
+    ]);
+    const premium = walletDoc.data()?.coinsPremium ?? 0;
+
+    const sub           = subDoc.data() ?? {};
+    const turbosGranted = (sub.turbosGranted as number) ?? 0;
+    const turbosUsed    = (sub.turbosUsed    as number) ?? 0;
+    const turbosLeft    = isPlus ? Math.max(0, turbosGranted - turbosUsed) : 0;
+    const cost          = turbosLeft > 0 ? 0 : PREMIUM_COSTS.TURBO;
 
     // REGRA 10: status padronizado
     let status: string = 'READY';
-    if (isActive)                             status = 'ACTIVE';
-    else if (inCooldown)                      status = 'COOLDOWN';
-    else if (premium < PREMIUM_COSTS.TURBO)   status = 'LOCKED';
+    if (isActive)                    status = 'ACTIVE';
+    else if (inCooldown)             status = 'COOLDOWN';
+    else if (premium < cost)         status = 'LOCKED';
 
     return {
       status,
@@ -197,7 +241,9 @@ export const getTurboStatus = functions.onCall(
       boostScore:      isActive ? (turbo.boostScore ?? TURBO_SCORE.BASE * TURBO_SCORE.MULTIPLIER) : TURBO_SCORE.BASE,
       cooldownMs:      Math.max(0, cooldownMs),
       inCooldown,
-      cost:            PREMIUM_COSTS.TURBO,
+      cost,
+      turbosLeft,
+      isGalaxiaPlus:   isPlus,
       coinsPremium:    premium,
       enabled:         PREMIUM_FLAGS.PREMIUM_TURBO_ENABLED,
     };

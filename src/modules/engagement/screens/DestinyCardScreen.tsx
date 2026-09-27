@@ -1,209 +1,457 @@
 // ============================================
-// LUMINA — CARTA DO DESTINO SCREEN v5.2
+// LUMINA — CARTA DO DESTINO
 // src/modules/engagement/screens/DestinyCardScreen.tsx
 //
-// v5.2: progressMission('open_destiny') chamado ao abrir.
+// Duas pessoas, uma escolha por dia. A escolha CRIA A CONEXÃO
+// e libera a conversa — é isso que separa a Carta da aba
+// Sintonize, que é aleatória e não dá privilégio nenhum.
+//
+// Uma grátis, mais três pagas em cristais PREMIUM: 50, 70 e
+// 90 — sobe a cada troca. Quem escolhe encerra o dia.
+//
+// Premium e não gratuitos nem fragmentos: a Carta entrega uma
+// conexão garantida, o bem mais valioso do app. Sem saldo, o
+// caminho é a loja.
+//
+// ── ORIENTAÇÃO ──
+//
+// Cada passo diz o que fazer e o que vai acontecer. Kaio
+// pediu explícito: a pessoa não pode gastar cristais sem
+// entender, nem escolher sem saber que encerra o dia.
 // ============================================
 
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Image, ActivityIndicator, Alert, Platform,
 } from 'react-native';
-import { LinearGradient }   from 'expo-linear-gradient';
-import { useNavigation }    from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { useAuth }          from '../../../context/AuthContext';
-import { useDestinyCard, DestinyProfile } from '../hooks/useDestinyCard';
+import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { RootStackParamList } from '../../../navigation/types';
+import { useAuth } from '../../../context/AuthContext';
+import { useCoins } from '../../../context/CoinsContext';
+import { getProfile } from '../../profile/services/profileService';
+import { getUserProfile } from '../../../services/usersService';
+import { calcularSintonia } from '../../../utils/sintoniaEngine';
 import Header from '../../../components/Header';
-import { todayBrUnderscore } from '../../../utils/dateBr';
-import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
+import { DestinyBackground } from '../components/DestinyBackground';
+import { DestinyCardFlip } from '../components/DestinyCardFlip';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-const fns = getFunctions();
-
-function getSintoniaColor(sintonia: number): string {
-  if (sintonia >= 90) return '#FFD700';
-  if (sintonia >= 80) return '#B57BEE';
-  if (sintonia >= 70) return '#56CCF2';
-  return '#A8E063';
+// Genéricos em tipos nomeados: httpsCallable< em fim de linha
+// é corrompido ao colar.
+interface DestinyProfile {
+  uid:      string;
+  name:     string;
+  age:      number;
+  photoURL: string;
+  city:     string;
+  sintonia: number;
 }
 
-function getSintoniaLabel(sintonia: number): string {
-  if (sintonia >= 90) return '✦ Sintonia Perfeita';
-  if (sintonia >= 80) return '🔥 Alta Sintonia';
-  if (sintonia >= 70) return '⚡ Boa Sintonia';
-  return '💫 Sintonia Moderada';
+interface CardState {
+  profiles:  DestinyProfile[];
+  drawsUsed: number;
+  maxDraws:  number;
+  freeDraws: number;
+  /** Preço da PRÓXIMA troca em cristais premium: 50, 70, 90. */
+  nextPrice: number;
+  chosenUid: string | null;
 }
 
-function PrimaryCard({ profile, onPress }: { profile: DestinyProfile; onPress: () => void }) {
-  const sintoniaColor = getSintoniaColor(profile.sintonia);
-  return (
-    <TouchableOpacity style={styles.primaryCard} onPress={onPress} activeOpacity={0.9}>
-      <LinearGradient colors={['#1A0A2E','#2D1B4E']} style={styles.primaryCardGradient}>
-        <View style={styles.primaryBadge}>
-          <Text style={styles.primaryBadgeText}>✨ Carta Principal</Text>
-        </View>
-        <View style={styles.primaryPhotoWrapper}>
-          {profile.photoURL
-            ? <Image source={{ uri: profile.photoURL }} style={styles.primaryPhoto} />
-            : <View style={[styles.primaryPhoto, styles.photoPlaceholder]}><Text style={styles.photoPlaceholderText}>👤</Text></View>
-          }
-          <View style={[styles.sintoniaRing, { borderColor: sintoniaColor }]} />
-        </View>
-        <Text style={styles.primaryName}>{profile.name}, {profile.age}</Text>
-        {profile.city && <Text style={styles.primaryCity}>📍 {profile.city}</Text>}
-        <View style={[styles.sintoniaChip, { backgroundColor: sintoniaColor + '22', borderColor: sintoniaColor }]}>
-          <Text style={[styles.sintoniaPercent, { color: sintoniaColor }]}>{profile.sintonia}%</Text>
-          <Text style={[styles.sintoniaLabel,  { color: sintoniaColor }]}>{getSintoniaLabel(profile.sintonia)}</Text>
-        </View>
-        <TouchableOpacity style={[styles.viewProfileBtn, { borderColor: sintoniaColor }]} onPress={onPress}>
-          <Text style={[styles.viewProfileBtnText, { color: sintoniaColor }]}>Ver perfil ›</Text>
-        </TouchableOpacity>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
+interface DrawResult {
+  profiles:  DestinyProfile[];
+  drawsUsed: number;
+  maxDraws:  number;
+  nextPrice: number;
+  wasPaid:   boolean;
 }
 
-function AlternativeCard({ profile, label, onPress }: { profile: DestinyProfile; label: string; onPress: () => void }) {
-  const sintoniaColor = getSintoniaColor(profile.sintonia);
-  return (
-    <TouchableOpacity style={styles.altCard} onPress={onPress} activeOpacity={0.85}>
-      <View style={styles.altCardInner}>
-        <Text style={styles.altLabel}>{label}</Text>
-        <View style={styles.altContent}>
-          {profile.photoURL
-            ? <Image source={{ uri: profile.photoURL }} style={styles.altPhoto} />
-            : <View style={[styles.altPhoto, styles.photoPlaceholder]}><Text style={{ fontSize: 20 }}>👤</Text></View>
-          }
-          <View style={styles.altInfo}>
-            <Text style={styles.altName}>{profile.name}, {profile.age}</Text>
-            {profile.city && <Text style={styles.altCity}>📍 {profile.city}</Text>}
-            <Text style={[styles.altSintonia, { color: sintoniaColor }]}>{profile.sintonia}% sintonia</Text>
-          </View>
-          <Text style={[styles.altArrow, { color: sintoniaColor }]}>›</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+interface ChoosePayload {
+  targetUid: string;
 }
 
 export default function DestinyCardScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
-  const { data, loading, error, markViewed } = useDestinyCard(user?.uid);
+  const { wallet, refreshWallet } = useCoins();
 
-  // Garante que progressMission é chamado apenas 1x por abertura
-  const missionNotified = useRef(false);
+  const [state,    setState]    = useState<CardState | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [drawing,  setDrawing]  = useState(false);
+  const [choosing, setChoosing] = useState<string | null>(null);
+  // Muda a cada sorteio para a carta voltar a ficar fechada:
+  // quem paga por outra tem direito ao mesmo momento de virar.
+  const [cardKey,  setCardKey]  = useState(0);
+  const [revealed, setRevealed] = useState(false);
+  /**
+   * Sintonia recalculada no CLIENTE, por uid.
+   *
+   * O servidor usa um cálculo simplificado — preferência,
+   * idade e região — só para ESCOLHER quem mostrar. Mas o
+   * número exibido tem que ser o mesmo que a pessoa vê no
+   * perfil aberto e no card do feed, senão a carta diz 78% e
+   * o perfil diz 64%.
+   *
+   * Portar o calcularSintonia inteiro para o backend
+   * duplicaria ~100 linhas, e o projeto já sofreu com
+   * catálogos duplicados divergindo.
+   */
+  const [localScores, setLocalScores] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    if (!data || missionNotified.current) return;
-
-    // Marca carta como visualizada
-    if (!data.fromCache) markViewed();
-
-    // v5.2 — registra progresso da missão open_destiny (fire-and-forget)
-    if (user?.uid) {
-      missionNotified.current = true;
-      const missionId = `daily_${todayBrUnderscore()}_open_destiny`;
-      const fn = httpsCallable(fns, 'progressMission');
-      fn({ missionIdParam: missionId }).catch(() => { /* silencioso */ });
+  const load = useCallback(async () => {
+    try {
+      const fn = httpsCallable<void, CardState>(getFunctions(), 'getDestinyCard');
+      const res = await fn();
+      setState(res.data);
+      // Carta já sorteada hoje volta aberta: virar de novo o
+      // que já foi revelado seria teatro vazio.
+      setRevealed(res.data.profiles.length > 0);
+    } catch (error) {
+      console.error('[DestinyCard] load:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [data]);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Recalcula quando os perfis mudam. Duas leituras por
+  // pessoa mostrada — aceitável, porque são no máximo duas
+  // por carta e a carta é rara.
+  useEffect(() => {
+    async function recalc() {
+      if (!user?.uid || !state?.profiles.length) return;
+
+      const me = await getProfile(user.uid);
+      if (!me) return;
+
+      const scores: Record<string, number> = {};
+
+      await Promise.all(state.profiles.map(async p => {
+        const other = await getUserProfile(p.uid);
+        if (!other) return;
+        scores[p.uid] = calcularSintonia(me, other).score;
+      }));
+
+      setLocalScores(prev => ({ ...prev, ...scores }));
+    }
+
+    recalc().catch(() => { /* fica o número do servidor */ });
+  }, [user?.uid, state?.profiles]);
+
+  // Volta do perfil de alguém: recarrega, porque a pessoa
+  // pode ter escolhido por lá ou o estado pode ter mudado.
+  useFocusEffect(
+    useCallback(() => {
+      if (!loading) load();
+    }, [loading, load]),
+  );
+
+   // Só PREMIUM: os cristais gratuitos ficam para as
+  // revelações, e os fragmentos para o Cofre e os badges.
+  const premium = wallet?.coinsPremium ?? 0;
+
+  async function doDraw() {
+    if (drawing || !state) return;
+
+    const isPaid = state.drawsUsed >= state.freeDraws;
+
+    if (isPaid && premium < state.nextPrice) {
+      Alert.alert(
+        'Cristais premium insuficientes',
+        `Ver outras duas custa ${state.nextPrice} cristais premium, e você tem ${premium}.\n\nCristais premium vêm da loja — os gratuitos não valem para a Carta.`,
+        [
+          { text: 'Agora não', style: 'cancel' },
+          {
+            text: 'Ir para a loja',
+            onPress: () => navigation.navigate('CrystalPacks'),
+          },
+        ],
+      );
+      return;
+    }
+
+    if (isPaid) {
+      const restantes = state.maxDraws - state.drawsUsed - 1;
+      const aviso = restantes > 0
+        ? `Custa ${state.nextPrice} cristais premium. As pessoas de agora não voltam, e você ainda terá ${restantes} ${restantes === 1 ? 'troca' : 'trocas'} depois desta.`
+        : `Custa ${state.nextPrice} cristais premium. As pessoas de agora não voltam, e esta é sua última troca de hoje.`;
+
+      const confirmed = await confirm('Ver outras duas pessoas', aviso);
+      if (!confirmed) return;
+    }
+
+    setDrawing(true);
+    try {
+      const fn = httpsCallable<void, DrawResult>(getFunctions(), 'drawDestinyCard');
+      const res = await fn();
+
+      setState(prev => prev ? {
+        ...prev,
+        profiles:  res.data.profiles,
+        drawsUsed: res.data.drawsUsed,
+        nextPrice: res.data.nextPrice,
+      } : null);
+
+      setRevealed(false);
+      setCardKey(k => k + 1);
+      if (res.data.wasPaid) refreshWallet();
+    } catch (error) {
+      const message = (error as { message?: string })?.message
+        ?? 'Não foi possível abrir a carta.';
+      Alert.alert('Carta do Destino', message);
+    } finally {
+      setDrawing(false);
+    }
+  }
+
+  async function doChoose(profile: DestinyProfile) {
+    if (choosing) return;
+
+    const confirmed = await confirm(
+      `Escolher ${profile.name}?`,
+      'Vocês poderão conversar a partir de agora. Esta é sua escolha de hoje — amanhã a carta traz novas pessoas.',
+    );
+    if (!confirmed) return;
+
+    setChoosing(profile.uid);
+    try {
+      const fn = httpsCallable<ChoosePayload, { success: boolean }>(
+        getFunctions(), 'chooseDestinyProfile',
+      );
+      await fn({ targetUid: profile.uid });
+
+      setState(prev => prev ? { ...prev, chosenUid: profile.uid } : null);
+
+      Alert.alert(
+        '✦ Conexão criada',
+        `Você já pode conversar com ${profile.name}.`,
+        [
+          { text: 'Depois', style: 'cancel' },
+          {
+            text: 'Conversar agora',
+            onPress: () => navigation.navigate('UserChat', {
+              userId:    profile.uid,
+              userName:  profile.name,
+              userPhoto: profile.photoURL,
+            }),
+          },
+        ],
+      );
+    } catch (error) {
+      const message = (error as { message?: string })?.message
+        ?? 'Não foi possível concluir a escolha.';
+      Alert.alert('Carta do Destino', message);
+    } finally {
+      setChoosing(null);
+    }
+  }
 
   if (loading) {
     return (
       <View style={styles.container}>
-        <Header title="Carta do Destino" showBack={true} showHome={true} />
+        <DestinyBackground />
+        <Header title="Carta do Destino" showBack showHome />
         <View style={styles.center}>
-          <ActivityIndicator color={COLORS.secondary} size="large" />
-          <Text style={styles.loadingText}>O universo está consultando os astros...</Text>
+          <ActivityIndicator color={colors.gold} size="large" />
         </View>
       </View>
     );
   }
 
-  if (error || !data) {
-    return (
-      <View style={styles.container}>
-        <Header title="Carta do Destino" showBack={true} showHome={true} />
-        <View style={styles.center}>
-          <Text style={styles.errorIcon}>🌌</Text>
-          <Text style={styles.errorTitle}>
-            {error?.includes('Limite') ? 'Cartas do dia esgotadas' : 'Nenhum perfil compatível hoje'}
-          </Text>
-          <Text style={styles.errorSub}>
-            {error?.includes('Limite')
-              ? 'Volte amanhã para novas cartas do destino.'
-              : 'Complete seu perfil para encontrar mais compatibilidades.'}
-          </Text>
-          {!error?.includes('Limite') && (
-            <TouchableOpacity style={styles.setupBtn} onPress={() => navigation.navigate('ProfileSetup')}>
-              <Text style={styles.setupBtnText}>Completar perfil</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    );
-  }
-
-  const [primary, ...alternatives] = data.profiles;
+  const drawsLeft = state ? state.maxDraws - state.drawsUsed : 0;
+  const nextIsPaid = state ? state.drawsUsed >= state.freeDraws : false;
+  const chosen = state?.chosenUid
+    ? state.profiles.find(p => p.uid === state.chosenUid)
+    : null;
 
   return (
     <View style={styles.container}>
-      <Header title="Carta do Destino" showBack={true} showHome={true} />
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <LinearGradient colors={['#1A0A2E','#0D0D1A']} style={styles.headerCard}>
-          <Text style={styles.headerIcon}>🃏</Text>
-          <Text style={styles.headerTitle}>Sua Carta de Hoje</Text>
-          <Text style={styles.headerSub}>
-            O universo escolheu {data.profiles.length} perfil{data.profiles.length > 1 ? 'is' : ''} para você
-          </Text>
-          <View style={styles.cartasCounter}>
-            <Text style={styles.cartasText}>{data.cartasHoje}/{data.maxCartas} carta{data.maxCartas > 1 ? 's' : ''} hoje</Text>
-            {data.isGalaxiaPlus && (
-              <View style={styles.galaxiaBadge}>
-                <Text style={styles.galaxiaBadgeText}>💜 Galáxia Plus</Text>
+      <DestinyBackground />
+      <Header title="Carta do Destino" showBack showHome />
+
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── JÁ ESCOLHEU ── */}
+        {chosen ? (
+          <View style={styles.doneBox}>
+            <Text style={styles.doneIcon}>✦</Text>
+            <Text style={styles.doneTitle}>Sua escolha de hoje</Text>
+
+            <TouchableOpacity
+              style={styles.chosenCard}
+              onPress={() => navigation.navigate('RealProfile', { userId: chosen.uid })}
+              activeOpacity={0.85}
+            >
+              <Image source={{ uri: chosen.photoURL }} style={styles.chosenPhoto} />
+              <View style={styles.chosenInfo}>
+                <Text style={styles.chosenName}>{chosen.name}, {chosen.age}</Text>
+                <Text style={styles.chosenCity}>📍 {chosen.city}</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => navigation.navigate('UserChat', {
+                userId:    chosen.uid,
+                userName:  chosen.name,
+                userPhoto: chosen.photoURL,
+              })}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.primaryText}>💬 Conversar</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.doneHint}>
+              Amanhã a carta traz novas pessoas. Enquanto isso,
+              a aba Sintonize continua aberta.
+            </Text>
+          </View>
+        ) : state && state.profiles.length === 0 ? (
+          /* ── NENHUMA CARTA ABERTA HOJE ── */
+          <>
+            <Text style={styles.intro}>
+              Todo dia o Lumina procura, entre todas as pessoas,
+              as duas mais compatíveis com você.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.openButton}
+              onPress={doDraw}
+              disabled={drawing}
+              activeOpacity={0.85}
+            >
+              {drawing
+                ? <ActivityIndicator color={colors.background} />
+                : <Text style={styles.openButtonText}>Abrir a carta de hoje</Text>
+              }
+            </TouchableOpacity>
+
+            <Text style={styles.introSmall}>
+              A primeira carta do dia é grátis.
+            </Text>
+          </>
+        ) : (
+          /* ── CARTA ABERTA ── */
+          <>
+            <DestinyCardFlip
+              resetKey={cardKey}
+              disabled={drawing}
+              onOpened={() => setRevealed(true)}
+            >
+              <ScrollView contentContainerStyle={styles.cardInner}>
+                {/* Nem sempre há duas: numa base pequena ou
+                    com preferência restrita, pode sobrar uma
+                    só. O texto acompanha em vez de prometer
+                    o que não está lá. */}
+                <Text style={styles.cardTitle}>
+                  {(state?.profiles.length ?? 0) > 1 ? 'Duas pessoas' : 'Uma pessoa'}
+                </Text>
+                <Text style={styles.cardSub}>
+                  {(state?.profiles.length ?? 0) > 1
+                    ? 'Escolha uma para conversar'
+                    : 'Escolha para conversar'}
+                </Text>
+
+                <View style={styles.pair}>
+                  {state?.profiles.map(p => (
+                    <View key={p.uid} style={styles.personBox}>
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate('RealProfile', { userId: p.uid })}
+                        activeOpacity={0.85}
+                      >
+                        <Image source={{ uri: p.photoURL }} style={styles.personPhoto} />
+                        <View style={styles.matchTag}>
+                          <Text style={styles.matchTagText}>
+                            {localScores[p.uid] ?? p.sintonia}%
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      <Text style={styles.personName} numberOfLines={1}>
+                        {p.name}, {p.age}
+                      </Text>
+                      <Text style={styles.personCity} numberOfLines={1}>{p.city}</Text>
+
+                      {/* Ver o perfil antes de decidir: a
+                          escolha é definitiva no dia, então a
+                          pessoa precisa poder olhar com calma
+                          e voltar. */}
+                      <TouchableOpacity
+                        style={styles.peekButton}
+                        onPress={() => navigation.navigate('RealProfile', { userId: p.uid })}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.peekText}>Ver perfil</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.chooseButton}
+                        onPress={() => doChoose(p)}
+                        disabled={choosing !== null}
+                        activeOpacity={0.85}
+                      >
+                        {choosing === p.uid
+                          ? <ActivityIndicator color={colors.background} size="small" />
+                          : <Text style={styles.chooseText}>Escolher</Text>
+                        }
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            </DestinyCardFlip>
+
+            {/* Explicação e troca — só depois de revelar, para
+                não competir com o momento da virada. */}
+            {revealed && (
+              <View style={styles.footer}>
+                <Text style={styles.footerRule}>
+                  Escolher uma libera a conversa entre vocês — e
+                  encerra sua carta de hoje.
+                </Text>
+
+                {drawsLeft > 0 ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.swapButton}
+                      onPress={doDraw}
+                      disabled={drawing}
+                      activeOpacity={0.85}
+                    >
+                      {drawing ? (
+                        <ActivityIndicator color={colors.gold} size="small" />
+                      ) : (
+                        <Text style={styles.swapText}>
+                          {nextIsPaid
+                            ? `Ver outras duas · ${state?.nextPrice} 💎`
+                            : 'Ver outras duas'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <Text style={styles.footerHint}>
+                      {drawsLeft === 1
+                        ? 'Esta é sua última troca de hoje.'
+                        : `Você ainda tem ${drawsLeft} trocas hoje.`}
+                      {nextIsPaid ? `\nSeus cristais premium: ${premium} 💎` : ''}
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={styles.footerHint}>
+                    Você já viu todas as cartas de hoje. Escolha
+                    uma das duas ou volte amanhã.
+                  </Text>
+                )}
               </View>
             )}
-          </View>
-        </LinearGradient>
-
-        {primary && (
-          <PrimaryCard
-            profile={primary}
-            onPress={() => navigation.navigate('RealProfile', { userId: primary.uid })}
-          />
-        )}
-
-        {alternatives.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Alternativas do Destino</Text>
-            {alternatives.map((profile, i) => (
-              <AlternativeCard
-                key={profile.uid}
-                profile={profile}
-                label={i === 0 ? 'Alternativa A' : 'Alternativa B'}
-                onPress={() => navigation.navigate('RealProfile', { userId: profile.uid })}
-              />
-            ))}
           </>
-        )}
-
-        {!data.isGalaxiaPlus && (
-          <TouchableOpacity style={styles.galaxiaCta} onPress={() => navigation.navigate('Store' as any)} activeOpacity={0.85}>
-            <LinearGradient colors={['#2A0A4E','#4E1B7E']} style={styles.galaxiaCtaInner}>
-              <Text style={styles.galaxiaCtaIcon}>💜</Text>
-              <View style={styles.galaxiaCtaInfo}>
-                <Text style={styles.galaxiaCtaTitle}>Galáxia Plus</Text>
-                <Text style={styles.galaxiaCtaSub}>10 Cartas do Destino por dia + muito mais</Text>
-              </View>
-              <Text style={styles.galaxiaCtaArrow}>›</Text>
-            </LinearGradient>
-          </TouchableOpacity>
         )}
 
         <View style={{ height: 40 }} />
@@ -212,58 +460,144 @@ export default function DestinyCardScreen() {
   );
 }
 
-const S = SPACING;
-const R = BORDER_RADIUS;
+/** Confirmação que funciona no Android, no iOS e na web. */
+function confirm(title: string, message: string): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    return Promise.resolve((window as unknown as { confirm: (m: string) => boolean })
+      .confirm(`${title}\n\n${message}`));
+  }
+
+  return new Promise(resolve => {
+    Alert.alert(title, message, [
+      { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+      { text: 'Confirmar', onPress: () => resolve(true) },
+    ]);
+  });
+}
 
 const styles = StyleSheet.create({
-  container:           { flex: 1, backgroundColor: COLORS.background },
-  center:              { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl, gap: S.md },
-  loadingText:         { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center', fontStyle: 'italic' },
-  errorIcon:           { fontSize: 60 },
-  errorTitle:          { color: COLORS.surface, fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
-  errorSub:            { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center', lineHeight: 20 },
-  setupBtn:            { backgroundColor: COLORS.primary, borderRadius: R.lg, paddingVertical: S.md, paddingHorizontal: S.xl },
-  setupBtnText:        { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  headerCard:          { margin: S.md, borderRadius: R.xl, padding: S.xl, alignItems: 'center', gap: S.sm, borderWidth: 1, borderColor: 'rgba(181,123,238,0.3)' },
-  headerIcon:          { fontSize: 48 },
-  headerTitle:         { color: COLORS.surface, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold },
-  headerSub:           { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center' },
-  cartasCounter:       { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginTop: S.xs },
-  cartasText:          { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
-  galaxiaBadge:        { backgroundColor: 'rgba(181,123,238,0.2)', borderRadius: R.full, paddingHorizontal: S.sm, paddingVertical: 2, borderWidth: 1, borderColor: COLORS.secondary },
-  galaxiaBadgeText:    { color: COLORS.secondary, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
-  primaryCard:         { marginHorizontal: S.md, marginBottom: S.md, borderRadius: R.xl, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(181,123,238,0.4)' },
-  primaryCardGradient: { padding: S.xl, alignItems: 'center', gap: S.md },
-  primaryBadge:        { backgroundColor: 'rgba(181,123,238,0.2)', borderRadius: R.full, paddingHorizontal: S.md, paddingVertical: S.xs, borderWidth: 1, borderColor: COLORS.secondary },
-  primaryBadgeText:    { color: COLORS.secondary, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: 1 },
-  primaryPhotoWrapper: { position: 'relative', width: 120, height: 120 },
-  primaryPhoto:        { width: 120, height: 120, borderRadius: 60 },
-  sintoniaRing:        { position: 'absolute', top: -4, left: -4, width: 128, height: 128, borderRadius: 64, borderWidth: 3 },
-  primaryName:         { color: COLORS.surface, fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold },
-  primaryCity:         { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
-  sintoniaChip:        { flexDirection: 'row', alignItems: 'center', gap: S.sm, borderRadius: R.full, paddingHorizontal: S.lg, paddingVertical: S.sm, borderWidth: 1 },
-  sintoniaPercent:     { fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.extrabold },
-  sintoniaLabel:       { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
-  viewProfileBtn:      { borderRadius: R.lg, borderWidth: 1, paddingVertical: S.sm, paddingHorizontal: S.xl },
-  viewProfileBtnText:  { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  sectionTitle:        { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginBottom: S.sm },
-  altCard:             { marginHorizontal: S.md, marginBottom: S.sm, backgroundColor: COLORS.card, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
-  altCardInner:        { padding: S.md },
-  altLabel:            { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textTransform: 'uppercase', letterSpacing: 1, marginBottom: S.sm },
-  altContent:          { flexDirection: 'row', alignItems: 'center', gap: S.md },
-  altPhoto:            { width: 56, height: 56, borderRadius: 28 },
-  photoPlaceholder:    { backgroundColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  photoPlaceholderText:{ fontSize: 32 },
-  altInfo:             { flex: 1 },
-  altName:             { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  altCity:             { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
-  altSintonia:         { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, marginTop: 4 },
-  altArrow:            { fontSize: 24, fontWeight: FONT_WEIGHT.bold },
-  galaxiaCta:          { marginHorizontal: S.md, marginTop: S.md, borderRadius: R.xl, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(181,123,238,0.4)' },
-  galaxiaCtaInner:     { flexDirection: 'row', alignItems: 'center', padding: S.lg, gap: S.md },
-  galaxiaCtaIcon:      { fontSize: 32 },
-  galaxiaCtaInfo:      { flex: 1 },
-  galaxiaCtaTitle:     { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  galaxiaCtaSub:       { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
-  galaxiaCtaArrow:     { color: COLORS.secondary, fontSize: 24, fontWeight: FONT_WEIGHT.bold },
+  container: { flex: 1, backgroundColor: colors.background },
+  center:    { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scroll:    { paddingTop: spacing.lg, paddingHorizontal: spacing.lg, alignItems: 'center' },
+
+  intro: {
+    color: colors.grayLight,
+    fontSize: fonts.sizes.md,
+    textAlign: 'center',
+    lineHeight: 23,
+    marginTop: spacing.xl * 2,
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.md,
+  },
+  introSmall: {
+    color: colors.gray,
+    fontSize: fonts.sizes.sm,
+    textAlign: 'center',
+    marginTop: spacing.md,
+  },
+  openButton: {
+    backgroundColor: colors.gold,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    minWidth: 220,
+    alignItems: 'center',
+  },
+  openButtonText: {
+    color: colors.background,
+    fontSize: fonts.sizes.md,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+
+  // Interior da carta
+  cardInner:  { padding: spacing.lg, alignItems: 'center', gap: spacing.xs },
+  cardTitle:  { color: colors.gold, fontSize: fonts.sizes.lg, fontWeight: 'bold', letterSpacing: 1 },
+  cardSub:    { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.md },
+  pair:       { flexDirection: 'row', gap: spacing.md, justifyContent: 'center' },
+  personBox:  { flex: 1, alignItems: 'center', gap: 4 },
+  personPhoto: {
+    width: 118, height: 148,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.gold + '55',
+    backgroundColor: colors.grayDark,
+  },
+  matchTag: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    backgroundColor: colors.background + 'DD',
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  matchTagText: { color: colors.gold, fontSize: 10, fontWeight: 'bold' },
+  personName: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold', marginTop: 6 },
+  personCity: { color: colors.gray, fontSize: fonts.sizes.xs, marginBottom: 6 },
+  peekButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.grayDark,
+  },
+  peekText: { color: colors.grayLight, fontSize: fonts.sizes.xs },
+  chooseButton: {
+    marginTop: 6,
+    backgroundColor: colors.gold,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 8,
+    minWidth: 96,
+    alignItems: 'center',
+  },
+  chooseText: { color: colors.background, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+
+  // Rodapé
+  footer:     { marginTop: spacing.lg, alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
+  footerRule: { color: colors.grayLight, fontSize: fonts.sizes.sm, textAlign: 'center', lineHeight: 20 },
+  swapButton: {
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.gold + '66',
+    backgroundColor: colors.gold + '12',
+    minWidth: 220,
+    alignItems: 'center',
+  },
+  swapText:   { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  footerHint: { color: colors.gray, fontSize: fonts.sizes.xs, textAlign: 'center', lineHeight: 17 },
+
+  // Já escolheu
+  doneBox:    { alignItems: 'center', gap: spacing.md, marginTop: spacing.xl, paddingHorizontal: spacing.md },
+  doneIcon:   { fontSize: 44, color: colors.gold },
+  doneTitle:  { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold' },
+  chosenCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.gold + '44',
+    alignSelf: 'stretch',
+  },
+  chosenPhoto: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: colors.gold },
+  chosenInfo:  { flex: 1, gap: 2 },
+  chosenName:  { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  chosenCity:  { color: colors.gray, fontSize: fonts.sizes.sm },
+  primaryButton: {
+    backgroundColor: colors.gold,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+  },
+  primaryText: { color: colors.background, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  doneHint:    { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center', lineHeight: 20 },
 });

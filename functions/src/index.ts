@@ -114,7 +114,11 @@ export { claimDailyReward, getDailyRewardStatus } from './engagement/dailyReward
 export { claimDailyFaisca, getDailyFaiscaStatus } from './engagement/dailyFaisca';
 
 //carta do destino
-export { getDestinyCard, markDestinyCardViewed } from './engagement/destinyCard';
+// markDestinyCardViewed REMOVIDA: gravava `visualizado: true` e
+// ninguém lia esse campo. O que importa agora é o `chosenUid`.
+export {
+  getDestinyCard, drawDestinyCard, chooseDestinyProfile,
+} from './engagement/destinyCard';
 
 // trigger notifications
 export { onProfileVisit, checkLostSintonia } from './engagement/emotionalTriggers';
@@ -148,7 +152,6 @@ export { revealVisitors, getVisitorsStatus }        from './premium/visitorsServ
 export { getWeeklyChallenge, progressWeeklyChallenge, resetWeeklyChallenges } from './premium/weeklyChallengeService';
                     
 export { onMessageReply } from './engagement/messageReply';
-export { onMissionCompleted } from './engagement/missionCompleted';
 export { onCreateMatch } from './engagement/matchCreated';            
 export { getDashboardSnapshot } from './gamification/dashboard/getDashboardSnapshot';
 
@@ -190,3 +193,4 @@ export { saveCreatorPixKey }       from './payments/saveCreatorPixKey';
 export { onWithdrawalCreated }     from './triggers/onWithdrawalCreated';
 export { onCreatorRequestCreated } from './triggers/onCreatorRequestCreated';
 export { clearLevelReveal } from './engagement/clearLevelReveal';
+export { getGalaxiaPlusStatus } from './payments/getGalaxiaPlusStatus';

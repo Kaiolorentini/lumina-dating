@@ -74,6 +74,23 @@ function buildAchievementBadgeIndex(): Record<string, { title: string; descripti
       };
     }
   }
+
+  // TERCEIRA ORIGEM: badges concedidos fora dos dois catálogos.
+  //
+  // O Constelação Guia vem da Galáxia Plus — não é da loja nem
+  // recompensa de conquista, então não estava em índice nenhum
+  // e ficava invisível mesmo com o campo gravado em
+  // unlockedItems.
+  //
+  // Permanente de propósito: a assinatura expira em 30 dias e os
+  // benefícios param, mas o badge fica. Quem sustentou o Lumina
+  // sustentou.
+  index.badge_constelacao_guia = {
+    title:       'Constelação Guia',
+    description: 'Quem ilumina o caminho de quem ainda procura',
+    rarity:      'MYTHIC',
+  };
+
   return index;
 }
 
@@ -121,17 +138,23 @@ function buildOwnedBadges(userData: Record<string, any>): OwnedBadge[] {
     // lista. Não há colisão hoje; o guard protege adições futuras.
     if (BADGES_CATALOG[badgeId]) continue;
 
+    // O Constelação Guia é o único badge fora da loja com
+    // direção visual PRÓPRIA. Mandar nulo faria o cliente
+    // desenhar o fallback da raridade — que para MYTHIC é o
+    // `genesis`, e o badge exclusivo viraria igual aos outros.
+    const isGuide = badgeId === 'badge_constelacao_guia';
+
     owned.push({
       id:          badgeId,
       title:       meta.title,
       description: meta.description,
       rarity:      meta.rarity,
       source:      'ACHIEVEMENT',
-      shape:       null,
-      coreColor:   null,
-      accentColor: null,
-      glowColor:   null,
-      motion:      null,
+      shape:       isGuide ? 'guide_constellation' : null,
+      coreColor:   isGuide ? '#FFF4D0' : null,
+      accentColor: isGuide ? '#FFD700' : null,
+      glowColor:   isGuide ? 'rgba(255,215,0,0.9)' : null,
+      motion:      isGuide ? 'dual_layer' : null,
       permanent:   true,
       expiresAt:   null,
       expired:     false,

@@ -23,14 +23,35 @@ export const MIDDLEWARE_FLAGS = {
 };
 
 // Dispatcher flags
+//
+// TREE, ACHIEVEMENT e PRESTIGE DESLIGADOS (v1.2).
+// Nunca foram registrados (registerDispatchers.ts não os
+// importa) e cada um precisa de reescrita do Service, não de
+// um import:
+//   TREE        — conflita com o XP (treeXP com constante
+//                 própria) e grava estágio sem gravar treeXP.
+//                 A árvore vive no XPService.
+//   ACHIEVEMENT — o persist não entrega recompensa e duplicaria
+//                 o achievementTriggers, que é o fluxo vivo.
+//   PRESTIGE    — aponta para o Service antigo em
+//                 gamification/services/. O vivo é
+//                 engagement/prestigeService.ts.
+//
+// Ligados na matriz e ausentes do registry, voltavam FAILED e
+// marcavam TODO evento como FAILED no eventLedger e no
+// gamificationAnalytics, mesmo com XP, Vault e Ranking certos.
+// Desligados aqui, voltam DISABLED e entram em `skipped`.
+//
+// Para religar um deles: reescrever o Service, importar o
+// dispatcher em registerDispatchers.ts e só então pôr true.
 export const DISPATCHER_FLAGS: Record<DispatcherType, boolean> = {
   XP:           true,
   VAULT:        true,
-  ACHIEVEMENT:  true,
+  ACHIEVEMENT:  false,
   MISSION:      true,
   RANKING:      true,
-  TREE:         true,
-  PRESTIGE:     true,
+  TREE:         false,
+  PRESTIGE:     false,
   NOTIFICATION: true,
   ANALYTICS:    true,
 };

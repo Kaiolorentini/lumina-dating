@@ -5,7 +5,9 @@
 // SPRINT 1B — Único ponto de entrada para conclusão de missões.
 // Resolve o conflito identificado na auditoria:
 //   progressMission (legado) registra progresso + entrega recompensa.
-//   onMissionCompleted (novo) só entrega recompensa.
+//   onMissionCompleted só entregava recompensa — REMOVIDA: o app
+//   nunca a chamava, e ela aceitava qualquer missionId do cliente,
+//   pagando MISSION_COMPLETED sem conferir dailyMissions.
 //
 // Esta versão unifica os dois fluxos em um único método:
 //   completeMission() = registra progresso + entrega fragmentos + dispara Engine

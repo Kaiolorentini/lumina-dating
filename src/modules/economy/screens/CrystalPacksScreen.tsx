@@ -28,6 +28,7 @@ import {
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
 import CpfPromptModal from '../../../components/CpfPromptModal';
+import { CrystalFieldBackground } from '../../../components/CrystalFieldBackground';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -151,6 +152,12 @@ export default function CrystalPacksScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Cristais dourados flutuando ao fundo — o universo do
+          Lumina, e uma prévia do que está à venda. A deriva é
+          lenta de propósito: a tela é de DECISÃO entre quatro
+          pacotes, e um fundo agitado competiria com isso. */}
+      <CrystalFieldBackground />
+
       <Header title="Cristais" showBack={true} showHome={true} />
       <ScrollView showsVerticalScrollIndicator={false}>
 
@@ -227,14 +234,18 @@ const S = SPACING;
 const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
-  container:              { flex: 1, backgroundColor: COLORS.background },
+  // O fundo fica por baixo de tudo; o container não pode ter
+  // cor própria ou taparia os cristais.
+  container:              { flex: 1, backgroundColor: 'transparent' },
   balanceStrip:           { marginHorizontal: S.md, marginTop: S.md, backgroundColor: 'rgba(255,215,0,0.08)', borderRadius: R.full, paddingVertical: S.sm, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,215,0,0.3)' },
   balanceStripText:       { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
   balanceStripValue:      { color: '#FFD700', fontWeight: FONT_WEIGHT.extrabold },
   sectionTitle:           { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginTop: S.lg, marginBottom: S.xs },
   sectionSub:             { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginHorizontal: S.md, marginBottom: S.sm },
   packagesSection:        { marginHorizontal: S.md, gap: S.sm },
-  packageCard:            { backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.border },
+  // Opacidade quase total: com o card translúcido, os cristais
+  // do fundo apareciam através do texto do preço.
+  packageCard:            { backgroundColor: COLORS.card + 'F2', borderRadius: R.lg, padding: S.md, borderWidth: 1, borderColor: COLORS.border },
   packageCardHighlighted: { borderColor: COLORS.secondary, backgroundColor: 'rgba(181,123,238,0.08)' },
   popularBadge:           { backgroundColor: COLORS.secondary, borderRadius: R.full, paddingHorizontal: S.md, paddingVertical: 2, alignSelf: 'flex-start', marginBottom: S.sm },
   popularBadgeText:       { color: COLORS.background, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.extrabold, letterSpacing: 1 },
@@ -259,7 +270,7 @@ const styles = StyleSheet.create({
   galaxiaArrow:           { color: COLORS.secondary, fontSize: 28, fontWeight: FONT_WEIGHT.bold },
   galaxiaBenefits:        { gap: S.xs },
   galaxiaBenefit:         { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },
-  infoCard:               { marginHorizontal: S.md, marginTop: S.lg, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.xs, borderWidth: 1, borderColor: COLORS.border },
+  infoCard:               { marginHorizontal: S.md, marginTop: S.lg, backgroundColor: COLORS.card + 'F2', borderRadius: R.lg, padding: S.lg, gap: S.xs, borderWidth: 1, borderColor: COLORS.border },
   infoTitle:              { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, marginBottom: S.xs },
   infoText:               { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, lineHeight: 18 },
 });

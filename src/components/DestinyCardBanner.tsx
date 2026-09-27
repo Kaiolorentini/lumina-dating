@@ -17,7 +17,7 @@ export default function DestinyCardBanner({ onPress }: Props) {
         <Text style={styles.icon}>🃏</Text>
         <View style={styles.info}>
           <Text style={styles.title}>Carta do Destino</Text>
-          <Text style={styles.sub}>O universo escolheu perfis para você hoje</Text>
+          <Text style={styles.sub}>Duas pessoas esperam por você. Escolha uma.</Text>
         </View>
         <Text style={styles.arrow}>›</Text>
       </LinearGradient>

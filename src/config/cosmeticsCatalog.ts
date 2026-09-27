@@ -145,6 +145,35 @@ export const BADGES: Record<string, BadgeLook> = {
   badge_singularidade:   { id: 'badge_singularidade',   costKey: 'BADGE_SINGULARIDADE',   title: 'Singularidade',   meaning: 'Lobo solitário — mas quem entrar, entra sem volta',   rarity: 'LEGENDARY', currency: 'CRYSTALS', price: 150, rentalDays: 30, shape: 'singularity', coreColor: '#0A0A14', accentColor: '#FFD700', glowColor: 'rgba(255,215,0,0.85)',  motion: 'orbit_particles' },
   badge_genese:          { id: 'badge_genese',          costKey: 'BADGE_GENESE',          title: 'Gênese',          meaning: 'Pronto para recomeçar — página em branco',            rarity: 'LEGENDARY', currency: 'CRYSTALS', price: 150, rentalDays: 30, shape: 'genesis',     coreColor: '#FFFFFF', accentColor: '#FFE9B8', glowColor: 'rgba(255,255,255,0.9)', motion: 'orbit_particles' },
   badge_via_lactea:      { id: 'badge_via_lactea',      costKey: 'BADGE_VIA_LACTEA',      title: 'Via Láctea',      meaning: 'Vasto demais para um só — e honesto sobre isso',      rarity: 'LEGENDARY', currency: 'CRYSTALS', price: 150, rentalDays: 30, shape: 'milky_way',   coreColor: '#FFF4D0', accentColor: '#B57BEE', glowColor: 'rgba(255,244,208,0.85)', motion: 'orbit_particles' },
+
+  // ── MYTHIC — exclusivo da Galáxia Plus ──
+  //
+  // Não está à venda e nunca estará: só quem assina recebe, uma
+  // vez, na primeira ativação. Nas renovações vêm 20 fragmentos
+  // no lugar — o badge já é seu.
+  //
+  // PERMANENTE (rentalDays 0): a assinatura expira em 30 dias e
+  // os benefícios param, mas o badge fica. Quem sustentou o
+  // Lumina sustentou, e isso não se aluga.
+  //
+  // Único com `motion: 'dual_layer'` — o halo gira enquanto as
+  // estrelas respiram. Nenhum outro badge tem duas camadas de
+  // movimento.
+  badge_constelacao_guia: {
+    id:          'badge_constelacao_guia',
+    costKey:     null,
+    title:       'Constelação Guia',
+    meaning:     'Quem ilumina o caminho de quem ainda procura',
+    rarity:      'MYTHIC',
+    currency:    'ACHIEVEMENT',
+    price:       0,
+    rentalDays:  0,
+    shape:       'guide_constellation',
+    coreColor:   '#FFF4D0',
+    accentColor: '#FFD700',
+    glowColor:   'rgba(255,215,0,0.9)',
+    motion:      'dual_layer',
+  },
 };
 
 export const FRAGMENT_BADGES: BadgeLook[] =

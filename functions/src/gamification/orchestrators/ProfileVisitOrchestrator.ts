@@ -1,5 +1,5 @@
 // ============================================
-// LUMINA — PROFILE VISIT ORCHESTRATOR v1.0
+// LUMINA — PROFILE VISIT ORCHESTRATOR v1.1
 // functions/src/gamification/orchestrators/ProfileVisitOrchestrator.ts
 //
 // BLOCO 4 — Regra 1+5: intermediário entre emotionalTriggers e Engine.
@@ -9,7 +9,21 @@
 // Fluxo:
 //   1. ProfileVisitValidator (BusinessValidation)
 //   2. EmotionalTriggersService (independente)
-//   3. GamificationIntegrationService (fire-and-forget)
+//   3. GamificationIntegrationService (aguardado, nunca lança)
+//   4. Conquista VISIT_PROFILE (aguardada, catch próprio)
+//
+// v1.1 — FIM DO FIRE-AND-FORGET.
+// As etapas 3 e 4 eram disparadas sem await. A Cloud Function
+// terminava antes delas e o Google estrangulava a CPU da
+// instância: a gamificação seguia a conta-gotas e podia ser
+// perdida se a instância fosse reciclada. Agora são aguardadas,
+// em sequência — a conquista dispara o onAchievementTrigger,
+// que também escreve em users/{uid}, e rodando junto com o XP
+// uma transação faria a outra repetir.
+//
+// Continua valendo: a gamificação NUNCA falha para o usuário.
+// O run() do GamificationIntegrationService engole o erro, e a
+// conquista tem catch próprio.
 //
 // Regra 6: ErrorBoundary é o único ponto de captura.
 // ============================================
@@ -67,9 +81,9 @@ export const ProfileVisitOrchestrator = {
       // Continua mesmo se trigger falhar
     }
 
-    // ETAPA 3: Gamification — fire-and-forget (REGRA 15)
-    // Nunca bloqueia. Nunca falha para o usuário.
-    GamificationIntegrationService.handleProfileVisit({
+    // ETAPA 3: Gamification — aguardada (REGRA 15 revista na v1.1).
+    // Nunca falha para o usuário: o run() engole e registra o erro.
+    await GamificationIntegrationService.handleProfileVisit({
       visitorUid,
       targetUid,
       platform:  input.platform,
@@ -85,12 +99,25 @@ export const ProfileVisitOrchestrator = {
     // auto-visita e bloqueio já foram descartados.
     //
     // Action INCREMENTAL: currentValue é somado ao progresso.
-    admin.firestore().collection('achievementTriggers').add({
+    //
+    // Depois da ETAPA 3, não junto: o onAchievementTrigger
+    // também escreve em users/{uid}.
+    await admin.firestore().collection('achievementTriggers').add({
       uid:          visitorUid,
       action:       'VISIT_PROFILE',
       currentValue: 1,
       processedAt:  null,
       timestamp:    FieldValue.serverTimestamp(),
-    }).catch(() => { /* conquista nunca derruba a visita */ });
+    }).catch((error) => {
+      // Conquista nunca derruba a visita.
+      GameLogger.warn({
+        dispatcher: 'ANALYTICS',
+        eventId:    errorCtx.eventId,
+        uid:        visitorUid,
+        message:    'Falha ao enfileirar conquista VISIT_PROFILE',
+        warning:    String(error),
+        meta:       { correlationId, targetUid },
+      });
+    });
   },
 };

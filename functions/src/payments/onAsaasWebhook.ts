@@ -13,6 +13,7 @@ import { notifyUser }   from '../utils/notifyUser';
 import { notifyAdmins } from '../utils/notifyAdmins';
 import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import { handleCoinsChargeback } from './handleCoinsChargeback';
+import { activateGalaxiaPlus }   from './activateGalaxiaPlus';
 import { incrementMetrics }      from '../utils/incrementMetric';
 
 const db = admin.firestore();
@@ -195,11 +196,52 @@ export const onAsaasWebhook = functions.onRequest(
           timestamp:    FieldValue.serverTimestamp(),
         }).catch(() => {});
 
+        // ── GALÁXIA PLUS ──
+        //
+        // Roda DEPOIS do crédito dos cristais: a transação acima
+        // já somou os 300 premium do pacote, e esta ativa os 30
+        // dias, credita os Turbos e concede o badge.
+        //
+        // Com await, e não fire-and-forget: se a ativação falhar,
+        // a pessoa pagou e não recebeu o acesso. O erro precisa
+        // aparecer no log com o saleId para tratamento manual.
+        if (sale.isSubscription === true) {
+          try {
+            const activation = await activateGalaxiaPlus(uid, saleId);
+
+            if (activation) {
+              const dias = Math.ceil(
+                (activation.expiresAt.getTime() - Date.now()) / (24 * 3600 * 1000),
+              );
+
+              notifyUser({
+                userId: uid,
+                type:   'promocao',
+                title:  activation.isFirstTime
+                  ? '💜 Galáxia Plus ativada!'
+                  : '💜 Galáxia Plus renovada!',
+                body:   activation.isFirstTime
+                  ? `${activation.crystals} cristais, ${activation.turbos} Turbos e o badge Constelação Guia são seus. Acesso até daqui a ${dias} dias.`
+                  : `${activation.crystals} cristais, ${activation.turbos} Turbos e ${activation.fragments} fragmentos. Seu acesso agora vai até daqui a ${dias} dias.`,
+              }).catch(() => {});
+            }
+          } catch (error) {
+            console.error('[onAsaasWebhook] Ativação da Galáxia Plus FALHOU:', {
+              uid, saleId, error,
+            });
+            notifyAdmins({
+              title: '🚨 Galáxia Plus não ativou',
+              body:  `Pagamento confirmado mas a ativação falhou — uid ${uid}, sale ${saleId}`,
+              type:  'promocao',
+            }).catch(() => {});
+          }
+        }
+
         // Marca como processado
         await idempotencyRef.set({
           processedAt: FieldValue.serverTimestamp(),
           saleId,
-          type:        'coins_purchase',
+          type:        sale.isSubscription === true ? 'galaxia_plus' : 'coins_purchase',
         });
 
         res.status(200).send('Coins credited');

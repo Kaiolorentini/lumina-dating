@@ -1,6 +1,17 @@
 // ============================================
-// LUMINA — BASE EVENT ORCHESTRATOR v1.1
+// LUMINA — BASE EVENT ORCHESTRATOR v1.2
 // functions/src/gamification/orchestrators/BaseEventOrchestrator.ts
+//
+// v1.2: gamificação AGUARDADA.
+// dispatchGamification() retornava void e o execute() o chamava
+// sem await. Em todo orchestrator filho (curtida, resposta,
+// sintonia, missão) a Cloud Function terminava antes da
+// gamificação, e o Google estrangulava a CPU da instância: o
+// trabalho seguia a conta-gotas e podia ser perdido se a
+// instância fosse reciclada. Agora é aguardada.
+//
+// Continua nunca falhando para o usuário: o run() do
+// GamificationIntegrationService engole e registra o erro.
 //
 // v1.1: hook afterValidate() para registro pós-validação
 // (ex: AntiFarmService.register após validação bem-sucedida)
@@ -63,33 +74,35 @@ export abstract class BaseEventOrchestrator implements IEventOrchestrator {
       handleError(error, errorCtx);
     }
 
-    // ETAPA 4: Gamification — fire-and-forget
-    this.dispatchGamification(input);
+    // ETAPA 4: Gamification — aguardada (v1.2).
+    // Nunca lança: o run() do GamificationIntegrationService
+    // engole e registra o erro.
+    await this.dispatchGamification(input);
   }
 
-  private dispatchGamification(input: OrchestratorInput): void {
+  private async dispatchGamification(input: OrchestratorInput): Promise<void> {
     switch (this.eventType) {
       case 'PROFILE_LIKE':
-        GamificationIntegrationService.handleProfileLike({
+        await GamificationIntegrationService.handleProfileLike({
           likerUid:  input.uid,
           targetUid: input.targetUid!,
         });
         break;
       case 'MESSAGE_REPLY':
-        GamificationIntegrationService.handleMessageReply({
+        await GamificationIntegrationService.handleMessageReply({
           uid:          input.uid,
           targetUid:    input.targetUid!,
           messageCount: (input.meta?.messageCount as number) ?? 2,
         });
         break;
       case 'MATCH_CREATED':
-        GamificationIntegrationService.handleMatchCreated({
+        await GamificationIntegrationService.handleMatchCreated({
           uid:       input.uid,
           targetUid: input.targetUid!,
         });
         break;
       case 'MISSION_COMPLETED':
-        GamificationIntegrationService.handleMissionCompleted({
+        await GamificationIntegrationService.handleMissionCompleted({
           uid:             input.uid,
           missionId:       (input.meta?.missionId as string)       ?? '',
           missionCategory: (input.meta?.missionCategory as string) ?? '',
