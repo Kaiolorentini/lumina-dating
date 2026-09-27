@@ -5,6 +5,10 @@
 // Espelha clearSintoniaReveal, clearPrestigeReveal e
 // clearCosmeticReveal. O campo progression é protegido nas
 // rules, então o cliente não limpa sozinho.
+//
+// Limpa também pendingLevelReward: o marco de nível é mostrado
+// no MESMO modal da subida, e sem isto a comemoração do prêmio
+// voltaria a cada abertura do app.
 // ============================================
 
 import { onCall } from "firebase-functions/v2/https";
@@ -20,7 +24,8 @@ export const clearLevelReveal = onCall(
     await admin.firestore().collection("users").doc(uid).set(
       {
         progression: {
-          pendingLevelReveal: admin.firestore.FieldValue.delete(),
+          pendingLevelReveal:  admin.firestore.FieldValue.delete(),
+          pendingLevelReward:  admin.firestore.FieldValue.delete(),
         },
       },
       { merge: true },

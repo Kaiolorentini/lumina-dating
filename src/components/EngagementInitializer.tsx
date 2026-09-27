@@ -1,82 +1,54 @@
 // ============================================
-// LUMINA — ENGAGEMENT INITIALIZER v5.7
+// LUMINA — ENGAGEMENT INITIALIZER v5.11
 // src/components/EngagementInitializer.tsx
 //
-// v5.7 — Restauração sob demanda do ban de marketplace.
-// Se o ban temporário venceu, a CF devolve o papel de
-// criador na abertura do app. O useUserPermissions escuta
-// o documento com onSnapshot, então a aba Marketplace e as
-// telas de criador voltam sozinhas, sem reiniciar o app.
-// Silenciosa por natureza: nada a mostrar quando não há
-// ban vencido, e o push de liberação vem do servidor.
+// v5.11 — COMEMORAÇÕES NA HORA.
 //
-// v5.8 — REVELAÇÃO DA SINTONIA.
+// As flags de revelação (sintonia, prestígio, nível, marco de
+// nível, cosmético) eram lidas UMA vez por sessão, com getDoc.
+// Quem subia de nível usando o app só via o modal na próxima
+// abertura — ou nunca, se não fechasse o app.
 //
-// Quando a outra pessoa fecha a sintonia, quem não estava
-// agindo pode ter o app fechado. O MatchService grava
-// progression.pendingSintoniaReveal nos dois lados e o modal
-// aparece na próxima abertura.
+// Agora o documento do usuário é escutado em tempo real
+// (onSnapshot). O useUserPermissions já escuta o MESMO
+// documento; o SDK compartilha a escuta, sem leitura a mais.
 //
-// Guarda só a MAIS RECENTE: cinco modais em sequência para
-// quem voltou depois de um dia é ruim, e uma lista cresceria
-// sem limite no documento. O resto fica no sino.
+// Ao fechar um modal, a flag é limpa no servidor. Até a limpeza
+// chegar de volta pelo snapshot, `dismissedRef` lembra o valor
+// já mostrado — sem isso o modal reabriria por um instante.
 //
-// v5.9 — REVELAÇÃO DE PRESTÍGIO.
+// Recompensa diária e restauração do ban continuam UMA vez por
+// sessão: não dependem do documento do usuário.
 //
-// Subir de estágio acontece CINCO vezes na vida de uma conta.
-// Marco comum vai só para o sino; o estágio merece modal.
+// v5.10 — REVELAÇÃO DE NÍVEL. Ordem dos modais ao competirem:
+// SINTONIA, PRESTÍGIO, NÍVEL (com marco), cosmético, diária.
 //
-// v5.10 — REVELAÇÃO DE NÍVEL.
+// v5.9 — REVELAÇÃO DE PRESTÍGIO (cinco vezes na vida da conta).
 //
-// CINCO modais podem competir ao abrir o app. A ordem é:
-// SINTONIA, PRESTÍGIO, NÍVEL, cosmético, recompensa diária.
+// v5.8 — REVELAÇÃO DA SINTONIA. O MatchService grava
+// progression.pendingSintoniaReveal nos dois lados; guarda só a
+// mais recente — o resto fica no sino.
 //
-// Sintonia é o momento que define o app; prestígio é o mais
-// raro de todos; nível acontece com frequência mas é o
-// feedback direto do esforço; recompensa acontece todo dia e
-// pode esperar.
+// v5.7 — restauração sob demanda do ban de marketplace.
 //
-// v5.6 — FASE 8: revelação de cosmético.
+// v5.6 — revelação de cosmético (flag no servidor).
 //
-// A flag progression.pendingCosmeticReveal vive no SERVIDOR e
-// não em armazenamento local: quem concede é o backend, só ele
-// sabe o que é novidade, e a flag sobrevive a reinstalação.
-//
-// v5.5 — CORREÇÕES DE ROBUSTEZ
-//
-// 1. FAIL-CLOSED no catch (era CRÍTICO)
-//    Antes, qualquer falha (rede, cold start, permissão) caía num
-//    fallback que ABRIA o modal de recompensa. Quem já resgatou
-//    hoje via o modal, clicava, e a CF rejeitava por idempotência.
-//    Num fluxo de economia, erro → não mostra nada.
-//
-// 2. getFunctions() lazy
-//    No escopo do módulo, executava no import — sem garantia de
-//    que initializeApp() já tinha rodado. Falha não determinística
-//    no boot ("às vezes a recompensa não aparece").
-//
-// 3. checkedRef marcado só APÓS sucesso
-//    Antes era marcado antes da chamada: uma falha transitória
-//    bloqueava nova tentativa pela sessão inteira.
-//
-// 4. Cleanup do setTimeout
-//    Logout dentro dos 1500ms causava setState em componente
-//    desmontado.
-//
-// 5. Logs sob __DEV__, sem UID em produção.
+// v5.5 — robustez: fail-closed na recompensa diária,
+// getFunctions() lazy, checkedRef só após sucesso, cleanup do
+// setTimeout, logs sob __DEV__.
 // ============================================
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, DocumentData } from 'firebase/firestore';
 import { useAuth }      from '../context/AuthContext';
 import { db }           from '../services/firebase';
 import DailyRewardModal from './DailyRewardModal';
 import CosmeticRevealModal from './CosmeticRevealModal';
 import SintoniaRevealModal from './SintoniaRevealModal';
 import PrestigeRevealModal from './PrestigeRevealModal';
-import LevelUpModal from './LevelUpModal';
+import LevelUpModal, { LevelRewardInfo } from './LevelUpModal';
 import { FRAMES } from '../config/cosmeticsCatalog';
 
 const REVEAL_DELAY_MS = 1500;
@@ -86,6 +58,20 @@ const REVEAL_DELAY_MS = 1500;
 interface RestoreCreatorResult {
   restored: boolean;
   role: string | null;
+}
+
+interface DailyRewardStatusResult {
+  alreadyClaimed: boolean;
+}
+
+/** Última versão de cada flag já mostrada — evita reabrir o
+ *  modal enquanto a limpeza no servidor não volta. */
+interface DismissedFlags {
+  cosmetic?: string;
+  sintonia?: string;
+  prestige?: number;
+  level?:    number;
+  reward?:   number;
 }
 
 export default function EngagementInitializer() {
@@ -100,10 +86,13 @@ export default function EngagementInitializer() {
   const [sintoniaName,    setSintoniaName]    = useState('');
   const [prestigeStage,   setPrestigeStage]   = useState<number | null>(null);
   const [levelUp,         setLevelUp]         = useState<number | null>(null);
+  const [levelReward,     setLevelReward]     = useState<LevelRewardInfo | null>(null);
 
-  const checkedRef = useRef<string | null>(null);
-  const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef = useRef(true);
+  const checkedRef      = useRef<string | null>(null);
+  const timerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef      = useRef(true);
+  const dismissedRef    = useRef<DismissedFlags>({});
+  const sintoniaNameFor = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -116,21 +105,100 @@ export default function EngagementInitializer() {
     };
   }, []);
 
+  // ── Uma vez por sessão: ban e recompensa diária ──
   useEffect(() => {
     if (authLoading)  return;
     if (!user?.uid)   return;
     if (checkedRef.current === user.uid) return;
 
-    checkEngagements(user.uid);
+    checkSessionOnce(user.uid);
   }, [user?.uid, authLoading]);
 
-  async function checkEngagements(uid: string) {
+  // ── Tempo real: flags de comemoração ──
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user?.uid)  return;
+
+    // Troca de conta: o que foi dispensado era da conta anterior.
+    dismissedRef.current    = {};
+    sintoniaNameFor.current = null;
+
+    const unsubscribe = onSnapshot(
+      doc(db, 'users', user.uid),
+      snap => { handleUserSnapshot(snap.data() ?? {}); },
+      error => {
+        if (__DEV__) {
+          console.warn('[EngagementInitializer] listener do usuário falhou:', error);
+        }
+      },
+    );
+
+    return unsubscribe;
+  }, [user?.uid, authLoading]);
+
+  function handleUserSnapshot(data: DocumentData) {
+    if (!mountedRef.current) return;
+
+    const progression = data?.progression ?? {};
+    const dismissed   = dismissedRef.current;
+
+    // Cosmético
+    const cosmetic = progression.pendingCosmeticReveal;
+    if (typeof cosmetic === 'string' && cosmetic && dismissed.cosmetic !== cosmetic) {
+      setRevealId(cosmetic);
+      setPhotoURL(data?.photoURL ?? '');
+    }
+
+    // Sintonia — o nome exige outra leitura, só quando a
+    // pessoa a revelar muda.
+    const sintonia = progression.pendingSintoniaReveal;
+    if (typeof sintonia === 'string' && sintonia && dismissed.sintonia !== sintonia) {
+      setSintoniaUid(sintonia);
+      if (sintoniaNameFor.current !== sintonia) {
+        sintoniaNameFor.current = sintonia;
+        loadSintoniaName(sintonia);
+      }
+    }
+
+    // Prestígio
+    const prestige = progression.pendingPrestigeReveal;
+    if (typeof prestige === 'number' && prestige > 0 && dismissed.prestige !== prestige) {
+      setPrestigeStage(prestige);
+    }
+
+    // Nível
+    const level = progression.pendingLevelReveal;
+    if (typeof level === 'number' && level > 1 && dismissed.level !== level) {
+      setLevelUp(level);
+    }
+
+    // Marco de nível — mostrado no MESMO modal do nível.
+    const reward = progression.pendingLevelReward;
+    if (
+      reward && typeof reward.level === 'number' &&
+      dismissed.reward !== reward.level
+    ) {
+      setLevelReward({
+        level:           reward.level,
+        fragments:       Number(reward.fragments)       || 0,
+        crystalsPremium: Number(reward.crystalsPremium) || 0,
+      });
+    }
+  }
+
+  async function loadSintoniaName(uid: string) {
+    try {
+      const otherSnap = await getDoc(doc(db, 'users', uid));
+      const otherName = (otherSnap.data()?.name as string | undefined) ?? 'Alguém';
+      if (mountedRef.current) setSintoniaName(otherName);
+    } catch {
+      if (mountedRef.current) setSintoniaName('Alguém');
+    }
+  }
+
+  async function checkSessionOnce(uid: string) {
     // ── Ban de marketplace vencido ──
-    // Idempotente no servidor: sem ban vencido não escreve
-    // nada. try próprio para não derrubar o resto — e sem
-    // fail-closed aqui, porque não há nada a exibir: falhar
-    // só posterga a restauração para a próxima abertura ou
-    // para a varredura diária.
+    // Idempotente no servidor; falhar só posterga a restauração.
     try {
       const restore = httpsCallable<void, RestoreCreatorResult>(
         getFunctions(),
@@ -147,96 +215,37 @@ export default function EngagementInitializer() {
       }
     }
 
-    // ── Cosmético pendente ──
-    // Leitura direta do documento: uma leitura por abertura, e
-    // evita uma CF só para isso. Falha aqui não pode derrubar a
-    // recompensa diária, por isso o try próprio.
-    try {
-      const snap = await getDoc(doc(db, 'users', uid));
-      const data = snap.data() ?? {};
-      const pending = data?.progression?.pendingCosmeticReveal;
-
-      if (typeof pending === 'string' && pending && mountedRef.current) {
-        setRevealId(pending);
-        setPhotoURL(data?.photoURL ?? '');
-      }
-
-      // Sintonia pendente — mesma leitura, sem custo extra.
-      // O nome exige uma segunda leitura, mas só quando há
-      // sintonia a revelar, que é raro.
-      const sintonia = data?.progression?.pendingSintoniaReveal;
-
-      if (typeof sintonia === 'string' && sintonia && mountedRef.current) {
-        setSintoniaUid(sintonia);
-
-        try {
-          const otherSnap = await getDoc(doc(db, 'users', sintonia));
-          const otherName = (otherSnap.data()?.name as string | undefined) ?? 'Alguém';
-          if (mountedRef.current) setSintoniaName(otherName);
-        } catch {
-          if (mountedRef.current) setSintoniaName('Alguém');
-        }
-      }
-
-      // Prestígio pendente — mesma leitura, sem custo extra.
-      const prestige = data?.progression?.pendingPrestigeReveal;
-
-      if (typeof prestige === 'number' && prestige > 0 && mountedRef.current) {
-        setPrestigeStage(prestige);
-      }
-
-      // Nível pendente — mesma leitura, sem custo extra.
-      const level = data?.progression?.pendingLevelReveal;
-
-      if (typeof level === 'number' && level > 1 && mountedRef.current) {
-        setLevelUp(level);
-      }
-    } catch (error) {
-      if (__DEV__) {
-        console.warn('[EngagementInitializer] pendingCosmeticReveal falhou:', error);
-      }
-    }
-
     // ── Recompensa diária ──
     try {
-      // Lazy: resolvido aqui, não no import do módulo.
-      const fn = httpsCallable<void, { alreadyClaimed: boolean }>(
+      const fn = httpsCallable<void, DailyRewardStatusResult>(
         getFunctions(),
         'getDailyRewardStatus',
       );
 
       const result = await fn();
 
-      // Só marca como verificado APÓS sucesso — uma falha
-      // transitória deve permitir nova tentativa.
+      // Só marca como verificado APÓS sucesso.
       checkedRef.current = uid;
-
-      if (__DEV__) {
-        console.log('[EngagementInitializer] alreadyClaimed:', result.data.alreadyClaimed);
-      }
 
       if (!result.data.alreadyClaimed && mountedRef.current) {
         setRewardPending(true);
       }
     } catch (error) {
-      // FAIL-CLOSED: não sabemos se já resgatou, então não
-      // oferecemos. Mostrar o modal aqui exibiria uma recompensa
-      // que a CF vai rejeitar — e, se claimDailyReward não tiver
-      // guard de idempotência, seria vetor de farm.
+      // FAIL-CLOSED: sem saber se já resgatou, não oferece.
       if (__DEV__) {
         console.error('[EngagementInitializer] getDailyRewardStatus falhou:', error);
       }
     }
   }
 
-  // A recompensa só entra na fila quando não há cosmético a
-  // revelar. Dois modais sobrepostos é pior que um atraso.
+  // A recompensa diária só entra quando não há outra comemoração.
   useEffect(() => {
     if (!rewardPending) return;
     if (revealId)       return;
     if (sintoniaUid)    return;
     if (prestigeStage)  return;
     if (levelUp)        return;
+    if (levelReward)    return;
 
     timerRef.current = setTimeout(() => {
       if (mountedRef.current) setShowDailyReward(true);
@@ -245,23 +254,25 @@ export default function EngagementInitializer() {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [rewardPending, revealId, sintoniaUid, prestigeStage, levelUp]);
+  }, [rewardPending, revealId, sintoniaUid, prestigeStage, levelUp, levelReward]);
+
+  async function clearOnServer(fnName: string) {
+    try {
+      await httpsCallable(getFunctions(), fnName)({});
+    } catch (error) {
+      // Tolerável: o pior caso é ver a comemoração de novo na
+      // próxima abertura.
+      if (__DEV__) {
+        console.warn(`[EngagementInitializer] ${fnName} falhou:`, error);
+      }
+    }
+  }
 
   async function closeReveal() {
     const id = revealId;
+    if (id) dismissedRef.current.cosmetic = id;
     setRevealId(null);
-
-    // Limpa a flag no servidor — sem isso o modal volta a cada
-    // abertura. Falha aqui é tolerável: o pior caso é ver a
-    // comemoração duas vezes.
-    try {
-      await httpsCallable(getFunctions(), 'clearCosmeticReveal')({});
-    } catch (error) {
-      if (__DEV__) {
-        console.warn('[EngagementInitializer] clearCosmeticReveal falhou:', error);
-      }
-    }
-
+    await clearOnServer('clearCosmeticReveal');
     return id;
   }
 
@@ -277,18 +288,9 @@ export default function EngagementInitializer() {
 
   async function closeSintonia(): Promise<string | null> {
     const uid = sintoniaUid;
+    if (uid) dismissedRef.current.sintonia = uid;
     setSintoniaUid(null);
-
-    // Sem isto o modal volta a cada abertura. Falha é
-    // tolerável: o pior caso é ver a comemoração duas vezes.
-    try {
-      await httpsCallable(getFunctions(), 'clearSintoniaReveal')({});
-    } catch (error) {
-      if (__DEV__) {
-        console.warn('[EngagementInitializer] clearSintoniaReveal falhou:', error);
-      }
-    }
-
+    await clearOnServer('clearSintoniaReveal');
     return uid;
   }
 
@@ -304,30 +306,23 @@ export default function EngagementInitializer() {
   }
 
   async function closePrestige() {
+    if (prestigeStage !== null) dismissedRef.current.prestige = prestigeStage;
     setPrestigeStage(null);
-
-    try {
-      await httpsCallable(getFunctions(), 'clearPrestigeReveal')({});
-    } catch (error) {
-      if (__DEV__) {
-        console.warn('[EngagementInitializer] clearPrestigeReveal falhou:', error);
-      }
-    }
+    await clearOnServer('clearPrestigeReveal');
   }
 
   async function closeLevelUp() {
+    if (levelUp !== null)     dismissedRef.current.level  = levelUp;
+    if (levelReward !== null) dismissedRef.current.reward = levelReward.level;
     setLevelUp(null);
-
-    try {
-      await httpsCallable(getFunctions(), 'clearLevelReveal')({});
-    } catch (error) {
-      if (__DEV__) {
-        console.warn('[EngagementInitializer] clearLevelReveal falhou:', error);
-      }
-    }
+    setLevelReward(null);
+    // Limpa nível E marco — o mesmo modal mostra os dois.
+    await clearOnServer('clearLevelReveal');
   }
 
   if (!user?.uid) return null;
+
+  const levelShown = levelUp ?? levelReward?.level ?? null;
 
   return (
     <>
@@ -339,19 +334,18 @@ export default function EngagementInitializer() {
         onOpenChat={handleSintoniaChat}
       />
 
-      {/* Prestígio depois da sintonia: a sintonia é do momento,
-          o prestígio é acúmulo e pode esperar trinta segundos. */}
+      {/* Prestígio depois da sintonia. */}
       <PrestigeRevealModal
         visible={prestigeStage !== null && sintoniaUid === null}
         stage={prestigeStage}
         onClose={() => { closePrestige(); }}
       />
 
-      {/* Nível depois do prestígio: subir de nível é frequente,
-          o estágio de prestígio acontece cinco vezes na vida. */}
+      {/* Nível — com o marco de recompensa, quando houver. */}
       <LevelUpModal
-        visible={levelUp !== null && sintoniaUid === null && prestigeStage === null}
-        level={levelUp}
+        visible={levelShown !== null && sintoniaUid === null && prestigeStage === null}
+        level={levelShown}
+        reward={levelReward}
         onClose={() => { closeLevelUp(); }}
       />
 
@@ -360,7 +354,7 @@ export default function EngagementInitializer() {
           revealId !== null &&
           sintoniaUid === null &&
           prestigeStage === null &&
-          levelUp === null
+          levelShown === null
         }
         cosmeticId={revealId}
         photoURL={photoURL}

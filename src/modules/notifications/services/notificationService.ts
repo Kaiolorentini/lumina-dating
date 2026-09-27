@@ -42,6 +42,11 @@ export function getNotificationIcon(type: NotificationType): string {
     // v5.4 — Ranking semanal
     ranking_reward:       '🏅',
     inflation_alert:      '⚠️',
+    // v5.5 — sintonia, curtida recebida e compras
+    sintonia_criada:        '✦',
+    like_received:          '💜',
+    coins_purchased:        '💎',
+    galaxia_plus_activated: '🌌',
   };
   return icons[type] ?? '🔔';
 }

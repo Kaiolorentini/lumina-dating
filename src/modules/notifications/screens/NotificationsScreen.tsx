@@ -37,6 +37,16 @@ function isTriggerType(type: string): type is TriggerType {
   return TRIGGER_TYPES.includes(type as TriggerType);
 }
 
+/**
+ * Lê um texto de `dados` com segurança. O servidor grava ali o
+ * contexto da notificação (quem curtiu, com quem sintonizou), e
+ * notificações antigas podem não ter o campo.
+ */
+function dadosString(item: AppNotification, key: string): string | null {
+  const value = (item.dados as unknown as Record<string, unknown> | undefined)?.[key];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 export default function NotificationsScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
@@ -82,7 +92,35 @@ export default function NotificationsScreen() {
         navigation.navigate('MainTabs', { screen: 'Sintonias' } as any);
         break;
       case 'promocao':
+      case 'coins_purchased':
         navigation.navigate('MainTabs', { screen: 'Store' } as any);
+        break;
+      // Curtida recebida: o texto é anônimo; o toque revela quem
+      // curtiu — a pessoa conhece todos que a curtiram.
+      case 'like_received': {
+        const likedBy = dadosString(item, 'likedBy');
+        if (likedBy) navigation.navigate('RealProfile', { userId: likedBy });
+        break;
+      }
+      case 'sintonia_criada': {
+        const sintoniaWith = dadosString(item, 'sintoniaWith');
+        if (sintoniaWith) navigation.navigate('RealProfile', { userId: sintoniaWith });
+        break;
+      }
+      case 'galaxia_plus_activated':
+        navigation.navigate('GalaxiaPlus');
+        break;
+      // Gamificação: cada aviso leva à tela onde o ganho aparece.
+      case 'level_up':
+      case 'tree_evolution':
+        navigation.navigate('XP');
+        break;
+      case 'achievement_unlocked':
+      case 'collection_complete':
+        navigation.navigate('Achievements');
+        break;
+      case 'ranking_reward':
+        navigation.navigate('Ranking');
         break;
       default:
         break;

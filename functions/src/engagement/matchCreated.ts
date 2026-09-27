@@ -116,6 +116,40 @@ export const onCreateMatch = functions.onCall(
       }
     }
 
+    // Curtida NOVA que não virou sintonia: avisa o alvo.
+    //
+    // Texto ANÔNIMO — o push aparece na tela bloqueada. O toque
+    // abre o perfil de quem curtiu (data.likedBy), então a pessoa
+    // conhece todos que a curtiram. Sem teto diário, por decisão
+    // de produto; a repetição já é barrada pelo create() acima
+    // (uma curtida por par por dia).
+    //
+    // Sintonia nova já recebeu o push "✦ Sintonia!" — este não sai.
+    //
+    // Quem BLOQUEOU o autor da curtida não é avisado: sem isso, o
+    // push seria um canal de contato de quem já foi bloqueado.
+    if (!alreadyLiked && !result.isNew) {
+      try {
+        const blockedByTarget = await db.collection('blocks')
+          .where('blockerId', '==', targetUid)
+          .where('blockedId', '==', uid)
+          .limit(1)
+          .get();
+
+        if (blockedByTarget.empty) {
+          await notifyUser({
+            userId: targetUid,
+            title:  '✦ Alguém sintonizou com você',
+            body:   'Toque para descobrir quem é.',
+            type:   'like_received',
+            data:   { likedBy: uid },
+          });
+        }
+      } catch (error) {
+        console.warn('[onCreateMatch] Falha ao notificar curtida:', error);
+      }
+    }
+
     return {
       success:  true,
       matchId:  result.matchId,

@@ -33,6 +33,14 @@ export interface XPActionPublic {
   treeXP: number;
 }
 
+export interface LevelRewardPublic {
+  level:           number;
+  fragments:       number;
+  crystalsPremium: number;
+  xpRequired:      number;
+  received:        boolean;
+}
+
 export interface XPStatus {
   totalXP:           number;
   treeXP:            number;
@@ -52,6 +60,8 @@ export interface XPStatus {
   /** Opcionais: servidores anteriores à v5.4 não devolvem. */
   treeStages?:       TreeStagePublic[];
   xpActions?:        XPActionPublic[];
+  levelRewards?:     LevelRewardPublic[];
+  maxLevel?:         number;
 }
 
 interface State {

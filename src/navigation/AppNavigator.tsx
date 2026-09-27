@@ -435,6 +435,13 @@ function AppContent() {
       // a lugar nenhum.
       case 'galaxia_plus_activated': navigationRef.current.navigate('GalaxiaPlus'); break;
       case 'coins_purchased':        break;
+      // Curtida recebida: o texto do push é anônimo (tela
+      // bloqueada); o toque revela quem curtiu.
+      case 'like_received':
+        if (data.likedBy) {
+          navigationRef.current.navigate('RealProfile', { userId: data.likedBy });
+        }
+        break;
       case 'sale_completed':
       case 'withdrawal_paid':
       case 'withdrawal_rejected': navigationRef.current.navigate('MyEarnings'); break;
@@ -487,6 +494,7 @@ function AppContent() {
         message:              { title: notification.request.content.title ?? 'Nova mensagem', onPress: () => { if (data.senderId) navigationRef.current?.navigate('UserChat', { userId: data.senderId, userName: data.senderName, userPhoto: data.senderPhoto }); } },
         request:              { title: 'Nova solicitação',         onPress: () => navigationRef.current?.navigate('Requests') },
         sintonia_criada:      { title: '✦ Sintonia!',              onPress: () => { if (data.sintoniaWith) navigationRef.current?.navigate('RealProfile', { userId: data.sintoniaWith }); } },
+        like_received:        { title: '✦ Alguém sintonizou com você', onPress: () => { if (data.likedBy) navigationRef.current?.navigate('RealProfile', { userId: data.likedBy }); } },
         sale_completed:       { title: '💰 Venda realizada!',      onPress: () => navigationRef.current?.navigate('MyEarnings') },
         purchase_confirmed:   { title: '📦 Compra confirmada!',    onPress: () => navigationRef.current?.navigate('MyPurchases') },
         creator_approved:     { title: '🎨 Você é um Criador!',    onPress: () => navigationRef.current?.navigate('MyProducts') },

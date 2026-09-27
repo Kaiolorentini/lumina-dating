@@ -104,6 +104,8 @@ export default function XPScreen() {
   const nextStage    = status.nextTreeStage;
   const treeStages   = status.treeStages ?? [];
   const xpActions    = status.xpActions  ?? [];
+  const levelRewards = status.levelRewards ?? [];
+  const nextReward   = levelRewards.find(r => !r.received) ?? null;
 
   return (
     <View style={styles.container}>
@@ -162,6 +164,57 @@ export default function XPScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Recompensas de nível — o que cada marco entrega e o
+            que já foi recebido. Vem do servidor. */}
+        {levelRewards.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Recompensas de nível</Text>
+            <View style={styles.rewardsContainer}>
+              {levelRewards.map(r => {
+                const isNext  = nextReward?.level === r.level;
+                const missing = Math.max(0, r.xpRequired - (status.totalXP ?? 0));
+                return (
+                  <View
+                    key={r.level}
+                    style={[
+                      styles.rewardRow,
+                      r.received && styles.rewardRowReceived,
+                      isNext     && styles.rewardRowNext,
+                    ]}
+                  >
+                    <Text style={styles.rewardStatus}>
+                      {r.received ? '✅' : isNext ? '🎁' : '🔒'}
+                    </Text>
+                    <View style={styles.rewardInfo}>
+                      <Text style={[styles.rewardLevel, r.received && styles.rewardLevelReceived]}>
+                        Nível {r.level}
+                      </Text>
+                      <Text style={styles.rewardDetail}>
+                        {r.received
+                          ? 'Recebido'
+                          : isNext
+                            ? `Faltam ${formatNumber(missing)} XP`
+                            : `${formatNumber(r.xpRequired)} XP`}
+                      </Text>
+                    </View>
+                    <View style={styles.rewardValues}>
+                      {r.fragments > 0 && (
+                        <Text style={styles.rewardFragments}>🔮 {formatNumber(r.fragments)}</Text>
+                      )}
+                      {r.crystalsPremium > 0 && (
+                        <Text style={styles.rewardPremium}>💎 {formatNumber(r.crystalsPremium)}</Text>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+            <Text style={styles.rewardsNote}>
+              Fragmentos vão para o seu Cofre. Cristais premium caem direto na carteira.
+            </Text>
+          </>
+        )}
 
         {/* Estágios da Árvore */}
         {treeStages.length > 0 && (
@@ -267,6 +320,21 @@ const styles = StyleSheet.create({
   levelCard:   { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.md, borderWidth: 1, borderColor: COLORS.border, marginBottom: S.lg },
   xpTodayRow:  { flexDirection: 'row', justifyContent: 'flex-end' },
   xpTodayText: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
+
+  // Recompensas de nível
+  rewardsContainer:    { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
+  rewardRow:           { flexDirection: 'row', alignItems: 'center', padding: S.md, gap: S.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  rewardRowReceived:   { backgroundColor: 'rgba(76,175,80,0.05)' },
+  rewardRowNext:       { backgroundColor: 'rgba(255,215,0,0.08)' },
+  rewardStatus:        { fontSize: 22, width: 30, textAlign: 'center' },
+  rewardInfo:          { flex: 1 },
+  rewardLevel:         { color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  rewardLevelReceived: { color: COLORS.success },
+  rewardDetail:        { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
+  rewardValues:        { alignItems: 'flex-end', gap: 2 },
+  rewardFragments:     { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  rewardPremium:       { color: '#FFD700', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  rewardsNote:         { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginHorizontal: S.md, marginTop: S.xs, marginBottom: S.lg },
 
   // Estágios
   sectionTitle:      { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginHorizontal: S.md, marginBottom: S.sm },

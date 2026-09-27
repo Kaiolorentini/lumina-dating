@@ -36,7 +36,27 @@ export class ProfileLikeValidator extends BaseGameEventValidator {
       throw new ValidationError('TARGET_BLOCKED_LIKER', 'Perfil alvo bloqueou este usuário', false);
     }
 
-    // 3. Anti-farm: 1 curtida por usuário/perfil/dia
+    // 3. A curtida precisa EXISTIR. O onProfileLike é chamado pelo
+    //    app depois de curtir, e antes nada conferia isso: qualquer
+    //    conta o chamava para alvos arbitrários — 5 fragmentos no
+    //    Cofre do alvo, XP e ranking para quem chamou, sem curtida
+    //    nenhuma.
+    //    Só o onCreateMatch grava em likes (rules: write false), no
+    //    id `${uid}_${alvo}_${dia}`, com o dia em BRT formatado como
+    //    'en-CA' (AAAA-MM-DD). A expressão abaixo é a MESMA de lá:
+    //    outra formatação recusaria toda curtida legítima.
+    const todayStr = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+    });
+    const likeSnap = await db.collection('likes')
+      .doc(`${ctx.uid}_${ctx.targetUid}_${todayStr}`)
+      .get();
+
+    if (!likeSnap.exists) {
+      throw new ValidationError('LIKE_NOT_FOUND', 'Curtida não encontrada', false);
+    }
+
+    // 4. Anti-farm: 1 curtida por usuário/perfil/dia
     await AntiFarmService.check({
       eventType: 'PROFILE_LIKE',
       uid:       ctx.uid,

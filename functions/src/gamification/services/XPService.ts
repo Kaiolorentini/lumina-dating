@@ -11,7 +11,10 @@ import * as admin from 'firebase-admin';
 import { XPRepository } from '../repositories/XPRepository';
 import { XP_ACTION_VALUES, DAILY_XP_MAX } from '../../config/xpValues';
 import { XP_MULTIPLIERS }                  from '../../config/xpMultipliers';
-import { calcLevel }                       from '../../config/xpTable';
+import { calcLevel, levelRewardsBetween } from '../../config/xpTable';
+import {
+  readWalletForLevelRewards, applyLevelRewards,
+} from '../../services/levelRewardService';
 import { calcTreeStage }                   from '../../config/treeTable';
 import { todayBr }                         from '../../utils/dateBr';
 import { FieldValue }                       from 'firebase-admin/firestore';
@@ -113,6 +116,13 @@ export const XPService = {
       const prevTree   = calcTreeStage(snapshot.treeXP);
       const newTree    = calcTreeStage(newTreeXP);
 
+      // Marcos de nível atravessados neste evento. A leitura do
+      // Cofre fica AQUI, antes da primeira escrita da transação.
+      const levelRewards     = levelRewardsBetween(prevLevel.level, newLevel.level);
+      const walletForRewards = levelRewards.length > 0
+        ? await readWalletForLevelRewards(t, uid)
+        : null;
+
       XPRepository.write(t, uid, {
         totalXP:     newTotalXP,
         treeXP:      newTreeXP,
@@ -170,6 +180,13 @@ export const XPService = {
         });
       }
 
+      // ── RECOMPENSAS DE NÍVEL ──
+      // Fragmentos no Cofre (a cada 10 níveis) e cristais premium
+      // (46 a 50). Mesmo helper do earnXP.
+      if (walletForRewards) {
+        applyLevelRewards(t, uid, levelRewards, walletForRewards, 'XPService');
+      }
+
       // ── EVOLUÇÃO DA ÁRVORE ──
       //
       // O `engagement/xp.ts` (caminho do cliente) paga a
@@ -224,10 +241,12 @@ export const XPService = {
           );
         }
 
-        // Marca a recompensa como concedida, igual ao xp.ts.
+        // Marca a recompensa como concedida — mapa ANINHADO. Com
+        // set+merge, a chave com ponto gravava um campo de nome
+        // literal "xp.stageRewardsClaimed.stage_N".
         t.set(
           userRef,
-          { [`xp.stageRewardsClaimed.stage_${newTree.current.stage}`]: true },
+          { xp: { stageRewardsClaimed: { [`stage_${newTree.current.stage}`]: true } } },
           { merge: true },
         );
 

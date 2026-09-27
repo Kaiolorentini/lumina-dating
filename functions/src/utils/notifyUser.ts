@@ -28,13 +28,21 @@ interface NotifyUserParams {
 async function createInAppNotification(
   userId: string,
   type: string,
-  message: string
+  message: string,
+  data: Record<string, string>,
 ): Promise<void> {
   try {
     await admin.firestore().collection("notifications").add({
       userId,
       type,
       message,
+      // `dados`: mesmo nome das notificações do xp.ts e do que o
+      // notificationService do app já lê. Sem isto, tocar na
+      // notificação do sino não sabia a que ela se referia — a
+      // curtida recebida não abria o perfil de quem curtiu.
+      // Só gravado quando há dado: as demais notificações ficam
+      // idênticas.
+      ...(Object.keys(data).length > 0 && { dados: data }),
       read: false,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -74,7 +82,7 @@ export async function notifyUser({
     }
 
     // In-app sempre — independe do push.
-    await createInAppNotification(userId, type, body);
+    await createInAppNotification(userId, type, body, data);
   } catch (error) {
     console.warn("[notifyUser] Erro:", error);
   }

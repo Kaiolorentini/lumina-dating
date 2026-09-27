@@ -239,7 +239,13 @@ export type NotificationType =
   | 'achievement_unlocked'
   | 'collection_complete'
   | 'ranking_reward'
-  | 'inflation_alert';
+  | 'inflation_alert'
+  // Criados pelo servidor e ainda sem tipo aqui — caíam no
+  // ícone genérico 🔔.
+  | 'sintonia_criada'
+  | 'like_received'
+  | 'coins_purchased'
+  | 'galaxia_plus_activated';
 
 export interface AppNotification {
   id:        string;

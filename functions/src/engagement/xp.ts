@@ -38,7 +38,12 @@ import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { XP_ACTION_VALUES, DAILY_XP_MAX } from '../config/xpValues';
 import { XP_MULTIPLIERS, XP_FEATURE_FLAGS, ANTI_BOT } from '../config/xpMultipliers';
-import { calcLevel } from '../config/xpTable';
+import {
+  calcLevel, levelRewardsBetween, LEVEL_REWARDS, XP_LEVEL_TABLE, MAX_LEVEL,
+} from '../config/xpTable';
+import {
+  readWalletForLevelRewards, applyLevelRewards,
+} from '../services/levelRewardService';
 import { calcTreeStage, TREE_STAGE_TABLE } from '../config/treeTable';
 import { grantTreeStageReward } from '../services/rewardService';
 import { todayBr } from '../utils/dateBr';
@@ -186,6 +191,13 @@ export const earnXP = functions.onCall(
       // REGRA 21: recompensa do estágio ANTES de qualquer escrita.
       // O grantTreeStageReward faz t.get() — depois de uma escrita
       // o Firestore recusaria a transação inteira.
+      // Marcos de nível — leitura do Cofre ANTES de qualquer
+      // escrita, inclusive a que o grantTreeStageReward faz.
+      const levelRewards     = levelRewardsBetween(prevLevelInfo.level, newLevelInfo.level);
+      const walletForRewards = levelRewards.length > 0
+        ? await readWalletForLevelRewards(t, uid)
+        : null;
+
       if (stageUp) {
         await grantTreeStageReward(t, uid, newTree.current);
       }
@@ -272,6 +284,11 @@ export const earnXP = functions.onCall(
         t.set(userRef, {
           xp: { stageRewardsClaimed: { [`stage_${newTree.current.stage}`]: true } },
         }, { merge: true });
+      }
+
+      // Recompensas de nível — mesmo helper do Engine.
+      if (walletForRewards) {
+        applyLevelRewards(t, uid, levelRewards, walletForRewards, 'earnXP');
       }
 
       // REGRA 18: decai o risk score.
@@ -393,6 +410,17 @@ export const getXPStatus = functions.onCall(
         return def ? [{ ...a, xp: def.xp, treeXP: def.treeXP }] : [];
       }),
       dailyXPMax: DAILY_XP_MAX,
+
+      // Recompensas de nível — o que cada marco entrega e se já
+      // foi recebido. "Próximo" é o primeiro não recebido.
+      maxLevel: MAX_LEVEL,
+      levelRewards: LEVEL_REWARDS.map(r => ({
+        level:           r.level,
+        fragments:       r.fragments,
+        crystalsPremium: r.crystalsPremium,
+        xpRequired:      XP_LEVEL_TABLE[r.level - 1]?.xpRequired ?? 0,
+        received:        levelInfo.level >= r.level,
+      })),
 
       // Feature flags (REGRA 24)
       features: {
