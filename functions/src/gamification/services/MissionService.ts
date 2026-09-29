@@ -22,7 +22,7 @@
 // missão CONCLUI pagando só o que cabe — antes lançava erro e
 // derrubava o evento que a disparou.
 // ============================================
-
+import { auditLogFinanceiro } from '../../utils/auditLogFinanceiro';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { ValidationError }                from '../ErrorBoundary';
@@ -158,6 +158,19 @@ async function recordEvent(
           timestamp:  FieldValue.serverTimestamp(),
           imutavel:   true,
         });
+
+        if (fragments > 0) {
+          auditLogFinanceiro({
+            uid, tipo: 'FRAG_MISSAO', valor: fragments, origem: 'dailyMissions',
+            metadata: { missionId: mission.missionId },
+          }, t);
+        }
+        if (crystals > 0) {
+          auditLogFinanceiro({
+            uid, tipo: 'MISSAO_ESPECIAL', coinTipo: 'gratuito', valor: crystals, origem: 'dailyMissions',
+            metadata: { missionId: mission.missionId },
+          }, t);
+        }
       }
 
       updates.fragmentsEarnedToday = FieldValue.increment(fragments);

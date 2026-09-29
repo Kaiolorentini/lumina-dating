@@ -10,7 +10,7 @@
 // ✓ Não acumula: bloqueia compra se já ativo
 // ✓ remainingTime calculado server-side
 // ============================================
-
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -109,6 +109,12 @@ export const activateFertilizer = functions.onCall(
         timestamp:       FieldValue.serverTimestamp(),
         imutavel:        true,
       });
+
+      auditLogFinanceiro({
+        uid, tipo: 'SPEND_FERTILIZANTE', coinTipo: 'premium',
+        valor: -PREMIUM_COSTS.FERTILIZER, origem: 'activateFertilizer',
+        saldoAnteriorPremium: prevPremium, saldoPosteriorPremium: prevPremium - PREMIUM_COSTS.FERTILIZER,
+      }, t);
 
       // 4. PremiumUsageLog (REGRA 1)
       const usageId = `fert_${uid}_${Date.now()}`;

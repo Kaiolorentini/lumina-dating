@@ -18,6 +18,9 @@ import {
   TouchableOpacity, ActivityIndicator, Animated,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
+import { useNavigation }   from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../../navigation/types';
 import { useAuth }         from '../../../context/AuthContext';
 import { useCoins }        from '../../../context/CoinsContext';
 import { useVault, VaultStatus } from '../hooks/useVault';
@@ -51,7 +54,9 @@ const STATUS_CONFIG: Record<VaultStatus, {
 export default function VaultScreen() {
   const { user } = useAuth();
   const { refreshWallet } = useCoins();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const vault     = useVault(user?.uid);
+
   const fragments = useFragments(user?.uid);
 
   const [showConverter, setShowConverter] = useState(false);
@@ -286,6 +291,20 @@ export default function VaultScreen() {
           ))}
         </View>
 
+        {/* Sinergia real: visita recebida deposita +2 no Cofre. */}
+        <TouchableOpacity
+          style={styles.boostCta}
+          onPress={() => navigation.navigate('Boosts')}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Ver impulsos para receber mais visitas"
+        >
+          <Text style={styles.boostCtaTitle}>🚀 Encha o Cofre mais rápido</Text>
+          <Text style={styles.boostCtaSub}>
+            Cada visita deposita +2 🔮. Impulsos colocam seu perfil no topo e trazem mais visitas.
+          </Text>
+        </TouchableOpacity>
+
         {/* Regras */}
         <View style={styles.rulesCard}>
           <Text style={styles.rulesTitle}>⚠️ Regras do Cofre</Text>
@@ -360,6 +379,9 @@ const styles = StyleSheet.create({
   sourceNote:      { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
   sourceReward:    { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
 
+  boostCta:        { marginHorizontal: S.md, marginBottom: S.lg, borderRadius: R.lg, padding: S.md, gap: 4, borderWidth: 1, borderColor: '#B57BEE66', backgroundColor: '#B57BEE12' },
+  boostCtaTitle:   { color: '#C9A4F2', fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
+  boostCtaSub:     { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 18 },
   rulesCard:       { marginHorizontal: S.md, backgroundColor: COLORS.card, borderRadius: R.lg, padding: S.lg, gap: S.sm, borderWidth: 1, borderColor: COLORS.border },
   rulesTitle:      { color: COLORS.surface, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginBottom: S.xs },
   rulesText:       { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },

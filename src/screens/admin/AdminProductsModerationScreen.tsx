@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
-import { getProducts } from '../../services/marketplace/productService';
+import { getProducts, getProductsWithPendingChanges } from '../../services/marketplace/productService';
 import { getUserById } from '../../services/marketplace/adminService';
 import { Product } from '../../shared/types/marketplace';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
@@ -15,8 +15,16 @@ import ScreenContainer from '../../components/ScreenContainer';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-type StatusTab = 'pending' | 'approved' | 'rejected';
-const STATUS_TABS: StatusTab[] = ['pending', 'approved', 'rejected'];
+type StatusTab = 'pending' | 'changes' | 'approved' | 'rejected';
+const STATUS_TABS: StatusTab[] = ['pending', 'changes', 'approved', 'rejected'];
+
+const TAB_LABEL: Record<StatusTab, string> = {
+  pending: 'Pendentes', changes: 'Alterações', approved: 'Aprovados', rejected: 'Rejeitados',
+};
+const EMPTY_LABEL: Record<StatusTab, string> = {
+  pending: 'Nenhum produto pendente', changes: 'Nenhuma alteração para analisar',
+  approved: 'Nenhum produto aprovado', rejected: 'Nenhum produto rejeitado',
+};
 
 // getProducts() não converte createdAt (Timestamp) para Date — trata os dois casos
 function formatDate(value: any): string {
@@ -47,12 +55,15 @@ export default function AdminProductsModerationScreen() {
     setLoading(true);
     setError(null);
     try {
-      const result = await getProducts({ status: activeTab, pageSize: 20 });
-      setProducts(result.products);
+      // "Alterações": produtos à venda com capa ou arquivos novos em análise.
+      const list = activeTab === 'changes'
+        ? await getProductsWithPendingChanges(20)
+        : (await getProducts({ status: activeTab, pageSize: 20 })).products;
+      setProducts(list);
 
       const names: Record<string, string> = {};
       await Promise.all(
-        result.products.map(async prod => {
+        list.map(async prod => {
           try {
             const profile = await getUserById(prod.ownerId);
             names[prod.ownerId] = profile?.name ?? prod.ownerId.slice(0, 12) + '...';
@@ -94,7 +105,7 @@ export default function AdminProductsModerationScreen() {
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === 'pending' ? 'Pendentes' : tab === 'approved' ? 'Aprovados' : 'Rejeitados'}
+              {TAB_LABEL[tab]}
             </Text>
           </TouchableOpacity>
         ))}
@@ -126,12 +137,7 @@ export default function AdminProductsModerationScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyIcon}>📭</Text>
-              <Text style={styles.emptyText}>
-                Nenhum produto {
-                  activeTab === 'pending' ? 'pendente' :
-                  activeTab === 'approved' ? 'aprovado' : 'rejeitado'
-                }
-              </Text>
+              <Text style={styles.emptyText}>{EMPTY_LABEL[activeTab]}</Text>
             </View>
           }
           renderItem={({ item }) => (

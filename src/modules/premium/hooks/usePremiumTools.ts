@@ -78,6 +78,8 @@ export interface DestaqueStatus {
   state:            string | null;
   usersInRegion:    number | null;
   minUsersInRegion: number;
+  /** Já está na lista de espera da cidade. */
+  waitlisted?:      boolean;
   coinsGratuitos:   number;
   coinsPremium:     number;
   enabled:          boolean;
@@ -184,12 +186,8 @@ export function usePremiumTools(uid: string | undefined) {
       } catch (error: unknown) {
         const msg = extractMessage(error, fallbackMessage);
         setState(prev => ({ ...prev, error: msg }));
-
-        // REGRA 11: registra tentativa para o Offer Engine
-        try {
-          await httpsCallable(fns(), 'registerPremiumAttempt')({ feature: featureKey });
-        } catch { /* silencioso — não pode mascarar o erro real */ }
-
+        // registerPremiumAttempt saiu (27/09): a função não existe no
+        // servidor e a chamada falhava em silêncio a cada erro.
         return { ok: false, error: msg };
       } finally {
         setState(prev => ({ ...prev, activating: null }));
@@ -218,6 +216,18 @@ export function usePremiumTools(uid: string | undefined) {
     [activate],
   );
 
+  /** Lista de espera da cidade: aviso quando o Destaque abrir. */
+  const joinDestaqueWaitlist = useCallback(async (): Promise<ActivationResult> => {
+    if (!uid) return { ok: false, error: 'Você precisa estar autenticado.' };
+    try {
+      await httpsCallable(fns(), 'joinDestaqueWaitlist')();
+      await load();
+      return { ok: true };
+    } catch (error: unknown) {
+      return { ok: false, error: extractMessage(error, 'Não foi possível entrar na lista.') };
+    }
+  }, [uid, load]);
+
   return {
     fertilizer: state.fertilizer,
     turbo:      state.turbo,
@@ -230,6 +240,7 @@ export function usePremiumTools(uid: string | undefined) {
     activateTurbo,
     activateImpulso,
     activateDestaqueRegional,
+    joinDestaqueWaitlist,
     refresh: load,
   };
 }

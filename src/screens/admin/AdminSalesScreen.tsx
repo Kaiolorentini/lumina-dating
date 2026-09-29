@@ -1,4 +1,16 @@
-import React, { useState, useCallback } from 'react';
+// ============================================
+// LUMINA — VENDAS (ADMIN) v2
+// src/screens/admin/AdminSalesScreen.tsx
+//
+// v2 (28/09): abas Marketplace e Cristais e Galáxia, cada uma com o
+// total do mês no topo (contadores do servidor).
+//
+// Marketplace: as vendas de produto não têm campo `type`, então a lista
+// pagina todas as vendas e deixa só as que não são de cristais.
+// Cristais: consulta direta por type == 'coins_purchase'.
+// ============================================
+
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl,
@@ -6,148 +18,154 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { DocumentSnapshot } from 'firebase/firestore';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
-import { getAllSales, getUserById } from '../../services/marketplace/adminService';
+import { getAllSales, getCoinsSales, getUserById } from '../../services/marketplace/adminService';
+import { formatBRL } from '../../services/marketplace/adminDashboardService';
+import { useAdminDashboard } from '../../hooks/useAdminDashboard';
 import { Sale } from '../../shared/types/marketplace';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
 import ScreenContainer from '../../components/ScreenContainer';
 
-function formatDate(value: any): string {
-  try {
-    const d = value?.toDate ? value.toDate() : value instanceof Date ? value : null;
-    if (!d) return '';
-    return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-  } catch {
-    return '';
-  }
+/** Campos gravados nas vendas de cristais, além dos do tipo Sale. */
+type SaleRow = Sale & { type?: string; packageLabel?: string; isSubscription?: boolean };
+type Tab = 'marketplace' | 'coins';
+
+const PAGE = 20;
+const MAX_SCAN_PAGES = 5;
+
+function formatDate(d: Date | undefined): string {
+  if (!d) return '';
+  return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function formatMoney(v: number | undefined): string {
-  const n = typeof v === 'number' ? v : 0;
-  return `R$ ${n.toFixed(2).replace('.', ',')}`;
-}
-
-// Prioridade: chargeback é condição especial, acima do status
-function saleStatusInfo(sale: Sale): { label: string; color: string } {
+function statusInfo(sale: SaleRow): { label: string; color: string } {
   if (sale.isChargebacked) return { label: '⚠️ Chargeback', color: colors.error };
   switch (sale.status) {
-    case 'refunded':
-      return { label: '↩️ Reembolsada', color: colors.error };
-    case 'partially_refunded':
-      return { label: '↩️ Reemb. parcial', color: colors.error };
-    case 'refund_requested':
-      return { label: '⏳ Reembolso solicitado', color: colors.gold };
-    case 'paid':
-      return { label: '🟢 Pago', color: colors.success };
-    case 'pending':
-    default:
-      return { label: '⏳ Pendente', color: colors.gray };
+    case 'paid':             return { label: '🟢 Pago', color: colors.success };
+    case 'refunded':         return { label: '↩️ Reembolsada', color: colors.error };
+    case 'refund_requested': return { label: '⏳ Reembolso pedido', color: colors.gold };
+    case 'cancelled':        return { label: 'Cancelada', color: colors.gray };
+    case 'overdue':          return { label: 'Vencida', color: colors.gray };
+    default:                 return { label: '⏳ Pendente', color: colors.gray };
   }
-}
-
-// Sales de coins_purchase não têm productId nem sellerId real
-// ('lumina_platform'), então qualquer .slice() direto quebra a lista
-// inteira via CellRenderer. Um helper centraliza o guard.
-function shortId(id: string | undefined, len: number): string {
-  if (!id) return '—';
-  return id.length > len ? `${id.slice(0, len)}...` : id;
-}
-
-function methodLabel(method: string | undefined): string {
-  if (!method) return '—';
-  if (method === 'pix') return 'PIX';
-  if (method === 'credit_card') return 'Cartão';
-  if (method === 'free') return 'Grátis';
-  return method;
 }
 
 export default function AdminSalesScreen() {
   const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useAdminGuard();
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [userNames, setUserNames] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const { data: dashboard } = useAdminDashboard(!blocked && !guardLoading);
 
-  const resolveNames = useCallback(async (list: Sale[]) => {
-    const ids = new Set<string>();
-    list.forEach(s => {
-      if (s.buyerId)  ids.add(s.buyerId);
-      // 'lumina_platform' é a própria plataforma, não um usuário
-      if (s.sellerId && s.sellerId !== 'lumina_platform') ids.add(s.sellerId);
-    });
-    const names: Record<string, string> = {};
-    await Promise.all(
-      Array.from(ids).map(async id => {
-        try {
-          const p = await getUserById(id);
-          names[id] = p?.name ?? shortId(id, 10);
-        } catch {
-          names[id] = shortId(id, 10);
-        }
-      })
-    );
-    setUserNames(prev => ({ ...prev, ...names }));
+  const [tab, setTab]                 = useState<Tab>('marketplace');
+  const [sales, setSales]             = useState<SaleRow[]>([]);
+  const [names, setNames]             = useState<Record<string, string>>({});
+  const [loading, setLoading]         = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+  const [cursor, setCursor]           = useState<DocumentSnapshot | null>(null);
+  const [hasMore, setHasMore]         = useState(false);
+
+  const resolveNames = useCallback(async (list: SaleRow[]) => {
+    const ids = Array.from(new Set(list.flatMap(s => [s.buyerId, s.sellerId])
+      .filter(id => id && id !== 'lumina_platform')));
+    const entries = await Promise.all(ids.map(async id => {
+      const u = await getUserById(id).catch(() => null);
+      return [id, u?.name ?? `${id.slice(0, 10)}…`] as const;
+    }));
+    setNames(prev => ({ ...prev, ...Object.fromEntries(entries) }));
   }, []);
 
-  const loadSales = useCallback(async () => {
+  /** Uma página da aba atual, a partir do cursor. */
+  const fetchPage = useCallback(async (from: DocumentSnapshot | null) => {
+    if (tab === 'coins') {
+      const r = await getCoinsSales(PAGE, from);
+      return { rows: r.sales as SaleRow[], cursor: r.lastDoc, hasMore: r.hasMore };
+    }
+    // Marketplace: pagina todas e filtra, até encher uma página.
+    let rows: SaleRow[] = [];
+    let next = from;
+    let more = true;
+    for (let i = 0; i < MAX_SCAN_PAGES && rows.length < PAGE && more; i++) {
+      const r = await getAllSales(PAGE, next);
+      rows = rows.concat((r.sales as SaleRow[]).filter(s => s.type !== 'coins_purchase'));
+      next = r.lastDoc;
+      more = r.hasMore;
+    }
+    return { rows, cursor: next, hasMore: more };
+  }, [tab]);
+
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getAllSales(20, null);
-      setSales(result.sales);
-      setLastDoc(result.lastDoc);
-      setHasMore(result.hasMore);
-      await resolveNames(result.sales);
-    } catch (e: any) {
-      console.error('[AdminSales] Erro:', e);
-      setError(e.message ?? 'Erro ao carregar vendas');
+      const page = await fetchPage(null);
+      setSales(page.rows);
+      setCursor(page.cursor);
+      setHasMore(page.hasMore);
+      await resolveNames(page.rows);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erro ao carregar vendas.');
     } finally {
       setLoading(false);
     }
-  }, [resolveNames]);
+  }, [fetchPage, resolveNames]);
 
   const loadMore = useCallback(async () => {
-    if (!hasMore || loadingMore || !lastDoc) return;
+    if (!hasMore || loadingMore || !cursor) return;
     setLoadingMore(true);
     try {
-      const result = await getAllSales(20, lastDoc);
-      setSales(prev => [...prev, ...result.sales]);
-      setLastDoc(result.lastDoc);
-      setHasMore(result.hasMore);
-      await resolveNames(result.sales);
-    } catch (e: any) {
-      console.error('[AdminSales] Erro ao carregar mais:', e);
+      const page = await fetchPage(cursor);
+      setSales(prev => [...prev, ...page.rows]);
+      setCursor(page.cursor);
+      setHasMore(page.hasMore);
+      await resolveNames(page.rows);
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore, lastDoc, resolveNames]);
+  }, [hasMore, loadingMore, cursor, fetchPage, resolveNames]);
 
-  React.useEffect(() => { loadSales(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   if (guardLoading || blocked) return null;
 
+  const m = dashboard?.metrics;
+  const monthTotal = tab === 'coins' ? m?.monthlyCoinsRevenue : m?.monthlyMarketplaceRevenue;
+  const monthCount = tab === 'coins' ? m?.monthlyCoinsSales : m?.monthlyMarketplaceSales;
+
   return (
     <ScreenContainer>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Voltar">
           <Text style={styles.backBtn}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Vendas</Text>
         <View style={{ width: 40 }} />
       </View>
 
+      <View style={styles.tabs}>
+        {(['marketplace', 'coins'] as Tab[]).map(t => (
+          <TouchableOpacity key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)} accessibilityRole="tab">
+            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
+              {t === 'marketplace' ? '🛍️ Marketplace' : '💎 Cristais e Galáxia'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.summary}>
+        <Text style={styles.summaryLabel}>Este mês</Text>
+        <Text style={styles.summaryValue}>{formatBRL(monthTotal)}</Text>
+        <Text style={styles.summarySub}>
+          {monthCount ?? 0} {monthCount === 1 ? 'venda' : 'vendas'}
+          {tab === 'marketplace' && m ? ` · comissão ${formatBRL(m.monthlyCommission)}` : ''}
+        </Text>
+      </View>
+
       {loading ? (
         <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
       ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={loadSales}>
-            <Text style={styles.retryBtnText}>Tentar novamente</Text>
+        <View style={styles.empty}>
+          <Text style={styles.errorText}>⚠️ {error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={load}>
+            <Text style={styles.retryText}>Tentar novamente</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -155,87 +173,59 @@ export default function AdminSalesScreen() {
           data={sales}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={loadSales} tintColor={colors.gold} />
-          }
+          refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={colors.gold} />}
           onEndReachedThreshold={0.4}
           onEndReached={loadMore}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyIcon}>💳</Text>
-              <Text style={styles.emptyText}>Nenhuma venda encontrada</Text>
+              <Text style={styles.emptyText}>Nenhuma venda nesta aba</Text>
             </View>
           }
-          ListFooterComponent={
-            hasMore ? (
-              <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore} disabled={loadingMore}>
-                {loadingMore ? (
-                  <ActivityIndicator color={colors.gold} size="small" />
-                ) : (
-                  <Text style={styles.loadMoreText}>Carregar mais</Text>
-                )}
-              </TouchableOpacity>
-            ) : null
-          }
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.gold} style={{ margin: spacing.md }} /> : null}
           renderItem={({ item }) => {
-            const status = saleStatusInfo(item);
+            const st = statusInfo(item);
             return (
               <View style={styles.card}>
                 <View style={styles.cardTop}>
-                  <Text style={styles.cardId}>Venda #{shortId(item.id, 8)}</Text>
-                  <View style={[styles.statusBadge, { borderColor: status.color }]}>
-                    <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+                  <Text style={styles.cardTitle} numberOfLines={1}>
+                    {tab === 'coins'
+                      ? (item.isSubscription ? '🌌 Galáxia Plus' : `💎 ${item.packageLabel ?? 'Pacote de cristais'}`)
+                      : `Venda #${item.id.slice(0, 8)}`}
+                  </Text>
+                  <View style={[styles.statusBadge, { borderColor: st.color }]}>
+                    <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>
                   </View>
                 </View>
 
-                {/* Valores */}
                 <View style={styles.valuesRow}>
                   <View style={styles.valueBox}>
                     <Text style={styles.valueLabel}>Valor</Text>
-                    <Text style={styles.valueMain}>{formatMoney(item.amount)}</Text>
+                    <Text style={styles.valueMain}>{formatBRL(item.amount)}</Text>
                   </View>
-                  <View style={styles.valueBox}>
-                    <Text style={styles.valueLabel}>Comissão</Text>
-                    <Text style={styles.valueSecondary}>{formatMoney(item.platformCommission)}</Text>
-                  </View>
-                  <View style={styles.valueBox}>
-                    <Text style={styles.valueLabel}>Criador</Text>
-                    <Text style={styles.valueSecondary}>{formatMoney(item.sellerAmount)}</Text>
-                  </View>
+                  {tab === 'marketplace' && (
+                    <>
+                      <View style={styles.valueBox}>
+                        <Text style={styles.valueLabel}>Comissão</Text>
+                        <Text style={styles.valueSecondary}>{formatBRL(item.platformCommission)}</Text>
+                      </View>
+                      <View style={styles.valueBox}>
+                        <Text style={styles.valueLabel}>Criador</Text>
+                        <Text style={styles.valueSecondary}>{formatBRL(item.sellerAmount)}</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 {item.couponCode ? (
-                  <Text style={styles.coupon}>
-                    🎟️ Cupom {item.couponCode}
-                    {item.discountAmount ? ` (−${formatMoney(item.discountAmount)})` : ''}
-                  </Text>
+                  <Text style={styles.coupon}>🎟️ Cupom {item.couponCode}{item.discountAmount ? ` (−${formatBRL(item.discountAmount)})` : ''}</Text>
                 ) : null}
 
-                {/* Partes */}
-                <Text style={styles.party}>
-                  🛒 Comprador: <Text style={styles.partyValue}>{userNames[item.buyerId] ?? shortId(item.buyerId, 10)}</Text>
-                </Text>
-                <Text style={styles.party}>
-                  🎨 Vendedor: <Text style={styles.partyValue}>
-                    {item.sellerId === 'lumina_platform'
-                      ? 'Lumina (cristais)'
-                      : userNames[item.sellerId] ?? shortId(item.sellerId, 10)}
-                  </Text>
-                </Text>
-                {item.productId ? (
-                  <Text style={styles.party}>
-                    📦 Produto: <Text style={styles.partyValue}>{shortId(item.productId, 14)}</Text>
-                  </Text>
-                ) : null}
-
-                {/* Método + datas */}
-                <View style={styles.footerRow}>
-                  <Text style={styles.method}>{methodLabel(item.paymentMethod)}</Text>
-                  <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
-                </View>
-                {item.paidAt ? (
-                  <Text style={styles.paidAt}>Pago em {formatDate(item.paidAt)}</Text>
-                ) : null}
+                <Text style={styles.party}>🛒 Comprador: <Text style={styles.partyValue}>{names[item.buyerId] ?? '…'}</Text></Text>
+                {tab === 'marketplace' && (
+                  <Text style={styles.party}>🎨 Criador: <Text style={styles.partyValue}>{names[item.sellerId] ?? '…'}</Text></Text>
+                )}
+                <Text style={styles.date}>{formatDate(item.createdAt)}{item.paidAt ? ` · pago ${formatDate(item.paidAt)}` : ''}</Text>
               </View>
             );
           }}
@@ -253,23 +243,28 @@ const styles = StyleSheet.create({
   },
   backBtn: { color: colors.gold, fontSize: 28 },
   headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  tabs: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: colors.grayDark },
+  tab: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center' },
+  tabActive: { borderBottomWidth: 2, borderBottomColor: colors.gold },
+  tabText: { color: colors.gray, fontSize: fonts.sizes.sm },
+  tabTextActive: { color: colors.gold, fontWeight: 'bold' },
+  summary: {
+    margin: spacing.md, marginBottom: 0, padding: spacing.md, borderRadius: borderRadius.md,
+    backgroundColor: colors.gold + '11', borderWidth: 1, borderColor: colors.gold + '44', alignItems: 'center',
+  },
+  summaryLabel: { color: colors.gold, fontSize: fonts.sizes.xs, fontWeight: 'bold', letterSpacing: 1 },
+  summaryValue: { color: colors.white, fontSize: fonts.sizes.xxl, fontWeight: 'bold', marginVertical: 2 },
+  summarySub: { color: colors.gray, fontSize: fonts.sizes.xs },
   list: { padding: spacing.md },
   card: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
-    gap: spacing.xs,
+    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md, gap: spacing.xs,
   },
-  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardId: { color: colors.gray, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  statusBadge: {
-    borderRadius: borderRadius.sm, borderWidth: 1,
-    paddingHorizontal: spacing.sm, paddingVertical: 2,
-  },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  cardTitle: { flex: 1, color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  statusBadge: { borderRadius: borderRadius.sm, borderWidth: 1, paddingHorizontal: spacing.sm, paddingVertical: 2 },
   statusText: { fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  valuesRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    marginTop: spacing.sm, marginBottom: spacing.xs,
-  },
+  valuesRow: { flexDirection: 'row', marginVertical: spacing.xs },
   valueBox: { flex: 1 },
   valueLabel: { color: colors.gray, fontSize: fonts.sizes.xs },
   valueMain: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
@@ -277,33 +272,11 @@ const styles = StyleSheet.create({
   coupon: { color: colors.gold, fontSize: fonts.sizes.xs },
   party: { color: colors.gray, fontSize: fonts.sizes.xs },
   partyValue: { color: colors.white },
-  footerRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginTop: spacing.xs,
-  },
-  method: {
-    color: colors.gold, fontSize: fonts.sizes.xs, fontWeight: 'bold',
-    borderWidth: 1, borderColor: colors.gold + '55', borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.sm, paddingVertical: 1,
-  },
   date: { color: colors.gray, fontSize: fonts.sizes.xs },
-  paidAt: { color: colors.success, fontSize: fonts.sizes.xs },
-  loadMoreBtn: {
-    padding: spacing.md, alignItems: 'center', marginTop: spacing.sm,
-    borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.grayDark,
-  },
-  loadMoreText: { color: colors.gold, fontWeight: 'bold', fontSize: fonts.sizes.sm },
-  errorContainer: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl,
-  },
-  errorIcon: { fontSize: 48 },
-  errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center' },
-  retryBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.sm,
-    padding: spacing.md, paddingHorizontal: spacing.xl,
-  },
-  retryBtnText: { color: colors.background, fontWeight: 'bold' },
-  empty: { flex: 1, alignItems: 'center', padding: spacing.xl, gap: spacing.md },
+  empty: { alignItems: 'center', padding: spacing.xl, gap: spacing.md },
   emptyIcon: { fontSize: 48 },
   emptyText: { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center' },
+  errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center' },
+  retryBtn: { backgroundColor: colors.gold, borderRadius: borderRadius.sm, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg },
+  retryText: { color: colors.background, fontWeight: 'bold' },
 });

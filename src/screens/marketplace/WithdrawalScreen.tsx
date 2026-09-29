@@ -1,267 +1,222 @@
-import React, { useState, useEffect } from 'react';
+// ============================================
+// LUMINA — SOLICITAR SAQUE v2
+// src/screens/marketplace/WithdrawalScreen.tsx
+//
+// v2 (28/09): o saque é pedido ao SERVIDOR (requestWithdrawal), que
+// usa SEMPRE a chave Pix cadastrada e confere mínimo, saldo, dívida e
+// saque aberto. Antes o app gravava o saque direto, com a chave que
+// quisesse.
+//
+// A chave aparece MASCARADA; para trocar, "Alterar" leva à tela de
+// recebimento. Dívida por reembolso bloqueia o pedido, com o valor.
+// ============================================
+
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { addDoc, collection, serverTimestamp, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../core/firebase';
-import { MARKETPLACE_COLLECTIONS, COLLECTIONS } from '../../core/constants';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app from '../../core/firebase';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
+import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
 import { useCreatorWallet } from '../../hooks/useCreatorWallet';
-import { PixType } from '../../shared/types/marketplace';
+import {
+  getPixKeyStatus, PixKeyStatus, PixKeyType,
+} from '../../services/marketplace/creatorPaymentSetupService';
 import ScreenContainer from '../../components/ScreenContainer';
 
-const PIX_TYPES: { label: string; value: PixType }[] = [
-  { label: 'CPF', value: 'cpf' },
-  { label: 'CNPJ', value: 'cnpj' },
-  { label: 'E-mail', value: 'email' },
-  { label: 'Telefone', value: 'telefone' },
-  { label: 'Chave aleatória', value: 'chave' },
-];
+type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-// Mapeia o tipo salvo no perfil (saveCreatorPixKey) para o tipo do saque
-function mapProfileTypeToPixType(profileType?: string): PixType | null {
-  switch (profileType) {
-    case 'cpf':    return 'cpf';
-    case 'email':  return 'email';
-    case 'phone':  return 'telefone';
-    case 'random': return 'chave';
-    default:       return null;
-  }
-}
+const MIN_WITHDRAWAL = 10;
 
-// --- Validação de formato por tipo (evita chave inválida no saque) ---
-function onlyDigits(v: string): string { return v.replace(/\D/g, ''); }
-
-function isValidCpf(raw: string): boolean {
-  const cpf = onlyDigits(raw);
-  if (cpf.length !== 11) return false;
-  if (/^(\d)\1{10}$/.test(cpf)) return false;
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i], 10) * (10 - i);
-  let check = (sum * 10) % 11; if (check === 10) check = 0;
-  if (check !== parseInt(cpf[9], 10)) return false;
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i], 10) * (11 - i);
-  check = (sum * 10) % 11; if (check === 10) check = 0;
-  return check === parseInt(cpf[10], 10);
-}
-function isValidCnpj(raw: string): boolean {
-  const c = onlyDigits(raw);
-  return c.length === 14; // validação leve (comprimento). CNPJ completo é opcional.
-}
-function isValidEmail(v: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-}
-function isValidPhone(v: string): boolean {
-  const d = onlyDigits(v).replace(/^55/, '');
-  return d.length === 10 || d.length === 11;
-}
-function isValidRandom(v: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
-}
-
-function validateKeyByType(type: PixType, value: string): boolean {
-  switch (type) {
-    case 'cpf':      return isValidCpf(value);
-    case 'cnpj':     return isValidCnpj(value);
-    case 'email':    return isValidEmail(value);
-    case 'telefone': return isValidPhone(value);
-    case 'chave':    return isValidRandom(value);
-    default:         return false;
-  }
-}
-
-const TYPE_ERROR: Record<PixType, string> = {
-  cpf: 'CPF inválido.',
-  cnpj: 'CNPJ inválido (14 dígitos).',
-  email: 'E-mail inválido.',
-  telefone: 'Telefone inválido (DDD + número).',
-  chave: 'Chave aleatória inválida (formato UUID).',
+const KEY_LABEL: Record<PixKeyType, string> = {
+  cpf: 'CPF', email: 'E-mail', phone: 'Telefone', random: 'Chave aleatória',
 };
 
+function money(v: number): string {
+  return `R$ ${v.toFixed(2).replace('.', ',')}`;
+}
+
 export default function WithdrawalScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavProp>();
   const { user } = useAuth();
   const { wallet, loading } = useCreatorWallet(user?.uid);
-  const [amount, setAmount] = useState('');
-  const [pixKey, setPixKey] = useState('');
-  const [pixType, setPixType] = useState<PixType>('cpf');
+
+  const [amount, setAmount]         = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [prefilled, setPrefilled] = useState(false);
+  const [keyStatus, setKeyStatus]   = useState<PixKeyStatus | null>(null);
+  const [keyLoading, setKeyLoading] = useState(true);
 
-  // Modelo C — pré-preenche a chave Pix salva no perfil (se houver)
+  const loadKey = useCallback(async () => {
+    setKeyLoading(true);
+    setKeyStatus(await getPixKeyStatus());
+    setKeyLoading(false);
+  }, []);
+
+  // Recarrega ao voltar da tela de recebimento (chave alterada).
   useEffect(() => {
-    async function loadProfilePixKey() {
-      if (!user) return;
-      try {
-        const snap = await getDoc(doc(db, COLLECTIONS.USERS, user.uid));
-        if (!snap.exists()) return;
-        const data = snap.data();
-        const savedKey: string | undefined = data.pixKey;
-        const savedType = mapProfileTypeToPixType(data.pixKeyType);
-        if (savedKey && savedType) {
-          setPixKey(savedKey);
-          setPixType(savedType);
-          setPrefilled(true);
-        }
-      } catch {
-        // silencioso — se falhar, o criador digita manualmente
-      }
-    }
-    loadProfilePixKey();
-  }, [user]);
+    loadKey();
+    return navigation.addListener('focus', loadKey);
+  }, [navigation, loadKey]);
 
-  async function handleSubmit() {
-    if (!user) return;
-    const parsedAmount = parseFloat(amount.replace(',', '.'));
+  const available  = wallet?.availableBalance ?? 0;
+  const debt       = wallet?.debtBalance ?? 0;
+  const chargeback = wallet?.hasChargebackPending === true;
+  const blocked    = debt > 0 || chargeback;
 
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Erro', 'Informe um valor válido.');
+  function submit() {
+    const value = Math.round(parseFloat(amount.replace(',', '.')) * 100) / 100;
+
+    if (!keyStatus?.configured) {
+      Alert.alert('Chave Pix', 'Cadastre sua chave Pix antes de solicitar o saque.');
       return;
     }
-    if (parsedAmount > (wallet?.availableBalance ?? 0)) {
-      Alert.alert('Saldo insuficiente', `Seu saldo disponível é R$ ${(wallet?.availableBalance ?? 0).toFixed(2)}`);
+    if (!Number.isFinite(value) || value < MIN_WITHDRAWAL) {
+      Alert.alert('Valor mínimo', `O saque mínimo é ${money(MIN_WITHDRAWAL)}.`);
       return;
     }
-    if (parsedAmount < 10) {
-      Alert.alert('Valor mínimo', 'O saque mínimo é R$ 10,00');
-      return;
-    }
-    if (!pixKey.trim()) {
-      Alert.alert('Erro', 'Informe sua chave Pix.');
-      return;
-    }
-    // Validação de formato da chave conforme o tipo
-    if (!validateKeyByType(pixType, pixKey)) {
-      Alert.alert('Chave Pix inválida', TYPE_ERROR[pixType]);
+    if (value > available) {
+      Alert.alert('Saldo insuficiente', `Seu saldo disponível é ${money(available)}.`);
       return;
     }
 
-    // Trava: verifica se já há saque pendente ou aprovado
-    const existing = await getDocs(
-      query(
-        collection(db, MARKETPLACE_COLLECTIONS.WITHDRAWALS),
-        where('userId', '==', user.uid),
-        where('status', 'in', ['pending', 'approved']),
-      ),
+    Alert.alert(
+      'Confirmar saque',
+      `${money(value)} para a chave ${KEY_LABEL[keyStatus.pixKeyType ?? 'cpf']} ${keyStatus.maskedKey}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Solicitar', onPress: () => send(value) },
+      ],
     );
-    if (!existing.empty) {
-      Alert.alert(
-        'Saque já solicitado',
-        'Você já possui um pedido de saque pendente. Aguarde o pagamento ser concluído para solicitar outro.',
-      );
-      setSubmitting(false);
-      return;
-    }
+  }
 
+  async function send(value: number) {
     setSubmitting(true);
     try {
-      const docRef = await addDoc(collection(db, MARKETPLACE_COLLECTIONS.WITHDRAWALS), {
-        userId: user.uid,
-        amount: parsedAmount,
-        balanceAtRequest: wallet?.availableBalance ?? 0,
-        pixKey: pixKey.trim(),
-        pixType,
-        status: 'pending',
-        createdAt: serverTimestamp(),
-      });
-
+      const fn = httpsCallable<{ amount: number }, { success: boolean }>(
+        getFunctions(app, 'us-central1'), 'requestWithdrawal',
+      );
+      await fn({ amount: value });
       Alert.alert(
-        '✅ Solicitação enviada!',
-        `Seu pedido de saque de R$ ${parsedAmount.toFixed(2)} foi registrado.\n\n` +
-        'Nossa equipe vai analisar e realizar o depósito via Pix na chave informada ' +
-        'em até 24 horas úteis.\n\n' +
-        'Você será notificado assim que o pagamento for concluído.',
+        '✅ Saque solicitado',
+        `Seu pedido de ${money(value)} foi registrado. Nossa equipe faz o Pix em até 2 dias úteis, e você recebe um aviso quando for pago.`,
         [{ text: 'Entendi', onPress: () => navigation.goBack() }],
       );
-    } catch (error: any) {
-      Alert.alert('Erro', error.message ?? 'Não foi possível enviar a solicitação.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Não foi possível solicitar o saque.';
+      Alert.alert('Saque não solicitado', message);
     } finally {
       setSubmitting(false);
     }
   }
 
+  if (loading || keyLoading) {
+    return (
+      <ScreenContainer style={{ justifyContent: 'center' }}>
+        <ActivityIndicator color={colors.gold} />
+      </ScreenContainer>
+    );
+  }
+
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Voltar">
           <Text style={styles.backBtn}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Solicitar Saque</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Disponível para saque</Text>
-          <Text style={styles.balanceValue}>
-            R$ {(wallet?.availableBalance ?? 0).toFixed(2)}
-          </Text>
+          <Text style={styles.balanceValue}>{money(available)}</Text>
         </View>
 
-        <Text style={styles.label}>Valor do saque (mínimo R$ 10,00)</Text>
-        <TextInput
-          style={styles.input}
-          value={amount}
-          onChangeText={setAmount}
-          placeholder="Ex: 100,00"
-          placeholderTextColor={colors.gray}
-          keyboardType="decimal-pad"
-        />
-
-        <Text style={styles.label}>Tipo de chave Pix</Text>
-        <View style={styles.pixTypeGrid}>
-          {PIX_TYPES.map(type => (
-            <TouchableOpacity
-              key={type.value}
-              style={[styles.pixTypeChip, pixType === type.value && styles.pixTypeChipActive]}
-              onPress={() => setPixType(type.value)}
-            >
-              <Text style={[styles.pixTypeText, pixType === type.value && styles.pixTypeTextActive]}>
-                {type.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.label}>Chave Pix</Text>
-        <TextInput
-          style={styles.input}
-          value={pixKey}
-          onChangeText={setPixKey}
-          placeholder="Informe sua chave Pix"
-          placeholderTextColor={colors.gray}
-          autoCapitalize="none"
-        />
-
-        {prefilled && (
-          <Text style={styles.prefilledHint}>
-            Chave preenchida com a que você salvou no perfil. Você pode alterá-la para este saque.
-          </Text>
+        {debt > 0 && (
+          <View style={styles.warnCard}>
+            <Text style={styles.warnTitle}>⚠️ Pendência de {money(debt)}</Text>
+            <Text style={styles.warnText}>
+              Um reembolso ou estorno foi maior que o seu saldo. Suas próximas vendas cobrem
+              esse valor automaticamente, e o saque volta a ser liberado em seguida.
+            </Text>
+          </View>
         )}
+
+        {chargeback && (
+          <View style={styles.warnCard}>
+            <Text style={styles.warnText}>⚠️ Há um chargeback pendente. Saques bloqueados temporariamente.</Text>
+          </View>
+        )}
+
+        {/* Chave de recebimento */}
+        {keyStatus?.configured ? (
+          <View style={styles.keyCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.keyLabel}>Você recebe em ({KEY_LABEL[keyStatus.pixKeyType ?? 'cpf']})</Text>
+              <Text style={styles.keyValue}>{keyStatus.maskedKey}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('PaymentSetup')}
+              accessibilityRole="button"
+              accessibilityLabel="Alterar chave Pix"
+            >
+              <Text style={styles.keyChange}>Alterar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.keyMissing}
+            onPress={() => navigation.navigate('PaymentSetup')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.keyMissingTitle}>Cadastre sua chave Pix</Text>
+            <Text style={styles.keyMissingText}>É para ela que enviamos seus saques. Toque para cadastrar.</Text>
+          </TouchableOpacity>
+        )}
+
+        <Text style={styles.label}>Valor do saque (mínimo {money(MIN_WITHDRAWAL)})</Text>
+        <View style={styles.amountRow}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            value={amount}
+            onChangeText={setAmount}
+            placeholder="Ex: 100,00"
+            placeholderTextColor={colors.gray}
+            keyboardType="decimal-pad"
+            editable={!blocked}
+          />
+          <TouchableOpacity
+            style={styles.allBtn}
+            onPress={() => setAmount(available.toFixed(2).replace('.', ','))}
+            disabled={blocked || available < MIN_WITHDRAWAL}
+            accessibilityRole="button"
+          >
+            <Text style={styles.allBtnText}>Tudo</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>
-            💡 Após solicitar, nossa equipe analisa o pedido e faz o depósito via Pix
-            na chave informada em até 24 horas úteis. Você será notificado quando
-            o pagamento for concluído.
+            💡 Nossa equipe faz o Pix para a sua chave cadastrada em até 2 dias úteis.
+            Você recebe um aviso quando o pagamento for concluído.
           </Text>
         </View>
 
         <TouchableOpacity
-          style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting}
+          style={[styles.submitBtn, (submitting || blocked || !keyStatus?.configured) && styles.submitBtnDisabled]}
+          onPress={submit}
+          disabled={submitting || blocked || !keyStatus?.configured}
+          accessibilityRole="button"
         >
-          {submitting ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <Text style={styles.submitBtnText}>💸 Solicitar saque</Text>
-          )}
+          {submitting
+            ? <ActivityIndicator color={colors.background} />
+            : <Text style={styles.submitBtnText}>💸 Solicitar saque</Text>}
         </TouchableOpacity>
       </ScrollView>
     </ScreenContainer>
@@ -269,7 +224,6 @@ export default function WithdrawalScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: spacing.md, paddingBottom: spacing.md,
@@ -277,38 +231,53 @@ const styles = StyleSheet.create({
   },
   backBtn: { color: colors.gold, fontSize: 28 },
   headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  content: { padding: spacing.md },
+  content: { padding: spacing.md, paddingBottom: spacing.xl },
   balanceCard: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
     borderColor: colors.gold + '44', padding: spacing.md, marginBottom: spacing.md, alignItems: 'center',
   },
   balanceLabel: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.xs },
   balanceValue: { color: colors.success, fontSize: fonts.sizes.xxl, fontWeight: 'bold' },
+  warnCard: {
+    backgroundColor: colors.error + '11', borderRadius: borderRadius.md, borderWidth: 1,
+    borderColor: colors.error, padding: spacing.md, marginBottom: spacing.md, gap: 4,
+  },
+  warnTitle: { color: colors.error, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  warnText: { color: colors.error, fontSize: fonts.sizes.sm, lineHeight: 19 },
+  keyCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
+    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.sm,
+  },
+  keyLabel: { color: colors.gray, fontSize: fonts.sizes.xs },
+  keyValue: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', marginTop: 2 },
+  keyChange: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  keyMissing: {
+    backgroundColor: colors.gold + '11', borderRadius: borderRadius.md, borderWidth: 1,
+    borderColor: colors.gold, padding: spacing.md, marginBottom: spacing.sm, gap: 4,
+  },
+  keyMissingTitle: { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  keyMissingText: { color: colors.gray, fontSize: fonts.sizes.sm },
   label: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.xs, marginTop: spacing.md },
+  amountRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
   input: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
     borderColor: colors.grayDark, color: colors.white, padding: spacing.md, fontSize: fonts.sizes.md,
   },
-  prefilledHint: {
-    color: colors.gold, fontSize: fonts.sizes.xs, marginTop: spacing.xs, lineHeight: 16,
+  allBtn: {
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.gold,
   },
-  pixTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  pixTypeChip: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark,
-  },
-  pixTypeChipActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  pixTypeText: { color: colors.gray, fontSize: fonts.sizes.sm },
-  pixTypeTextActive: { color: colors.background, fontWeight: 'bold' },
+  allBtnText: { color: colors.gold, fontWeight: 'bold' },
   infoBox: {
     backgroundColor: colors.gold + '11', borderRadius: borderRadius.md, borderWidth: 1,
     borderColor: colors.gold + '44', padding: spacing.md, marginTop: spacing.md,
   },
-  infoText: { color: colors.gold, fontSize: fonts.sizes.sm },
+  infoText: { color: colors.gold, fontSize: fonts.sizes.sm, lineHeight: 19 },
   submitBtn: {
     backgroundColor: colors.gold, borderRadius: borderRadius.md,
     padding: spacing.md, alignItems: 'center', marginTop: spacing.md,
   },
-  submitBtnDisabled: { opacity: 0.6 },
+  submitBtnDisabled: { opacity: 0.45 },
   submitBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
 });

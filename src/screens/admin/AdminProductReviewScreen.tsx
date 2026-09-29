@@ -11,7 +11,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuth } from '../../context/AuthContext';
-import { getProduct } from '../../services/marketplace/productService';
+import { getProduct, ProductWithChanges } from '../../services/marketplace/productService';
 import { getUserById } from '../../services/marketplace/adminService';
 import { Product, ProductFile } from '../../shared/types/marketplace';
 import { UserProfile } from '../../shared/types';
@@ -72,7 +72,9 @@ export default function AdminProductReviewScreen() {
   const { user } = useAuth();
   const { blocked, loading: guardLoading } = useSuperAdminGuard();
 
-  const [product, setProduct] = useState<Product | null>(null);
+  const [product, setProduct] = useState<ProductWithChanges | null>(null);
+  // O mesmo modal de rejeição serve ao produto novo e às alterações.
+  const [rejectMode, setRejectMode] = useState<'product' | 'changes'>('product');
   const [ownerName, setOwnerName] = useState<string>('');
   const [ownerSince, setOwnerSince] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -209,6 +211,31 @@ export default function AdminProductReviewScreen() {
     );
   }
 
+  async function reviewChanges(approve: boolean, reason?: string) {
+    setProcessing(true);
+    try {
+      const fn = httpsCallable(getFunctions(app, 'us-central1'), 'reviewProductChanges');
+      await fn({ productId, approve, reason });
+      Alert.alert(approve ? '✅ Alterações aprovadas' : '❌ Alterações rejeitadas');
+      await loadData();
+    } catch (e: any) {
+      Alert.alert('Erro', e.message ?? 'Não foi possível concluir.');
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  function confirmApproveChanges() {
+    Alert.alert(
+      'Aprovar alterações?',
+      'A capa e os arquivos novos passam a valer no marketplace e para os compradores.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Aprovar', onPress: () => reviewChanges(true) },
+      ],
+    );
+  }
+
   async function confirmReject() {
     if (!product) return;
     if (!rejectReason.trim()) {
@@ -216,6 +243,10 @@ export default function AdminProductReviewScreen() {
       return;
     }
     setRejectModal(false);
+    if (rejectMode === 'changes') {
+      await reviewChanges(false, rejectReason.trim());
+      return;
+    }
     setProcessing(true);
     try {
       const functions = getFunctions(app, 'us-central1');
@@ -261,6 +292,7 @@ export default function AdminProductReviewScreen() {
   }
 
   const files = product.files ?? [];
+  const pendingCount = files.filter(f => f.status === 'pending').length;
   const totalBytes = files.reduce((sum, f) => sum + (f.size ?? 0), 0);
   const cover = product.coverImage;
   const previews = (product.previewImages ?? []).filter(Boolean);
@@ -328,6 +360,51 @@ export default function AdminProductReviewScreen() {
           ) : null}
         </View>
 
+        {/* Alterações em análise de produto à venda */}
+        {product.hasPendingChanges && (
+          <View style={styles.changesBox}>
+            <Text style={styles.changesTitle}>✏️ Alterações em análise</Text>
+            <Text style={styles.changesLine}>O produto segue à venda com a versão aprovada.</Text>
+
+            {product.pendingCover?.url ? (
+              <View style={styles.coverCompare}>
+                <View style={styles.coverCol}>
+                  <Text style={styles.coverLabel}>Capa atual</Text>
+                  {cover
+                    ? <Image source={{ uri: cover }} style={styles.coverThumb} />
+                    : <View style={styles.coverThumb} />}
+                </View>
+                <View style={styles.coverCol}>
+                  <Text style={styles.coverLabel}>Capa nova</Text>
+                  <Image source={{ uri: product.pendingCover.url }} style={styles.coverThumb} />
+                </View>
+              </View>
+            ) : null}
+
+            {pendingCount > 0 && (
+              <Text style={styles.changesLine}>
+                • {pendingCount} arquivo(s) novo(s), marcados abaixo como "🆕 Em análise". Use "Ver" para conferir.
+              </Text>
+            )}
+
+            {processing ? (
+              <ActivityIndicator color={colors.gold} style={{ paddingVertical: spacing.sm }} />
+            ) : (
+              <View style={styles.changesActions}>
+                <TouchableOpacity style={[styles.approveBtn, { flex: 1 }]} onPress={confirmApproveChanges}>
+                  <Text style={styles.approveBtnText}>✅ Aprovar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.rejectBtn, { flex: 1 }]}
+                  onPress={() => { setRejectMode('changes'); setRejectReason(''); setRejectModal(true); }}
+                >
+                  <Text style={styles.rejectBtnText}>❌ Rejeitar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Arquivos enviados */}
         <View style={styles.block}>
           <Text style={styles.sectionLabel}>Conteúdo enviado ({files.length})</Text>
@@ -343,6 +420,8 @@ export default function AdminProductReviewScreen() {
                     <Text style={styles.fileMeta}>
                       {file.mimeType} · {formatBytes(file.size)}
                     </Text>
+                    {file.status === 'pending' && <Text style={styles.fileTagNew}>🆕 Em análise</Text>}
+                    {file.removedAt && <Text style={styles.fileTagRemoved}>Removido pelo criador · só para quem já comprou</Text>}
                   </View>
                   <TouchableOpacity
                     style={styles.viewBtn}
@@ -406,7 +485,7 @@ export default function AdminProductReviewScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.rejectBtn}
-                  onPress={() => { setRejectReason(''); setRejectModal(true); }}
+                  onPress={() => { setRejectMode('product'); setRejectReason(''); setRejectModal(true); }}
                 >
                   <Text style={styles.rejectBtnText}>❌ Rejeitar produto</Text>
                 </TouchableOpacity>
@@ -474,7 +553,9 @@ export default function AdminProductReviewScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>❌ Rejeitar produto</Text>
+            <Text style={styles.modalTitle}>
+              {rejectMode === 'changes' ? '❌ Rejeitar alterações' : '❌ Rejeitar produto'}
+            </Text>
             <Text style={styles.modalSubtitle}>{product.title}</Text>
             <TextInput
               style={styles.modalInput}
@@ -552,6 +633,19 @@ const styles = StyleSheet.create({
     padding: spacing.md, marginBottom: spacing.sm,
   },
   fileHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  fileTagNew: { color: colors.gold, fontSize: fonts.sizes.xs, fontWeight: 'bold', marginTop: 2 },
+  fileTagRemoved: { color: colors.gray, fontSize: fonts.sizes.xs, marginTop: 2 },
+  changesBox: {
+    marginHorizontal: spacing.md, marginTop: spacing.md, padding: spacing.md, gap: spacing.sm,
+    borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.gold + '11',
+  },
+  changesTitle: { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  changesLine: { color: colors.white, fontSize: fonts.sizes.sm, lineHeight: 19 },
+  coverCompare: { flexDirection: 'row', gap: spacing.sm },
+  coverCol: { flex: 1, gap: 4 },
+  coverLabel: { color: colors.gray, fontSize: fonts.sizes.xs },
+  coverThumb: { width: '100%', aspectRatio: 4 / 3, borderRadius: borderRadius.sm, backgroundColor: colors.surface },
+  changesActions: { flexDirection: 'row', gap: spacing.sm },
   fileIconText: { fontSize: 24 },
   fileName: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   fileMeta: { color: colors.gray, fontSize: fonts.sizes.xs },

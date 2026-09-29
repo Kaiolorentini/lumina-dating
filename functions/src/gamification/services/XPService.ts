@@ -6,7 +6,7 @@
 // simulate() deixa explícito: ZERO persistência, nunca.
 // process() = calcula + persiste (modo ENGINE).
 // ============================================
-
+import { auditLogFinanceiro } from '../../utils/auditLogFinanceiro';
 import * as admin from 'firebase-admin';
 import { XPRepository } from '../repositories/XPRepository';
 import { XP_ACTION_VALUES, DAILY_XP_MAX } from '../../config/xpValues';
@@ -62,8 +62,9 @@ export const XPService = {
     const xp       = data.xp ?? {};
     const arv      = data.progression?.arvore ?? {};
 
-    const totalXP        = xp.totalXP ?? 0;
-    const currentXPToday = xp.xpTodayDate === todayStr ? (xp.xpToday ?? 0) : 0;
+    // Number(): mesmo cuidado do XPRepository (totalXP em texto concatenava).
+    const totalXP        = Number(xp.totalXP) || 0;
+    const currentXPToday = xp.xpTodayDate === todayStr ? (Number(xp.xpToday) || 0) : 0;
     if (currentXPToday >= DAILY_XP_MAX) return { skipped: true, reason: 'Limite diário atingido' };
 
     const fertAtivo  = arv.fertilizanteAtivo === true;
@@ -223,6 +224,11 @@ export const XPService = {
             timestamp: FieldValue.serverTimestamp(),
             imutavel:  true,
           });
+
+          auditLogFinanceiro({
+            uid, tipo: 'ARVORE_RECOMPENSA', coinTipo: 'gratuito', valor: reward.value,
+            origem: 'XPService', metadata: { stage: newTree.current.stage },
+          }, t);
         } else if (reward.type === 'badge' || reward.type === 'frame') {
           t.set(
             userRef,

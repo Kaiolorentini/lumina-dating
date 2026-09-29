@@ -6,11 +6,8 @@
 // (saveCreatorPixKey). NÃO usa API do Asaas.
 // ============================================
 
-import { doc, getDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { db } from '../../core/firebase';
 import app from '../../core/firebase';
-import { COLLECTIONS } from '../../core/constants';
 
 export type PixKeyType = 'cpf' | 'email' | 'phone' | 'random';
 
@@ -95,22 +92,25 @@ export async function saveCreatorPixKey(
 // ============================================
 // Lê a configuração atual de recebimento do criador
 // ============================================
-export async function getPixKeyStatus(uid: string): Promise<{
+export interface PixKeyStatus {
   configured: boolean;
   pixKeyType?: PixKeyType;
   maskedKey?: string;
-}> {
+}
+
+/**
+ * A chave vive em users/{uid}/private/payout, fechada a todo cliente.
+ * O servidor devolve só a versão mascarada (e migra chaves antigas
+ * do documento público na primeira leitura).
+ *
+ * O parâmetro uid fica pela compatibilidade de assinatura: o servidor
+ * usa sempre o uid autenticado.
+ */
+export async function getPixKeyStatus(_uid?: string): Promise<PixKeyStatus> {
   try {
-    const snap = await getDoc(doc(db, COLLECTIONS.USERS, uid));
-    if (!snap.exists()) return { configured: false };
-    const data = snap.data();
-    if (!data.pixKey) return { configured: false };
-    const key: string = data.pixKey;
-    return {
-      configured: true,
-      pixKeyType: data.pixKeyType as PixKeyType,
-      maskedKey: key.length > 4 ? `${key.slice(0, 3)}***${key.slice(-2)}` : '***',
-    };
+    const fn = httpsCallable<void, PixKeyStatus>(getFunctions(app, 'us-central1'), 'getMyPixKeyStatus');
+    const result = await fn();
+    return result.data;
   } catch {
     return { configured: false };
   }

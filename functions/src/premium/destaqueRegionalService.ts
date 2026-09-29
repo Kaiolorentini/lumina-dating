@@ -128,6 +128,48 @@ async function getCachedRegionCount(
 
   return count;
 }
+// ============================================
+// LISTA DE ESPERA (Fase 5, 27/09)
+//
+// Cidade abaixo do mínimo: quem quer o Destaque entra na lista, e a
+// rotina notifyDestaqueOpened avisa quando a cidade chegar lá. Antes
+// a mensagem dizia "Avisamos você assim que abrir" e ninguém avisava.
+//
+// Documento: destaqueWaitlist/{regiaoId}_{uid} — só o servidor lê.
+// ============================================
+async function addToWaitlist(
+  uid: string, regiaoId: string, city: string, state: string,
+): Promise<void> {
+  await db.collection('destaqueWaitlist').doc(`${regiaoId}_${uid}`).set({
+    uid, regiaoId, city, state,
+    createdAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+export const joinDestaqueWaitlist = functions.onCall(
+  { region: 'us-central1' },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
+
+    const user = (await db.collection('users').doc(uid).get()).data() ?? {};
+    if (!isRegiaoIdCoerente(user.regiaoId, user.estadoId)) {
+      throw new functions.HttpsError(
+        'failed-precondition',
+        'Atualize seu perfil e selecione estado e cidade nas listas.',
+      );
+    }
+
+    const usersInRegion = await countUsersInRegion(user.regiaoId);
+    if (usersInRegion >= DESTAQUE_MIN_USERS_IN_REGION) {
+      return { success: true, alreadyOpen: true, usersInRegion };
+    }
+
+    await addToWaitlist(uid, user.regiaoId, (user.city ?? '').trim(), (user.state ?? '').trim());
+    return { success: true, alreadyOpen: false, usersInRegion };
+  },
+);
+
 // ── Ativar Destaque Regional ──
 export const activateDestaqueRegional = functions.onCall(
   { region: 'us-central1' },
@@ -175,10 +217,12 @@ export const activateDestaqueRegional = functions.onCall(
 
     const usersInRegion = await countUsersInRegion(regiaoId);
     if (usersInRegion < DESTAQUE_MIN_USERS_IN_REGION) {
+      // Nada é cobrado: entra na lista e é avisado quando abrir.
+      await addToWaitlist(uid, regiaoId, city, state);
       throw new functions.HttpsError(
         'failed-precondition',
         `Sua cidade tem ${usersInRegion} de ${DESTAQUE_MIN_USERS_IN_REGION} pessoas. ` +
-          'O Destaque Regional libera quando chegar a esse número.',
+          'Avisamos você quando o Destaque Regional abrir.',
       );
     }
 
@@ -383,6 +427,11 @@ export const getDestaqueRegionalStatus = functions.onCall(
       }
     }
 
+    const waitlistSnap = temRegiao
+      ? await db.collection('destaqueWaitlist').doc(`${user.regiaoId}_${uid}`).get()
+      : null;
+    const waitlisted = waitlistSnap?.exists === true;
+
     let status: string = 'READY';
     let remainingMs = 0;
 
@@ -416,6 +465,7 @@ export const getDestaqueRegionalStatus = functions.onCall(
       hasValidRegion:   temRegiao,
       usersInRegion:    usersInRegion ?? destaque.usersInRegion ?? null,
       minUsersInRegion: DESTAQUE_MIN_USERS_IN_REGION,
+      waitlisted,
       coinsGratuitos:   gratuitos,
       coinsPremium:     premium,
       enabled:          PREMIUM_FLAGS.PREMIUM_DESTAQUE_ENABLED,

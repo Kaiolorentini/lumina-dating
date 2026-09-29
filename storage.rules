@@ -116,6 +116,17 @@ service firebase.storage {
     }
 
     // ============================================
+    // SUPORTE — prints anexados aos chamados
+    // ============================================
+    // Leitura só por URL assinada (getSupportAttachmentUrl), para o
+    // dono e para a administração.
+    match /support/{userId}/{fileName} {
+      allow read:   if false;
+      allow create: if isOwner(userId) && isImage() && isUnderSizeMB(5);
+      allow update, delete: if false;
+    }
+
+    // ============================================
     // TUDO MAIS — BLOQUEADO
     // ============================================
     match /{allPaths=**} {

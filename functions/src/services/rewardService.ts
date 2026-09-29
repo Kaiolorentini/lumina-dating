@@ -6,7 +6,7 @@
 // Recompensas fluem: earnXP → LEVEL_UP → RewardService → WalletService
 // Cada sistema independente.
 // ============================================
-
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { TreeStageDef } from '../config/treeTable';
@@ -45,6 +45,12 @@ export async function grantTreeStageReward(
       timestamp:   FieldValue.serverTimestamp(),
       imutavel:    true,
     });
+
+    auditLogFinanceiro({
+      uid, tipo: 'ARVORE_RECOMPENSA', coinTipo: 'gratuito', valor: reward.value, origem: 'rewardService',
+      saldoAnteriorGratuito: prevGrat, saldoPosteriorGratuito: prevGrat + reward.value,
+      metadata: { stage: stage.stage },
+    }, t);
   }
   // badge e frame: armazenados no perfil do usuário
   else if (reward.type === 'badge' || reward.type === 'frame') {

@@ -14,7 +14,7 @@
 // REGRA 3B: Cliente envia o badgeId, nunca o preço.
 // REGRA 15: economyLedger em toda movimentação.
 // ============================================
-
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { BADGES_CATALOG } from '../config/badgesCatalog';
@@ -116,6 +116,11 @@ export const buyBadgeWithFragments = onCall(
           timestamp:    now,
           imutavel:     true,
         });
+
+        auditLogFinanceiro({
+          uid, tipo: 'FRAG_BADGE', valor: -cost, origem: 'buyBadgeWithFragments',
+          metadata: { badgeId: badge.id },
+        }, t);
 
         return {
           success:      true,

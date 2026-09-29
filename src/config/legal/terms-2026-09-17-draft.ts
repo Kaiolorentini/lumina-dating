@@ -23,6 +23,16 @@
 // não expiram; o saque do Cofre é manual e libera depois de um
 // prazo (hoje 48h), imediato para a Galáxia Plus.
 //
+// Seção 8 (reembolso), 28/09: 7 dias contados do pagamento; pedido
+// pelo app com motivo e chave Pix (requestRefund); estorno MANUAL
+// por Pix após aprovação (approveRefund → markRefundPaid); o acesso
+// ao conteúdo é encerrado na aprovação.
+//
+// Seção 9 (saques), 28/09: saque só para a chave Pix cadastrada
+// (requestWithdrawal); mínimo R$ 10,00; reembolso ou estorno maior
+// que o saldo vira pendência abatida das vendas seguintes, e o
+// saque fica bloqueado enquanto houver pendência (creatorLedger).
+//
 // SE O CÓDIGO MUDAR, ESTAS SEÇÕES MUDAM JUNTO.
 // ============================================
 
@@ -71,6 +81,7 @@ export const TERMS_2026_09_17_DRAFT: LegalDocument = {
         'Quando dois usuários demonstrarem interesse mútuo por meio das funcionalidades disponibilizadas, poderá ser criada uma conexão entre eles, que poderá permitir o acesso ao chat ou a outras funcionalidades.',
         'Usuários conectados poderão trocar mensagens conforme as funcionalidades da Plataforma. É proibido utilizar mensagens para assediar; ameaçar; perseguir ou intimidar; praticar discriminação ilícita; enviar spam; praticar fraude; solicitar ou distribuir conteúdo ilegal; praticar extorsão ou chantagem; divulgar conteúdo íntimo sem autorização; ou praticar qualquer conduta ilícita.',
         'A Lumina poderá registrar a visita de um usuário ao perfil de outro usuário. Quando disponível, a identidade de visitantes poderá ser revelada mediante utilização de Cristais ou outro recurso previsto pela Plataforma.',
+        'Além da foto de perfil, o usuário pode publicar até 3 (três) fotos na galeria do perfil, visíveis a quem visitar o perfil. Na foto de perfil e na galeria é proibido publicar nudez ou conteúdo sexual; fotos de terceiros sem autorização; imagens de menores de idade; documentos, placas de veículos, endereços ou outros dados pessoais; e contatos externos, links ou propaganda. Fotos em desacordo podem ser removidas pela Lumina, com aviso ao usuário, e a reincidência pode levar à suspensão da conta. Qualquer usuário pode denunciar uma foto pelo suporte.',
       ],
     },
     {
@@ -106,7 +117,11 @@ export const TERMS_2026_09_17_DRAFT: LegalDocument = {
         'O comprador poderá adquirir conteúdos individuais disponibilizados no marketplace mediante os meios de pagamento disponibilizados pela Lumina.',
         'A compra concede ao comprador apenas o direito de acessar e utilizar o conteúdo para fins pessoais, dentro dos limites definidos pelo Criador e pela Plataforma. A compra não transfere propriedade intelectual sobre o conteúdo.',
         'É proibido compartilhar o arquivo; vender o conteúdo; redistribuí-lo; disponibilizá-lo gratuitamente a terceiros; publicar o conteúdo em outras plataformas; criar cópias destinadas à exploração comercial; remover mecanismos de proteção; e contornar limitações técnicas de acesso.',
-        'As regras de cancelamento, arrependimento, reembolso e demais direitos do consumidor serão observadas nos limites da legislação aplicável, inclusive o Código de Defesa do Consumidor. A previsão de que determinado saldo ou item seja "não reembolsável" não afasta direitos que sejam legalmente indisponíveis. O CDC prevê, em determinadas contratações realizadas fora do estabelecimento comercial, direito de arrependimento de 7 dias.',
+        'O comprador poderá solicitar o reembolso de conteúdo pago em até 7 (sete) dias corridos contados da confirmação do pagamento, nos termos do direito de arrependimento previsto no Código de Defesa do Consumidor.',
+        'A solicitação é feita pelo próprio aplicativo, na área de compras, com a indicação do motivo e de uma chave Pix de titularidade do comprador para recebimento do valor. A Lumina analisará a solicitação e comunicará o resultado pelo aplicativo.',
+        'Aprovado o reembolso, o acesso ao conteúdo correspondente é encerrado e o valor integral pago é devolvido por transferência Pix para a chave informada pelo comprador. A Lumina não se responsabiliza por transferência feita corretamente para chave informada com erro pelo próprio comprador.',
+        'Conteúdos gratuitos não geram reembolso. Solicitações reiteradas podem ser analisadas para prevenção de fraude e abuso, sem prejuízo dos direitos legalmente assegurados ao consumidor.',
+        'A previsão de que determinado saldo ou item seja "não reembolsável" não afasta direitos que sejam legalmente indisponíveis. As regras de cancelamento, arrependimento, reembolso e demais direitos do consumidor serão observadas nos limites da legislação aplicável.',
       ],
     },
     {
@@ -115,8 +130,9 @@ export const TERMS_2026_09_17_DRAFT: LegalDocument = {
         'A condição de Criador depende da aprovação da Lumina e do cumprimento dos requisitos de cadastro, identidade, segurança e documentação estabelecidos pela Plataforma.',
         'Do valor efetivamente recebido em uma venda, o Criador receberá 80% (oitenta por cento) e a Lumina retém 20% (vinte por cento) a título de comissão da Plataforma. A base de cálculo é apresentada ao Criador antes da publicação ou venda do conteúdo.',
         'Os valores elegíveis para saque serão disponibilizados em até 2 (dois) dias úteis contados da solicitação. Poderão existir períodos de retenção destinados à prevenção de fraude, chargebacks, estornos, disputas e cumprimento de obrigações legais.',
-        'O valor mínimo para solicitação de saque será de [PREENCHER: valor mínimo de saque].',
-        'O Criador deverá fornecer dados bancários válidos para recebimento dos valores, sendo sua a responsabilidade pela exatidão desses dados.',
+        'O valor mínimo para solicitação de saque é de R$ 10,00 (dez reais). Só é possível manter uma solicitação de saque em andamento por vez.',
+        'Os saques são pagos exclusivamente por transferência Pix para a chave cadastrada pelo Criador na área de recebimento do aplicativo. A exatidão e a titularidade da chave são de responsabilidade do Criador, e a Lumina poderá solicitar a confirmação de dados antes de efetuar o pagamento.',
+        'Quando uma venda for reembolsada ou tiver o pagamento estornado, a parte correspondente ao Criador será descontada do seu saldo. Se o saldo disponível não for suficiente, a diferença constituirá pendência, que será compensada automaticamente com os valores de vendas futuras; enquanto houver pendência, novas solicitações de saque ficam bloqueadas.',
         'Cada Criador é responsável pelos tributos incidentes sobre sua atividade, sem prejuízo das obrigações legais de retenção, informação ou recolhimento que possam ser atribuídas à Lumina. Quando exigido por lei, poderão ocorrer retenções tributárias.',
       ],
     },

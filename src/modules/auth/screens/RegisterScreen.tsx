@@ -1,4 +1,13 @@
-import React from 'react';
+// ============================================
+// LUMINA — CRIAR CONTA
+// src/modules/auth/screens/RegisterScreen.tsx
+//
+// - Senha e confirmação com "mostrar senha", cada uma independente.
+// - "new-password": o sistema pode sugerir e salvar uma senha forte.
+// - Teclado: e-mail → senha → confirmação → criar conta.
+// ============================================
+
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +24,7 @@ import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { RootStackParamList } from '../../../navigation/types';
 import { useRegisterForm } from '../hooks/useAuthForm';
 import ScreenContainer from '../../../components/ScreenContainer';
+import PasswordInput from '../../../components/PasswordInput';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
@@ -29,21 +39,27 @@ export default function RegisterScreen({ navigation }: Props) {
     submit,
   } = useRegisterForm();
 
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef  = useRef<TextInput>(null);
+
+  function handleSubmit() {
+    if (loading) return;
+    submit();
+  }
+
   return (
     <ScreenContainer>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView contentContainerStyle={styles.scroll}>
-          {/* Logo */}
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.logoContainer}>
             <Text style={styles.logo}>✦</Text>
             <Text style={styles.title}>Lumina</Text>
             <Text style={styles.phrase}>"Descubra conexões únicas"</Text>
           </View>
 
-          {/* Formulário */}
           <View style={styles.form}>
             <Text style={styles.formTitle}>Criar conta</Text>
 
@@ -57,34 +73,43 @@ export default function RegisterScreen({ navigation }: Props) {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              autoComplete="email"
+              textContentType="emailAddress"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              blurOnSubmit={false}
             />
 
             <Text style={styles.label}>Senha</Text>
-            <TextInput
-              style={styles.input}
+            <PasswordInput
+              ref={passwordRef}
               placeholder="Mínimo 6 caracteres"
-              placeholderTextColor={colors.gray}
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
+              autoComplete="new-password"
+              returnKeyType="next"
+              onSubmitEditing={() => confirmRef.current?.focus()}
+              blurOnSubmit={false}
             />
 
             <Text style={styles.label}>Confirmar senha</Text>
-            <TextInput
-              style={styles.input}
+            <PasswordInput
+              ref={confirmRef}
               placeholder="Repita sua senha"
-              placeholderTextColor={colors.gray}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              secureTextEntry
+              autoComplete="new-password"
+              returnKeyType="go"
+              onSubmitEditing={handleSubmit}
             />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <TouchableOpacity
-              style={styles.button}
-              onPress={submit}
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleSubmit}
               disabled={loading}
+              accessibilityRole="button"
             >
               {loading ? (
                 <ActivityIndicator color={colors.background} />
@@ -96,6 +121,7 @@ export default function RegisterScreen({ navigation }: Props) {
             <TouchableOpacity
               style={styles.linkButton}
               onPress={() => navigation.navigate('Login')}
+              accessibilityRole="button"
             >
               <Text style={styles.linkText}>
                 Já tem conta?{' '}
@@ -180,6 +206,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.sm,
   },
+  buttonDisabled: { opacity: 0.6 },
   buttonText: {
     color: colors.background,
     fontSize: fonts.sizes.lg,

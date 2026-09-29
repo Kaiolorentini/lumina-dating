@@ -28,9 +28,35 @@ import { MarketplaceEmptyState } from '../../components/marketplace/MarketplaceE
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../core/firebase';
 import { Purchase, Product } from '../../shared/types/marketplace';
-import { getProductsByIds } from '../../services/marketplace/productService';
+import { getProductsForPurchases } from '../../services/marketplace/productService';
 import ScreenContainer from '../../components/ScreenContainer';
 import CoinsPurchasesTab from './CoinsPurchasesTab';
+import { useFocusEffect } from '@react-navigation/native';
+import { markNotificationsReadByTypes } from '../../modules/notifications/services/notificationService';
+import { BADGE_TYPES } from '../../modules/profile/hooks/useProfileBadges';
+import {
+  PixKeyType, validatePixKeyFormat,
+} from '../../services/marketplace/creatorPaymentSetupService';
+
+/** Direito de arrependimento (CDC art. 49). O servidor confere de novo. */
+const REFUND_WINDOW_DAYS = 7;
+
+const REFUND_KEY_TYPES: { type: PixKeyType; label: string; placeholder: string }[] = [
+  { type: 'cpf',    label: 'CPF',       placeholder: 'Somente números' },
+  { type: 'email',  label: 'E-mail',    placeholder: 'seu@email.com' },
+  { type: 'phone',  label: 'Telefone',  placeholder: 'DDD + número' },
+  { type: 'random', label: 'Aleatória', placeholder: 'xxxxxxxx-xxxx-...' },
+];
+
+const STATUS_LABEL: Record<string, string> = {
+  active:   'Ativo',
+  refunded: 'Reembolsado',
+  revoked:  'Revogado',
+};
+
+function withinRefundWindow(createdAt: Date): boolean {
+  return Date.now() - createdAt.getTime() <= REFUND_WINDOW_DAYS * 24 * 3600 * 1000;
+}
 
 type PurchaseTab = 'content' | 'coins';
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -42,9 +68,16 @@ export default function MyPurchasesScreen() {
   const [requestingRefund, setRequestingRefund] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<PurchaseTab>('content');
 
+  // Abrir a área apaga o balão dela no Perfil.
+  useFocusEffect(useCallback(() => {
+    if (user?.uid) markNotificationsReadByTypes(user.uid, [...BADGE_TYPES.purchases]).catch(() => {});
+  }, [user?.uid]));
+
   const [refundModal, setRefundModal] = useState(false);
   const [refundTarget, setRefundTarget] = useState<Purchase | null>(null);
   const [refundReason, setRefundReason] = useState('');
+  const [refundKeyType, setRefundKeyType] = useState<PixKeyType>('cpf');
+  const [refundKey, setRefundKey] = useState('');
 
   // Deduplica por productId (evita duplicata quando listener +
   // loadMore se sobrepõem)
@@ -70,7 +103,8 @@ export default function MyPurchasesScreen() {
     const ids = uniquePurchases.map(p => p.productId).filter(Boolean);
     if (ids.length === 0) return;
     let cancelled = false;
-    getProductsByIds(ids)
+    // Um get por produto: alcança também o que saiu da venda.
+    getProductsForPurchases(ids)
       .then(map => { if (!cancelled) setProductMap(map); })
       .catch(e => console.error('[MyPurchases] hidratacao falhou:', e));
     return () => { cancelled = true; };
@@ -79,6 +113,8 @@ export default function MyPurchasesScreen() {
   function openRefund(purchase: Purchase) {
     setRefundTarget(purchase);
     setRefundReason('');
+    setRefundKey('');
+    setRefundKeyType('cpf');
     setRefundModal(true);
   }
 
@@ -88,14 +124,26 @@ export default function MyPurchasesScreen() {
       Alert.alert('Motivo obrigatório', 'Informe o motivo da solicitação.');
       return;
     }
+    if (!validatePixKeyFormat(refundKeyType, refundKey)) {
+      Alert.alert('Chave Pix inválida', 'Confira a chave para o tipo escolhido. É para ela que enviamos o reembolso.');
+      return;
+    }
     const saleId = refundTarget.saleId ?? '';
     setRequestingRefund(saleId);
     setRefundModal(false);
     try {
       const functions = getFunctions(app, 'us-central1');
       const requestRefund = httpsCallable(functions, 'requestRefund');
-      await requestRefund({ saleId: refundTarget.saleId, reason: refundReason.trim() });
-      Alert.alert('✅ Solicitação enviada', 'Nossa equipe analisará em até 24 horas.');
+      await requestRefund({
+        saleId:     refundTarget.saleId,
+        reason:     refundReason.trim(),
+        pixKey:     refundKey.trim(),
+        pixKeyType: refundKeyType,
+      });
+      Alert.alert(
+        '✅ Pedido enviado',
+        'Nossa equipe vai analisar. Se aprovado, o valor é enviado por Pix para a chave que você informou, e você recebe um aviso.',
+      );
     } catch (error: any) {
       Alert.alert('Erro', error.message ?? 'Não foi possível enviar a solicitação.');
     } finally {
@@ -128,7 +176,7 @@ export default function MyPurchasesScreen() {
             <View style={styles.metaRow}>
               <View style={[styles.statusBadge, isActive ? styles.statusActive : styles.statusOther]}>
                 <Text style={[styles.statusText, isActive ? styles.statusTextActive : styles.statusTextOther]}>
-                  {isActive ? 'Ativo' : item.status}
+                  {STATUS_LABEL[item.status] ?? item.status}
                 </Text>
               </View>
               <Text style={styles.date}>
@@ -159,7 +207,7 @@ export default function MyPurchasesScreen() {
             </TouchableOpacity>
           )}
 
-          {isActive && item.saleId && (
+          {isActive && item.saleId && item.amount > 0 && withinRefundWindow(item.createdAt) && (
             <TouchableOpacity
               style={styles.refundBtn}
               onPress={() => openRefund(item)}
@@ -261,7 +309,12 @@ export default function MyPurchasesScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Solicitar reembolso</Text>
-            <Text style={styles.modalSubtitle}>Informe o motivo da solicitação:</Text>
+            <Text style={styles.modalSubtitle}>
+              Você pode pedir reembolso em até {REFUND_WINDOW_DAYS} dias após o pagamento.
+              Se aprovado, o valor volta por Pix e o acesso ao conteúdo é encerrado.
+            </Text>
+
+            <Text style={styles.modalLabel}>Motivo</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="Ex: não era o que eu esperava"
@@ -270,6 +323,31 @@ export default function MyPurchasesScreen() {
               onChangeText={setRefundReason}
               multiline
               maxLength={300}
+            />
+
+            <Text style={styles.modalLabel}>Chave Pix para receber</Text>
+            <View style={styles.keyTypeRow}>
+              {REFUND_KEY_TYPES.map(k => (
+                <TouchableOpacity
+                  key={k.type}
+                  style={[styles.keyTypeChip, refundKeyType === k.type && styles.keyTypeChipActive]}
+                  onPress={() => { setRefundKeyType(k.type); setRefundKey(''); }}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.keyTypeText, refundKeyType === k.type && styles.keyTypeTextActive]}>
+                    {k.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              style={[styles.modalInput, styles.modalKeyInput]}
+              placeholder={REFUND_KEY_TYPES.find(k => k.type === refundKeyType)?.placeholder}
+              placeholderTextColor={MP.textMuted}
+              value={refundKey}
+              onChangeText={setRefundKey}
+              autoCapitalize="none"
+              keyboardType={refundKeyType === 'email' ? 'email-address' : refundKeyType === 'random' ? 'default' : 'phone-pad'}
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -455,6 +533,24 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     marginBottom: spacing.md,
   },
+  modalLabel: {
+    color: MP.textSoft,
+    fontSize: MP_FONT.size.xs,
+    fontWeight: MP_FONT.weight.bold,
+    marginBottom: spacing.xs,
+  },
+  modalKeyInput: { minHeight: 0, textAlignVertical: 'center' },
+  keyTypeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.sm },
+  keyTypeChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: MP.border,
+  },
+  keyTypeChipActive: { borderColor: MP.gold, backgroundColor: 'rgba(212, 175, 55, 0.14)' },
+  keyTypeText: { color: MP.textSoft, fontSize: MP_FONT.size.xs },
+  keyTypeTextActive: { color: MP.gold, fontWeight: MP_FONT.weight.bold },
   modalActions: { flexDirection: 'row', gap: spacing.sm },
   modalCancelBtn: {
     flex: 1,

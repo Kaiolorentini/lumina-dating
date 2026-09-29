@@ -89,6 +89,12 @@ service cloud.firestore {
         // Lendária e o frame de Fundador escrevendo direto no
         // próprio documento.
         'progression', 'xp', 'achievements',
+        // Recebimento do criador — só pela CF saveCreatorPixKey, e a
+        // chave vive em users/{uid}/private/payout.
+        'pixKey', 'pixKeyType', 'pixKeyVerifiedAt', 'paymentSetupStatus',
+        // Galeria: só pelas CFs, que montam o link a partir do arquivo
+        // da própria pasta.
+        'gallery',
       ];
     }
 
@@ -161,6 +167,12 @@ service cloud.firestore {
     }
 
     match /walletAuditLogs/{logId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // Movimentação em reais da carteira do criador — só o servidor.
+    match /creatorWalletLogs/{logId} {
       allow read:  if false;
       allow write: if false;
     }
@@ -375,6 +387,8 @@ service cloud.firestore {
       allow get: if isAuthenticated() && (
         resource.data.ownerId == request.auth.uid || isAdmin()
       );
+      // Quem comprou lê o produto mesmo depois de tirado da venda.
+      allow get: if hasActivePurchase(productId);
       allow list: if resource.data.status == 'approved' &&
         resource.data.isDeleted != true;
       allow list: if isAdmin();
@@ -389,6 +403,8 @@ service cloud.firestore {
         resource.data.status in ['draft', 'rejected'] &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'status', 'isFeatured', 'ownerId', 'averageRating', 'reviewsCount',
+          // Retirada e moderação de alterações: só pelas CFs.
+          'isDeleted', 'deletedAt', 'hasPendingChanges', 'pendingCover', 'lastChangesRejection',
         ]);
 
       // Envio para revisão: única transição de status permitida ao
@@ -487,10 +503,9 @@ match /coinsPurchases/{docId} {
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-      allow create: if isCreator() && isNotBlocked() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.status == 'pending' &&
-        request.resource.data.amount > 0;
+      // Só pela CF requestWithdrawal: chave cadastrada, mínimo, saldo e
+      // dívida conferidos numa transação.
+      allow create: if false;
       allow update, delete: if false;
     }
 
@@ -550,11 +565,32 @@ match /coinsPurchases/{docId} {
       allow read: if isAuthenticated() && (
         resource.data.buyerId == request.auth.uid || isAdmin()
       );
-      allow create: if isAuthenticated() && isNotBlocked() &&
-        request.resource.data.buyerId == request.auth.uid &&
-        request.resource.data.status == 'pending' &&
-        request.resource.data.sellerId != request.auth.uid;
+      // Só pela CF requestRefund (prazo de 7 dias e chave Pix validada).
+      allow create: if false;
       allow update, delete: if false;
+    }
+
+    // ============================================
+    // SUPORTE — escrita só pelas CFs de supportTickets
+    // ============================================
+    match /supportTickets/{ticketId} {
+      allow read: if isAuthenticated() &&
+        (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if false;
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && (
+          get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.uid == request.auth.uid ||
+          isAdmin()
+        );
+        allow write: if false;
+      }
+    }
+
+    // Relatórios mensais escritos — gerados pelo resetMonthlyMetrics.
+    match /adminReports/{monthId} {
+      allow read:  if isAuthenticated() && isAdmin();
+      allow write: if false;
     }
 
     // ============================================
@@ -734,6 +770,11 @@ match /coinsPurchases/{docId} {
     // Quem está por trás de um gatilho emocional. Só o servidor lê:
     // a revelação é paga e feita pela CF revealTrigger.
     match /triggerSecrets/{notificationId} {
+      allow read, write: if false;
+    }
+
+    // Lista de espera do Destaque Regional — só o servidor.
+    match /destaqueWaitlist/{id} {
       allow read, write: if false;
     }
 

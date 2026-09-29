@@ -30,39 +30,10 @@ const CATEGORIES: { label: string; value: ProductCategory }[] = [
 
 const TOTAL_STEPS = 5;
 
-// Limites por tipo de arquivo
-const SIZE_LIMITS: Record<string, number> = {
-  'image': 20 * 1024 * 1024,   // 20MB
-  'video': 500 * 1024 * 1024,  // 500MB
-  'application/pdf': 100 * 1024 * 1024, // 100MB
-};
-
-function getMaxSize(mimeType: string): number {
-  if (mimeType.startsWith('image/')) return SIZE_LIMITS['image'];
-  if (mimeType.startsWith('video/')) return SIZE_LIMITS['video'];
-  if (mimeType === 'application/pdf') return SIZE_LIMITS['application/pdf'];
-  return 500 * 1024 * 1024;
-}
-
-function getProductFileType(mimeType: string): string {
-  if (mimeType.startsWith('image/')) return 'imagem';
-  if (mimeType.startsWith('video/')) return 'video';
-  if (mimeType === 'application/pdf') return 'pdf';
-  return 'outro';
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function getFileIcon(mimeType: string): string {
-  if (mimeType.startsWith('image/')) return '🖼️';
-  if (mimeType.startsWith('video/')) return '🎬';
-  if (mimeType === 'application/pdf') return '📄';
-  if (mimeType.includes('zip')) return '📦';
-  return '📁';
-}
+// Regras de arquivo compartilhadas com a edição de produto.
+import {
+  getMaxSize, getProductFileType, formatBytes, getFileIcon,
+} from '../../utils/productFileRules';
 
 interface SelectedFile {
   uri: string;

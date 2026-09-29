@@ -1,15 +1,16 @@
 // ============================================
-// LUMINA — ADMIN INFLATION SCREEN
+// LUMINA — ECONOMIA (ADMIN) v2
 // src/screens/admin/AdminInflationScreen.tsx
 //
-// Painel de saúde da economia de cristais.
-// Acesso restrito a superadmin (validado na CF).
+// v2 (28/09): a economia inteira.
+// - Cristais com compra × recompensa × gasto × estorno (a v1 via só
+//   uma fração: diária, Faísca, Galáxia Plus, Turbo, Carta, árvore e
+//   níveis não eram registrados).
+// - Fragmentos, impulsos e Galáxia Plus — antes fora da tela.
+// - CrystalIcon no lugar do ✨.
+// - getFunctions() na chamada, não no carregamento do arquivo.
 //
 // Meta de ratio (gasto/criado): 0.7 – 0.9
-//   < 0.5  → CRÍTICO  (cristais acumulando, inflação)
-//   < 0.7  → ATENÇÃO
-//   0.7-0.9→ SAUDÁVEL
-//   > 1.0  → deflação (gastam mais do que ganham)
 // ============================================
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -18,96 +19,123 @@ import {
   TouchableOpacity, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
-import { RootStackParamList } from '../../navigation/types';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
+import { CrystalIcon } from '../../components/icons/CrystalIcon';
 import ScreenContainer from '../../components/ScreenContainer';
-
-type NavProp = NativeStackNavigationProp<RootStackParamList>;
-
-const functions = getFunctions();
 
 interface Snapshot {
   date:                     string;
   cristaisCreatedGratuitos: number;
   cristaisCreatedPremium:   number;
   cristaisSpent:            number;
-  cristaisPurchased:        number;
-  netFlow:                  number;
   ratioSpentToCreated:      number;
-  activeUsers:              number;
-  totalTransactions:        number;
-  newWallets:               number;
-  topSources:               Record<string, number>;
-  topSinks:                 Record<string, number>;
-  alertSent:                boolean;
+  topSources?:              Record<string, number>;
+  topSinks?:                Record<string, number>;
+  fragmentos?: {
+    gerados: number; convertidos: number; gastos: number;
+    topSources?: Record<string, number>; topSinks?: Record<string, number>;
+  };
+  alertSent?:               boolean;
 }
 
 interface SnapshotsResponse {
   snapshots: Snapshot[];
   totals: {
-    created:   number;
-    spent:     number;
-    purchased: number;
-    newUsers:  number;
-    ratio:     number;
+    created: number; spent: number; purchased: number; refunded: number;
+    newUsers: number; ratio: number;
+    fragments: { gerados: number; convertidos: number; gastos: number };
+    impulsos: Record<string, { total: number; assinatura: number }>;
+    galaxiaAtivacoes: number;
   };
-  health:     'HEALTHY' | 'WARNING' | 'CRITICAL';
-  alertCount: number;
+  health:            'HEALTHY' | 'WARNING' | 'CRITICAL';
+  alertCount:        number;
+  activeSubscribers: number;
 }
 
 const HEALTH_CONFIG = {
   HEALTHY:  { icon: '🟢', label: 'Saudável', color: '#44FF88',
-              msg: 'A economia está equilibrada. Cristais circulam bem.' },
+              msg: 'A economia está equilibrada. Os cristais circulam bem.' },
   WARNING:  { icon: '🟡', label: 'Atenção',  color: '#FFD700',
               msg: 'Cristais começando a acumular. Considere novos gastos ou revisar recompensas.' },
   CRITICAL: { icon: '🔴', label: 'Crítico',  color: '#FF6B6B',
-              msg: 'Inflação detectada. Usuários acumulam sem gastar — o cristal está perdendo valor.' },
+              msg: 'Inflação: usuários acumulam sem gastar e o cristal perde valor.' },
 } as const;
 
-// Rótulos legíveis para os tipos do auditLog
+// Nomes legíveis — os atuais e os de registros antigos.
 const TIPO_LABELS: Record<string, string> = {
-  LOGIN_DIARIO:            '🎁 Recompensa diária',
-  FAISCA_DESTINO:          '⚡ Faísca do Destino',
-  MISSAO_COMPLETA:         '📋 Missões',
-  CONQUISTA:               '🏆 Conquistas',
-  COFRE_SAQUE:             '🗝️ Cofre',
-  FRAGMENTOS_CONVERSAO:    '🔮 Conversão',
-  WELCOME_BONUS:           '👋 Bônus de boas-vindas',
-  PRESTIGIO_BONUS:         '👑 Prestígio',
-  COMPRA_ASAAS:            '💳 Compra (Asaas)',
-  GALAXIA_PLUS_MENSAL:     '💜 Galáxia Plus',
-  FIRST_PURCHASE_BONUS:    '🎁 Bônus 1ª compra',
-  SPEND_REVEAL_VISITORS:   '👁️ Ver Visitantes',
-  SPEND_QUASE_SINTONIA:    '💜 Quase Sintonia',
-  SPEND_SINTONIA_PERDIDA:  '💔 Sintonia Perdida',
-  SPEND_MYSTERY_MATCH:     '🎭 Sintonia Misteriosa',
-  SPEND_PENSOU_EM_VOCE:    '✨ Pensou em Você',
-  SPEND_IMPULSO_PERFIL:    '🚀 Impulso de Perfil',
-  SPEND_DESTAQUE_REGIONAL: '📍 Destaque Regional',
-  SPEND_MEGA_DESTAQUE:     '🌟 Mega Destaque',
-  SPEND_TURBO_SINTONIA:    '⚡ Turbo Sintonia',
-  SPEND_PERFIL_GALAXIA:    '🌌 Perfil Galáxia',
-  SPEND_SEGUNDA_CHANCE:    '🔄 Segunda Chance',
-  SPEND_ENERGIA:           '🔋 Energia',
-  SPEND_FERTILIZANTE:      '🌱 Fertilizante',
-  SPEND_MERCADO_COSMICO:   '🛒 Mercado Cósmico',
-  ADMIN_AJUSTE:            '🔧 Ajuste manual',
-  ESTORNO:                 '↩️ Estorno',
+  // Cristais — entradas
+  COMPRA_ASAAS:                  '💳 Pacotes de cristais',
+  GALAXIA_PLUS_ATIVACAO:         '💜 Galáxia Plus',
+  WELCOME_BONUS:                 '👋 Boas-vindas',
+  LOGIN_DIARIO:                  '🎁 Recompensa diária',
+  FAISCA_DESTINO:                '⚡ Faísca do Destino',
+  MISSAO_ESPECIAL:               '📋 Missão especial',
+  ARVORE_RECOMPENSA:             '🌳 Árvore',
+  NIVEL_RECOMPENSA:              '⬆️ Níveis',
+  FRAGMENTOS_CONVERSAO:          '🔮 Conversão de fragmentos',
+  CARTA_DESTINO_ESTORNO:         '↩️ Devolução da Carta',
+  // Cristais — saídas
+  SPEND_COSMETICO:               '🖼️ Molduras e badges',
+  SPEND_REVEAL_VISITORS:         '👁️ Ver Visitantes',
+  SPEND_REVEAL_QUASE_SINTONIA:   '💜 Quase Sintonia',
+  SPEND_REVEAL_PENSOU_EM_VOCE:   '✨ Pensou em Você',
+  SPEND_REVEAL_SINTONIA_PERDIDA: '💔 Sintonia Perdida',
+  SPEND_IMPULSO_PERFIL:          '🚀 Impulso',
+  SPEND_DESTAQUE_REGIONAL:       '📍 Destaque Regional',
+  SPEND_TURBO_SINTONIA:          '⚡ Turbo',
+  SPEND_FERTILIZANTE:            '🌱 Fertilizante',
+  SPEND_SEGUNDA_CHANCE:          '🔄 Segunda Chance',
+  SPEND_CARTA_DESTINO:           '🃏 Carta do Destino',
+  ESTORNO:                       '↩️ Estorno bancário',
+  ADMIN_AJUSTE:                  '🔧 Ajuste manual',
+  // Fragmentos
+  FRAG_MISSAO:                   '📋 Missões',
+  FRAG_COFRE_DEPOSITO:           '🗝️ Cofre (visitas e curtidas)',
+  FRAG_NIVEL:                    '⬆️ Níveis',
+  FRAG_RANKING:                  '🏆 Ranking semanal',
+  FRAG_CONQUISTA:                '🏅 Conquistas',
+  FRAG_COLECAO:                  '📚 Coleções',
+  FRAG_GALAXIA_PLUS:             '💜 Galáxia Plus',
+  FRAG_CONVERSAO:                '💎 Convertidos em cristais',
+  FRAG_BADGE:                    '🎖️ Badges',
+  // Registros antigos
+  MISSAO_COMPLETA:               '📋 Missões',
+  CONQUISTA:                     '🏅 Conquistas',
+  COFRE_SAQUE:                   '🗝️ Cofre',
+  GALAXIA_PLUS_MENSAL:           '💜 Galáxia Plus',
+  FIRST_PURCHASE_BONUS:          '🎁 Bônus 1ª compra',
+  SPEND_QUASE_SINTONIA:          '💜 Quase Sintonia',
+  SPEND_SINTONIA_PERDIDA:        '💔 Sintonia Perdida',
+  SPEND_PENSOU_EM_VOCE:          '✨ Pensou em Você',
+};
+
+const IMPULSO_LABELS: Record<string, string> = {
+  TURBO:             '⚡ Turbo',
+  IMPULSO_PERFIL:    '🚀 Impulso',
+  DESTAQUE_REGIONAL: '📍 Destaque Regional',
+  FERTILIZER:        '🌱 Fertilizante',
+  REVEAL_VISITORS:   '👁️ Ver Visitantes',
 };
 
 function labelFor(tipo: string): string {
-  return TIPO_LABELS[tipo] ?? tipo;
+  if (TIPO_LABELS[tipo]) return TIPO_LABELS[tipo];
+  // Molduras/badges antigos vinham como SPEND_<item>.
+  if (tipo.startsWith('SPEND_FRAME') || tipo.startsWith('SPEND_BADGE')) return '🖼️ Molduras e badges';
+  return tipo;
+}
+
+function n(v: number | undefined): string {
+  return (v ?? 0).toLocaleString('pt-BR');
 }
 
 function StatCard({ icon, label, value, color }: {
-  icon: string; label: string; value: string | number; color?: string;
+  icon: React.ReactNode; label: string; value: string; color?: string;
 }) {
   return (
     <View style={styles.statCard}>
-      <Text style={styles.statIcon}>{icon}</Text>
+      <View style={styles.statIcon}>{typeof icon === 'string' ? <Text style={styles.statEmoji}>{icon}</Text> : icon}</View>
       <Text style={[styles.statValue, color ? { color } : null]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
@@ -117,33 +145,37 @@ function StatCard({ icon, label, value, color }: {
 function BreakdownList({ title, data, positive }: {
   title: string; data: Record<string, number>; positive: boolean;
 }) {
-  const entries = Object.entries(data ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  if (entries.length === 0) return null;
-
-  const max = entries[0][1];
+  // Agrupa tipos que viram o mesmo rótulo (nomes antigos e novos).
+  const grouped: Record<string, number> = {};
+  Object.entries(data ?? {}).forEach(([tipo, v]) => {
+    const label = labelFor(tipo);
+    grouped[label] = (grouped[label] ?? 0) + v;
+  });
+  const entries = Object.entries(grouped).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  if (entries.length === 0) {
+    return (
+      <View style={styles.breakdownCard}>
+        <Text style={styles.breakdownTitle}>{title}</Text>
+        <Text style={styles.emptyLine}>Sem movimento no período.</Text>
+      </View>
+    );
+  }
+  const max = entries[0][1] || 1;
+  const barColor = positive ? '#44FF88' : colors.gold;
 
   return (
     <View style={styles.breakdownCard}>
       <Text style={styles.breakdownTitle}>{title}</Text>
-      {entries.map(([tipo, valor]) => (
-        <View key={tipo} style={styles.breakdownRow}>
+      {entries.map(([label, valor]) => (
+        <View key={label} style={styles.breakdownRow}>
           <View style={styles.breakdownInfo}>
-            <Text style={styles.breakdownLabel} numberOfLines={1}>{labelFor(tipo)}</Text>
+            <Text style={styles.breakdownLabel} numberOfLines={1}>{label}</Text>
             <View style={styles.breakdownBarBg}>
-              <View style={[
-                styles.breakdownBarFill,
-                {
-                  width: `${(valor / max) * 100}%` as any,
-                  backgroundColor: positive ? '#44FF88' : colors.gold,
-                },
-              ]} />
+              <View style={[styles.breakdownBarFill, { width: `${(valor / max) * 100}%`, backgroundColor: barColor }]} />
             </View>
           </View>
-          <Text style={[
-            styles.breakdownValue,
-            { color: positive ? '#44FF88' : colors.gold },
-          ]}>
-            {positive ? '+' : '-'}{valor.toLocaleString('pt-BR')}
+          <Text style={[styles.breakdownValue, { color: barColor }]}>
+            {positive ? '+' : '−'}{valor.toLocaleString('pt-BR')}
           </Text>
         </View>
       ))}
@@ -151,8 +183,16 @@ function BreakdownList({ title, data, positive }: {
   );
 }
 
+function aggregate(snapshots: Snapshot[], pick: (s: Snapshot) => Record<string, number> | undefined) {
+  const out: Record<string, number> = {};
+  snapshots.forEach(s => {
+    Object.entries(pick(s) ?? {}).forEach(([k, v]) => { out[k] = (out[k] ?? 0) + v; });
+  });
+  return out;
+}
+
 export default function AdminInflationScreen() {
-  const navigation = useNavigation<NavProp>();
+  const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useAdminGuard();
 
   const [data,       setData]       = useState<SnapshotsResponse | null>(null);
@@ -164,11 +204,8 @@ export default function AdminInflationScreen() {
   const load = useCallback(async (days: number) => {
     setError(null);
     try {
-      const fn = httpsCallable<{ days: number }, SnapshotsResponse>(
-        functions, 'getEconomySnapshots'
-      );
-      const result = await fn({ days });
-      setData(result.data);
+      const fn = httpsCallable<{ days: number }, SnapshotsResponse>(getFunctions(), 'getEconomySnapshots');
+      setData((await fn({ days })).data);
     } catch (err) {
       console.error('[AdminInflation] error:', err);
       setError('Não foi possível carregar os dados da economia.');
@@ -180,16 +217,6 @@ export default function AdminInflationScreen() {
 
   useEffect(() => { load(period); }, [period, load]);
 
-  function handleRefresh() {
-    setRefreshing(true);
-    load(period);
-  }
-
-  function handlePeriodChange(days: 7 | 30 | 90) {
-    setPeriod(days);
-    setLoading(true);
-  }
-
   if (guardLoading || blocked) {
     return (
       <ScreenContainer>
@@ -198,25 +225,20 @@ export default function AdminInflationScreen() {
     );
   }
 
-  const health   = data ? HEALTH_CONFIG[data.health] : null;
+  const health    = data ? HEALTH_CONFIG[data.health] : null;
   const snapshots = data?.snapshots ?? [];
+  const t         = data?.totals;
 
-  // Agrega breakdown de todo o período
-  const aggSources: Record<string, number> = {};
-  const aggSinks:   Record<string, number> = {};
-  snapshots.forEach(s => {
-    Object.entries(s.topSources ?? {}).forEach(([k, v]) => {
-      aggSources[k] = (aggSources[k] ?? 0) + v;
-    });
-    Object.entries(s.topSinks ?? {}).forEach(([k, v]) => {
-      aggSinks[k] = (aggSinks[k] ?? 0) + v;
-    });
-  });
+  const crystalSources = aggregate(snapshots, s => s.topSources);
+  const crystalSinks   = aggregate(snapshots, s => s.topSinks);
+  const fragSources    = aggregate(snapshots, s => s.fragmentos?.topSources);
+  const fragSinks      = aggregate(snapshots, s => s.fragmentos?.topSinks);
+  const impulsos       = Object.entries(t?.impulsos ?? {}).sort((a, b) => b[1].total - a[1].total);
 
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Voltar">
           <Text style={styles.backBtn}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Economia</Text>
@@ -227,142 +249,161 @@ export default function AdminInflationScreen() {
 
       <ScrollView
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(period); }} tintColor={colors.gold} />
         }
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Seletor de período */}
         <View style={styles.periodRow}>
           {([7, 30, 90] as const).map(d => (
             <TouchableOpacity
               key={d}
               style={[styles.periodBtn, period === d && styles.periodBtnActive]}
-              onPress={() => handlePeriodChange(d)}
+              onPress={() => { setPeriod(d); setLoading(true); }}
+              accessibilityRole="button"
             >
-              <Text style={[styles.periodText, period === d && styles.periodTextActive]}>
-                {d} dias
-              </Text>
+              <Text style={[styles.periodText, period === d && styles.periodTextActive]}>{d} dias</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.gold} size="large" />
-          </View>
+          <View style={styles.center}><ActivityIndicator color={colors.gold} size="large" /></View>
         ) : error ? (
           <View style={styles.center}>
             <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={() => load(period)}>
+            <TouchableOpacity style={styles.retryBtn} onPress={() => { setLoading(true); load(period); }}>
               <Text style={styles.retryBtnText}>Tentar novamente</Text>
             </TouchableOpacity>
           </View>
-        ) : snapshots.length === 0 ? (
+        ) : snapshots.length === 0 || !t ? (
           <View style={styles.center}>
             <Text style={styles.emptyIcon}>📊</Text>
             <Text style={styles.emptyTitle}>Sem dados ainda</Text>
-            <Text style={styles.emptySub}>
-              O primeiro snapshot é gerado às 23:55 de hoje.
-            </Text>
+            <Text style={styles.emptySub}>O primeiro fechamento do dia roda às 00:10 (horário de Brasília).</Text>
           </View>
         ) : (
           <>
-            {/* Saúde da economia */}
             {health && (
               <View style={[styles.healthCard, { borderColor: health.color + '66' }]}>
                 <View style={styles.healthHeader}>
                   <Text style={styles.healthIcon}>{health.icon}</Text>
-                  <View style={styles.healthInfo}>
-                    <Text style={[styles.healthLabel, { color: health.color }]}>
-                      {health.label}
-                    </Text>
-                    <Text style={styles.healthRatio}>
-                      Ratio gasto/criado: {data!.totals.ratio.toFixed(2)}
-                    </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.healthLabel, { color: health.color }]}>{health.label}</Text>
+                    <Text style={styles.healthRatio}>Gasto ÷ criado: {t.ratio.toFixed(2)}</Text>
                   </View>
                 </View>
                 <Text style={styles.healthMsg}>{health.msg}</Text>
                 <View style={styles.healthMeta}>
-                  <Text style={styles.healthMetaText}>Meta: 0.70 – 0.90</Text>
+                  <Text style={styles.healthMetaText}>Meta: 0,70 – 0,90</Text>
                   {data!.alertCount > 0 && (
-                    <Text style={styles.healthAlerts}>
-                      ⚠️ {data!.alertCount} alerta(s) no período
-                    </Text>
+                    <Text style={styles.healthAlerts}>⚠️ {data!.alertCount} alerta(s) no período</Text>
                   )}
                 </View>
               </View>
             )}
 
-            {/* Totais do período */}
-            <Text style={styles.sectionTitle}>Totais do período</Text>
+            {/* ── Cristais ── */}
+            <View style={styles.sectionRow}>
+              <CrystalIcon size={16} />
+              <Text style={styles.sectionTitle}>Cristais</Text>
+            </View>
             <View style={styles.statsGrid}>
-              <StatCard icon="✨" label="Cristais criados"
-                value={data!.totals.created.toLocaleString('pt-BR')} />
-              <StatCard icon="🔥" label="Cristais gastos"
-                value={data!.totals.spent.toLocaleString('pt-BR')} color={colors.gold} />
-              <StatCard icon="💳" label="Comprados"
-                value={data!.totals.purchased.toLocaleString('pt-BR')} color="#FFD700" />
-              <StatCard icon="👤" label="Novas carteiras"
-                value={data!.totals.newUsers.toLocaleString('pt-BR')} />
+              <StatCard icon={<CrystalIcon size={22} />} label="Criados" value={n(t.created)} />
+              <StatCard icon="🔥" label="Gastos" value={n(t.spent)} color={colors.gold} />
+              <StatCard icon="💳" label="Comprados (pacotes e Galáxia Plus)" value={n(t.purchased)} color="#FFD700" />
+              <StatCard icon="↩️" label="Estornados pelo banco" value={n(t.refunded)} color={t.refunded > 0 ? '#FF6B6B' : undefined} />
+            </View>
+            <BreakdownList title="De onde vêm" data={crystalSources} positive />
+            <View style={{ height: spacing.sm }} />
+            <BreakdownList title="Para onde vão" data={crystalSinks} positive={false} />
+
+            {/* ── Fragmentos ── */}
+            <Text style={[styles.sectionTitle, styles.sectionTitleBlock]}>🔮 Fragmentos</Text>
+            <View style={styles.statsGrid}>
+              <StatCard icon="🔮" label="Gerados" value={n(t.fragments.gerados)} />
+              <StatCard icon={<CrystalIcon size={22} />} label="Convertidos em cristais" value={n(t.fragments.convertidos)} color={colors.gold} />
+              <StatCard icon="🎖️" label="Gastos em badges" value={n(t.fragments.gastos)} color={colors.gold} />
+              <StatCard
+                icon="⚖️"
+                label="Saíram de circulação"
+                value={`${t.fragments.gerados > 0 ? Math.round(((t.fragments.convertidos + t.fragments.gastos) / t.fragments.gerados) * 100) : 0}%`}
+              />
+            </View>
+            <BreakdownList title="De onde vêm" data={fragSources} positive />
+
+            {Object.keys(fragSinks).length > 0 && (
+              <>
+                <View style={{ height: spacing.sm }} />
+                <BreakdownList title="Para onde vão" data={fragSinks} positive={false} />
+              </>
+            )}
+
+            {/* ── Impulsos ── */}
+            <Text style={[styles.sectionTitle, styles.sectionTitleBlock]}>🚀 Impulsos ativados</Text>
+            <View style={styles.breakdownCard}>
+              {impulsos.length === 0 ? (
+                <Text style={styles.emptyLine}>Nenhum impulso ativado no período.</Text>
+              ) : impulsos.map(([key, v]) => (
+                <View key={key} style={styles.impulsoRow}>
+                  <Text style={styles.impulsoLabel}>{IMPULSO_LABELS[key] ?? key}</Text>
+                  <Text style={styles.impulsoValue}>
+                    {n(v.total)}
+                    {v.assinatura > 0 ? <Text style={styles.impulsoSub}> · {n(v.assinatura)} da assinatura</Text> : null}
+                  </Text>
+                </View>
+              ))}
             </View>
 
-            {/* Breakdown */}
-            <Text style={styles.sectionTitle}>De onde vêm os cristais</Text>
-            <BreakdownList title="Entradas" data={aggSources} positive />
+            {/* ── Galáxia Plus ── */}
+            <Text style={[styles.sectionTitle, styles.sectionTitleBlock]}>💜 Galáxia Plus</Text>
+            <View style={styles.statsGrid}>
+              <StatCard icon="💜" label="Assinantes ativos agora" value={n(data!.activeSubscribers)} color="#C9A4F2" />
+              <StatCard icon="🆕" label="Ativações e renovações no período" value={n(t.galaxiaAtivacoes)} />
+            </View>
 
-            <Text style={styles.sectionTitle}>Para onde vão os cristais</Text>
-            <BreakdownList title="Saídas" data={aggSinks} positive={false} />
+            {/* ── Base ── */}
+            <Text style={[styles.sectionTitle, styles.sectionTitleBlock]}>👤 Base</Text>
+            <View style={styles.statsGrid}>
+              <StatCard icon="👤" label="Carteiras novas" value={n(t.newUsers)} />
+            </View>
 
-            {/* Histórico diário */}
-            <Text style={styles.sectionTitle}>Histórico diário</Text>
+            {/* ── Histórico ── */}
+            <Text style={[styles.sectionTitle, styles.sectionTitleBlock]}>Histórico diário</Text>
             <View style={styles.historyCard}>
               <View style={styles.historyHeaderRow}>
-                <Text style={[styles.historyHeaderCell, { flex: 1.4 }]}>Data</Text>
+                <Text style={[styles.historyHeaderCell, { flex: 1.3, textAlign: 'left' }]}>Data</Text>
                 <Text style={styles.historyHeaderCell}>Criado</Text>
                 <Text style={styles.historyHeaderCell}>Gasto</Text>
+                <Text style={styles.historyHeaderCell}>Frag.</Text>
                 <Text style={styles.historyHeaderCell}>Ratio</Text>
               </View>
               {snapshots.map(s => {
-                const created = s.cristaisCreatedGratuitos + s.cristaisCreatedPremium;
-                const ratioColor =
-                  s.ratioSpentToCreated < 0.5 ? '#FF6B6B'
-                  : s.ratioSpentToCreated < 0.7 ? '#FFD700'
-                  : '#44FF88';
+                const created = (s.cristaisCreatedGratuitos ?? 0) + (s.cristaisCreatedPremium ?? 0);
+                const r = s.ratioSpentToCreated ?? 0;
+                const ratioColor = r < 0.5 ? '#FF6B6B' : r < 0.7 ? '#FFD700' : '#44FF88';
                 return (
                   <View key={s.date} style={styles.historyRow}>
-                    <Text style={[styles.historyCell, { flex: 1.4 }]}>
-                      {s.date.slice(5).split('-').reverse().join('/')}
-                      {s.alertSent ? ' ⚠️' : ''}
+                    <Text style={[styles.historyCell, { flex: 1.3, textAlign: 'left' }]}>
+                      {s.date.slice(5).split('-').reverse().join('/')}{s.alertSent ? ' ⚠️' : ''}
                     </Text>
-                    <Text style={styles.historyCell}>{created}</Text>
-                    <Text style={styles.historyCell}>{s.cristaisSpent}</Text>
-                    <Text style={[styles.historyCell, { color: ratioColor, fontWeight: 'bold' }]}>
-                      {s.ratioSpentToCreated.toFixed(2)}
-                    </Text>
+                    <Text style={styles.historyCell}>{n(created)}</Text>
+                    <Text style={styles.historyCell}>{n(s.cristaisSpent)}</Text>
+                    <Text style={styles.historyCell}>{s.fragmentos ? n(s.fragmentos.gerados) : '—'}</Text>
+                    <Text style={[styles.historyCell, { color: ratioColor, fontWeight: 'bold' }]}>{r.toFixed(2)}</Text>
                   </View>
                 );
               })}
             </View>
 
-            {/* Como ler */}
             <View style={styles.infoCard}>
               <Text style={styles.infoTitle}>ℹ️ Como interpretar</Text>
-              <Text style={styles.infoText}>
-                • <Text style={styles.infoBold}>Ratio</Text> = cristais gastos ÷ cristais criados
-              </Text>
-              <Text style={styles.infoText}>
-                • Abaixo de 0.70 os usuários acumulam sem gastar — o cristal perde valor
-              </Text>
-              <Text style={styles.infoText}>
-                • Acima de 0.90 pode faltar cristal e frustrar quem não compra
-              </Text>
-              <Text style={styles.infoText}>
-                • Fragmentos não entram aqui — são economia separada
-              </Text>
-              <Text style={styles.infoText}>
-                • Snapshot roda automaticamente às 23:55 (horário de Brasília)
-              </Text>
+              <Text style={styles.infoText}>• <Text style={styles.infoBold}>Ratio</Text> = cristais gastos ÷ cristais criados</Text>
+              <Text style={styles.infoText}>• Abaixo de 0,70 os usuários acumulam sem gastar e o cristal perde valor</Text>
+              <Text style={styles.infoText}>• Acima de 0,90 pode faltar cristal e frustrar quem não compra</Text>
+              <Text style={styles.infoText}>• "Saíram de circulação" mostra quanto dos fragmentos gerados já foi convertido ou gasto</Text>
+              <Text style={styles.infoText}>• Dias anteriores a 28/09 não têm fragmentos nem impulsos (aparecem com —)</Text>
+              <Text style={styles.infoText}>• O dia é fechado às 00:10 (horário de Brasília)</Text>
             </View>
           </>
         )}
@@ -381,104 +422,76 @@ const styles = StyleSheet.create({
   headerTitle:   { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   roleBadge: {
     backgroundColor: colors.gold + '22', borderRadius: borderRadius.full,
-    borderWidth: 1, borderColor: colors.gold,
-    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2,
+    borderWidth: 1, borderColor: colors.gold, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2,
   },
   roleBadgeText: { color: colors.gold, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
   content:       { padding: spacing.md, paddingBottom: spacing.xl * 2 },
   center:        { alignItems: 'center', justifyContent: 'center', paddingTop: 60, gap: spacing.md },
   errorText:     { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center' },
-  retryBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm, paddingHorizontal: spacing.xl,
-  },
+  retryBtn:      { backgroundColor: colors.gold, borderRadius: borderRadius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.xl },
   retryBtnText:  { color: colors.background, fontWeight: 'bold' },
   emptyIcon:     { fontSize: 56 },
   emptyTitle:    { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   emptySub:      { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center' },
+  emptyLine:     { color: colors.gray, fontSize: fonts.sizes.sm },
 
-  // Período
-  periodRow:     { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  periodRow:        { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   periodBtn: {
     flex: 1, paddingVertical: spacing.sm, alignItems: 'center',
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark,
+    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.grayDark,
   },
-  periodBtnActive: { borderColor: colors.gold, backgroundColor: colors.gold + '22' },
-  periodText:      { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  periodTextActive:{ color: colors.gold },
+  periodBtnActive:  { borderColor: colors.gold, backgroundColor: colors.gold + '22' },
+  periodText:       { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  periodTextActive: { color: colors.gold },
 
-  // Saúde
-  healthCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, padding: spacing.md, gap: spacing.sm, marginBottom: spacing.sm,
-  },
-  healthHeader:  { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  healthIcon:    { fontSize: 32 },
-  healthInfo:    { flex: 1 },
-  healthLabel:   { fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  healthRatio:   { color: colors.gray, fontSize: fonts.sizes.sm, marginTop: 2 },
-  healthMsg:     { color: colors.grayLight, fontSize: fonts.sizes.sm, lineHeight: 20 },
-  healthMeta:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  healthMetaText:{ color: colors.gray, fontSize: fonts.sizes.xs },
-  healthAlerts:  { color: '#FFD700', fontSize: fonts.sizes.xs, fontWeight: 'bold' },
+  healthCard:     { backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, padding: spacing.md, gap: spacing.sm },
+  healthHeader:   { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  healthIcon:     { fontSize: 32 },
+  healthLabel:    { fontSize: fonts.sizes.lg, fontWeight: 'bold' },
+  healthRatio:    { color: colors.gray, fontSize: fonts.sizes.sm, marginTop: 2 },
+  healthMsg:      { color: colors.grayLight, fontSize: fonts.sizes.sm, lineHeight: 20 },
+  healthMeta:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  healthMetaText: { color: colors.gray, fontSize: fonts.sizes.xs },
+  healthAlerts:   { color: '#FFD700', fontSize: fonts.sizes.xs, fontWeight: 'bold' },
 
+  sectionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.lg, marginBottom: spacing.sm },
   sectionTitle: {
     color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold',
-    marginTop: spacing.md, marginBottom: spacing.sm,
     textTransform: 'uppercase', letterSpacing: 1,
   },
+  sectionTitleBlock: { marginTop: spacing.lg, marginBottom: spacing.sm },
 
-  // Stats
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   statCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark,
+    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.grayDark,
     padding: spacing.md, width: '47%', alignItems: 'center',
   },
-  statIcon:  { fontSize: 20, marginBottom: spacing.xs },
+  statIcon:  { height: 26, justifyContent: 'center', marginBottom: spacing.xs },
+  statEmoji: { fontSize: 20 },
   statValue: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   statLabel: { color: colors.gray, fontSize: fonts.sizes.xs, textAlign: 'center' },
 
-  // Breakdown
-  breakdownCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark,
-    padding: spacing.md, gap: spacing.sm,
-  },
-  breakdownTitle:  { color: colors.gray, fontSize: fonts.sizes.xs, textTransform: 'uppercase', letterSpacing: 1 },
-  breakdownRow:    { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  breakdownInfo:   { flex: 1, gap: 4 },
-  breakdownLabel:  { color: colors.white, fontSize: fonts.sizes.sm },
-  breakdownBarBg:  { height: 4, backgroundColor: colors.grayDark, borderRadius: 2, overflow: 'hidden' },
-  breakdownBarFill:{ height: '100%', borderRadius: 2 },
-  breakdownValue:  { fontSize: fonts.sizes.sm, fontWeight: 'bold', minWidth: 70, textAlign: 'right' },
+  breakdownCard:    { backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.grayDark, padding: spacing.md, gap: spacing.sm },
+  breakdownTitle:   { color: colors.gray, fontSize: fonts.sizes.xs, textTransform: 'uppercase', letterSpacing: 1 },
+  breakdownRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  breakdownInfo:    { flex: 1, gap: 4 },
+  breakdownLabel:   { color: colors.white, fontSize: fonts.sizes.sm },
+  breakdownBarBg:   { height: 4, backgroundColor: colors.grayDark, borderRadius: 2, overflow: 'hidden' },
+  breakdownBarFill: { height: '100%', borderRadius: 2 },
+  breakdownValue:   { fontSize: fonts.sizes.sm, fontWeight: 'bold', minWidth: 70, textAlign: 'right' },
 
-  // Histórico
-  historyCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark, overflow: 'hidden',
-  },
-  historyHeaderRow: {
-    flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
-    borderBottomWidth: 1, borderBottomColor: colors.grayDark,
-  },
-  historyHeaderCell: {
-    flex: 1, color: colors.gray, fontSize: fonts.sizes.xs,
-    fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'right',
-  },
-  historyRow: {
-    flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
-    borderBottomWidth: 0.5, borderBottomColor: colors.grayDark,
-  },
-  historyCell: { flex: 1, color: colors.grayLight, fontSize: fonts.sizes.sm, textAlign: 'right' },
+  impulsoRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  impulsoLabel: { color: colors.white, fontSize: fonts.sizes.sm },
+  impulsoValue: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  impulsoSub:   { color: colors.gray, fontSize: fonts.sizes.xs, fontWeight: 'normal' },
 
-  // Info
-  infoCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.grayDark,
-    padding: spacing.md, gap: spacing.xs, marginTop: spacing.md,
-  },
+  historyCard:       { backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.grayDark, overflow: 'hidden' },
+  historyHeaderRow:  { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.grayDark },
+  historyHeaderCell: { flex: 1, color: colors.gray, fontSize: fonts.sizes.xs, fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'right' },
+  historyRow:        { flexDirection: 'row', paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark },
+  historyCell:       { flex: 1, color: colors.grayLight, fontSize: fonts.sizes.sm, textAlign: 'right' },
+
+  infoCard:  { backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.grayDark, padding: spacing.md, gap: spacing.xs, marginTop: spacing.lg },
   infoTitle: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold', marginBottom: spacing.xs },
   infoText:  { color: colors.gray, fontSize: fonts.sizes.xs, lineHeight: 18 },
   infoBold:  { color: colors.white, fontWeight: 'bold' },

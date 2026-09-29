@@ -75,6 +75,9 @@ export async function notifyAdmins({
             userId: uid,
             type,
             message: body,
+            // Mesmo campo do notifyUser: sem ele, tocar no aviso do
+            // sino não sabia qual chamado, venda ou produto abrir.
+            ...(Object.keys(data).length > 0 && { dados: data }),
             read: false,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           });

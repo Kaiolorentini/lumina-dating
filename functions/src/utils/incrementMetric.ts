@@ -8,7 +8,10 @@ export async function incrementMetric(
 ): Promise<void> {
   try {
     await admin.firestore().doc(ADMIN_METRICS_DOC).set(
-      { [field]: admin.firestore.FieldValue.increment(value) },
+      {
+        [field]:   admin.firestore.FieldValue.increment(value),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
       { merge: true }
     );
   } catch (error) {
@@ -24,6 +27,8 @@ export async function incrementMetrics(
     for (const [field, value] of Object.entries(updates)) {
       data[field] = admin.firestore.FieldValue.increment(value);
     }
+    // updatedAt sempre: os Relatórios mostravam "Atualizado:" vazio.
+    data.updatedAt = admin.firestore.FieldValue.serverTimestamp();
     await admin.firestore().doc(ADMIN_METRICS_DOC).set(data, { merge: true });
   } catch (error) {
     console.warn("[incrementMetrics] Falha:", error);

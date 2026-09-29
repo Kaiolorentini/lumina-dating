@@ -31,12 +31,13 @@ const db = admin.firestore();
 
 const PAID_TRIGGERS: Record<string, {
   costKey:      keyof typeof COSTS;
+  auditTipo:    AuditTipo;
   premiumOnly:  boolean;
   freeWithPlus: boolean;
 }> = {
-  quase_sintonia:   { costKey: 'REVEAL_QUASE_SINTONIA',   premiumOnly: false, freeWithPlus: true  },
-  pensou_em_voce:   { costKey: 'REVEAL_PENSOU_EM_VOCE',   premiumOnly: false, freeWithPlus: true  },
-  sintonia_perdida: { costKey: 'REVEAL_SINTONIA_PERDIDA', premiumOnly: true,  freeWithPlus: false },
+  quase_sintonia:   { costKey: 'REVEAL_QUASE_SINTONIA',   auditTipo: 'SPEND_REVEAL_QUASE_SINTONIA',   premiumOnly: false, freeWithPlus: true  },
+  pensou_em_voce:   { costKey: 'REVEAL_PENSOU_EM_VOCE',   auditTipo: 'SPEND_REVEAL_PENSOU_EM_VOCE',   premiumOnly: false, freeWithPlus: true  },
+  sintonia_perdida: { costKey: 'REVEAL_SINTONIA_PERDIDA', auditTipo: 'SPEND_REVEAL_SINTONIA_PERDIDA', premiumOnly: true,  freeWithPlus: false },
 };
 
 interface RevealResult {
@@ -155,7 +156,7 @@ export const revealTrigger = onCall(
 
         auditLogFinanceiro({
           uid,
-          tipo:                   `SPEND_${cfg.costKey}` as AuditTipo,
+          tipo:                   cfg.auditTipo,
           coinTipo:               cfg.premiumOnly ? 'premium' : 'mixed',
           valor:                  -cost,
           origem:                 'revealTrigger',

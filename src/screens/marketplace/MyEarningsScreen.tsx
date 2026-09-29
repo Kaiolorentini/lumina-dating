@@ -12,6 +12,9 @@ import { useCreatorWallet } from '../../hooks/useCreatorWallet';
 import { MarketplaceEmptyState } from '../../components/marketplace/MarketplaceEmptyState';
 import { CreatorTransaction } from '../../shared/types/marketplace';
 import ScreenContainer from '../../components/ScreenContainer';
+import { useFocusEffect } from '@react-navigation/native';
+import { markNotificationsReadByTypes } from '../../modules/notifications/services/notificationService';
+import { BADGE_TYPES } from '../../modules/profile/hooks/useProfileBadges';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -34,6 +37,11 @@ export default function MyEarningsScreen() {
   useEffect(() => {
     refreshTransactions();
   }, []);
+
+  // Abrir a área apaga o balão dela no Perfil.
+  useFocusEffect(React.useCallback(() => {
+    if (user?.uid) markNotificationsReadByTypes(user.uid, [...BADGE_TYPES.earnings]).catch(() => {});
+  }, [user?.uid]));
 
   function renderTransaction({ item }: { item: CreatorTransaction }) {
     const config = TYPE_LABELS[item.type] ?? { label: item.type, color: colors.gray, prefix: '' };
@@ -99,6 +107,18 @@ export default function MyEarningsScreen() {
                 </View>
               </View>
 
+              {(wallet?.debtBalance ?? 0) > 0 && (
+                <View style={styles.chargebackWarning}>
+                  <Text style={styles.debtTitle}>
+                    ⚠️ Pendência de R$ {(wallet?.debtBalance ?? 0).toFixed(2)}
+                  </Text>
+                  <Text style={styles.chargebackText}>
+                    Um reembolso ou estorno foi maior que o seu saldo. Suas próximas vendas
+                    cobrem esse valor, e o saque é liberado em seguida.
+                  </Text>
+                </View>
+              )}
+
               {wallet?.hasChargebackPending && (
                 <View style={styles.chargebackWarning}>
                   <Text style={styles.chargebackText}>
@@ -110,11 +130,11 @@ export default function MyEarningsScreen() {
               <TouchableOpacity
                 style={[
                   styles.withdrawAction,
-                  ((wallet?.availableBalance ?? 0) <= 0 || wallet?.hasChargebackPending)
+                  ((wallet?.availableBalance ?? 0) <= 0 || wallet?.hasChargebackPending || (wallet?.debtBalance ?? 0) > 0)
                     && styles.withdrawActionDisabled,
                 ]}
                 onPress={() => navigation.navigate('Withdrawal')}
-                disabled={(wallet?.availableBalance ?? 0) <= 0 || wallet?.hasChargebackPending}
+                disabled={(wallet?.availableBalance ?? 0) <= 0 || wallet?.hasChargebackPending || (wallet?.debtBalance ?? 0) > 0}
               >
                 <Text style={styles.withdrawActionText}>💸 Solicitar saque</Text>
               </TouchableOpacity>
@@ -167,6 +187,7 @@ const styles = StyleSheet.create({
     borderColor: colors.error, padding: spacing.md, marginBottom: spacing.md,
   },
   chargebackText: { color: colors.error, fontSize: fonts.sizes.sm },
+  debtTitle: { color: colors.error, fontSize: fonts.sizes.md, fontWeight: 'bold', marginBottom: 4 },
   withdrawAction: {
     backgroundColor: colors.gold, borderRadius: borderRadius.md,
     padding: spacing.md, alignItems: 'center', marginBottom: spacing.md,

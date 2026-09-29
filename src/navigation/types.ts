@@ -47,7 +47,7 @@ export type RootStackParamList = {
   FramesShop:    undefined;
   CrystalPacks:  undefined;
   Boosts:        undefined;
-  WeeklyChallenge: undefined;
+  
   PaymentSetup:    undefined;
   MarketplaceHome: undefined;
   ProductDetail:   { productId: string };
@@ -86,6 +86,12 @@ export type RootStackParamList = {
   AdminCuration:            undefined;
   Visitors:                 undefined;
   Titles: undefined;
+  /** Suporte: início, questionário e conversa (usuário e admin). */
+  Support:       undefined;
+  /** Com reportUid, o questionário abre em Denúncia com a pessoa escolhida. */
+  SupportNew:    { reportUid?: string; reportName?: string } | undefined;
+  SupportTicket: { ticketId: string };
+  AdminSupport:  undefined;
     
 };
 

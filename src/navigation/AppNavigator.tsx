@@ -43,7 +43,7 @@ import RealProfileScreen from '../screens/Profile/RealProfileScreen';
 import UserChatScreen from '../modules/chat/screens/UserChatScreen';
 import RequestsScreen from '../modules/profile/screens/RequestsScreen';
 import BlockedScreen from '../screens/Profile/BlockedScreen';
-import { listenToRequests, getConexoesAceitas } from '../modules/profile/services/requestsService';
+import { getConexoesAceitas } from '../modules/profile/services/requestsService';
 import { listenToNotifications } from '../modules/notifications/services/notificationService';
 import { generateChatId } from '../modules/chat/services/messageService';
 import InAppNotification from '../components/InAppNotification';
@@ -63,6 +63,7 @@ import CreatorRequestScreen from '../screens/marketplace/CreatorRequestScreen';
 import CheckoutScreen from '../screens/marketplace/CheckoutScreen';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useUserPermissions } from '../hooks/useUserPermissions';
+import { useAdminPendingTotal } from '../hooks/useAdminPendingTotal';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import AdminCreatorRequestsScreen from '../screens/admin/AdminCreatorRequestsScreen';
 import AdminWithdrawalsScreen from '../screens/admin/AdminWithdrawalsScreen';
@@ -91,6 +92,11 @@ import GalaxiaPlusScreen from '../modules/premium/screens/GalaxiaPlusScreen';
 import AdminInflationScreen from '../screens/admin/AdminInflationScreen';
 import AdminCurationScreen from '../screens/admin/AdminCurationScreen';
 import VisitorsScreen from '../modules/premium/screens/VisitorsScreen';
+import SupportHomeScreen from '../modules/support/screens/SupportHomeScreen';
+import SupportNewScreen from '../modules/support/screens/SupportNewScreen';
+import SupportTicketScreen from '../modules/support/screens/SupportTicketScreen';
+import AdminSupportScreen from '../screens/admin/AdminSupportScreen';
+import { useProfileBadges } from '../modules/profile/hooks/useProfileBadges';
 import {
   AdminProductsModerationScreen,
   AdminProductReviewScreen,
@@ -125,18 +131,17 @@ function TabNavigator() {
   const insets    = useSafeAreaInsets();
   const [unreadMessages,  setUnreadMessages]  = useState(0);
   const [unreadNotifs,    setUnreadNotifs]    = useState(0);
-  const [pendingRequests, setPendingRequests] = useState(0);
+  const profileBadges = useProfileBadges(user?.uid);
   const unsubscribersRef = useRef<(() => void)[]>([]);
 
   const { isBlocked, isSuperAdmin, marketplaceEnabled } = React.useContext(NavigationPermissionsContext);
   const canAccessAdminPanel = isSuperAdmin;
+  const adminPending        = useAdminPendingTotal(canAccessAdminPanel);
 
   useEffect(() => {
     if (!user?.uid) return;
 
-    const unsubRequests = listenToRequests(user.uid, requests => {
-      setPendingRequests(requests.length);
-    });
+   
 
     const unsubNotifs = listenToNotifications(user.uid, notifs => {
       setUnreadNotifs(notifs.filter(n => !n.read).length);
@@ -172,14 +177,13 @@ function TabNavigator() {
     }).catch(console.error);
 
     return () => {
-      unsubRequests();
       unsubNotifs();
       unsubscribersRef.current.forEach(unsub => unsub());
       unsubscribersRef.current = [];
     };
   }, [user?.uid]);
 
-  const totalProfileBadge = pendingRequests;
+  const totalProfileBadge = profileBadges.total;
   const showMarketplace   = marketplaceEnabled && !isBlocked;
 
   return (
@@ -289,7 +293,16 @@ function TabNavigator() {
         <Tab.Screen name="Admin" component={AdminDashboardScreen}
           options={{
             tabBarLabel: 'Admin',
-            tabBarIcon:  ({ color }) => <Text style={{ fontSize: 20, color }}>👑</Text>,
+            tabBarIcon:  ({ color }) => (
+              <View>
+                <Text style={{ fontSize: 20, color }}>👑</Text>
+                {adminPending > 0 && (
+                  <View style={[styles.badge, styles.badgeAlert]}>
+                    <Text style={styles.badgeAlertText}>{adminPending > 9 ? '9+' : adminPending}</Text>
+                  </View>
+                )}
+              </View>
+            ),
           }}
         />
       )}
@@ -363,6 +376,10 @@ function MainStack() {
       <Stack.Screen name="BadgesShop" component={BadgesShopScreen} />
       <Stack.Screen name="CrystalPacks" component={CrystalPacksScreen} />
       <Stack.Screen name="Boosts" component={BoostsScreen} />
+      <Stack.Screen name="Support" component={SupportHomeScreen} />
+      <Stack.Screen name="SupportNew" component={SupportNewScreen} />
+      <Stack.Screen name="SupportTicket" component={SupportTicketScreen} />
+      <Stack.Screen name="AdminSupport" component={AdminSupportScreen} />
     </Stack.Navigator>
   );
 }
@@ -437,6 +454,13 @@ function AppContent() {
       case 'coins_purchased':        break;
       case 'cofre_pronto':           navigationRef.current.navigate('Vault'); break;
       case 'galaxia_turbos_expiring': navigationRef.current.navigate('GalaxiaPlus'); break;
+      case 'boost_report':            navigationRef.current.navigate('Boosts'); break;
+      case 'destaque_aberto':         navigationRef.current.navigate('Boosts'); break;
+      // Suporte: resposta ao usuário e chamado novo para o admin.
+      case 'support_reply':
+      case 'support_new':
+        if (data.ticketId) navigationRef.current.navigate('SupportTicket', { ticketId: data.ticketId });
+        break;
       // Curtida recebida: o texto do push é anônimo (tela
       // bloqueada); o toque revela quem curtiu.
       case 'like_received':
@@ -445,6 +469,7 @@ function AppContent() {
         }
         break;
       case 'sale_completed':
+      case 'sale_refunded':
       case 'withdrawal_paid':
       case 'withdrawal_rejected': navigationRef.current.navigate('MyEarnings'); break;
       case 'purchase_confirmed':
@@ -470,6 +495,75 @@ function AppContent() {
         } else {
           navigationRef.current.navigate('AdminProductsModeration');
         }
+        break;
+      // ── Mesma tabela da tela de Notificações ──
+      case 'mensagem':
+      case 'request_accepted':
+        navigationRef.current.navigate('MainTabs', { screen: 'Sintonias' } as never);
+        break;
+      case 'withdrawal_approved':
+        navigationRef.current.navigate('MyEarnings');
+        break;
+      case 'product_rejected':
+      case 'marketplace_unbanned':
+        navigationRef.current.navigate('MyProducts');
+        break;
+      case 'creator_rejected':
+        navigationRef.current.navigate('CreatorRequest');
+        break;
+      case 'level_up':
+      case 'tree_evolution':
+        navigationRef.current.navigate('XP');
+        break;
+      case 'achievement_unlocked':
+      case 'collection_complete':
+        navigationRef.current.navigate('Achievements');
+        break;
+      case 'ranking_reward':
+        navigationRef.current.navigate('Ranking');
+        break;
+      case 'prestige_marco':
+      case 'prestige_stage':
+      case 'prestige_evolution':
+        navigationRef.current.navigate('Prestige');
+        break;
+      case 'visibilidade_caindo':
+        navigationRef.current.navigate('Boosts');
+        break;
+      // Gatilhos emocionais: a revelação acontece na tela de Notificações.
+      case 'quase_sintonia':
+      case 'pensou_em_voce':
+      case 'sintonia_perdida':
+      case 'cofre_cheio':
+        navigationRef.current.navigate('Notifications');
+        break;
+      case 'marketplace_banned':
+      case 'age_verification_rejected':
+        navigationRef.current.navigate('Support');
+        break;
+      case 'product_pending':
+        navigationRef.current.navigate('AdminProductsModeration');
+        break;
+      case 'creator_request':
+        navigationRef.current.navigate('AdminCreatorRequests');
+        break;
+      case 'withdrawal_request':
+        navigationRef.current.navigate('AdminWithdrawals');
+        break;
+      case 'refund_requested':
+        navigationRef.current.navigate('AdminRefundRequests');
+        break;
+      case 'fraud_flag':
+        navigationRef.current.navigate('AdminFraudFlags');
+        break;
+      case 'inflation_alert':
+        navigationRef.current.navigate('AdminInflation');
+        break;
+      case 'admin_sale':
+        navigationRef.current.navigate('AdminSales');
+        break;
+      case 'gallery_photo_removed':
+        navigationRef.current.navigate('MainTabs', { screen: 'Profile' } as never);
         break;
       case 'screenshot_warning':
         Alert.alert('⚠️ Aviso', data?.message ?? 'Ação proibida detectada em conteúdo protegido.');
@@ -499,6 +593,11 @@ function AppContent() {
         like_received:        { title: '✦ Alguém sintonizou com você', onPress: () => { if (data.likedBy) navigationRef.current?.navigate('RealProfile', { userId: data.likedBy }); } },
         cofre_pronto:         { title: '🗝️ Seu Cofre está liberado',   onPress: () => navigationRef.current?.navigate('Vault') },
         galaxia_turbos_expiring: { title: '⚡ Seus Turbos expiram em breve', onPress: () => navigationRef.current?.navigate('GalaxiaPlus') },
+        boost_report:            { title: notification.request.content.title ?? '🚀 Seu impulso terminou', onPress: () => navigationRef.current?.navigate('Boosts') },
+        destaque_aberto:         { title: notification.request.content.title ?? '📍 O Destaque Regional abriu', onPress: () => navigationRef.current?.navigate('Boosts') },
+        support_reply:           { title: notification.request.content.title ?? '💬 O suporte respondeu', onPress: () => { if (data.ticketId) navigationRef.current?.navigate('SupportTicket', { ticketId: data.ticketId }); } },
+        support_new:             { title: notification.request.content.title ?? '🆘 Novo chamado', onPress: () => { if (data.ticketId) navigationRef.current?.navigate('SupportTicket', { ticketId: data.ticketId }); } },
+        sale_refunded:           { title: '↩️ Uma venda foi reembolsada', onPress: () => navigationRef.current?.navigate('MyEarnings') },
         sale_completed:       { title: '💰 Venda realizada!',      onPress: () => navigationRef.current?.navigate('MyEarnings') },
         purchase_confirmed:   { title: '📦 Compra confirmada!',    onPress: () => navigationRef.current?.navigate('MyPurchases') },
         creator_approved:     { title: '🎨 Você é um Criador!',    onPress: () => navigationRef.current?.navigate('MyProducts') },
@@ -683,6 +782,16 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color:      colors.background,
+    fontSize:   9,
+    fontWeight: 'bold',
+  },
+  // Pendência do admin: vermelho, para não se confundir com
+  // notificações comuns (dourado).
+  badgeAlert: {
+    backgroundColor: colors.error,
+  },
+  badgeAlertText: {
+    color:      colors.white,
     fontSize:   9,
     fontWeight: 'bold',
   },

@@ -55,7 +55,7 @@
 // mais valioso do app. Os gratuitos ficam para as revelações,
 // os fragmentos para o Cofre e os badges.
 // ============================================
-
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -406,6 +406,11 @@ async function reserveDraw(
         imutavel:    true,
       });
 
+      auditLogFinanceiro({
+        uid, tipo: 'SPEND_CARTA_DESTINO', coinTipo: 'premium', valor: -price, origem: 'drawDestinyCard',
+        saldoAnteriorPremium: premium, saldoPosteriorPremium: premium - price,
+      }, t);
+
       charge = { crystals: price };
     }
 
@@ -473,6 +478,11 @@ async function releaseDraw(
           timestamp: FieldValue.serverTimestamp(),
           imutavel:  true,
         });
+
+        auditLogFinanceiro({
+          uid, tipo: 'CARTA_DESTINO_ESTORNO', coinTipo: 'premium',
+          valor: reservation.charge.crystals, origem: 'drawDestinyCard', metadata: { motivo },
+        }, t);
       }
     });
   } catch (error) {

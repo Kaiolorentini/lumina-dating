@@ -38,6 +38,10 @@ export const onApproveWithdrawal = onCall(async (request) => {
     if (wallet.hasChargebackPending) {
       throw new HttpsError("failed-precondition", "Saque bloqueado por chargeback pendente");
     }
+    // Dívida por reembolso/estorno bloqueia o saque até novas vendas cobrirem.
+    if ((wallet.debtBalance ?? 0) > 0) {
+      throw new HttpsError("failed-precondition", `Criador com dívida de R$ ${Number(wallet.debtBalance).toFixed(2)}`);
+    }
 
     userId = data.userId;
     amount = data.amount;

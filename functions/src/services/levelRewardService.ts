@@ -15,7 +15,7 @@
 // marco é atravessado uma única vez. levelRewardsClaimed fica
 // como REGISTRO para a tela, não como trava.
 // ============================================
-
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import * as admin from 'firebase-admin';
 import { FieldValue, Timestamp, Transaction } from 'firebase-admin/firestore';
 import { LevelReward } from '../config/xpTable';
@@ -108,6 +108,21 @@ export function applyLevelRewards(
     });
     cofreAntes   += r.fragments;
     premiumAntes += r.crystalsPremium;
+  }
+
+  // ── Registro da economia ──
+  if (totalPremium > 0) {
+    auditLogFinanceiro({
+      uid, tipo: 'NIVEL_RECOMPENSA', coinTipo: 'premium', valor: totalPremium, origem,
+      saldoAnteriorPremium: wallet.coinsPremium, saldoPosteriorPremium: wallet.coinsPremium + totalPremium,
+      metadata: { levels: rewards.map(r => r.level) },
+    }, t);
+  }
+  if (totalFragments > 0) {
+    auditLogFinanceiro({
+      uid, tipo: 'FRAG_NIVEL', valor: totalFragments, origem,
+      metadata: { levels: rewards.map(r => r.level) },
+    }, t);
   }
 
   // ── Registro para a tela + pendente do modal ──

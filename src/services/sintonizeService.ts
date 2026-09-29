@@ -1,65 +1,79 @@
 // ============================================
-// LUMINA — FILA DO SINTONIZE
+// LUMINA — FILA DO SINTONIZE v2.1
 // src/services/sintonizeService.ts
 //
-// A aba Sintonize mostra UM perfil por vez, para decidir. A
-// grade da Home é para varrer; aqui é para escolher.
+// v2.1 (27/09) — SEGUNDA CHANCE: lista de quem foi passado nas
+// últimas 24h (fetchDismissedProfiles) e a chamada paga que traz
+// de volta (bringBackProfile → CF secondChance).
 //
-// ── POR QUE UM SERVIÇO SEPARADO ──
-//
-// A grade quer volume e aceita repetir; o Sintonize precisa
-// excluir quem já foi curtido e quem foi descartado nas
-// últimas 24h. Compartilhar a busca pareceria econômico, mas
-// as duas telas descartariam coisas diferentes do mesmo lote.
+// v2.0 (27/09) — TURBO NO SINTONIZE: só na primeira página, no
+// máximo 3, só para quem tem preferência compatível, descarte de
+// 24h vale normalmente, com selo de posição paga.
 //
 // ── O CUSTO DO DESCARTE ──
-//
-// Os descartados ficam em `progression.dismissedProfiles`, um
-// mapa de uid para timestamp. Filtrar isso no Firestore exigiria
-// um `not-in`, que tem limite de 10 valores — inviável. Então
-// buscamos MAIS do que vamos mostrar e filtramos no cliente:
-// 20 por vez, e busca nova quando a fila chega a 3. A pessoa
-// nunca espera carregamento entre um card e outro.
+// Os descartados ficam em progression.dismissedProfiles. Filtrar
+// no Firestore exigiria not-in (limite de 10). Buscamos MAIS e
+// filtramos no cliente: 20 por vez, reabastece em 3.
 // ============================================
 
 import {
-  collection, getDocs, query, where, orderBy, limit, startAfter,
+  collection, doc, getDoc, getDocs, query, where, orderBy, limit, startAfter, Timestamp,
   QueryDocumentSnapshot, DocumentData,
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from './firebase';
 import { UserProfile } from '../types';
 import { calcularSintonia } from '../utils/sintoniaEngine';
 import { RealProfile } from './usersService';
 
-/** Buscados por vez. Maior que o exibido porque parte é
- *  filtrada: descartados, curtidos, perfis incompletos. */
 const FETCH_SIZE = 20;
 
-/** Quando a fila chega aqui, busca mais em segundo plano. */
 export const REFILL_THRESHOLD = 3;
 
-/** Descarte expira em 24h — depois disso a pessoa volta à fila. */
 const DISMISS_HOURS = 24;
+
+/** Máximo de perfis com Turbo no começo da sessão. */
+const TURBO_SLOTS = 3;
+
+/** Quantos passados a lista da Segunda Chance mostra. */
+const DISMISSED_LIST_LIMIT = 20;
+
+/**
+ * Preferência → gêneros. Espelha functions/src/utils/compatibility.ts.
+ * Manter em sincronia.
+ */
+const PREFERENCE_TO_GENDERS: Record<string, string[]> = {
+  homens:   ['masculino'],
+  mulheres: ['feminino'],
+  trans:    ['trans'],
+  todos:    ['masculino', 'feminino', 'trans', 'nao-binario'],
+};
+
+function viewerAccepts(viewer: UserProfile, gender: unknown): boolean {
+  const prefs = ((viewer as { preferences?: string[] }).preferences) ?? [];
+  if (prefs.length === 0) return true;
+  if (typeof gender !== 'string') return false;
+  return prefs.some(p => (PREFERENCE_TO_GENDERS[p] ?? []).includes(gender));
+}
 
 export interface SintonizePage {
   profiles: RealProfile[];
   cursor:   QueryDocumentSnapshot<DocumentData> | null;
   seed:     number;
   wrapped:  boolean;
-  /** false quando a base acabou de verdade. */
   hasMore:  boolean;
 }
 
-/**
- * Uids descartados que ainda estão dentro das 24h.
- *
- * O mapa vive no documento do próprio usuário, então não custa
- * leitura extra: o perfil já foi carregado pela tela.
- */
-export function activeDismissals(
+/** Perfil passado, com quando foi passado. */
+export interface DismissedProfile extends RealProfile {
+  dismissedAt: number;
+}
+
+/** Descartes dentro das 24h: uid → quando (ms). */
+export function activeDismissalMap(
   dismissed: Record<string, unknown> | undefined,
-): Set<string> {
-  const active = new Set<string>();
+): Record<string, number> {
+  const active: Record<string, number> = {};
   if (!dismissed) return active;
 
   const cutoff = Date.now() - DISMISS_HOURS * 3600 * 1000;
@@ -67,32 +81,37 @@ export function activeDismissals(
   for (const [uid, value] of Object.entries(dismissed)) {
     const at = (value as { toDate?: () => Date })?.toDate?.()?.getTime()
       ?? (typeof value === 'number' ? value : 0);
-    if (at > cutoff) active.add(uid);
+    if (at > cutoff) active[uid] = at;
   }
 
   return active;
 }
 
-function buildProfile(
-  docSnap: QueryDocumentSnapshot<DocumentData>,
+export function activeDismissals(
+  dismissed: Record<string, unknown> | undefined,
+): Set<string> {
+  return new Set(Object.keys(activeDismissalMap(dismissed)));
+}
+
+/** Monta o perfil a partir do documento — serve à fila e à lista de passados. */
+function buildFromData(
+  id: string,
+  raw: DocumentData,
   currentUser: UserProfile,
 ): RealProfile | null {
-  const data = docSnap.data() as UserProfile;
+  const data = { ...raw, uid: (raw.uid as string) ?? id } as UserProfile;
 
   if (data.uid === currentUser.uid) return null;
   if (!data.name || !data.age || !data.gender) return null;
   if ((data as { isBlocked?: boolean }).isBlocked === true) return null;
 
   const sintoniaResult = calcularSintonia(currentUser, data);
-  const prog = (docSnap.data() as { progression?: Record<string, unknown> })?.progression ?? {};
+  const prog = (raw as { progression?: Record<string, unknown> }).progression ?? {};
 
   return {
     ...data,
     sintonia:      sintoniaResult.score,
     sintoniaLabel: sintoniaResult.label,
-    // Boost não se aplica aqui: o Sintonize é aleatório por
-    // definição, e deixar quem pagou furar a fila seria vender
-    // posição num lugar onde só existe um card por vez.
     boostScore: 0,
     boostType:  null,
     equippedFrame:       (prog.equippedFrame as string) ?? null,
@@ -101,6 +120,37 @@ function buildProfile(
     equippedTitle:       (prog.equippedTitle as string) ?? null,
     prestigeStage:       (prog.prestigeStage as number) ?? 0,
   };
+}
+
+function buildProfile(
+  docSnap: QueryDocumentSnapshot<DocumentData>,
+  currentUser: UserProfile,
+): RealProfile | null {
+  return buildFromData(docSnap.id, docSnap.data(), currentUser);
+}
+
+/** Até TURBO_SLOTS perfis com Turbo ativo, compatíveis e não descartados. */
+async function fetchTurboProfiles(
+  currentUser: UserProfile,
+  dismissedUids: Set<string>,
+): Promise<RealProfile[]> {
+  const snap = await getDocs(query(
+    collection(db, 'users'),
+    where('boostType', '==', 'turbo'),
+    where('boostActiveUntil', '>', Timestamp.now()),
+    orderBy('boostActiveUntil', 'desc'),
+    limit(10),
+  ));
+
+  const out: RealProfile[] = [];
+  for (const docSnap of snap.docs) {
+    if (out.length >= TURBO_SLOTS) break;
+    if (dismissedUids.has(docSnap.id)) continue;
+    if (!viewerAccepts(currentUser, docSnap.data().gender)) continue;
+    const profile = buildProfile(docSnap, currentUser);
+    if (profile) out.push({ ...profile, boostType: 'turbo', boostScore: 180 });
+  }
+  return out;
 }
 
 export async function fetchSintonizePage(
@@ -112,17 +162,25 @@ export async function fetchSintonizePage(
 ): Promise<SintonizePage> {
   try {
     const startSeed = seed ?? Math.random();
+    const isFirst   = cursor === null;
 
     const constraints = cursor
       ? [orderBy('randomSeed', 'asc'), startAfter(cursor), limit(FETCH_SIZE)]
       : [orderBy('randomSeed', 'asc'), where('randomSeed', '>=', startSeed), limit(FETCH_SIZE)];
 
-    const snapshot = await getDocs(query(collection(db, 'users'), ...constraints));
+    const [snapshot, turbo] = await Promise.all([
+      getDocs(query(collection(db, 'users'), ...constraints)),
+      isFirst
+        ? fetchTurboProfiles(currentUser, dismissedUids).catch((error): RealProfile[] => {
+            console.error('[sintonizeService] Turbo:', error);
+            return [];
+          })
+        : Promise.resolve<RealProfile[]>([]),
+    ]);
+
     let docs = snapshot.docs;
     let didWrap = wrapped;
 
-    // Página incompleta e sem a volta: completa do início da
-    // faixa. Quem sorteia 0.9 veria pouquíssimos perfis.
     if (docs.length < FETCH_SIZE && !wrapped) {
       didWrap = true;
       const wrapSnap = await getDocs(query(
@@ -134,9 +192,12 @@ export async function fetchSintonizePage(
       docs = [...docs, ...wrapSnap.docs];
     }
 
-    const profiles: RealProfile[] = [];
+    const turboIds = new Set(turbo.map(p => p.uid));
+    const profiles: RealProfile[] = [...turbo];
+
     docs.forEach((docSnap) => {
       if (dismissedUids.has(docSnap.id)) return;
+      if (turboIds.has(docSnap.id)) return;
       const profile = buildProfile(docSnap, currentUser);
       if (profile) profiles.push(profile);
     });
@@ -152,4 +213,44 @@ export async function fetchSintonizePage(
     console.error('[sintonizeService] fetchSintonizePage:', error);
     return { profiles: [], cursor: null, seed: 0, wrapped: false, hasMore: false };
   }
+}
+
+/**
+ * Passados nas últimas 24h, do mais recente ao mais antigo, para a
+ * Segunda Chance. Lê só os DISMISSED_LIST_LIMIT mais recentes.
+ */
+export async function fetchDismissedProfiles(
+  currentUser: UserProfile,
+  dismissedAt: Record<string, number>,
+): Promise<DismissedProfile[]> {
+  const recent = Object.entries(dismissedAt)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, DISMISSED_LIST_LIMIT);
+
+  const snaps = await Promise.all(
+    recent.map(([id]) => getDoc(doc(db, 'users', id)).catch(() => null)),
+  );
+
+  const out: DismissedProfile[] = [];
+  snaps.forEach((snap, i) => {
+    if (!snap || !snap.exists()) return;
+    const profile = buildFromData(snap.id, snap.data(), currentUser);
+    if (profile) out.push({ ...profile, dismissedAt: recent[i][1] });
+  });
+  return out;
+}
+
+interface SecondChanceRequest { targetUid: string }
+interface SecondChanceResponse {
+  success:            boolean;
+  cost:               number;
+  spentFromGratuitos: number;
+  spentFromPremium:   number;
+}
+
+/** Segunda Chance: cobra e desfaz o descarte no servidor. */
+export async function bringBackProfile(targetUid: string): Promise<SecondChanceResponse> {
+  const fn = httpsCallable<SecondChanceRequest, SecondChanceResponse>(getFunctions(), 'secondChance');
+  const result = await fn({ targetUid });
+  return result.data;
 }

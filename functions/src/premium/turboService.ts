@@ -10,7 +10,7 @@
 // ✓ Cooldown 5 min entre ativações
 // ✓ Apenas 1 Turbo ativo por vez
 // ============================================
-
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -146,6 +146,14 @@ export const activateTurbo = functions.onCall(
         timestamp:       FieldValue.serverTimestamp(),
         imutavel:        true,
       });
+
+      // Turbo da assinatura não move cristais: só o pago é registrado.
+      if (cost > 0) {
+        auditLogFinanceiro({
+          uid, tipo: 'SPEND_TURBO_SINTONIA', coinTipo: 'premium', valor: -cost, origem: 'activateTurbo',
+          saldoAnteriorPremium: prevPremium, saldoPosteriorPremium: prevPremium - cost,
+        }, t);
+      }
 
       // 4. PremiumUsageLog (REGRA 1)
       const usageId = `turbo_${uid}_${Date.now()}`;

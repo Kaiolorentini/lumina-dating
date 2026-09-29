@@ -1,199 +1,160 @@
-import React, { useState, useCallback } from 'react';
+// ============================================
+// LUMINA — REEMBOLSOS (ADMIN) v2 — estorno manual por Pix
+// src/screens/admin/AdminRefundRequestsScreen.tsx
+//
+// Fluxo: Pendente → (Aprovar: revoga a compra e desconta o criador)
+// → Aguardando Pix → (você transfere e toca "Marcar como pago") → Pago.
+// A chave Pix do comprador aparece com Copiar.
+// ============================================
+
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Alert, RefreshControl, TextInput, Modal,
-  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import * as Clipboard from 'expo-clipboard';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { getRefundRequests, getUserById } from '../../services/marketplace/adminService';
-import { RefundRequest, RefundRequestStatus } from '../../shared/types/marketplace';
+import { getProductsByIds } from '../../services/marketplace/productService';
+import {
+  callAdminAction, formatBRL, PIX_TYPE_LABEL,
+} from '../../services/marketplace/adminDashboardService';
+import { RefundRequest } from '../../shared/types/marketplace';
 import { useAdminGuard } from '../../hooks/useAdminGuard';
-import app from '../../core/firebase';
 import ScreenContainer from '../../components/ScreenContainer';
 
-const STATUS_TABS: RefundRequestStatus[] = ['pending', 'approved', 'rejected', 'expired'];
+const TABS = ['pending', 'approved', 'paid', 'rejected'] as const;
+type Tab = typeof TABS[number];
 
-const STATUS_LABEL: Record<RefundRequestStatus, string> = {
-  pending: 'Pendentes',
-  approved: 'Aprovados',
-  rejected: 'Rejeitados',
-  expired: 'Expirados',
+const TAB_LABEL: Record<Tab, string> = {
+  pending: 'Pendentes', approved: 'Aguardando Pix', paid: 'Pagos', rejected: 'Rejeitados',
 };
 
-function formatDate(value: any): string {
-  try {
-    const d = value?.toDate ? value.toDate() : value instanceof Date ? value : null;
-    if (!d) return '';
-    return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-  } catch {
-    return '';
-  }
-}
-
-function formatMoney(v: number | undefined): string {
-  const n = typeof v === 'number' ? v : 0;
-  return `R$ ${n.toFixed(2).replace('.', ',')}`;
-}
-
-// Menos de 6h para expirar → aviso
-function isExpiringSoon(expiresAt: any): boolean {
-  try {
-    const d = expiresAt?.toDate ? expiresAt.toDate() : expiresAt instanceof Date ? expiresAt : null;
-    if (!d) return false;
-    const hoursLeft = (d.getTime() - Date.now()) / (1000 * 60 * 60);
-    return hoursLeft > 0 && hoursLeft < 6;
-  } catch {
-    return false;
-  }
+function formatDate(value: unknown): string {
+  const d = value instanceof Date ? value : (value as { toDate?: () => Date })?.toDate?.();
+  if (!d) return '';
+  return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 export default function AdminRefundRequestsScreen() {
   const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useAdminGuard();
-  const [activeTab, setActiveTab] = useState<RefundRequestStatus>('pending');
-  const [requests, setRequests] = useState<RefundRequest[]>([]);
-  const [userNames, setUserNames] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  const [tab, setTab]               = useState<Tab>('pending');
+  const [requests, setRequests]     = useState<RefundRequest[]>([]);
+  const [names, setNames]           = useState<Record<string, string>>({});
+  const [titles, setTitles]         = useState<Record<string, string>>({});
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
 
-  // Modal de rejeição
-  const [rejectModal, setRejectModal] = useState(false);
+  const [rejectId, setRejectId]         = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
-  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
-  const loadRequests = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getRefundRequests(activeTab, 20);
+      const result = await getRefundRequests(tab, 20);
       setRequests(result.requests);
 
-      const ids = new Set<string>();
-      result.requests.forEach(r => { ids.add(r.buyerId); ids.add(r.sellerId); });
-      const names: Record<string, string> = {};
-      await Promise.all(
-        Array.from(ids).map(async id => {
-          try {
-            const p = await getUserById(id);
-            names[id] = p?.name ?? id.slice(0, 10) + '...';
-          } catch {
-            names[id] = id.slice(0, 10) + '...';
-          }
-        })
-      );
-      setUserNames(names);
-    } catch (e: any) {
-      console.error('[AdminRefundRequests] Erro:', e);
-      setError(e.message ?? 'Erro ao carregar reembolsos');
+      const userIds = Array.from(new Set(result.requests.flatMap(r => [r.buyerId, r.sellerId])));
+      const [userEntries, products] = await Promise.all([
+        Promise.all(userIds.map(async id => {
+          const u = await getUserById(id).catch(() => null);
+          return [id, u?.name ?? `${id.slice(0, 10)}…`] as const;
+        })),
+        getProductsByIds(result.requests.map(r => r.productId)).catch(() => new Map()),
+      ]);
+      setNames(prev => ({ ...prev, ...Object.fromEntries(userEntries) }));
+      const t: Record<string, string> = {};
+      products.forEach((p, id) => { t[id] = p.title; });
+      setTitles(prev => ({ ...prev, ...t }));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erro ao carregar reembolsos.');
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [tab]);
 
-  React.useEffect(() => { loadRequests(); }, [activeTab]);
+  useEffect(() => { load(); }, [load]);
 
-  if (guardLoading || blocked) return null;
+  async function run(id: string, fn: string, params: Record<string, unknown>, done: string) {
+    setProcessing(id);
+    try {
+      await callAdminAction(fn, params);
+      Alert.alert(done);
+      await load();
+    } catch (e: unknown) {
+      Alert.alert('Erro', e instanceof Error ? e.message : 'Não foi possível concluir.');
+    } finally {
+      setProcessing(null);
+    }
+  }
 
-  function handleApprove(req: RefundRequest) {
+  function approve(r: RefundRequest) {
     Alert.alert(
-      '⚠️ Aprovar reembolso?',
-      'Esta ação irá:\n\n' +
-      '• Executar o estorno REAL no Asaas\n' +
-      '• Devolver o valor ao comprador\n' +
-      '• Remover o acesso ao produto\n' +
-      '• Debitar o saldo do criador\n\n' +
-      'Deseja continuar?',
+      'Aprovar reembolso?',
+      `• A compra é revogada (o conteúdo sai da biblioteca)\n` +
+        `• ${formatBRL(r.sellerAmount)} são descontados do criador\n\n` +
+        `Depois, faça o Pix de ${formatBRL(r.amount)} para a chave do comprador e toque em "Marcar como pago".`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar estorno',
-          style: 'destructive',
-          onPress: async () => {
-            setProcessing(req.id);
-            try {
-              const functions = getFunctions(app, 'us-central1');
-              const approve = httpsCallable(functions, 'approveRefund');
-              await approve({ refundRequestId: req.id });
-              Alert.alert('✅ Reembolso aprovado', 'O estorno foi processado no Asaas.');
-              loadRequests();
-            } catch (e: any) {
-              Alert.alert('Erro', e.message ?? 'Não foi possível processar o estorno.');
-            } finally {
-              setProcessing(null);
-            }
-          },
-        },
-      ]
+        { text: 'Aprovar', onPress: () => run(r.id, 'approveRefund', { refundRequestId: r.id }, '✅ Reembolso aprovado — faça o Pix') },
+      ],
     );
   }
 
-  function openRejectModal(id: string) {
-    setRejectingId(id);
-    setRejectReason('');
-    setRejectModal(true);
+  function markPaid(r: RefundRequest) {
+    Alert.alert(
+      'Confirmar pagamento',
+      `Você já transferiu ${formatBRL(r.amount)} para ${r.buyerPixKey ?? 'a chave do comprador'}?`,
+      [
+        { text: 'Ainda não', style: 'cancel' },
+        { text: 'Já transferi', onPress: () => run(r.id, 'markRefundPaid', { refundRequestId: r.id }, '✅ Reembolso marcado como pago') },
+      ],
+    );
   }
 
   async function confirmReject() {
-    if (!rejectingId) return;
+    if (!rejectId) return;
     if (!rejectReason.trim()) {
-      Alert.alert('Erro', 'Informe o motivo da rejeição.');
+      Alert.alert('Motivo obrigatório', 'Informe o motivo da rejeição.');
       return;
     }
-    setRejectModal(false);
-    setProcessing(rejectingId);
-    try {
-      const functions = getFunctions(app, 'us-central1');
-      const reject = httpsCallable(functions, 'rejectRefund');
-      await reject({ refundRequestId: rejectingId, reason: rejectReason.trim() });
-      Alert.alert('❌ Reembolso rejeitado');
-      loadRequests();
-    } catch (e: any) {
-      Alert.alert('Erro', e.message);
-    } finally {
-      setProcessing(null);
-      setRejectingId(null);
-    }
+    const id = rejectId;
+    setRejectId(null);
+    await run(id, 'rejectRefund', { refundRequestId: id, reason: rejectReason.trim() }, '❌ Reembolso rejeitado');
   }
+
+  if (guardLoading || blocked) return null;
 
   return (
     <ScreenContainer>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Voltar">
           <Text style={styles.backBtn}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Reembolsos</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Tabs — scroll horizontal (4 abas) */}
-      <View style={styles.tabsWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {STATUS_TABS.map(tab => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tab, activeTab === tab && styles.tabActive]}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                {STATUS_LABEL[tab]}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      <View style={styles.tabs}>
+        {TABS.map(t => (
+          <TouchableOpacity key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)} accessibilityRole="tab">
+            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>{TAB_LABEL[t]}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {loading ? (
         <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
       ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={loadRequests}>
-            <Text style={styles.retryBtnText}>Tentar novamente</Text>
+        <View style={styles.empty}>
+          <Text style={styles.errorText}>⚠️ {error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={load}>
+            <Text style={styles.retryText}>Tentar novamente</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -201,123 +162,102 @@ export default function AdminRefundRequestsScreen() {
           data={requests}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl refreshing={false} onRefresh={loadRequests} tintColor={colors.gold} />
-          }
+          refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={colors.gold} />}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyIcon}>↩️</Text>
-              <Text style={styles.emptyText}>
-                Nenhum reembolso {STATUS_LABEL[activeTab].toLowerCase()}
-              </Text>
+              <Text style={styles.emptyText}>Nenhum reembolso em "{TAB_LABEL[tab]}"</Text>
             </View>
           }
-          renderItem={({ item }) => {
-            const expiringSoon = activeTab === 'pending' && isExpiringSoon(item.expiresAt);
-            return (
-              <View style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.cardProduct}>📦 {item.productId.slice(0, 18)}...</Text>
-                  {expiringSoon && (
-                    <Text style={styles.expiringSoon}>⚠️ Expira em breve</Text>
-                  )}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <Text style={styles.product} numberOfLines={2}>📦 {titles[item.productId] ?? 'Produto'}</Text>
+
+              <View style={styles.valuesRow}>
+                <View style={styles.valueBox}>
+                  <Text style={styles.valueLabel}>Devolver ao comprador</Text>
+                  <Text style={styles.valueMain}>{formatBRL(item.amount)}</Text>
                 </View>
-
-                {/* Financeiro */}
-                <View style={styles.valuesRow}>
-                  <View style={styles.valueBox}>
-                    <Text style={styles.valueLabel}>Reembolso</Text>
-                    <Text style={styles.valueMain}>{formatMoney(item.amount)}</Text>
-                  </View>
-                  <View style={styles.valueBox}>
-                    <Text style={styles.valueLabel}>Criador perde</Text>
-                    <Text style={styles.valueSecondary}>{formatMoney(item.sellerAmount)}</Text>
-                  </View>
+                <View style={styles.valueBox}>
+                  <Text style={styles.valueLabel}>Sai do criador</Text>
+                  <Text style={styles.valueLoss}>{formatBRL(item.sellerAmount)}</Text>
                 </View>
-
-                {/* Motivo do comprador */}
-                <View style={styles.reasonBox}>
-                  <Text style={styles.reasonLabel}>Motivo do comprador:</Text>
-                  <Text style={styles.reasonText}>{item.reason || '—'}</Text>
-                </View>
-
-                {/* Partes */}
-                <Text style={styles.party}>
-                  🛒 Comprador: <Text style={styles.partyValue}>{userNames[item.buyerId] ?? item.buyerId.slice(0, 10) + '...'}</Text>
-                </Text>
-                <Text style={styles.party}>
-                  🎨 Criador: <Text style={styles.partyValue}>{userNames[item.sellerId] ?? item.sellerId.slice(0, 10) + '...'}</Text>
-                </Text>
-
-                {/* Datas */}
-                <Text style={styles.date}>Criado: {formatDate(item.createdAt)}</Text>
-                {activeTab === 'pending' && (
-                  <Text style={styles.date}>Expira: {formatDate(item.expiresAt)}</Text>
-                )}
-
-                {/* Rejeição */}
-                {activeTab === 'rejected' && item.rejectionReason && (
-                  <View style={styles.rejectionBox}>
-                    <Text style={styles.rejectionLabel}>Motivo da rejeição:</Text>
-                    <Text style={styles.rejectionText}>{item.rejectionReason}</Text>
-                  </View>
-                )}
-
-                {/* Ações — só pending */}
-                {activeTab === 'pending' && (
-                  <View style={styles.actions}>
-                    <TouchableOpacity
-                      style={styles.approveBtn}
-                      onPress={() => handleApprove(item)}
-                      disabled={processing === item.id}
-                    >
-                      {processing === item.id ? (
-                        <ActivityIndicator color={colors.success} size="small" />
-                      ) : (
-                        <Text style={styles.approveBtnText}>✅ Aprovar estorno</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.rejectBtn}
-                      onPress={() => openRejectModal(item.id)}
-                      disabled={processing === item.id}
-                    >
-                      <Text style={styles.rejectBtnText}>❌ Rejeitar</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
               </View>
-            );
-          }}
+
+              <View style={styles.reasonBox}>
+                <Text style={styles.reasonLabel}>Motivo do comprador</Text>
+                <Text style={styles.reasonText}>{item.reason || '—'}</Text>
+              </View>
+
+              <Text style={styles.party}>🛒 Comprador: <Text style={styles.partyValue}>{names[item.buyerId] ?? '…'}</Text></Text>
+              <Text style={styles.party}>🎨 Criador: <Text style={styles.partyValue}>{names[item.sellerId] ?? '…'}</Text></Text>
+              <Text style={styles.date}>Pedido em {formatDate(item.createdAt)}</Text>
+
+              {(tab === 'pending' || tab === 'approved') && item.buyerPixKey ? (
+                <View style={styles.pixBox}>
+                  <Text style={styles.pixLabel}>Chave Pix do comprador · {PIX_TYPE_LABEL[item.buyerPixKeyType ?? ''] ?? ''}</Text>
+                  <View style={styles.pixRow}>
+                    <Text style={styles.pixKey} selectable>{item.buyerPixKey}</Text>
+                    <TouchableOpacity
+                      style={styles.copyBtn}
+                      onPress={async () => {
+                        await Clipboard.setStringAsync(item.buyerPixKey ?? '');
+                        Alert.alert('Copiado', 'Chave Pix copiada.');
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Copiar chave Pix do comprador"
+                    >
+                      <Text style={styles.copyText}>Copiar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
+
+              {tab === 'rejected' && item.rejectionReason ? (
+                <Text style={styles.rejection}>Motivo da rejeição: {item.rejectionReason}</Text>
+              ) : null}
+
+              {processing === item.id ? (
+                <ActivityIndicator color={colors.gold} style={{ marginTop: spacing.sm }} />
+              ) : tab === 'pending' ? (
+                <View style={styles.actions}>
+                  <TouchableOpacity style={styles.approveBtn} onPress={() => approve(item)}>
+                    <Text style={styles.approveText}>✅ Aprovar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.rejectBtn} onPress={() => { setRejectId(item.id); setRejectReason(''); }}>
+                    <Text style={styles.rejectText}>❌ Rejeitar</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : tab === 'approved' ? (
+                <TouchableOpacity style={styles.paidBtn} onPress={() => markPaid(item)}>
+                  <Text style={styles.paidText}>💸 Marcar reembolso como pago</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          )}
         />
       )}
 
-      {/* Modal de rejeição */}
-      <Modal
-        visible={rejectModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRejectModal(false)}
-      >
+      <Modal visible={rejectId !== null} transparent animationType="fade" onRequestClose={() => setRejectId(null)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>❌ Rejeitar reembolso</Text>
+            <Text style={styles.modalTitle}>Rejeitar reembolso</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Informe o motivo da rejeição..."
+              placeholder="Motivo (o comprador recebe este texto)"
               placeholderTextColor={colors.gray}
               value={rejectReason}
               onChangeText={setRejectReason}
               multiline
-              numberOfLines={3}
+              maxLength={300}
               autoFocus
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setRejectModal(false)}>
-                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setRejectId(null)}>
+                <Text style={styles.modalCancelText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmReject}>
-                <Text style={styles.modalConfirmBtnText}>Rejeitar</Text>
+                <Text style={styles.modalConfirmText}>Rejeitar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -328,7 +268,6 @@ export default function AdminRefundRequestsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: spacing.md, paddingBottom: spacing.md,
@@ -336,69 +275,61 @@ const styles = StyleSheet.create({
   },
   backBtn: { color: colors.gold, fontSize: 28 },
   headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  tabsWrap: { borderBottomWidth: 0.5, borderBottomColor: colors.grayDark },
-  tab: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, alignItems: 'center' },
+  tabs: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: colors.grayDark },
+  tab: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center' },
   tabActive: { borderBottomWidth: 2, borderBottomColor: colors.gold },
-  tabText: { color: colors.gray, fontSize: fonts.sizes.sm },
+  tabText: { color: colors.gray, fontSize: fonts.sizes.xs, textAlign: 'center' },
   tabTextActive: { color: colors.gold, fontWeight: 'bold' },
   list: { padding: spacing.md },
   card: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md,
-    gap: spacing.xs,
+    borderColor: colors.grayDark, padding: spacing.md, marginBottom: spacing.md, gap: spacing.xs,
   },
-  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardProduct: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  expiringSoon: { color: colors.gold, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  valuesRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: spacing.xs },
+  product: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  valuesRow: { flexDirection: 'row', gap: spacing.sm, marginVertical: spacing.xs },
   valueBox: { flex: 1 },
   valueLabel: { color: colors.gray, fontSize: fonts.sizes.xs },
-  valueMain: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  valueSecondary: { color: colors.error, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  reasonBox: {
-    backgroundColor: colors.background, borderRadius: borderRadius.sm,
-    padding: spacing.sm, marginVertical: spacing.xs,
-  },
+  valueMain: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
+  valueLoss: { color: colors.error, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  reasonBox: { backgroundColor: colors.background, borderRadius: borderRadius.sm, padding: spacing.sm },
   reasonLabel: { color: colors.gray, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
   reasonText: { color: colors.white, fontSize: fonts.sizes.sm, marginTop: 2 },
   party: { color: colors.gray, fontSize: fonts.sizes.xs },
   partyValue: { color: colors.white },
   date: { color: colors.gray, fontSize: fonts.sizes.xs },
-  rejectionBox: {
-    marginTop: spacing.xs, padding: spacing.sm,
-    backgroundColor: colors.error + '11', borderRadius: borderRadius.sm,
-    borderLeftWidth: 2, borderLeftColor: colors.error,
+  pixBox: {
+    marginTop: spacing.xs, padding: spacing.sm, borderRadius: borderRadius.sm,
+    borderWidth: 1, borderColor: colors.gold + '55', gap: 4,
   },
-  rejectionLabel: { color: colors.error, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  rejectionText: { color: colors.white, fontSize: fonts.sizes.sm, marginTop: 2 },
+  pixLabel: { color: colors.gray, fontSize: fonts.sizes.xs },
+  pixRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  pixKey: { flex: 1, color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  copyBtn: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 2, borderRadius: borderRadius.full, backgroundColor: colors.gold },
+  copyText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.sm },
+  rejection: { color: colors.error, fontSize: fonts.sizes.xs, marginTop: spacing.xs },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   approveBtn: {
-    backgroundColor: colors.success + '22', borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.success, flex: 1, padding: spacing.sm, alignItems: 'center',
+    flex: 1, padding: spacing.sm, alignItems: 'center', borderRadius: borderRadius.sm,
+    borderWidth: 1, borderColor: colors.success, backgroundColor: colors.success + '22',
   },
-  approveBtnText: { color: colors.success, fontWeight: 'bold', fontSize: fonts.sizes.sm },
+  approveText: { color: colors.success, fontWeight: 'bold', fontSize: fonts.sizes.sm },
   rejectBtn: {
-    backgroundColor: colors.error + '11', borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.error, flex: 1, padding: spacing.sm, alignItems: 'center',
+    flex: 1, padding: spacing.sm, alignItems: 'center', borderRadius: borderRadius.sm,
+    borderWidth: 1, borderColor: colors.error, backgroundColor: colors.error + '11',
   },
-  rejectBtnText: { color: colors.error, fontWeight: 'bold', fontSize: fonts.sizes.sm },
-  errorContainer: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl,
+  rejectText: { color: colors.error, fontWeight: 'bold', fontSize: fonts.sizes.sm },
+  paidBtn: {
+    marginTop: spacing.sm, padding: spacing.sm, alignItems: 'center', borderRadius: borderRadius.sm,
+    borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.gold + '22',
   },
-  errorIcon: { fontSize: 48 },
-  errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center' },
-  retryBtn: {
-    backgroundColor: colors.gold, borderRadius: borderRadius.sm,
-    padding: spacing.md, paddingHorizontal: spacing.xl,
-  },
-  retryBtnText: { color: colors.background, fontWeight: 'bold' },
-  empty: { flex: 1, alignItems: 'center', padding: spacing.xl, gap: spacing.md },
+  paidText: { color: colors.gold, fontWeight: 'bold', fontSize: fonts.sizes.sm },
+  empty: { alignItems: 'center', padding: spacing.xl, gap: spacing.md },
   emptyIcon: { fontSize: 48 },
   emptyText: { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center' },
-  modalOverlay: {
-    flex: 1, backgroundColor: '#00000088',
-    alignItems: 'center', justifyContent: 'center', padding: spacing.lg,
-  },
+  errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center' },
+  retryBtn: { backgroundColor: colors.gold, borderRadius: borderRadius.sm, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg },
+  retryText: { color: colors.background, fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: '#00000088', alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   modalContent: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
     borderColor: colors.grayDark, padding: spacing.lg, width: '100%', gap: spacing.md,
@@ -410,14 +341,8 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.md, textAlignVertical: 'top', minHeight: 80,
   },
   modalActions: { flexDirection: 'row', gap: spacing.sm },
-  modalCancelBtn: {
-    flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalCancelBtnText: { color: colors.white, fontWeight: 'bold' },
-  modalConfirmBtn: {
-    flex: 1, backgroundColor: colors.error, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalConfirmBtnText: { color: colors.white, fontWeight: 'bold' },
+  modalCancelBtn: { flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm, padding: spacing.md, alignItems: 'center' },
+  modalCancelText: { color: colors.white, fontWeight: 'bold' },
+  modalConfirmBtn: { flex: 1, backgroundColor: colors.error, borderRadius: borderRadius.sm, padding: spacing.md, alignItems: 'center' },
+  modalConfirmText: { color: colors.white, fontWeight: 'bold' },
 });

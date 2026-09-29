@@ -106,6 +106,69 @@ export async function getAllSales(
   };
 }
 
+// Vendas de cristais e Galáxia Plus (aba "Cristais" da tela Vendas).
+// Índice: sales (type ASC, createdAt DESC).
+export async function getCoinsSales(
+  pageSize = 20,
+  lastDoc: DocumentSnapshot | null = null,
+): Promise<{ sales: Sale[]; lastDoc: DocumentSnapshot | null; hasMore: boolean }> {
+  const constraints: any[] = [
+    where('type', '==', 'coins_purchase'),
+    orderBy('createdAt', 'desc'),
+    limit(pageSize + 1),
+  ];
+  if (lastDoc) constraints.push(startAfter(lastDoc));
+
+  const snap = await getDocs(
+    query(collection(db, MARKETPLACE_COLLECTIONS.SALES), ...constraints)
+  );
+
+  const hasMore = snap.docs.length > pageSize;
+  const docs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
+
+  return {
+    sales: docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      createdAt: d.data().createdAt?.toDate() ?? new Date(),
+      paidAt: d.data().paidAt?.toDate(),
+    } as Sale)),
+    lastDoc: docs.length > 0 ? docs[docs.length - 1] : null,
+    hasMore,
+  };
+}
+
+/** Relatório mensal escrito (gerado no fechamento do mês). */
+export interface AdminReport {
+  id:              string;
+  month:           string;
+  label:           string;
+  text:            string;
+  grossRevenue:    number;
+  netRevenue:      number;
+  commission:      number;
+  refundedAmount:  number;
+}
+
+export async function getAdminReports(max = 24): Promise<AdminReport[]> {
+  const snap = await getDocs(
+    query(collection(db, 'adminReports'), orderBy('month', 'desc'), limit(max))
+  );
+  return snap.docs.map(d => {
+    const data = d.data();
+    return {
+      id:             d.id,
+      month:          String(data.month ?? d.id),
+      label:          String(data.label ?? d.id),
+      text:           String(data.text ?? ''),
+      grossRevenue:   Number(data.grossRevenue ?? 0),
+      netRevenue:     Number(data.netRevenue ?? 0),
+      commission:     Number(data.commission ?? 0),
+      refundedAmount: Number(data.refundedAmount ?? 0),
+    };
+  });
+}
+
 // Busca refund requests
 export async function getRefundRequests(
   status?: string,

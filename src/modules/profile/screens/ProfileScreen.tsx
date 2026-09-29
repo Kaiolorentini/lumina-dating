@@ -32,6 +32,20 @@ import {
 } from '../../../config/cosmeticsCatalog';
 import { TitleSeal } from '../../../components/profile/TitleSeal';
 import { titleById } from '../../../config/titlesCatalog';
+import { useProfileBadges } from '../hooks/useProfileBadges';
+import { useMissionsSummary } from '../../engagement/hooks/useMissionsSummary';
+import GalleryEditor from '../components/GalleryEditor';
+
+/** Balão de contagem, ou ponto quando n === true. */
+function MenuBadge({ n }: { n: number | boolean }) {
+  if (!n) return null;
+  if (n === true) return <View style={styles.badgeDot} />;
+  return (
+    <View style={styles.badge}>
+      <Text style={styles.badgeText}>{n > 99 ? '99+' : n}</Text>
+    </View>
+  );
+}
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -54,6 +68,8 @@ export default function ProfileScreen() {
   const { role, isAdmin, isSuperAdmin } = useUserPermissions(user?.uid);
   const { status: xpStatus }       = useXP(user?.uid);
   const { data: prestigeData }     = usePrestige(user?.uid); // ← FIX: era 'data', agora 'prestigeData'
+  const badges                     = useProfileBadges(user?.uid);
+  const missions                   = useMissionsSummary(user?.uid);
 
   const [profile, setProfile]               = useState<UserProfile | null>(null);
   const [loading, setLoading]               = useState(true);
@@ -254,6 +270,11 @@ export default function ProfileScreen() {
           )}
         </TouchableOpacity>
 
+        {/* Galeria: 3 fotos além da foto de perfil */}
+        {user?.uid && (
+          <GalleryEditor userId={user.uid} profile={profile} onChanged={loadProfile} />
+        )}
+
         {/* Gamificação */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🎮 Gamificação</Text>
@@ -271,12 +292,16 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Vault')}>
             <Text style={styles.menuItemIcon}>🗝️</Text>
             <Text style={styles.menuItemText}>Cofre de Sintonia</Text>
-            <Text style={styles.menuItemSubtext}>{wallet?.vaultFragments ?? 0} fragmentos</Text>
+            <Text style={styles.menuItemSubtext}>
+              {badges.vaultReady ? 'Pronto para sacar' : `${wallet?.vaultFragments ?? 0} fragmentos`}
+            </Text>
+            <MenuBadge n={badges.vaultReady} />
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Missions')}>
             <Text style={styles.menuItemIcon}>📋</Text>
             <Text style={styles.menuItemText}>Missões do Dia</Text>
+            <Text style={styles.menuItemSubtext}>{missions.completed} de {missions.total}</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Ranking')}>
@@ -334,6 +359,7 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Requests')}>
             <Text style={styles.menuItemIcon}>✦</Text>
             <Text style={styles.menuItemText}>Solicitações recebidas</Text>
+            <MenuBadge n={badges.requests} />
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Blocked')}>
@@ -344,6 +370,13 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Notifications')}>
             <Text style={styles.menuItemIcon}>🔔</Text>
             <Text style={styles.menuItemText}>Notificações</Text>
+            <MenuBadge n={badges.notifications} />
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Support')}>
+            <Text style={styles.menuItemIcon}>🆘</Text>
+            <Text style={styles.menuItemText}>Suporte</Text>
+            <MenuBadge n={badges.support} />
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('GalaxiaPlus')}>
@@ -360,6 +393,7 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('MyPurchases')}>
             <Text style={styles.menuItemIcon}>📦</Text>
             <Text style={styles.menuItemText}>Minhas Compras</Text>
+            <MenuBadge n={badges.purchases} />
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('MyFavorites')}>
@@ -379,11 +413,13 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('MyProducts')}>
                 <Text style={styles.menuItemIcon}>📁</Text>
                 <Text style={styles.menuItemText}>Meus Produtos</Text>
+                <MenuBadge n={badges.products} />
                 <Text style={styles.menuItemArrow}>›</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('MyEarnings')}>
                 <Text style={styles.menuItemIcon}>💰</Text>
                 <Text style={styles.menuItemText}>Meus Ganhos</Text>
+                <MenuBadge n={badges.earnings} />
                 <Text style={styles.menuItemArrow}>›</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PaymentSetup')}>
@@ -474,6 +510,12 @@ const styles = StyleSheet.create({
   menuItemTextHighlight: { flex: 1, color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   menuItemTextAdmin: { flex: 1, color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   menuItemArrow: { color: colors.gray, fontSize: fonts.sizes.xl },
+  badge: {
+    minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, marginRight: spacing.xs,
+    backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center',
+  },
+  badgeText: { color: colors.white, fontSize: 11, fontWeight: 'bold' },
+  badgeDot:  { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error, marginRight: spacing.xs },
   logoutButton:  { margin: spacing.md, marginTop: spacing.lg, backgroundColor: colors.error + '22', borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.error, padding: spacing.md, alignItems: 'center' },
   logoutText:    { color: colors.error, fontSize: fonts.sizes.md, fontWeight: 'bold' },
 });

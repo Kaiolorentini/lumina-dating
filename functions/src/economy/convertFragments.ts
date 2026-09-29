@@ -97,6 +97,12 @@ export const convertFragments = onCall(
           },
         }, t);
 
+        // O lado dos fragmentos da mesma conversão.
+        auditLogFinanceiro({
+          uid, tipo: 'FRAG_CONVERSAO', valor: -fragmentsUsed, origem: 'convertFragments',
+          metadata: { crystalsGained: toConvert },
+        }, t);
+
         return {
           success:             true,
           crystalsGained:      toConvert,

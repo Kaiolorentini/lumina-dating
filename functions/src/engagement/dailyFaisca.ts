@@ -18,7 +18,7 @@
 //  1% → 50 cristais
 // Média real: ~4,7 cristais/dia
 // ============================================
-
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -118,6 +118,12 @@ export const claimDailyFaisca = functions.onCall(
           coinsGratuitos: FieldValue.increment(crystals),
           updatedAt:      FieldValue.serverTimestamp(),
         }, { merge: true });
+
+        auditLogFinanceiro({
+          uid, tipo: 'FAISCA_DESTINO', coinTipo: 'gratuito', valor: crystals, origem: 'dailyFaisca',
+          saldoAnteriorGratuito: coinsGratuitos, saldoPosteriorGratuito: coinsGratuitos + crystals,
+          metadata: { tier, bonus },
+        }, t);
 
         // ── REGRA 20: auditLog ──
         t.set(auditRef.doc(`faisca_${todayStr}`), {

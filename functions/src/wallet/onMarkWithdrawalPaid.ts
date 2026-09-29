@@ -36,6 +36,10 @@ export const onMarkWithdrawalPaid = onCall(async (request) => {
     if (!wallet || wallet.availableBalance < data.amount) {
       throw new HttpsError("failed-precondition", "Saldo insuficiente para processar pagamento");
     }
+    // Um reembolso entre a aprovação e o pagamento pode ter gerado dívida.
+    if ((wallet.debtBalance ?? 0) > 0) {
+      throw new HttpsError("failed-precondition", `Criador com dívida de R$ ${Number(wallet.debtBalance).toFixed(2)} — não pague este saque`);
+    }
 
     userId = data.userId;
     amount = data.amount;

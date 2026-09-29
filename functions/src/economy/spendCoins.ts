@@ -15,7 +15,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { COSTS, PREMIUM_ONLY_FEATURES } from '../config/economy';
 import { COSMETICS_CATALOG, COST_KEY_TO_COSMETIC } from '../config/cosmeticsCatalog';
 import { BADGES_CATALOG, COST_KEY_TO_BADGE }       from '../config/badgesCatalog';
-import { auditLogFinanceiro, AuditTipo } from '../utils/auditLogFinanceiro';
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 
 export type SpendableFeature = keyof typeof COSTS;
 
@@ -214,11 +214,12 @@ export const spendCoins = onCall(
           });
         }
 
-        const auditTipo = `SPEND_${feature}` as AuditTipo;
+        // Um tipo para todos os cosméticos — o item vai no metadata.
+        // Antes era SPEND_<item>, um tipo por moldura e por badge.
 
         auditLogFinanceiro({
           uid,
-          tipo:                    auditTipo,
+          tipo:                    'SPEND_COSMETICO',
           coinTipo:                isPremiumOnly ? 'premium' : 'mixed',
           valor:                   -cost,
           origem:                  feature,
@@ -227,6 +228,8 @@ export const spendCoins = onCall(
           saldoPosteriorGratuito:  newGratuitos,
           saldoPosteriorPremium:   newPremium,
           metadata: {
+            feature,
+            cosmeticId: cosmetic?.id ?? null,
             spentFromGratuitos,
             spentFromPremium,
             idempotencyKey,

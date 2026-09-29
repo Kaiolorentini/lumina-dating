@@ -14,6 +14,18 @@ import app from '../../core/firebase';
 import { UserProfile } from '../../shared/types';
 import { useSuperAdminGuard } from '../../hooks/useAdminGuard';
 import ScreenContainer from '../../components/ScreenContainer';
+import { Image } from 'react-native';
+import {
+  galleryPhotos, adminRemoveGalleryPhoto, GallerySlot,
+} from '../../modules/profile/services/photoService';
+
+const REMOVAL_REASONS = [
+  'Nudez ou conteúdo sexual',
+  'Foto de outra pessoa',
+  'Menor de idade na foto',
+  'Dados pessoais expostos',
+  'Contato externo ou propaganda',
+];
 
 type RouteProps = RouteProp<RootStackParamList, 'AdminUserDetail'>;
 
@@ -32,6 +44,23 @@ export default function AdminUserDetailScreen() {
   // ✅ Modal de bloqueio — funciona no Android e iOS (Alert.prompt é iOS-only)
   const [blockModal, setBlockModal] = useState(false);
   const [blockReason, setBlockReason] = useState('');
+  const [removeSlot, setRemoveSlot]   = useState<GallerySlot | null>(null);
+
+  async function removePhoto(reason: string) {
+    if (!removeSlot) return;
+    const slot = removeSlot;
+    setRemoveSlot(null);
+    setProcessing(true);
+    try {
+      await adminRemoveGalleryPhoto(userId, slot, reason);
+      Alert.alert('✅ Foto removida', 'O usuário foi avisado com o motivo.');
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Erro', e.message);
+    } finally {
+      setProcessing(false);
+    }
+  }
 
   useEffect(() => {
     loadData();
@@ -157,6 +186,24 @@ export default function AdminUserDetailScreen() {
           )}
         </View>
 
+        {galleryPhotos(profile).length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>📷 Galeria ({galleryPhotos(profile).length})</Text>
+            <View style={styles.galleryRow}>
+              {galleryPhotos(profile).map(p => (
+                <View key={p.slot} style={styles.galleryItem}>
+                  <Image source={{ uri: p.uri }} style={styles.galleryImage} />
+                  {isSuperAdmin && (
+                    <TouchableOpacity style={styles.galleryRemove} onPress={() => setRemoveSlot(p.slot)}>
+                      <Text style={styles.galleryRemoveText}>Remover</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {screenshots.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>📸 Eventos de Screenshot ({screenshots.length})</Text>
@@ -185,6 +232,24 @@ export default function AdminUserDetailScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Motivo da remoção de foto — o usuário recebe esse texto. */}
+      <Modal visible={removeSlot !== null} transparent animationType="fade" onRequestClose={() => setRemoveSlot(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Remover foto da galeria</Text>
+            <Text style={styles.modalSubtitle}>Escolha o motivo. O usuário é avisado.</Text>
+            {REMOVAL_REASONS.map(reason => (
+              <TouchableOpacity key={reason} style={styles.reasonBtn} onPress={() => removePhoto(reason)}>
+                <Text style={styles.reasonText}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setRemoveSlot(null)}>
+              <Text style={styles.modalCancelBtnText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* ✅ Modal de bloqueio — Android + iOS */}
       <Modal
@@ -243,6 +308,13 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', marginBottom: spacing.sm },
   field: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.xs },
   value: { color: colors.white },
+  galleryRow:   { flexDirection: 'row', gap: spacing.sm },
+  galleryItem:  { flex: 1, gap: spacing.xs },
+  galleryImage: { width: '100%', aspectRatio: 4 / 5, borderRadius: borderRadius.sm, backgroundColor: colors.background },
+  galleryRemove: { borderWidth: 1, borderColor: colors.error, borderRadius: borderRadius.sm, paddingVertical: 4, alignItems: 'center' },
+  galleryRemoveText: { color: colors.error, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
+  reasonBtn: { padding: spacing.md, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.grayDark },
+  reasonText: { color: colors.white, fontSize: fonts.sizes.sm },
   blockBtn: {
     backgroundColor: colors.error + '22', borderRadius: borderRadius.md, borderWidth: 1,
     borderColor: colors.error, padding: spacing.md, alignItems: 'center',

@@ -18,6 +18,8 @@ export type PixType = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'chave';
 export interface CreatorWallet {
   userId: string;
   availableBalance: number;
+  /** Reembolso/estorno maior que o saldo. Bloqueia saques até novas vendas cobrirem. */
+  debtBalance?: number;
   pendingBalance: number;
   totalEarned: number;
   totalWithdrawn: number;

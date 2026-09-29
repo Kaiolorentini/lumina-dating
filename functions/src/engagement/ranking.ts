@@ -1,154 +1,51 @@
 // ============================================
-// LUMINA — RANKING SEMANAL v5.2
+// LUMINA — RANKING SEMANAL v6.0
 // functions/src/engagement/ranking.ts
 //
-// SPRINT 1C: registerRankingXP agora dispara
-// LegacyShadowOrchestrator com legacyResult real.
-// Resposta ao cliente 100% inalterada.
-// freezeRanking, rewardRanking, resetRanking, getRanking: INALTERADOS.
+// v6.0 (27/09):
+// - registerRankingXP REMOVIDA: callable em que o APP escolhia
+//   quanto XP de ranking recebia (sem teto, aceitava negativo).
+//   Bastava mandar 1.000.000 para ser 1º toda semana: 50
+//   fragmentos, badge de Campeão e conquista. Nenhuma tela a
+//   chamava — quem alimenta o ranking é o Engine, pelo
+//   RankingRepository, no servidor.
+// - Rotinas no horário de BRASÍLIA. Sem timeZone rodavam em UTC:
+//   congelavam o ranking às 20h50 de domingo (3h antes do fim da
+//   semana), premiavam com uma semana de atraso e zeravam a
+//   semana em curso. Os ids de semana (weekIdBr) já eram BRT;
+//   só o horário de disparo muda — nenhuma chave muda.
+// - Trava contra pagamento em dobro CONSERTADA: gravava
+//   `rewardedWeeks.<semana>` como campo literal com ponto no nome
+//   (set com merge não aninha), e a checagem nunca achava nada.
+// - Notificação do prêmio com tipo 'ranking_reward' (abre o
+//   Ranking); melhor posição guardada de verdade; reset paginado.
 // ============================================
-
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import * as functions  from 'firebase-functions/v2/https';
 import * as scheduler  from 'firebase-functions/v2/scheduler';
 import * as admin      from 'firebase-admin';
 import { FieldValue }  from 'firebase-admin/firestore';
-import { LegacyShadowOrchestrator } from '../gamification/compatibility/LegacyShadowOrchestrator';
-import { CompareParams } from '../gamification/compatibility/ICompatibilityAdapter';
 import { weekIdBr, lastWeekIdBr, seasonIdBr } from '../utils/dateBr';
 
 const db = admin.firestore();
 
-const SOCIAL_RANKING_CATEGORIES = ['SOCIAL', 'MISSION', 'CHAT'];
+const TIME_ZONE = 'America/Sao_Paulo';
 
 const RANK_REWARDS: Record<number, number> = {
   1: 50, 2: 40, 3: 30, 4: 20, 5: 20, 6: 20, 7: 20, 8: 20, 9: 20, 10: 20,
 };
 
-const LEAGUES = [
-  { name: 'Galáxia',     minXP: 5000 },
-  { name: 'Constelação', minXP: 2000 },
-  { name: 'Ouro',        minXP: 1000 },
-  { name: 'Prata',       minXP: 500  },
-  { name: 'Bronze',      minXP: 0    },
-];
+/** Tamanho do lote do reset — o limite de um batch é 500 escritas. */
+const RESET_BATCH_SIZE = 400;
 
-function getLeague(xp: number): string {
-  for (const league of LEAGUES) {
-    if (xp >= league.minXP) return league.name;
-  }
-  return 'Bronze';
-}
-
-// getCurrentWeekId e getCurrentSeasonId locais REMOVIDOS: o
-// primeiro usava getDate() (dia do MÊS) e gerava W01..W05
-// repetindo todo mês; o segundo dava T0 em janeiro, porque
-// getMonth() é zero-based. Fonte única agora em utils/dateBr.
-const getCurrentWeekId   = weekIdBr;
-const getCurrentSeasonId = seasonIdBr;
-
-function newEventId(): string {
-  return `ranking_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-}
-
-// ── 1. Registrar XP no ranking — SPRINT 1C: dispara Shadow ──
-export const registerRankingXP = functions.onCall(
-  { region: 'us-central1' },
-  async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
-
-    const { xpAmount, category } = request.data as { xpAmount: number; category: string };
-
-    const weekId   = getCurrentWeekId();
-    const seasonId = getCurrentSeasonId();
-    const rankRef  = db.collection('weeklyRanking').doc(`${uid}_${weekId}`);
-    const userRef  = db.collection('users').doc(uid);
-
-    interface PreState { currentSocialXP: number; currentWeeklyXP: number; frozen: boolean }
-    let legacyResult: { socialXP: number; weeklyXP: number; league: string } | null = null;
-    const preStateForShadow: PreState = { currentSocialXP: 0, currentWeeklyXP: 0, frozen: false };
-
-    await db.runTransaction(async (t) => {
-      const [rankDoc, userDoc] = await Promise.all([t.get(rankRef), t.get(userRef)]);
-
-      const rankData = rankDoc.data() ?? {};
-      const userData = userDoc.data() ?? {};
-
-      Object.assign(preStateForShadow, {
-        currentSocialXP: rankData.socialXP ?? 0,
-        currentWeeklyXP: rankData.weeklyXP ?? 0,
-        frozen:          rankData.frozen === true,
-      });
-
-      if (rankData.frozen) return;
-
-      const isSocialCategory = SOCIAL_RANKING_CATEGORIES.includes(category);
-
-      const updates: Record<string, unknown> = {
-        uid, weekId, seasonId,
-        weeklyXP:    FieldValue.increment(xpAmount),
-        lifetimeXP:  FieldValue.increment(xpAmount),
-        updatedAt:   FieldValue.serverTimestamp(),
-        league:      getLeague((rankData.socialXP ?? 0) + (isSocialCategory ? xpAmount : 0)),
-        displayName: userData.name     ?? 'Usuário',
-        photoURL:    userData.photoURL ?? '',
-      };
-
-      if (isSocialCategory) {
-        updates.socialXP = FieldValue.increment(xpAmount);
-        if (!rankData.firstXPAt) updates.firstXPAt = FieldValue.serverTimestamp();
-      }
-
-      t.set(rankRef, updates, { merge: true });
-
-      t.set(userRef, {
-        ranking: {
-          weeklyXP:   FieldValue.increment(xpAmount),
-          seasonXP:   FieldValue.increment(xpAmount),
-          lifetimeXP: FieldValue.increment(xpAmount),
-        },
-      }, { merge: true });
-
-      // Resultado real do legado — calculado dentro da mesma transaction
-      const newSocialXP = (rankData.socialXP ?? 0) + (isSocialCategory ? xpAmount : 0);
-      legacyResult = {
-        socialXP: newSocialXP,
-        weeklyXP: (rankData.weeklyXP ?? 0) + xpAmount,
-        league:   getLeague(newSocialXP),
-      };
-    });
-
-    // SPRINT 1C: dispara comparação Shadow — fire-and-forget, nunca afeta a resposta
-    if (legacyResult !== null) {
-      const eventId = newEventId();
-      const params: CompareParams = {
-        uid, eventId, legacyActionKey: category,
-        legacyResult: legacyResult as unknown as Record<string, unknown>,
-        calculatorInput: {
-          category, xpAmount,
-          currentSocialXP: preStateForShadow.currentSocialXP,
-          currentWeeklyXP: preStateForShadow.currentWeeklyXP,
-          frozen:          preStateForShadow.frozen,
-        },
-      };
-
-      LegacyShadowOrchestrator
-        .dispatchComparisons(category, { RANKING: params })
-        .catch(() => { /* nunca afeta a resposta ao cliente */ });
-    }
-
-    return { success: true };
-  }
-);
-
-// ── 2. Buscar ranking — INALTERADA ──
+// ── 1. Buscar ranking ──
 export const getRanking = functions.onCall(
   { region: 'us-central1' },
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
 
-    const weekId   = getCurrentWeekId();
+    const weekId   = weekIdBr();
     const cacheRef = db.collection('rankingCache').doc(weekId);
     const cacheDoc = await cacheRef.get();
 
@@ -156,8 +53,7 @@ export const getRanking = functions.onCall(
       const cacheData = cacheDoc.data()!;
       const cacheAge  = Date.now() - (cacheData.updatedAt?.toMillis() ?? 0);
       if (cacheAge < 5 * 60 * 1000) {
-        const userRankRef = db.collection('weeklyRanking').doc(`${uid}_${weekId}`);
-        const userRankDoc = await userRankRef.get();
+        const userRankDoc = await db.collection('weeklyRanking').doc(`${uid}_${weekId}`).get();
         const userXP      = userRankDoc.data()?.socialXP ?? 0;
 
         return {
@@ -207,11 +103,11 @@ export const getRanking = functions.onCall(
   }
 );
 
-// ── STEP 1: Congelar ranking — INALTERADA ──
+// ── STEP 1: Congelar ranking — domingo 23:50 (BRT) ──
 export const freezeRanking = scheduler.onSchedule(
-  { schedule: 'every sunday 23:50', region: 'us-central1' },
+  { schedule: '50 23 * * 0', timeZone: TIME_ZONE, region: 'us-central1' },
   async () => {
-    const weekId = getCurrentWeekId();
+    const weekId = weekIdBr();
     console.log(`[freezeRanking] Congelando ranking ${weekId}`);
 
     const snap = await db.collection('weeklyRanking')
@@ -224,9 +120,9 @@ export const freezeRanking = scheduler.onSchedule(
 
     const batch = db.batch();
 
-    const snapshotData = {
+    batch.set(db.collection('rankingSnapshots').doc(weekId), {
       weekId,
-      seasonId: getCurrentSeasonId(),
+      seasonId: seasonIdBr(),
       frozenAt: FieldValue.serverTimestamp(),
       top10: snap.docs.slice(0, 10).map((doc, i) => ({
         position:    i + 1,
@@ -235,9 +131,7 @@ export const freezeRanking = scheduler.onSchedule(
         socialXP:    doc.data().socialXP ?? 0,
         league:      doc.data().league   ?? 'Bronze',
       })),
-    };
-
-    batch.set(db.collection('rankingSnapshots').doc(weekId), snapshotData);
+    });
 
     for (const doc of snap.docs) {
       batch.update(doc.ref, { frozen: true });
@@ -248,18 +142,13 @@ export const freezeRanking = scheduler.onSchedule(
   }
 );
 
-// ── STEP 2: Recompensar top 10 — INALTERADA ──
+// ── STEP 2: Recompensar top 10 — segunda 00:05 (BRT) ──
 export const rewardRanking = scheduler.onSchedule(
-  { schedule: 'every monday 00:05', region: 'us-central1' },
+  { schedule: '5 0 * * 1', timeZone: TIME_ZONE, region: 'us-central1' },
   async () => {
-    // Rodando segunda 00:05, a semana a premiar é a ANTERIOR.
-    // O código antigo subtraía UM dia e recalculava com a
-    // fórmula quebrada: o id não batia com o que o
-    // freezeRanking gravou no domingo às 23:50, e a function
-    // saía com "Snapshot não encontrado". O top 10 NUNCA foi
-    // recompensado.
+    // Segunda 00:05 BRT: a semana a premiar é a que acabou — a mesma
+    // que o freezeRanking congelou no domingo às 23:50.
     const weekId = lastWeekIdBr();
-
     console.log(`[rewardRanking] Recompensando semana ${weekId}`);
 
     const snapshotDoc = await db.collection('rankingSnapshots').doc(weekId).get();
@@ -268,12 +157,13 @@ export const rewardRanking = scheduler.onSchedule(
       return;
     }
 
-    const snapshot = snapshotDoc.data()!;
-    const top10    = snapshot.top10 ?? [];
+    const top10 = (snapshotDoc.data()!.top10 ?? []) as {
+      position: number; uid: string; socialXP: number; league: string;
+    }[];
 
     for (const entry of top10) {
-      const position = entry.position as number;
-      const reward    = RANK_REWARDS[position] ?? 0;
+      const position = entry.position;
+      const reward   = RANK_REWARDS[position] ?? 0;
       if (reward <= 0) continue;
 
       await db.runTransaction(async (t) => {
@@ -281,9 +171,11 @@ export const rewardRanking = scheduler.onSchedule(
         const walletRef = db.collection('wallets').doc(entry.uid);
 
         const [userDoc, walletDoc] = await Promise.all([t.get(userRef), t.get(walletRef)]);
+        const ranking = userDoc.data()?.ranking ?? {};
 
-        const alreadyRewarded = userDoc.data()?.ranking?.rewardedWeeks?.[weekId];
-        if (alreadyRewarded) return;
+        // Trava: a semana já paga não paga de novo, mesmo se o
+        // agendador repetir a execução.
+        if (ranking.rewardedWeeks?.[weekId] === true) return;
 
         const riskScore = userDoc.data()?.xp?.xpRiskScore ?? 0;
         if (riskScore >= 50) {
@@ -294,33 +186,40 @@ export const rewardRanking = scheduler.onSchedule(
           return;
         }
 
-        const wallet    = walletDoc.data() ?? {};
-        const prevFrags = wallet.fragments ?? 0;
+        const prevFrags = walletDoc.data()?.fragments ?? 0;
 
-        t.set(walletRef, { fragments: FieldValue.increment(reward), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        t.set(walletRef, {
+          fragments: FieldValue.increment(reward),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
 
         t.set(db.collection('economyLedger').doc(), {
           uid: entry.uid, tipo: 'RANKING_REWARD', weekId, position,
           fragmentos: reward, saldoAntes: prevFrags, saldoDepois: prevFrags + reward,
           timestamp: FieldValue.serverTimestamp(), imutavel: true,
         });
+        auditLogFinanceiro({
+          uid: entry.uid, tipo: 'FRAG_RANKING', valor: reward, origem: 'rewardRanking',
+          metadata: { weekId, position },
+        }, t);
+
+        const prevBest = typeof ranking.bestPosition === 'number' ? ranking.bestPosition : Infinity;
+
+        // Mapas ANINHADOS: set com merge não interpreta ponto no nome.
+        const rankingUpdate: Record<string, unknown> = {
+          rewardedWeeks: { [weekId]: true },
+          top10Count:    FieldValue.increment(1),
+          bestPosition:  Math.min(prevBest, position),
+        };
 
         if (position === 1) {
-          const badgeExpiry = new Date();
-          badgeExpiry.setDate(badgeExpiry.getDate() + 7);
-          t.set(userRef, {
-            ranking: { weeklyBadge: 'campeao_da_semana', weeklyBadgeExpiry: admin.firestore.Timestamp.fromDate(badgeExpiry) },
-          }, { merge: true });
+          const badgeExpiry = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+          rankingUpdate.weeksWon          = FieldValue.increment(1);
+          rankingUpdate.weeklyBadge       = 'campeao_da_semana';
+          rankingUpdate.weeklyBadgeExpiry = admin.firestore.Timestamp.fromDate(badgeExpiry);
         }
 
-        t.set(userRef, {
-          ranking: {
-            [`rewardedWeeks.${weekId}`]: true,
-            weeksWon:     position === 1 ? FieldValue.increment(1) : FieldValue.increment(0),
-            top10Count:   FieldValue.increment(1),
-            bestPosition: entry.position,
-          },
-        }, { merge: true });
+        t.set(userRef, { ranking: rankingUpdate }, { merge: true });
 
         t.set(db.collection('rankingAnalytics').doc(`${entry.uid}_${weekId}`), {
           uid: entry.uid, week: weekId, rank: position, xp: entry.socialXP,
@@ -328,45 +227,53 @@ export const rewardRanking = scheduler.onSchedule(
         });
 
         t.set(db.collection('notifications').doc(), {
-          userId: entry.uid, type: 'sintonia',
+          userId:  entry.uid,
+          type:    'ranking_reward',
           title:   position === 1 ? '🏆 Campeão da Semana!' : `🎯 Top ${position} do Ranking!`,
           message: `+${reward} Fragmentos de recompensa pela sua posição no ranking semanal.`,
           icon:    position === 1 ? '🏆' : '🎯',
-          read: false, dados: { position, reward, weekId },
+          read:    false,
+          dados:   { position, reward, weekId },
           timestamp: FieldValue.serverTimestamp(),
         });
       });
     }
 
-    console.log(`[rewardRanking] Top 10 recompensados`);
+    console.log('[rewardRanking] Top 10 recompensados');
   }
 );
 
-// ── STEP 3: Resetar ranking — INALTERADA ──
+// ── STEP 3: Resetar ranking — segunda 00:10 (BRT) ──
 export const resetRanking = scheduler.onSchedule(
-  { schedule: 'every monday 00:10', region: 'us-central1' },
+  { schedule: '10 0 * * 1', timeZone: TIME_ZONE, region: 'us-central1' },
   async () => {
-    const weekId = getCurrentWeekId();
+    const weekId = weekIdBr();
     console.log(`[resetRanking] Resetando para nova semana ${weekId}`);
 
-    const snap = await db.collection('users')
-      .where('ranking.weeklyXP', '>', 0)
-      .limit(500)
-      .get();
+    // Paginado: o documento zerado sai do filtro, então cada volta
+    // pega os próximos. Antes parava nos primeiros 500.
+    let total = 0;
+    for (;;) {
+      const snap = await db.collection('users')
+        .where('ranking.weeklyXP', '>', 0)
+        .limit(RESET_BATCH_SIZE)
+        .get();
+      if (snap.empty) break;
 
-    const batch = db.batch();
-    for (const doc of snap.docs) {
-      batch.update(doc.ref, { 'ranking.weeklyXP': 0 });
+      const batch = db.batch();
+      for (const doc of snap.docs) {
+        batch.update(doc.ref, { 'ranking.weeklyXP': 0 });
+      }
+      await batch.commit();
+      total += snap.size;
+
+      if (snap.size < RESET_BATCH_SIZE) break;
     }
-    await batch.commit();
 
-    // O cache da semana que ACABOU também sai: com o id
-    // antigo repetindo todo mês, o cache velho era servido
-    // como se fosse o ranking da semana nova.
-    const previousWeekId = lastWeekIdBr();
-    await db.collection('rankingCache').doc(weekId).delete();
-    await db.collection('rankingCache').doc(previousWeekId).delete().catch(() => {});
+    // Os caches da semana nova e da que acabou saem.
+    await db.collection('rankingCache').doc(weekId).delete().catch(() => {});
+    await db.collection('rankingCache').doc(lastWeekIdBr()).delete().catch(() => {});
 
-    console.log(`[resetRanking] ${snap.size} usuários resetados`);
+    console.log(`[resetRanking] ${total} usuários resetados`);
   }
 );

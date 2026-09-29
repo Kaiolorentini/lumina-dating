@@ -15,7 +15,16 @@ export { onApproveCreator }         from "./creators/onApproveCreator";
 export { onRejectCreator }          from "./creators/onRejectCreator";
 export { onApproveProduct }         from "./products/onApproveProduct";
 export { toggleProductFeatured }    from "./products/toggleProductFeatured";
+export {
+  submitProductChanges, reviewProductChanges, unpublishProduct, getPurchasedContent,
+} from "./products/productChanges";
 export { getCurationDashboard }     from "./admin/getCurationDashboard";
+
+export { getAdminDashboard }        from "./admin/getAdminDashboard";
+export {
+  createSupportTicket, replySupportTicket, resolveSupportTicket,
+  markSupportTicketRead, getSupportAttachmentUrl,
+} from "./support/supportTickets";
 export { onRejectProduct }          from "./products/onRejectProduct";
 export { releaseCreatorBalance }    from "./wallet/releaseCreatorBalance";
 export { createFreeProductPurchase } from "./payments/createFreeProductPurchase";
@@ -32,6 +41,8 @@ export { banUserAfterScreenshot }   from "./users/banUserAfterScreenshot";
 export { onApproveWithdrawal }      from "./wallet/onApproveWithdrawal";
 export { onRejectWithdrawal }       from "./wallet/onRejectWithdrawal";
 export { onMarkWithdrawalPaid }     from "./wallet/onMarkWithdrawalPaid";
+export { requestWithdrawal }        from "./wallet/requestWithdrawal";
+export { getWithdrawalReview }      from "./wallet/getWithdrawalReview";
 export { blockUser }                from "./users/blockUser";
 export { unblockUser }              from "./users/unblockUser";
 // Ban temporário de marketplace (fraudes): restauração
@@ -43,6 +54,9 @@ export { listBlockedUsers }         from "./users/listBlockedUsers";
 // ONBOARDING — TERMOS E VERIFICAÇÃO DE IDADE
 // ============================================
 export { acceptAppTerms }           from "./users/acceptAppTerms";
+export {
+  setGalleryPhoto, removeGalleryPhoto, adminRemoveGalleryPhoto,
+} from "./users/profileGallery";
 
 // ============================================
 // PUSH ENTRE USUÁRIOS
@@ -60,6 +74,7 @@ export { expireMarketplaceBans }    from "./users/expireMarketplaceBans";
 // ============================================
 export { createAsaasPayment }       from "./payments/createAsaasPayment";
 export { approveRefund }            from "./payments/approveRefund";
+export { markRefundPaid }           from "./payments/markRefundPaid";
 export { verifyAsaasWallet }        from "./payments/verifyAsaasWallet";
 export { onAsaasWebhook }           from "./payments/onAsaasWebhook";
 export { createCoinsPurchase } from "./payments/createCoinsPurchase";
@@ -84,13 +99,18 @@ export { initWallet }               from "./economy/initWallet";
 export { spendCoins }               from "./economy/spendCoins";
 
 // Fragmentos (moeda secundária — v5.1)
-export { earnFragments }            from "./economy/earnFragments";
+// earnFragments REMOVIDA (27/09): callable em que o app escolhia a
+// quantidade de fragmentos e a chave de idempotência — crédito sem
+// teto. Missões pagam pelo MissionService; o Cofre, pelo VaultService.
+
 export { convertFragments }         from "./economy/convertFragments";
 
 
 
-// Segurança
-export { updateTrustScore }         from "./security/trustScore";
+// updateTrustScore REMOVIDA (27/09): calculava uma nota que nenhuma
+// regra lia — antifraude desligado. Dois critérios liam campos
+// errados (sintoniaCount e streakAtual). Religar com critérios
+// corrigidos quando o antifraude for implementado de fato.
 
 // Ranking
 // weeklyRanking.ts REMOVIDO: era um SEGUNDO sistema de
@@ -146,7 +166,10 @@ export { earnXP, getXPStatus } from './engagement/xp';
 // app e desbloqueava qualquer conquista. Conquistas entram só pelo
 // servidor, via achievementTriggers → onAchievementTrigger.
 export { getAchievementsStatus, repairAchievements } from './engagement/achievements';
-export { registerRankingXP, getRanking, freezeRanking, rewardRanking, resetRanking } from './engagement/ranking';
+// registerRankingXP REMOVIDA (27/09): o app escolhia quanto XP de
+// ranking recebia. O ranking é alimentado pelo Engine
+// (RankingRepository), no servidor.
+export { getRanking, freezeRanking, rewardRanking, resetRanking } from './engagement/ranking';
 // grantPrestigePoints REMOVIDA: era callable e aceitava
 // qualquer marcoId do cliente — dava para pedir ACH_FOUNDER e
 // ganhar 500 pontos sem ser fundador. Agora os marcos são
@@ -162,10 +185,18 @@ export { getPrestigeStatus } from './engagement/prestige';
 export { activateFertilizer, getFertilizerStatus } from './premium/fertilizerService';
 export { activateTurbo, getTurboStatus }            from './premium/turboService';
 export { activateImpulso, getImpulsoStatus }        from './premium/impulsoService';
+export { reportBoostResults }                       from './premium/reportBoostResults';
 export { revealVisitors, getVisitorsStatus }        from './premium/visitorsService';
-export { getWeeklyChallenge, progressWeeklyChallenge, resetWeeklyChallenges } from './premium/weeklyChallengeService';
+// Desafio Semanal REMOVIDO (27/09): nenhuma tela o usava, e o
+// progressWeeklyChallenge deixava o app declarar tipo e quantidade
+// (sem meta definida, uma chamada concluía o desafio e pagava até
+// 320 fragmentos e badges). Se voltar, voltar como as missões:
+// registrado pelo servidor no evento real.
                     
-export { onMessageReply } from './engagement/messageReply';
+// onMessageReply REMOVIDA (27/09): o app informava o alvo e a
+// quantidade de mensagens direto ao Engine. Nenhuma tela chamava.
+// Conversa real agora é observada pelo servidor
+// (onChatMessageCreated) — se o evento de resposta voltar, nasce lá.
 export { onCreateMatch } from './engagement/matchCreated';            
 export { getDashboardSnapshot } from './gamification/dashboard/getDashboardSnapshot';
 
@@ -177,11 +208,16 @@ export { getDashboardSnapshot } from './gamification/dashboard/getDashboardSnaps
 // Engine não concede nada. Ver registerDispatchers.ts.
 import './gamification/registerDispatchers';
 
-export { processGameEvent } from './gamification/GamificationEngine';
+// processGameEvent REMOVIDA do export (27/09): callable que aceitava
+// qualquer evento do app (visita, curtida, sintonia, missão) direto
+// no Engine, conferindo só o uid. O servidor chama o Engine por
+// dentro (GamificationIntegrationService) — a porta pública não
+// tinha uso legítimo. O arquivo fica para referência do wrapper.
 export { onProfileLike } from './engagement/profileLike';
 export { clearSintoniaReveal } from './engagement/clearSintoniaReveal';
 export { equipTitle, getTitlesStatus } from './engagement/titles';
 export { dismissProfile } from './engagement/dismissProfile';
+export { secondChance }   from './engagement/secondChance';
 export { clearPrestigeReveal } from './engagement/clearPrestigeReveal';
 export { getPublicAchievements } from './users/getPublicAchievements';
 export { gamificationHealthCheck } from './gamification/health/healthCheck';
@@ -190,7 +226,9 @@ export { onAchievementTrigger } from "./triggers/onAchievementTrigger";
 export {
   activateDestaqueRegional,
   getDestaqueRegionalStatus,
+  joinDestaqueWaitlist,
 } from './premium/destaqueRegionalService';
+export { notifyDestaqueOpened } from './premium/notifyDestaqueOpened';
 export { registerProfileVisit } from './engagement/registerProfileVisit';
 // ============================================
 // Functions que estavam em produção sem export aqui.
@@ -203,8 +241,10 @@ export { getModeratorFileUrl }     from './admin/getModeratorFileUrl';
 export { createCoupon }            from './marketplace/coupons/createCoupon';
 export { updateCoupon }            from './marketplace/coupons/updateCoupon';
 export { toggleCoupon }            from './marketplace/coupons/toggleCoupon';
-export { saveCreatorPixKey }       from './payments/saveCreatorPixKey';
+export { saveCreatorPixKey, getMyPixKeyStatus } from './payments/saveCreatorPixKey';
 export { onWithdrawalCreated }     from './triggers/onWithdrawalCreated';
 export { onCreatorRequestCreated } from './triggers/onCreatorRequestCreated';
 export { clearLevelReveal } from './engagement/clearLevelReveal';
 export { getGalaxiaPlusStatus } from './payments/getGalaxiaPlusStatus';
+// Migração única (28/09) — APAGAR depois de executada.
+export { migrateNotificationTypes } from './maintenance/migrateNotificationTypes';

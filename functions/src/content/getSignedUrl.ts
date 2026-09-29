@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { createAuditLog } from "../utils/auditLog";
+import { ProductFileEntry, isVisibleToBuyer } from "../products/productFiles";
 
 const SIGNED_URL_EXPIRY_MS = 5 * 60 * 1000;
 const RATE_LIMIT_PER_HOUR = 30;
@@ -134,7 +135,9 @@ export const getSignedUrl = onCall(async (request) => {
     return denyAccess(`purchase_product_mismatch`, "permission-denied", "Acesso negado");
   }
 
-  // Produto aprovado
+  // Produto — o acesso é da COMPRA. Produto tirado da venda
+  // (isDeleted) continua acessível a quem comprou: decisão de
+  // produto de 28/09. Antes, retirar da venda cortava o acesso pago.
   const productSnap = await db.collection("products").doc(productId).get();
 
   if (!productSnap.exists) {
@@ -143,24 +146,15 @@ export const getSignedUrl = onCall(async (request) => {
 
   const product = productSnap.data()!;
 
-  if (product.status !== "approved") {
-    return denyAccess(
-      `product_status_invalid:${product.status}`,
-      "failed-precondition",
-      "Produto indisponível"
-    );
-  }
-  if (product.isDeleted === true) {
-    return denyAccess("product_deleted", "not-found", "Produto não encontrado");
-  }
+  // StoragePath — camada 2: o arquivo pertence ao produto E está
+  // visível para ESTA compra (nem em análise, nem removido antes dela).
+  const files: ProductFileEntry[] = product.files ?? [];
+  const productFile = files.find((f) => f.storagePath === storagePath);
+  const purchasedAt = (purchase.createdAt as admin.firestore.Timestamp | undefined)?.toDate() ?? null;
 
-  // StoragePath — camada 2: ownership do arquivo
-  const files: Array<{ storagePath: string }> = product.files ?? [];
-  const fileExists = files.some((f) => f.storagePath === storagePath);
-
-  if (!fileExists) {
+  if (!productFile || !isVisibleToBuyer(productFile, purchasedAt)) {
     return denyAccess(
-      `file_not_in_product:${storagePath}`,
+      `file_not_visible:${storagePath}`,
       "permission-denied",
       "Acesso negado"
     );

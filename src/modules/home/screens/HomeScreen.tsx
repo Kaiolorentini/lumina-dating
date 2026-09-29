@@ -27,6 +27,7 @@ import VisitedProfileCard     from '../../../components/VisitedProfileCard';
 import VisitsBanner           from '../../../components/VisitsBanner';
 import DestinyCardBanner      from '../../../components/DestinyCardBanner';
 import MissionsBanner         from '../../../components/MissionsBanner';
+import ActiveBoostChip        from '../../premium/components/ActiveBoostChip';
 import { useHomeData, HomeTab } from '../hooks/useHomeData';
 import { useMissionsSummary } from '../../engagement/hooks/useMissionsSummary';
 import { useAuth }            from '../../../context/AuthContext';
@@ -150,7 +151,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [activeTab, setActiveTab] = useState<HomeTab>('perfis');
 
   const {
-    realProfiles, mostVisited, visitCounts,
+    realProfiles, mostVisited, promotedVisited, visitCounts,
     loadingVisited, visitasHoje, totalVisitas, unreadCount,
     coins, loadMostVisited,
     loadingProfiles, loadingMore, hasMoreProfiles,
@@ -217,6 +218,9 @@ export default function HomeScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Só enquanto o impulso de quem comprou estiver ativo. */}
+      <ActiveBoostChip onPress={() => navigation.navigate('Boosts')} />
 
       <ScrollView
         ref={scrollRef}
@@ -301,7 +305,7 @@ export default function HomeScreen({ navigation }: Props) {
             <View style={styles.loadingContainer}>
               <Text style={styles.loadingText}>Carregando perfis em alta...</Text>
             </View>
-          ) : mostVisited.length === 0 ? (
+          ) : mostVisited.length === 0 && promotedVisited.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>🔥</Text>
               <Text style={styles.emptyTitle}>Nenhum perfil ainda</Text>
@@ -309,6 +313,24 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
           ) : (
             <View>
+              {/* Posição PAGA, separada do ranking: a medalha fica só
+                  com quem teve mais visitas de fato. */}
+              {promotedVisited.length > 0 && (
+                <>
+                  <Text style={styles.promotedTitle}>⚡ Impulsionados agora</Text>
+                  <View style={styles.grid}>
+                    {promotedVisited.map(profile => (
+                      <ProfileCard
+                        key={`turbo_${profile.id}`}
+                        data={profile}
+                        onPress={() => handleCardPress(profile)}
+                        viewerUid={user?.uid}
+                      />
+                    ))}
+                  </View>
+                </>
+              )}
+
               <View style={styles.mostVisitedBanner}>
                 <Text style={styles.mostVisitedBannerText}>Perfis mais visitados agora</Text>
               </View>
@@ -437,6 +459,7 @@ const styles = StyleSheet.create({
   tabLabel:     { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   tabLabelActive: { color: colors.gold },
   grid:         { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
+  promotedTitle:         { color: '#F0D060', fontSize: fonts.sizes.sm, fontWeight: 'bold', letterSpacing: 0.5, marginHorizontal: spacing.lg, marginTop: spacing.md },
   mostVisitedBanner:     { marginHorizontal: spacing.lg, marginTop: spacing.md, marginBottom: spacing.sm, backgroundColor: colors.gold + '22', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.gold + '44' },
   mostVisitedBannerText: { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', textAlign: 'center', letterSpacing: 1 },
   loadingContainer: { paddingTop: 80, alignItems: 'center', gap: spacing.md },

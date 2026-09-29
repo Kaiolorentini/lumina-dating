@@ -30,21 +30,23 @@ import {
   DocumentSnapshot,
   QueryConstraint,
   documentId,
+  Timestamp,
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
 import {
   ref,
   uploadBytesResumable,
   getDownloadURL,
-  deleteObject,
-  listAll,
 } from 'firebase/storage';
-import { db, storage } from '../../core/firebase';
+import app, { db, storage } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
 import {
   Product,
   ProductStatus,
   ProductCategory,
   ProductFileType,
+  ProductFile,
 } from '../../shared/types/marketplace';
 import { createAuditLog } from './auditService';
 // notifySuperAdmins do cliente REMOVIDO: ele lia a lista de
@@ -175,7 +177,9 @@ export async function uploadProductCover(
   onProgress?: (p: UploadProgress) => void,
 ): Promise<UploadHandle> {
   const ext = getExtension(uri);
-  const storagePath = `marketplace/products/${productId}/cover/cover.${ext}`;
+  // Nome único: as regras do Storage só permitem CRIAR — sobrescrever
+  // trocaria a capa aprovada sem moderação.
+  const storagePath = `marketplace/products/${productId}/cover/cover_${Date.now()}.${ext}`;
   const blob = await uriToBlob(uri);
   return createUploadHandle(storagePath, blob, true, onProgress);
 }
@@ -213,27 +217,19 @@ export async function uploadProductFile(
   fileName: string,
   onProgress?: (p: UploadProgress) => void,
 ): Promise<UploadHandle> {
-  const storagePath = `marketplace/products/${productId}/files/${fileName}`;
+  // Nome único pelo mesmo motivo da capa: reenviar "foto.jpg" trocaria
+  // o arquivo aprovado que os compradores já têm.
+  const safeName = fileName.replace(/[^\w.\-]+/g, '_').slice(-80);
+  const storagePath = `marketplace/products/${productId}/files/${Date.now()}_${safeName}`;
   const blob = await uriToBlob(uri);
   return createUploadHandle(storagePath, blob, false, onProgress);
 }
 
 // ============================================
-// STORAGE CLEANUP
+// A limpeza de Storage saiu do app (28/09): apagar arquivos de um
+// produto vendido tirava de quem comprou o que foi pago. Quem decide
+// o que pode ser apagado é o servidor (unpublishProduct).
 // ============================================
-
-async function deleteProductStorage(productId: string): Promise<void> {
-  const folders = ['cover', 'previews', 'previewFiles', 'files'];
-  for (const folder of folders) {
-    try {
-      const folderRef = ref(storage, `marketplace/products/${productId}/${folder}`);
-      const { items } = await listAll(folderRef);
-      await Promise.allSettled(items.map(item => deleteObject(item)));
-    } catch {
-      // Pasta pode não existir — continua
-    }
-  }
-}
 
 // ============================================
 // CRUD
@@ -367,31 +363,9 @@ export async function submitProductForReview(
 
 }
 
-export async function softDeleteProduct(
-  productId: string,
-  ownerId: string,
-): Promise<void> {
-  const productRef = doc(db, MARKETPLACE_COLLECTIONS.PRODUCTS, productId);
-  const snap = await getDoc(productRef);
-
-  if (!snap.exists()) throw new Error('Produto não encontrado');
-  if (snap.data().ownerId !== ownerId) throw new Error('Sem permissão');
-
-  await deleteProductStorage(productId);
-
-  await updateDoc(productRef, {
-    isDeleted: true,
-    updatedAt: serverTimestamp(),
-  });
-
-  // Audit — fire-and-forget
-  createAuditLog({
-    action: 'product_deleted',
-    performedBy: ownerId,
-    targetId: productId,
-    targetType: 'product',
-    metadata: { title: snap.data().title },
-  }).catch(() => {});
+/** Mantido pela assinatura antiga: agora tira da venda pelo servidor. */
+export async function softDeleteProduct(productId: string, _ownerId?: string): Promise<void> {
+  await unpublishProduct(productId);
 }
 
 export async function getProduct(productId: string): Promise<Product | null> {
@@ -528,4 +502,88 @@ export async function getProductsByIds(productIds: string[]): Promise<Map<string
   );
 
   return result;
+}
+
+// ============================================
+// EDIÇÃO E ALTERAÇÕES EM ANÁLISE (28/09)
+// ============================================
+
+/** Arquivo com os campos de moderação gravados pelo servidor. */
+export interface ProductFileWithStatus extends ProductFile {
+  /** 'pending' = esperando o admin. Sem o campo = aprovado. */
+  status?: 'approved' | 'pending';
+  addedAt?: Timestamp;
+  /** Removido pelo criador: só quem comprou antes continua vendo. */
+  removedAt?: Timestamp;
+}
+
+export type ProductWithChanges = Omit<Product, 'files'> & {
+  files?: ProductFileWithStatus[];
+  hasPendingChanges?: boolean;
+  pendingCover?: { storagePath: string; url: string };
+  lastChangesRejection?: { reason: string };
+};
+
+function fns() {
+  return getFunctions(app, 'us-central1');
+}
+
+export async function submitProductChanges(input: {
+  productId: string;
+  description?: string;
+  addFiles?: Array<{ storagePath: string; name: string }>;
+  removeFiles?: string[];
+  newCoverPath?: string;
+}): Promise<{ pendingReview: boolean }> {
+  const result = await httpsCallable<typeof input, { pendingReview: boolean }>(fns(), 'submitProductChanges')(input);
+  return result.data;
+}
+
+/** Tira da venda. Quem comprou mantém o acesso. */
+export async function unpublishProduct(productId: string): Promise<{ keptForBuyers: boolean }> {
+  const result = await httpsCallable<{ productId: string }, { keptForBuyers: boolean }>(
+    fns(), 'unpublishProduct',
+  )({ productId });
+  return result.data;
+}
+
+export interface PurchasedContent {
+  title: string;
+  files: Array<{ storagePath: string; name: string; size: number; mimeType: string; type: string }>;
+}
+
+/** Arquivos que ESTA compra pode ver (sem os em análise e os removidos depois dela). */
+export async function getPurchasedContent(productId: string): Promise<PurchasedContent> {
+  const result = await httpsCallable<{ productId: string }, PurchasedContent>(
+    fns(), 'getPurchasedContent',
+  )({ productId });
+  return result.data;
+}
+
+/**
+ * Produtos das compras do usuário, um get por produto. O get tem regra
+ * própria para quem comprou — funciona com produto tirado da venda, que
+ * a consulta em lote (list) não alcança. O número de leituras é o mesmo.
+ */
+export async function getProductsForPurchases(productIds: string[]): Promise<Map<string, Product>> {
+  const result = new Map<string, Product>();
+  const unique = Array.from(new Set(productIds.filter(Boolean)));
+  const snaps = await Promise.all(
+    unique.map(id => getDoc(doc(db, MARKETPLACE_COLLECTIONS.PRODUCTS, id)).catch(() => null)),
+  );
+  snaps.forEach(snap => {
+    if (snap?.exists()) result.set(snap.id, { id: snap.id, ...snap.data() } as Product);
+  });
+  return result;
+}
+
+/** Fila "Alterações" da moderação. Índice: products (hasPendingChanges, updatedAt DESC). */
+export async function getProductsWithPendingChanges(pageSize = 20): Promise<Product[]> {
+  const snap = await getDocs(query(
+    collection(db, MARKETPLACE_COLLECTIONS.PRODUCTS),
+    where('hasPendingChanges', '==', true),
+    orderBy('updatedAt', 'desc'),
+    limit(pageSize),
+  ));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Product));
 }

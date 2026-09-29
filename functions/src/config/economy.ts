@@ -146,14 +146,10 @@ export const FRAGMENTS = {
   // Limite diário de fragmentos vindos de visitas
   VAULT_VISITS_DAILY_MAX:  20,
 
-  // Conversão: cooldown 24h, máx 5 cristais por conversão
+  // Conversão livre desde 27/09: 100 fragmentos = 1 cristal
+  // gratuito, na quantidade que a pessoa escolher. Sem teto, sem
+  // espera e sem expiração (decisão de produto).
   FRAGMENTS_PER_CRYSTAL:  100,
-  MAX_CRYSTALS_PER_CONVERSION: 5,
-  CONVERSION_COOLDOWN_HOURS:   24,
-
-  // Expiração parcial — anti-acúmulo passivo
-  EXPIRY_DAYS_WITHOUT_CONVERT: 7,   // dias sem converter
-  EXPIRY_PERCENTAGE:           0.10, // 10% expiram
 } as const;
 
 // ------------------------------------------

@@ -49,7 +49,7 @@ import {
 } from 'react-native';
 import { colors, fonts, spacing, borderRadius } from '../theme';
 import { ProfileCardData } from '../shared/types';
-import BoostBadge from './BoostBadge';
+import BoostBadge, { BOOST_BADGE_HEIGHT } from './BoostBadge';
 import { ProfileFrame } from './profile/ProfileFrame';
 import { Badge } from './profile/Badge';
 import { useLike } from '../hooks/useLike';
@@ -236,8 +236,16 @@ function ProfileCard({
         </View>
       )}
 
-      {(data.boostType === 'turbo' || data.boostType === 'destaque') && (
-        <BoostBadge type={data.boostType} />
+      {/* Selo de posição paga — canto INFERIOR esquerdo da foto.
+          No superior esquerdo ele se sobrepunha ao título. Os três
+          tipos: o Impulso não aparecia, e posição paga precisa ser
+          identificada (CDC art. 36). */}
+      {data.boostType && (
+        <BoostBadge
+          type={data.boostType}
+          top={CARD_WIDTH * PHOTO_RATIO - BOOST_BADGE_HEIGHT - spacing.sm}
+          left={spacing.sm}
+        />
       )}
 
       {/* Símbolo do título — canto ESQUERDO, espelhando o selo

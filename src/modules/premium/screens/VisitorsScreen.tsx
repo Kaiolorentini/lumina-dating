@@ -196,6 +196,15 @@ export default function VisitorsScreen() {
           <Text style={styles.stateSub}>
             Complete seu perfil e interaja para aparecer para mais pessoas.
           </Text>
+          <TouchableOpacity
+            style={styles.boostCta}
+            onPress={() => navigation.navigate('Boosts')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Ver impulsos para receber visitas"
+          >
+            <Text style={styles.boostCtaText}>🚀 Apareça no topo com um Impulso ›</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -217,6 +226,17 @@ export default function VisitorsScreen() {
           <Text style={styles.summaryLabel}>NO TOTAL</Text>
         </View>
       </View>
+
+      {/* Vitrine: quem olha as próprias visitas é quem mais quer mais. */}
+      <TouchableOpacity
+        style={styles.boostCtaInline}
+        onPress={() => navigation.navigate('Boosts')}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Ver impulsos para receber mais visitas"
+      >
+        <Text style={styles.boostCtaText}>🚀 Quer mais visitas? Impulsione seu perfil ›</Text>
+      </TouchableOpacity>
 
       {isActive ? (
         <>
@@ -425,5 +445,26 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   balanceHint:  { color: colors.gray, fontSize: fonts.sizes.xs },
+  boostCta: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: '#B57BEE',
+    backgroundColor: '#B57BEE18',
+  },
+  boostCtaInline: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: '#B57BEE66',
+    backgroundColor: '#B57BEE12',
+    alignItems: 'center',
+  },
+  boostCtaText: { color: '#C9A4F2', fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+
   inlineError:  { color: colors.error, fontSize: fonts.sizes.sm, textAlign: 'center' },
 });

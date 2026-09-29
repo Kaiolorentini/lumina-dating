@@ -28,7 +28,9 @@ import {
   PROFILE_PAGE_SIZE,
   RealProfile,
 } from '../../../services/usersService';
-import { getMostVisitedProfileCards } from '../../../services/mostVisitedService';
+import {
+  getMostVisitedProfileCards, getTurboProfileCards,
+} from '../../../services/mostVisitedService';
 import { getMostVisitedProfiles }     from '../../../services/visitsService';
 import { ProfileCardData, UserProfile } from '../../../shared/types';
 
@@ -37,6 +39,8 @@ export type HomeTab = 'perfis' | 'visitados' | 'conversas';
 interface UseHomeDataReturn {
   realProfiles:    ProfileCardData[];
   mostVisited:     ProfileCardData[];
+  /** Turbo ativo, fora do ranking orgânico — seção própria no Em Alta. */
+  promotedVisited: ProfileCardData[];
   visitCounts:     Record<string, number>;
   userProfile:     UserProfile | null;
   loadingProfiles: boolean;
@@ -81,6 +85,7 @@ export function useHomeData(): UseHomeDataReturn {
   const [userProfile,     setUserProfile]     = useState<UserProfile | null>(null);
   const [realProfiles,    setRealProfiles]    = useState<ProfileCardData[]>([]);
   const [mostVisited,     setMostVisited]     = useState<ProfileCardData[]>([]);
+  const [promotedVisited, setPromotedVisited] = useState<ProfileCardData[]>([]);
   const [visitCounts,     setVisitCounts]     = useState<Record<string, number>>({});
   const [loadingVisited,  setLoadingVisited]  = useState(false);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
@@ -200,8 +205,15 @@ export function useHomeData(): UseHomeDataReturn {
 
     setLoadingVisited(true);
     try {
-      const cards  = await getMostVisitedProfileCards(profile, 20);
+      const [cards, turbo] = await Promise.all([
+        getMostVisitedProfileCards(profile, 20),
+        getTurboProfileCards(profile, 4),
+      ]);
       setMostVisited(cards);
+      // Quem já está no ranking orgânico fica lá, com o selo; a
+      // seção paga mostra só os que não entraram por visitas.
+      const organic = new Set(cards.map(c => c.id));
+      setPromotedVisited(turbo.filter(t => !organic.has(t.id)));
 
       const counts = await getMostVisitedProfiles(20);
       const countsMap: Record<string, number> = {};
@@ -217,7 +229,7 @@ export function useHomeData(): UseHomeDataReturn {
   const totalCoins = (wallet?.coinsGratuitos ?? 0) + (wallet?.coinsPremium ?? 0);
 
   return {
-    realProfiles, mostVisited, visitCounts, userProfile,
+    realProfiles, mostVisited, promotedVisited, visitCounts, userProfile,
     loadingProfiles, loadingMore, hasMoreProfiles, errorProfiles,
     loadingVisited, visitasHoje, totalVisitas, unreadCount,
     coins: totalCoins,

@@ -21,6 +21,7 @@ import {
 import { colors, fonts, spacing, borderRadius } from '../theme';
 import { ProfileCardData } from '../shared/types';
 import { ProfileFrame } from './profile/ProfileFrame';
+import BoostBadge, { BOOST_BADGE_HEIGHT } from './BoostBadge';
 import { Badge } from './profile/Badge';
 import {
   frameAppearanceById, badgeAppearanceById, badgeMeaningById,
@@ -80,6 +81,16 @@ export default function VisitedProfileCard({ data, visitCount, rank, onPress }: 
         />
       ) : (
         <Image source={{ uri: data.photoURL }} style={styles.photo} />
+      )}
+
+
+      {/* Selo de posição paga — mesmo lugar da grade da Home. */}
+      {data.boostType && (
+        <BoostBadge
+          type={data.boostType}
+          top={CARD_WIDTH * PHOTO_RATIO - BOOST_BADGE_HEIGHT - spacing.sm}
+          left={spacing.sm}
+        />
       )}
 
       {/* Badge de ranking */}

@@ -47,6 +47,8 @@ import { registrarVisita } from '../../services/visitsService';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable }           from 'firebase/functions';
 import { db }                                    from '../../services/firebase';
+import { galleryPhotos } from '../../modules/profile/services/photoService';
+import GalleryViewer from '../../modules/profile/components/GalleryViewer';
 
 const { width, height } = Dimensions.get('window');
 const functions         = getFunctions();
@@ -98,6 +100,7 @@ export default function RealProfileScreen() {
   const [liking,       setLiking]       = useState(false);
   const [achievements, setAchievements] = useState<PublicAchievement[]>([]);
   const [totalAch,     setTotalAch]     = useState(0);
+  const [viewerIndex,  setViewerIndex]  = useState<number | null>(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -391,7 +394,7 @@ export default function RealProfileScreen() {
               <Text style={styles.photoPlaceholderIcon}>👤</Text>
             </View>
           )}
-          <View style={styles.photoOverlay} />
+          
           <View style={styles.photoInfo}>
             <View style={styles.nameRow}>
               <Text style={styles.name}>{targetProfile?.name}, {targetProfile?.age}</Text>
@@ -408,6 +411,24 @@ export default function RealProfileScreen() {
         </View>
 
         <View style={styles.content}>
+          {/* Galeria: até 3 fotos além da principal. */}
+          {galleryPhotos(targetProfile).length > 0 && (
+            <View style={styles.galleryRow}>
+              {galleryPhotos(targetProfile).map((p, i) => (
+                <TouchableOpacity
+                  key={p.slot}
+                  style={styles.galleryItem}
+                  onPress={() => setViewerIndex(i)}
+                  activeOpacity={0.85}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel={`Foto ${i + 1} de ${targetProfile?.name ?? 'perfil'}`}
+                >
+                  <Image source={{ uri: p.uri }} style={styles.galleryImage} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
           {/* O que a pessoa está dizendo sobre si. Vem antes da
               Sintonia de propósito: é o que ela escolheu declarar,
               e pesa mais numa decisão de mandar mensagem do que
@@ -564,6 +585,17 @@ export default function RealProfileScreen() {
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
+
+      <GalleryViewer
+        photos={galleryPhotos(targetProfile).map(p => p.uri)}
+        initialIndex={viewerIndex ?? 0}
+        visible={viewerIndex !== null}
+        onClose={() => setViewerIndex(null)}
+        onReport={() => navigation.navigate('SupportNew', {
+          reportUid:  targetUserId,
+          reportName: targetProfile?.name ?? '',
+        })}
+      />
     </View>
   );
 }
@@ -583,17 +615,24 @@ const styles = StyleSheet.create({
   mainPhotoFramed:      { width: width * 0.8, height: '100%' },
   photoPlaceholder:     { width: '100%', height: '100%', backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   photoPlaceholderIcon: { fontSize: 80 },
-  photoOverlay:         { position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', backgroundColor: '#0D0D0D99' },
+
   photoInfo:            { position: 'absolute', bottom: spacing.lg, left: spacing.lg, gap: spacing.xs },
   nameRow:              { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  name:                 { color: colors.white, fontSize: fonts.sizes.xxl, fontWeight: 'bold' },
+  // Sombra no texto em vez de camada escura sobre a foto: a
+  // camada cobria 60% da foto no perfil, onde ela mais importa.
+  name:                 { color: colors.white, fontSize: fonts.sizes.xxl, fontWeight: 'bold', textShadowColor: '#000000', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
   realBadge:            { backgroundColor: colors.gold, borderRadius: borderRadius.full, paddingHorizontal: spacing.sm, paddingVertical: 2 },
   realBadgeText:        { color: colors.background, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  location:             { color: colors.grayLight, fontSize: fonts.sizes.md },
-  onlineBadge:          { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  location:             { color: colors.white, fontSize: fonts.sizes.md, textShadowColor: '#000000', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
+  // Fundo próprio e pequeno: o verde sobre foto clara sumia sem a
+  // camada escura.
+  onlineBadge:          { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#0D0D0DAA', borderRadius: borderRadius.full, paddingHorizontal: spacing.sm, paddingVertical: 2 },
   onlineDot:            { width: 8, height: 8, borderRadius: 4, backgroundColor: '#44FF88' },
   onlineText:           { color: '#44FF88', fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   content:              { padding: spacing.lg, gap: spacing.md },
+  galleryRow:           { flexDirection: 'row', gap: spacing.sm },
+  galleryItem:          { flex: 1, aspectRatio: 4 / 5, borderRadius: borderRadius.md, overflow: 'hidden', borderWidth: 1, borderColor: colors.gold + '44', backgroundColor: colors.surface },
+  galleryImage:         { width: '100%', height: '100%' },
   card:                 { backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.grayDark },
   meaningCard:          { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.gold + '11', borderRadius: borderRadius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.gold + '33' },
   meaningText:          { flex: 1, color: colors.gold, fontSize: fonts.sizes.md, fontStyle: 'italic', lineHeight: 20 },

@@ -1,4 +1,16 @@
-import React, { useState, useEffect } from 'react';
+// ============================================
+// LUMINA — LOGIN
+// src/modules/auth/screens/LoginScreen.tsx
+//
+// - Senha com "mostrar senha" (PasswordInput).
+// - "Esqueci minha senha": link de redefinição pelo Firebase
+//   (ForgotPasswordModal), sem revelar se o e-mail tem conta.
+// - Campos identificados para o preenchimento automático do sistema.
+// - Teclado: "Próximo" leva à senha; "Entrar" envia.
+// - Só o e-mail é lembrado no aparelho — nunca a senha.
+// ============================================
+
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +28,8 @@ import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { RootStackParamList } from '../../../navigation/types';
 import { useLoginForm } from '../hooks/useAuthForm';
 import ScreenContainer from '../../../components/ScreenContainer';
+import PasswordInput from '../../../components/PasswordInput';
+import ForgotPasswordModal from '../components/ForgotPasswordModal';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
@@ -23,12 +37,7 @@ type Props = {
 
 const LAST_EMAIL_KEY = '@lumina:lastEmail';
 
- 
-const PHRASES = [
-  'Existem perfis com alta Sintonia esperando por voce',
-  'Descubra conexoes unicas',
-  'Seu proximo grande encontro comeca aqui',
-];
+const PHRASE = 'Existem perfis com alta Sintonia esperando por você';
 
 export default function LoginScreen({ navigation }: Props) {
   const {
@@ -38,18 +47,21 @@ export default function LoginScreen({ navigation }: Props) {
     submit,
   } = useLoginForm();
 
-  // Carrega ultimo email e senha ao abrir
- useEffect(() => {
-  async function loadSaved() {
-    const savedEmail = await AsyncStorage.getItem(LAST_EMAIL_KEY);
-    if (savedEmail) setEmail(savedEmail);
-  }
-  loadSaved();
-}, []);
+  const passwordRef = useRef<TextInput>(null);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
-  async function handleSubmit() {
-    if (email) await AsyncStorage.setItem(LAST_EMAIL_KEY, email);
-    
+  // Preenche o último e-mail usado. Falha no armazenamento local não
+  // pode derrubar a tela — o campo só fica vazio.
+  useEffect(() => {
+    AsyncStorage.getItem(LAST_EMAIL_KEY)
+      .then(saved => { if (saved) setEmail(saved); })
+      .catch(() => {});
+  }, []);
+
+  function handleSubmit() {
+    if (loading) return;
+    const trimmed = email.trim();
+    if (trimmed) AsyncStorage.setItem(LAST_EMAIL_KEY, trimmed).catch(() => {});
     submit();
   }
 
@@ -59,7 +71,7 @@ export default function LoginScreen({ navigation }: Props) {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.logoContainer}>
             <Text style={styles.logo}>✦</Text>
             <Text style={styles.title}>Lumina</Text>
@@ -67,7 +79,7 @@ export default function LoginScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.phraseContainer}>
-            <Text style={styles.phrase}>"{PHRASES[0]}"</Text>
+            <Text style={styles.phrase}>"{PHRASE}"</Text>
           </View>
 
           <View style={styles.form}>
@@ -81,24 +93,39 @@ export default function LoginScreen({ navigation }: Props) {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              autoComplete="email"
+              textContentType="emailAddress"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              blurOnSubmit={false}
             />
 
             <Text style={styles.label}>Senha</Text>
-            <TextInput
-              style={styles.input}
+            <PasswordInput
+              ref={passwordRef}
               placeholder="Sua senha"
-              placeholderTextColor={colors.gray}
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
+              autoComplete="password"
+              returnKeyType="go"
+              onSubmitEditing={handleSubmit}
             />
+
+            <TouchableOpacity
+              style={styles.forgotButton}
+              onPress={() => setForgotOpen(true)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.forgotText}>Esqueci minha senha</Text>
+            </TouchableOpacity>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, loading && styles.buttonDisabled]}
               onPress={handleSubmit}
               disabled={loading}
+              accessibilityRole="button"
             >
               {loading ? (
                 <ActivityIndicator color={colors.background} />
@@ -110,15 +137,22 @@ export default function LoginScreen({ navigation }: Props) {
             <TouchableOpacity
               style={styles.linkButton}
               onPress={() => navigation.navigate('Register')}
+              accessibilityRole="button"
             >
               <Text style={styles.linkText}>
-                Nao tem conta?{' '}
+                Não tem conta?{' '}
                 <Text style={styles.linkTextBold}>Criar conta</Text>
               </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ForgotPasswordModal
+        visible={forgotOpen}
+        initialEmail={email}
+        onClose={() => setForgotOpen(false)}
+      />
     </ScreenContainer>
   );
 }
@@ -176,6 +210,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.grayDark,
   },
+  forgotButton: {
+    alignSelf: 'flex-end',
+    marginTop: -spacing.xs,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  forgotText: {
+    color: colors.gold,
+    fontSize: fonts.sizes.sm,
+  },
   error: {
     color: colors.error,
     fontSize: fonts.sizes.sm,
@@ -189,6 +233,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.sm,
   },
+  buttonDisabled: { opacity: 0.6 },
   buttonText: {
     color: colors.background,
     fontSize: fonts.sizes.lg,

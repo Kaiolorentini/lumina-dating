@@ -37,8 +37,15 @@ import { getProfile } from '../../profile/services/profileService';
 import { UserProfile, ProfileCardData } from '../../../shared/types';
 import { RealProfile } from '../../../services/usersService';
 import {
-  fetchSintonizePage, activeDismissals, REFILL_THRESHOLD,
+  fetchSintonizePage, activeDismissalMap, REFILL_THRESHOLD,
+  fetchDismissedProfiles, bringBackProfile, DismissedProfile,
 } from '../../../services/sintonizeService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCoins } from '../../../context/CoinsContext';
+import DismissedSheet from '../components/DismissedSheet';
+
+/** Preço exibido — o servidor decide o real (COSTS.SEGUNDA_CHANCE). */
+const SECOND_CHANCE_COST = 15;
 import { SintonizeBackground } from '../../../components/SintonizeBackground';
 import ProfileCard from '../../../components/ProfileCard';
 import { HeartBurst } from '../../../components/profile/HeartBurst';
@@ -62,7 +69,8 @@ function toCardData(p: RealProfile): ProfileCardData {
     location:  `${p.city || ''}, ${p.state || ''}`,
     sintonia:  p.sintonia,
     photoURL:  p.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
-    boostType: null,
+    // Só o Turbo chega com tipo (sintonizeService) — é o selo.
+    boostType: p.boostType,
     equippedFrame:       p.equippedFrame,
     equippedBadge:       p.equippedBadge,
     equippedBadgeRarity: p.equippedBadgeRarity,
@@ -95,6 +103,16 @@ export default function SintonizeScreen() {
   const fetchingRef  = useRef(false);
 
   const { like } = useLike(user?.uid);
+  const insets   = useSafeAreaInsets();
+  const { refreshWallet } = useCoins();
+
+  // Segunda Chance: quando cada um foi passado (uid → ms).
+  const dismissedAtRef = useRef<Record<string, number>>({});
+  const [dismissedCount,   setDismissedCount]   = useState(0);
+  const [sheetVisible,     setSheetVisible]     = useState(false);
+  const [dismissedList,    setDismissedList]    = useState<DismissedProfile[]>([]);
+  const [loadingDismissed, setLoadingDismissed] = useState(false);
+  const [bringingId,       setBringingId]       = useState<string | null>(null);
 
   const loadMore = useCallback(async (replace: boolean) => {
     const profile = profileRef.current;
@@ -140,9 +158,12 @@ export default function SintonizeScreen() {
         profileRef.current = profile;
 
         const prog = (profile as { progression?: Record<string, unknown> }).progression ?? {};
-        dismissedRef.current = activeDismissals(
+        const map = activeDismissalMap(
           prog.dismissedProfiles as Record<string, unknown> | undefined,
         );
+        dismissedAtRef.current = map;
+        dismissedRef.current   = new Set(Object.keys(map));
+        setDismissedCount(Object.keys(map).length);
 
         await loadMore(true);
       } finally {
@@ -176,8 +197,64 @@ export default function SintonizeScreen() {
     }, 1500);
   }
 
+  async function openDismissed() {
+    const profile = profileRef.current;
+    if (!profile) return;
+    setSheetVisible(true);
+    setLoadingDismissed(true);
+    try {
+      setDismissedList(await fetchDismissedProfiles(profile, dismissedAtRef.current));
+    } finally {
+      setLoadingDismissed(false);
+    }
+  }
+
+  function confirmBringBack(p: DismissedProfile) {
+    Alert.alert(
+      'Segunda Chance',
+      `Trazer ${p.name} de volta por ${SECOND_CHANCE_COST} cristais?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Trazer de volta', onPress: () => bringBack(p) },
+      ],
+    );
+  }
+
+  async function bringBack(p: DismissedProfile) {
+    setBringingId(p.uid);
+    try {
+      await bringBackProfile(p.uid);
+
+      delete dismissedAtRef.current[p.uid];
+      dismissedRef.current.delete(p.uid);
+      setDismissedCount(Object.keys(dismissedAtRef.current).length);
+      setDismissedList(prev => prev.filter(x => x.uid !== p.uid));
+
+      // Entra como o card ATUAL: é quem a pessoa quis rever.
+      const card = toCardData(p);
+      setQueue(prev => [
+        ...prev.slice(0, index).filter(c => c.id !== card.id),
+        card,
+        ...prev.slice(index).filter(c => c.id !== card.id),
+      ]);
+      setSheetVisible(false);
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToIndex({ index, animated: false });
+      });
+
+      refreshWallet();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Não foi possível trazer de volta.';
+      Alert.alert('Segunda Chance', message);
+    } finally {
+      setBringingId(null);
+    }
+  }
+
   function handleDismiss(targetUid: string) {
     dismissedRef.current.add(targetUid);
+    dismissedAtRef.current[targetUid] = Date.now();
+    setDismissedCount(Object.keys(dismissedAtRef.current).length);
 
     // Fire-and-forget: o descarte é conveniência, e falha aqui
     // só faz o perfil reaparecer numa próxima sessão.
@@ -228,6 +305,28 @@ export default function SintonizeScreen() {
   return (
     <View style={styles.container}>
       <SintonizeBackground />
+
+      {dismissedCount > 0 && (
+        <TouchableOpacity
+          style={[styles.dismissedBtn, { top: insets.top + spacing.sm }]}
+          onPress={openDismissed}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Ver ${dismissedCount} perfis passados hoje`}
+        >
+          <Text style={styles.dismissedText}>↺ Passados hoje · {dismissedCount}</Text>
+        </TouchableOpacity>
+      )}
+
+      <DismissedSheet
+        visible={sheetVisible}
+        loading={loadingDismissed}
+        profiles={dismissedList}
+        bringingId={bringingId}
+        cost={SECOND_CHANCE_COST}
+        onClose={() => setSheetVisible(false)}
+        onBringBack={confirmBringBack}
+      />
 
       <FlatList
         ref={listRef}
@@ -342,5 +441,17 @@ const styles = StyleSheet.create({
     borderColor: colors.grayDark,
   },
   passArrow: { color: colors.grayLight, fontSize: 30, fontWeight: 'bold', lineHeight: 32 },
+  dismissedBtn: {
+    position: 'absolute',
+    left: spacing.md,
+    zIndex: 20,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface + 'CC',
+    borderWidth: 1,
+    borderColor: colors.gold + '66',
+  },
+  dismissedText: { color: colors.gold, fontSize: fonts.sizes.xs, fontWeight: 'bold', letterSpacing: 0.3 },
   passHint:  { color: colors.gray, fontSize: 9, letterSpacing: 0.5 },
 });

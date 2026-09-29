@@ -1,6 +1,7 @@
 export type RefundRequestStatus =
   | 'pending'
   | 'approved'
+  | 'paid'
   | 'rejected'
   | 'expired';
 
@@ -20,4 +21,9 @@ export interface RefundRequest {
   reviewedAt?: Date;
   reviewedBy?: string;
   rejectionReason?: string;
+  /** Chave informada pelo comprador para o estorno manual. */
+  buyerPixKey?: string;
+  buyerPixKeyType?: 'cpf' | 'email' | 'phone' | 'random';
+  approvedAt?: Date;
+  paidAt?: Date;
 }

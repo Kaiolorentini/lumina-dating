@@ -7,6 +7,8 @@ export type SaleStatus =
   | 'paid'
   | 'refund_requested'    // ← ADICIONAR
   | 'partially_refunded'
+    | 'cancelled'
+  | 'overdue'
   | 'refunded';
 export type PaymentStatus =
   | 'pending'

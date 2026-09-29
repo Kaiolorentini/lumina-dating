@@ -5,7 +5,7 @@
 // RESPONSABILIDADE ÚNICA: lógica de negócio do Cofre.
 // Não acessa Firestore diretamente — usa VaultRepository.
 // ============================================
-
+import { auditLogFinanceiro } from '../../utils/auditLogFinanceiro';
 import * as admin from 'firebase-admin';
 import { VaultRepository } from '../repositories/VaultRepository';
 import { todayBr }         from '../../utils/dateBr';
@@ -95,6 +95,10 @@ export const VaultService = {
         source: eventType, fragmentos: canDeposit, eventId,
         saldoAntes: snapshot.vaultFragments, saldoDepois: newVault,
       });
+      auditLogFinanceiro({
+        uid: targetUid, tipo: 'FRAG_COFRE_DEPOSITO', valor: canDeposit, origem: 'VaultService',
+        metadata: { source: eventType, fromUid },
+      }, t);
 
       if (nowFull && !snapshot.vaultFullNotified) {
         VaultRepository.writeNotification(t, targetUid, newVault);

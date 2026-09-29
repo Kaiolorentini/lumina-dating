@@ -61,6 +61,12 @@ const CLIENT_ACTIONS: ReadonlySet<string> = new Set([
   // (removida) pedia, e o app não pode se dar XP.
 ]);
 
+/** Número finito e não negativo; qualquer outra coisa vira 0. */
+function toSafeNumber(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 /** Mesmo formato das rules (isChatMember) e do messageService. */
 function chatIdFor(a: string, b: string): string {
   return [a, b].sort().join('_');
@@ -143,9 +149,12 @@ export const earnXP = functions.onCall(
       const userData = userDoc.data() ?? {};
       const xp       = userData.xp ?? {};
 
-      const totalXP       = xp.totalXP       ?? 0;
-      const treeXP        = xp.treeXP        ?? 0;
-      const xpToday       = xp.xpTodayDate === todayStr ? (xp.xpToday ?? 0) : 0;
+      // Number() SEMPRE: um totalXP gravado como TEXTO ("1849") fazia
+      // "1849" + 2 = "18492" — concatenação, não soma — e a conta
+      // saltou do nível 9 ao 35 recebendo os marcos 10/20/30.
+      const totalXP       = toSafeNumber(xp.totalXP);
+      const treeXP        = toSafeNumber(xp.treeXP);
+      const xpToday       = xp.xpTodayDate === todayStr ? toSafeNumber(xp.xpToday) : 0;
       const lastLevel     = xp.level         ?? 1;      // REGRA 20
       const lastTreeStage = xp.treeStage     ?? 0;      // REGRA 20
       const riskScore     = xp.xpRiskScore   ?? 0;      // REGRA 18
@@ -377,9 +386,9 @@ export const getXPStatus = functions.onCall(
     const xp       = userData.xp ?? {};
 
     const todayStr  = todayBr();
-    const totalXP   = xp.totalXP   ?? 0;
-    const treeXP    = xp.treeXP    ?? 0;
-    const xpToday   = xp.xpTodayDate === todayStr ? (xp.xpToday ?? 0) : 0;
+    const totalXP   = toSafeNumber(xp.totalXP);
+    const treeXP    = toSafeNumber(xp.treeXP);
+    const xpToday   = xp.xpTodayDate === todayStr ? toSafeNumber(xp.xpToday) : 0;
 
     // REGRA 28: servidor calcula tudo — cliente só exibe
     const levelInfo = calcLevel(totalXP);

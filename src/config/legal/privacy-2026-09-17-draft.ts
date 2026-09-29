@@ -15,6 +15,12 @@
 // A seção 12.2 (CPF não armazenado) também reflete o
 // código: o campo users/{uid}.cpf foi eliminado da base e
 // o CPF vai direto ao Asaas a cada compra.
+//
+// Seções 12 e 13 (chaves Pix), 28/09: a chave do Criador vive em
+// users/{uid}/private/payout, fechada a todo cliente (nem o dono lê;
+// o app recebe a versão mascarada pelo servidor) e é copiada para o
+// registro do saque. A chave do comprador para reembolso fica no
+// pedido de reembolso, legível só pelo comprador e pela administração.
 // ============================================
 
 import { LegalDocument } from './index';
@@ -121,15 +127,17 @@ export const PRIVACY_2026_09_17_DRAFT: LegalDocument = {
         'A Lumina poderá tratar informações relacionadas às transações, como produto adquirido; valor; data; status; usuário comprador; identificadores da transação; e informações necessárias à conciliação.',
         'Quando exigido no processo de compra, o CPF será solicitado e encaminhado diretamente ao Asaas, processador de pagamentos utilizado pela Lumina. A Lumina não armazena o CPF utilizado na compra.',
         'O Asaas poderá tratar dados pessoais conforme suas próprias responsabilidades e políticas aplicáveis.',
+        'Ao solicitar o reembolso de uma compra, o comprador informa uma chave Pix (CPF, e-mail, telefone ou chave aleatória) para receber o valor. A chave é utilizada exclusivamente para a transferência do reembolso, fica acessível apenas ao próprio comprador e à equipe administrativa autorizada, e é conservada junto do registro do reembolso pelo prazo necessário à comprovação da operação e à defesa de direitos. Base legal: execução de contrato (art. 7º, V) e exercício regular de direitos (art. 7º, VI).',
         'A Lumina poderá conservar informações sobre a transação pelo tempo necessário para comprovação da operação; contabilidade; prevenção de fraude; defesa de direitos; e cumprimento de obrigações legais.',
       ],
     },
     {
       heading: '13. Dados dos Criadores',
       body: [
-        'Criadores poderão fornecer dados cadastrais; dados de identificação; informações fiscais; dados bancários necessários ao pagamento; informações sobre vendas; e informações de saque.',
+        'Criadores poderão fornecer dados cadastrais; dados de identificação; informações fiscais; chave Pix para recebimento; informações sobre vendas; e informações de saque.',
+        'A chave Pix do Criador é armazenada em área restrita, inacessível a outros usuários e ao próprio aplicativo: o Criador a visualiza apenas de forma parcialmente mascarada, e somente os sistemas da Lumina e a equipe administrativa autorizada têm acesso à chave completa, para efetuar os pagamentos. A cada solicitação de saque, a chave vigente é registrada junto da solicitação, para comprovação do pagamento.',
         'Essas informações são utilizadas para habilitação como Criador; processamento de repasses; prevenção de fraude; cumprimento tributário; prestação de contas; e cumprimento de obrigações legais.',
-        'Dados bancários poderão ser compartilhados com instituições financeiras, prestadores de pagamento ou outros fornecedores necessários ao repasse.',
+        'A chave Pix e os dados necessários à transferência poderão ser compartilhados com a instituição financeira utilizada pela Lumina para efetuar o repasse.',
       ],
     },
     {
@@ -203,7 +211,7 @@ export const PRIVACY_2026_09_17_DRAFT: LegalDocument = {
         'Dados cadastrais: durante a conta mais [PREENCHER: prazo pós-encerramento]. Perfil: durante a conta mais o prazo necessário à defesa de direitos. Fotos: durante a disponibilização mais o prazo legal aplicável.',
         'Documento de verificação e selfie de verificação: ELIMINADOS após a análise, aprovada ou rejeitada, salvo obrigação legal. Status de verificação: [PREENCHER: prazo]. Data de nascimento verificada: durante a conta mais [PREENCHER: prazo].',
         'Mensagens: [PREENCHER: prazo operacional]. Registros de segurança: [PREENCHER: prazo]. Registros de acesso: conforme o Marco Civil e a legislação aplicável.',
-        'Dados de transações: [PREENCHER: prazo contábil/fiscal]. Dados de Criadores: [PREENCHER: prazo fiscal/contratual]. Dados bancários: [PREENCHER: prazo]. Token push: enquanto necessário ao envio. Dados de moderação: [PREENCHER: prazo]. Registros de incidentes: conforme obrigação legal aplicável.',
+        'Dados de transações: [PREENCHER: prazo contábil/fiscal]. Dados de Criadores: [PREENCHER: prazo fiscal/contratual]. Chave Pix do Criador: enquanto cadastrada, e a registrada em cada saque pelo [PREENCHER: prazo contábil/fiscal]. Chave Pix informada para reembolso: junto do registro do reembolso, pelo [PREENCHER: prazo contábil/fiscal]. Token push: enquanto necessário ao envio. Dados de moderação: [PREENCHER: prazo]. Registros de incidentes: conforme obrigação legal aplicável.',
       ],
     },
     {

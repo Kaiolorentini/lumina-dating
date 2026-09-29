@@ -22,8 +22,7 @@ import { useAuth } from '../../context/AuthContext';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
 import app from '../../core/firebase';
-import { getProduct } from '../../services/marketplace/productService';
-import { Product } from '../../shared/types/marketplace';
+import { getPurchasedContent } from '../../services/marketplace/productService';
 import ScreenContainer from '../../components/ScreenContainer';
 
 type RouteProps = RouteProp<RootStackParamList, 'ContentViewer'>;
@@ -75,7 +74,7 @@ export default function ContentViewerScreen() {
   const { productId, purchaseId } = route.params;
   const { user } = useAuth();
 
-  const [product, setProduct] = useState<Product | null>(null);
+  const [title, setTitle] = useState('Conteúdo');
   const [files, setFiles] = useState<ProductFile[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -171,23 +170,19 @@ export default function ContentViewerScreen() {
   async function loadProduct() {
     setLoading(true);
     try {
-      const p = await getProduct(productId);
-      if (!p) {
-        Alert.alert('Erro', 'Produto não encontrado.');
-        navigation.goBack();
-        return;
-      }
+      // O servidor devolve só o que ESTA compra pode ver: nem arquivos
+      // em análise, nem os removidos depois da compra. Funciona também
+      // com o produto tirado da venda.
+      const content = await getPurchasedContent(productId);
+      setTitle(content.title);
 
-      setProduct(p);
-      const productFiles = (p.files ?? []) as ProductFile[];
-
-      if (productFiles.length === 0) {
+      if (content.files.length === 0) {
         Alert.alert('Aviso', 'Este produto não possui arquivos disponíveis.');
         navigation.goBack();
         return;
       }
 
-      setFiles(productFiles);
+      setFiles(content.files as ProductFile[]);
     } catch {
       Alert.alert('Erro', 'Não foi possível carregar o conteúdo.');
       navigation.goBack();
@@ -350,7 +345,7 @@ export default function ContentViewerScreen() {
           <Text style={styles.backBtn}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {product?.title ?? 'Conteúdo'}
+          {title}
         </Text>
         <View style={{ width: 40 }} />
       </View>

@@ -34,7 +34,7 @@ import { usePremiumTools }                 from '../../premium/hooks/usePremiumT
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-type BoostAction = 'TURBO' | 'FERTILIZER' | 'IMPULSO' | 'DESTAQUE' | 'VISITORS' | 'SOON';
+type BoostAction = 'TURBO' | 'FERTILIZER' | 'IMPULSO' | 'DESTAQUE' | 'VISITORS' | 'QUASE' | 'SEGUNDA' | 'SOON';
 
 const BOOSTS: {
   key: SpendableFeature; icon: string; label: string; sub: string;
@@ -42,11 +42,11 @@ const BOOSTS: {
 }[] = [
   { key: 'REVEAL_VISITORS',       icon: '👁️', label: 'Ver Visitantes',    sub: 'Descubra quem visitou seu perfil', cost: 50,  action: 'VISITORS' },
   { key: 'IMPULSO_PERFIL',        icon: '🚀', label: 'Impulso de Perfil', sub: 'Topo da Home por 30 min',          cost: 80,  action: 'IMPULSO' },
-  { key: 'TURBO_SINTONIA',        icon: '⚡', label: 'Turbo Sintonia',    sub: 'Topo da Home por 30 min',          cost: 120, action: 'TURBO' },
+  { key: 'TURBO_SINTONIA',        icon: '⚡', label: 'Turbo Sintonia',    sub: 'Topo da Home, do Sintonize e do Em Alta · 30 min', cost: 120, action: 'TURBO' },
   { key: 'DESTAQUE_REGIONAL',     icon: '📍', label: 'Destaque Regional', sub: 'Topo da Home na sua cidade por 4h', cost: 150, action: 'DESTAQUE' },
   { key: 'FERTILIZANTE_SINTONIA', icon: '🌱', label: 'Fertilizante',      sub: '+50% XP da Árvore por 24h',        cost: 80,  action: 'FERTILIZER' },
-  { key: 'REVEAL_QUASE_SINTONIA', icon: '💜', label: 'Quase Sintonia',    sub: 'Quem visitou você com alta Sintonia', cost: 25, action: 'SOON' },
-  { key: 'SEGUNDA_CHANCE',        icon: '🔄', label: 'Segunda Chance',    sub: 'Reveja um perfil descartado',      cost: 15,  action: 'SOON' },
+  { key: 'REVEAL_QUASE_SINTONIA', icon: '💜', label: 'Quase Sintonia',    sub: 'Aviso quando alguém com 85%+ visita você', cost: 25, action: 'QUASE' },
+  { key: 'SEGUNDA_CHANCE',        icon: '🔄', label: 'Segunda Chance',    sub: 'Traga de volta quem você passou no Sintonize', cost: 15, action: 'SEGUNDA' },
 ];
 
 export default function BoostsScreen() {
@@ -60,6 +60,7 @@ export default function BoostsScreen() {
   const {
     fertilizer, turbo, impulso, destaque, activating,
     activateFertilizer, activateTurbo, activateImpulso, activateDestaqueRegional,
+    joinDestaqueWaitlist,
   } = usePremiumTools(user?.uid);
 
   function confirmActivation(
@@ -100,6 +101,34 @@ export default function BoostsScreen() {
       return;
     }
 
+    // Não se compra aqui: chega como notificação e é revelada lá.
+    if (item.action === 'QUASE') {
+      Alert.alert(
+        'Quase Sintonia',
+        'Quando alguém com 85% ou mais de Sintonia visita seu perfil, você recebe um aviso. ' +
+          'Revelar quem é custa 25 cristais — grátis com a Galáxia Plus.',
+        [
+          { text: 'Ok', style: 'cancel' },
+          { text: 'Ver notificações', onPress: () => navigation.navigate('Notifications') },
+        ],
+      );
+      return;
+    }
+
+    // Usada no Sintonize, na lista de passados hoje.
+    if (item.action === 'SEGUNDA') {
+      Alert.alert(
+        'Segunda Chance',
+        'No Sintonize, toque em "↺ Passados hoje" para trazer de volta alguém que você passou nas últimas 24h. ' +
+          'Custa 15 cristais por perfil.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Abrir o Sintonize', onPress: () => navigation.navigate('MainTabs', { screen: 'Sintonize' } as any) },
+        ],
+      );
+      return;
+    }
+
     // A compra acontece na própria tela, com o número de visitas
     // à vista — decisão informada em vez de compra às cegas.
     if (item.action === 'VISITORS') {
@@ -122,7 +151,7 @@ export default function BoostsScreen() {
         `Ativar por ${item.cost} Cristais Premium?`,
         activateTurbo,
         '⚡ Turbo ativado!',
-        'Seu perfil fica no topo da Home pelos próximos 30 minutos.',
+        'Pelos próximos 30 minutos, seu perfil fica no topo da Home, entre os primeiros do Sintonize e em "Impulsionados agora" no Em Alta.',
       );
       return;
     }
@@ -177,6 +206,37 @@ export default function BoostsScreen() {
         Alert.alert('Aguarde', 'Há um intervalo de 5 minutos entre ativações.');
         return;
       }
+      // Cidade abaixo do mínimo: nada a vender ainda — oferece o aviso.
+      const minRegion = destaque?.minUsersInRegion ?? 15;
+      if (typeof destaque?.usersInRegion === 'number' && destaque.usersInRegion < minRegion) {
+        const cidade = destaque.city ?? 'Sua cidade';
+        if (destaque.waitlisted) {
+          Alert.alert(
+            '📍 Destaque Regional',
+            `${cidade} tem ${destaque.usersInRegion} de ${minRegion} pessoas. Você já está na lista: avisamos quando abrir.`,
+          );
+          return;
+        }
+        Alert.alert(
+          '📍 Destaque Regional',
+          `${cidade} tem ${destaque.usersInRegion} de ${minRegion} pessoas. O Destaque abre quando chegar a ${minRegion}. Quer ser avisado?`,
+          [
+            { text: 'Agora não', style: 'cancel' },
+            {
+              text: 'Me avise',
+              onPress: async () => {
+                const res = await joinDestaqueWaitlist();
+                Alert.alert(
+                  res.ok ? '✓ Combinado' : 'Não foi possível',
+                  res.ok ? 'Você recebe um aviso quando o Destaque abrir na sua cidade.' : (res.error ?? ''),
+                );
+              },
+            },
+          ],
+        );
+        return;
+      }
+
       if (premiumShort(item.label, item.cost)) return;
 
       const regiao = destaque?.city && destaque?.state
@@ -197,6 +257,15 @@ export default function BoostsScreen() {
         `Seu perfil aparece em evidência em ${regiao} pelas próximas 4 horas.`,
       );
     }
+  }
+
+  /** Texto do card; o Destaque mostra o progresso da cidade. */
+  function subFor(item: typeof BOOSTS[number]): string {
+    const min = destaque?.minUsersInRegion ?? 15;
+    if (item.action === 'DESTAQUE' && typeof destaque?.usersInRegion === 'number' && destaque.usersInRegion < min) {
+      return `Sua cidade: ${destaque.usersInRegion} de ${min} pessoas`;
+    }
+    return item.sub;
   }
 
   return (
@@ -247,7 +316,7 @@ export default function BoostsScreen() {
                 <Text style={styles.icon}>{item.icon}</Text>
                 <View style={styles.info}>
                   <Text style={styles.label}>{item.label}</Text>
-                  <Text style={styles.sub}>{isActive ? 'Ativo agora ✓' : item.sub}</Text>
+                  <Text style={styles.sub}>{isActive ? 'Ativo agora ✓' : subFor(item)}</Text>
                 </View>
                 {isBusy ? (
                   <ActivityIndicator color={COLORS.secondary} />

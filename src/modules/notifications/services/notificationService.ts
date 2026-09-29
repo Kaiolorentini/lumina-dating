@@ -48,6 +48,34 @@ export function getNotificationIcon(type: NotificationType): string {
     coins_purchased:        '💎',
     galaxia_plus_activated: '🌌',
     cofre_pronto:           '🗝️',
+    galaxia_turbos_expiring: '⚡',
+    boost_report:           '🚀',
+    destaque_aberto:        '📍',
+    support_reply:          '💬',
+    support_new:            '🆘',
+    sale_refunded:          '↩️',
+    sale_completed:         '🎉',
+    purchase_confirmed:     '📦',
+    message:                '💬',
+    request:                '✦',
+    request_accepted:       '✨',
+    prestige_marco:         '👑',
+    prestige_stage:         '👑',
+    prestige_evolution:     '👑',
+    marketplace_banned:     '🚫',
+    marketplace_unbanned:   '✅',
+    screenshot_warning:     '⚠️',
+    age_verification_approved: '✅',
+    age_verification_rejected: '🪪',
+    age_verification_pending:  '🪪',
+    product_review_new:     '📦',
+    product_pending:        '📦',
+    creator_request:        '🎨',
+    withdrawal_request:     '💸',
+    refund_requested:       '↩️',
+    fraud_flag:             '🚨',
+    admin_sale:             '💰',
+    gallery_photo_removed:  '📷',
   };
   return icons[type] ?? '🔔';
 }
@@ -109,6 +137,25 @@ export async function markAllAsRead(userId: string): Promise<void> {
   );
   const snapshot = await getDocs(q);
   const batch    = writeBatch(db);
+  snapshot.docs.forEach(d => batch.update(d.ref, { read: true }));
+  await batch.commit();
+}
+
+/**
+ * Marca como lidas as notificações de certos tipos — usado ao abrir
+ * Minhas Compras, Meus Produtos e Meus Ganhos, para o balão da área
+ * sumir junto.
+ */
+export async function markNotificationsReadByTypes(userId: string, types: string[]): Promise<void> {
+  if (types.length === 0) return;
+  const snapshot = await getDocs(query(
+    collection(db, COLLECTIONS.NOTIFICATIONS),
+    where('userId', '==', userId),
+    where('read', '==', false),
+    where('type', 'in', types.slice(0, 30)),
+  ));
+  if (snapshot.empty) return;
+  const batch = writeBatch(db);
   snapshot.docs.forEach(d => batch.update(d.ref, { read: true }));
   await batch.commit();
 }

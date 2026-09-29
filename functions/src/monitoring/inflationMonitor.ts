@@ -1,256 +1,279 @@
 // ============================================
-// LUMINA — INFLATION MONITOR v2.1
+// LUMINA — MONITOR DA ECONOMIA v3
 // functions/src/monitoring/inflationMonitor.ts
 //
-// Acompanha cristais criados vs gastos por dia.
-// Meta: 70–90% dos cristais criados devem
-// voltar para o sistema (não acumular).
+// v3 (28/09) — a economia inteira, não uma fração.
+// A v2 lia walletAuditLogs, mas metade da economia não gravava lá:
+// diária, Faísca, Galáxia Plus, Turbo, Fertilizante, Carta, árvore,
+// níveis e TODOS os fragmentos. O ratio gasto/criado era calculado
+// sobre dados incompletos. Agora todo caminho registra (v2 do
+// auditLogFinanceiro), e o snapshot agrega por MOEDA e CATEGORIA.
 //
-// v2.1 — CORREÇÕES DE JANELA TEMPORAL:
-// 6. Roda às 00:10 e agrega o dia ANTERIOR. Antes rodava às 23:55
-//    sobre o dia corrente: os últimos 5 minutos nunca entravam.
-// 7. Data calculada em America/Sao_Paulo, não em UTC. toISOString()
-//    às 23:55 BRT já marca o dia seguinte — todo snapshot era
-//    gravado com a data errada e agregava uma janela futura,
-//    saindo zerado.
-// 8. endOfDay inclui os milissegundos (.999).
+// Cristais:
+//   criados   = recompensas + conversões + compras
+//   comprados = categoria 'compra' (pacotes E Galáxia Plus)
+//   gastos    = categoria 'gasto', menos as devoluções da Carta
+//   estornados= chargebacks (categoria 'estorno' negativa)
+// Fragmentos: gerados, convertidos em cristais, gastos em badges.
+// Impulsos: ativações do dia por tipo (premiumUsageLog), e quantas
+//   saíram da assinatura.
 //
-// v2.0 — CORREÇÕES:
-// 1. Usa notifyAdmins() — sem UIDs hardcoded
-//    (fonte única: appSettings/adminConfig.superAdmins)
-// 2. activeUsers conta UIDs ÚNICOS, não documentos de log
-// 3. newWallets preenchido de verdade
-// 4. Novo: breakdown por tipo de entrada/saída
-// 5. Novo: getEconomySnapshots — CF para o painel admin
-//
-// NOTA: fragmentos NÃO entram aqui. Ranking e Cofre
-// gravam em economyLedger — economia separada dos cristais.
-//
-// ESCALA: o .get() dos logs carrega o dia inteiro em memória.
-// Acima de ~10 mil transações/dia isso precisa virar paginação
-// por cursor — os 256Mi da função não comportam mais que isso.
+// Roda às 00:10 e fecha o dia ANTERIOR (America/Sao_Paulo).
 // ============================================
 
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { notifyAdmins } from '../utils/notifyAdmins';
+import { AUDIT_TIPOS, AuditTipo, AuditCategoria, Moeda } from '../utils/auditLogFinanceiro';
 
-interface DailyEconomySnapshot {
-  date: string;
-  cristaisCreatedGratuitos:  number;
-  cristaisCreatedPremium:    number;
-  cristaisSpent:             number;
-  cristaisPurchased:         number;
-  netFlow:                   number;   // spent - created (negativo = inflação)
-  ratioSpentToCreated:       number;   // meta: 0.7–0.9
-  activeUsers:               number;   // UIDs únicos com movimentação
-  totalTransactions:         number;   // documentos de log do dia
-  newWallets:                number;   // carteiras criadas no dia
-  topSources:                Record<string, number>;  // de onde vieram cristais
-  topSinks:                  Record<string, number>;  // para onde foram
-  alertSent:                 boolean;
+/** Nomes antigos (antes da v2 do registro) que eram compra. */
+const LEGACY_PURCHASE = new Set(['GALAXIA_PLUS_MENSAL', 'FIRST_PURCHASE_BONUS']);
+
+interface FragmentosDia {
+  gerados:     number;
+  convertidos: number;
+  gastos:      number;
+  topSources:  Record<string, number>;
+  topSinks:    Record<string, number>;
 }
 
-// ------------------------------------------
-// Snapshot diário — roda às 00:10 e fecha o dia ANTERIOR
-// ------------------------------------------
+interface DailyEconomySnapshot {
+  date:                     string;
+  version:                  3;
+  cristaisCreatedGratuitos: number;   // recompensas + conversões
+  cristaisCreatedPremium:   number;   // compras (pacotes e Galáxia Plus)
+  cristaisSpent:            number;
+  cristaisPurchased:        number;
+  cristaisRefunded:         number;   // chargebacks
+  netFlow:                  number;
+  ratioSpentToCreated:      number;
+  activeUsers:              number;
+  totalTransactions:        number;
+  newWallets:               number;
+  topSources:               Record<string, number>;
+  topSinks:                 Record<string, number>;
+  fragmentos:               FragmentosDia;
+  impulsos:                 Record<string, { total: number; assinatura: number }>;
+  galaxiaPlus:              { ativacoes: number };
+  alertSent:                boolean;
+}
+
+function classify(tipo: string, data: Record<string, unknown>): { moeda: Moeda; categoria: AuditCategoria } {
+  const info = AUDIT_TIPOS[tipo as AuditTipo];
+  const moeda = (data.moeda as Moeda | undefined) ?? info?.moeda ?? 'cristal';
+  let categoria = (data.categoria as AuditCategoria | undefined) ?? info?.categoria;
+  if (!categoria) {
+    const valor = Number(data.valor ?? 0);
+    categoria = LEGACY_PURCHASE.has(tipo) ? 'compra' : valor > 0 ? 'recompensa' : 'gasto';
+  }
+  return { moeda, categoria };
+}
+
+function add(map: Record<string, number>, key: string, v: number): void {
+  map[key] = (map[key] ?? 0) + v;
+}
+
 export const takeDailyEconomySnapshot = onSchedule(
-  {
-    // 00:10 agrega um dia já encerrado. Às 23:55 os últimos
-    // 5 minutos de movimentação ficavam permanentemente fora
-    // do registro — inaceitável num dado financeiro auditável.
-    schedule: '10 0 * * *',
-    timeZone: 'America/Sao_Paulo',
-    region:   'us-central1',
-  },
+  { schedule: '10 0 * * *', timeZone: 'America/Sao_Paulo', region: 'us-central1' },
   async () => {
     const db = admin.firestore();
-
-    // Roda às 00:10 e agrega o dia ANTERIOR, já fechado.
-    // A data precisa ser calculada em America/Sao_Paulo:
-    // toISOString() devolve UTC e, na virada, aponta o dia errado.
-    // 'en-CA' formata YYYY-MM-DD, que é o id usado na collection.
     const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const targetDate = ontem.toLocaleDateString('en-CA', {
-      timeZone: 'America/Sao_Paulo',
-    });
+    const targetDate = ontem.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
-    console.log(`[inflationMonitor] Snapshot do dia: ${targetDate}`);
+    const [logsSnap, usageSnap] = await Promise.all([
+      db.collection('walletAuditLogs')
+        .where('createdAt', '>=', startOfDay(targetDate))
+        .where('createdAt', '<=', endOfDay(targetDate))
+        .get(),
+      db.collection('premiumUsageLog')
+        .where('activatedAt', '>=', startOfDay(targetDate))
+        .where('activatedAt', '<=', endOfDay(targetDate))
+        .get(),
+    ]);
 
-    // Agrega auditLogs do dia
-    const logsSnap = await db
-      .collection('walletAuditLogs')
-      .where('createdAt', '>=', startOfDay(targetDate))
-      .where('createdAt', '<=', endOfDay(targetDate))
-      .get();
+    let createdGratuitos = 0;
+    let purchased        = 0;
+    let spent            = 0;
+    let spentReturned    = 0;
+    let refunded         = 0;
+    let galaxiaAtivacoes = 0;
 
-    let cristaisCreatedGratuitos = 0;
-    let cristaisCreatedPremium   = 0;
-    let cristaisSpent            = 0;
-    let cristaisPurchased        = 0;
-
-    // CORREÇÃO 2: Set garante contagem de usuários únicos.
-    // Antes usava logsSnap.size — um usuário com 10 transações
-    // era contado como 10 usuários ativos.
     const uniqueUsers = new Set<string>();
-
-    // Breakdown por origem — mostra QUAL feature gera/consome mais
     const topSources: Record<string, number> = {};
     const topSinks:   Record<string, number> = {};
+    const frag: FragmentosDia = { gerados: 0, convertidos: 0, gastos: 0, topSources: {}, topSinks: {} };
 
     logsSnap.forEach((doc) => {
-      const data = doc.data();
-      const val  = Math.abs(data.valor ?? 0);
-      const tipo = data.tipo ?? 'DESCONHECIDO';
+      const data  = doc.data();
+      const tipo  = String(data.tipo ?? 'DESCONHECIDO');
+      const valor = Number(data.valor ?? 0);
+      const abs   = Math.abs(valor);
+      if (!Number.isFinite(valor) || valor === 0) return;
+      if (data.uid) uniqueUsers.add(String(data.uid));
 
-      if (data.uid) uniqueUsers.add(data.uid);
+      const { moeda, categoria } = classify(tipo, data);
 
-      if (data.valor > 0) {
-        if (data.tipo === 'COMPRA_ASAAS' || data.tipo === 'GALAXIA_PLUS_MENSAL') {
-          cristaisCreatedPremium += val;
-          cristaisPurchased      += val;
+      if (moeda === 'fragmento') {
+        if (valor > 0) {
+          frag.gerados += abs;
+          add(frag.topSources, tipo, abs);
         } else {
-          cristaisCreatedGratuitos += val;
+          if (categoria === 'conversao') frag.convertidos += abs;
+          else frag.gastos += abs;
+          add(frag.topSinks, tipo, abs);
         }
-        topSources[tipo] = (topSources[tipo] ?? 0) + val;
-      } else if (data.valor < 0) {
-        cristaisSpent  += val;
-        topSinks[tipo]  = (topSinks[tipo] ?? 0) + val;
+        return;
+      }
+
+      if (tipo === 'GALAXIA_PLUS_ATIVACAO') galaxiaAtivacoes++;
+
+      if (valor > 0) {
+        if (categoria === 'estorno') {
+          spentReturned += abs;            // devolução de gasto (Carta)
+        } else {
+          if (categoria === 'compra') purchased += abs;
+          else createdGratuitos += abs;
+          add(topSources, tipo, abs);
+        }
+      } else {
+        if (categoria === 'estorno') {
+          refunded += abs;                 // chargeback
+        } else {
+          spent += abs;
+          add(topSinks, tipo, abs);
+        }
       }
     });
 
-    // CORREÇÃO 3: newWallets preenchido de verdade
+    spent = Math.max(0, spent - spentReturned);
+
+    const impulsos: Record<string, { total: number; assinatura: number }> = {};
+    usageSnap.forEach((doc) => {
+      const d = doc.data();
+      const key = String(d.featureType ?? 'OUTRO');
+      const entry = impulsos[key] ?? { total: 0, assinatura: 0 };
+      entry.total++;
+      if (d.fromSubscription === true) entry.assinatura++;
+      impulsos[key] = entry;
+    });
+
     let newWallets = 0;
     try {
-      const walletsSnap = await db
-        .collection('wallets')
+      newWallets = (await db.collection('wallets')
         .where('createdAt', '>=', startOfDay(targetDate))
         .where('createdAt', '<=', endOfDay(targetDate))
-        .count()
-        .get();
-      newWallets = walletsSnap.data().count;
+        .count().get()).data().count;
     } catch (error) {
-      // count() exige índice em alguns casos — falha não derruba o snapshot
       console.warn('[inflationMonitor] Falha ao contar novas carteiras:', error);
     }
 
-    const totalCreated = cristaisCreatedGratuitos + cristaisCreatedPremium;
-    const netFlow      = cristaisSpent - totalCreated;
-    const ratio        = totalCreated > 0 ? cristaisSpent / totalCreated : 0;
-
-    // Alerta se ratio < 0.5 (menos de 50% voltando ao sistema).
-    // O piso de 1000 cristais evita ruído em dias de baixo volume —
-    // na base atual isso significa que o alerta raramente dispara.
-    const alertNeeded = ratio < 0.5 && totalCreated > 1000;
+    const totalCreated = createdGratuitos + purchased;
+    const ratio        = totalCreated > 0 ? spent / totalCreated : 0;
+    const alertNeeded  = ratio < 0.5 && totalCreated > 1000;
 
     const snapshot: DailyEconomySnapshot = {
-      date:                    targetDate,
-      cristaisCreatedGratuitos,
-      cristaisCreatedPremium,
-      cristaisSpent,
-      cristaisPurchased,
-      netFlow,
-      ratioSpentToCreated:     Math.round(ratio * 100) / 100,
-      activeUsers:             uniqueUsers.size,
-      totalTransactions:       logsSnap.size,
+      date:                     targetDate,
+      version:                  3,
+      cristaisCreatedGratuitos: createdGratuitos,
+      cristaisCreatedPremium:   purchased,
+      cristaisSpent:            spent,
+      cristaisPurchased:        purchased,
+      cristaisRefunded:         refunded,
+      netFlow:                  spent - totalCreated,
+      ratioSpentToCreated:      Math.round(ratio * 100) / 100,
+      activeUsers:              uniqueUsers.size,
+      totalTransactions:        logsSnap.size,
       newWallets,
       topSources,
       topSinks,
-      alertSent:               alertNeeded,
+      fragmentos:               frag,
+      impulsos,
+      galaxiaPlus:              { ativacoes: galaxiaAtivacoes },
+      alertSent:                alertNeeded,
     };
 
     await db.collection('economySnapshots').doc(targetDate).set(snapshot);
 
-    // CORREÇÃO 1: notifyAdmins lê os superadmins do appSettings.
-    // Fire-and-forget — nunca derruba o snapshot.
     if (alertNeeded) {
       notifyAdmins({
         title: '⚠️ Alerta de inflação',
-        body:  `Ratio gasto/criado em ${targetDate}: ${snapshot.ratioSpentToCreated} (meta 0.7–0.9). Criados: ${totalCreated} · Gastos: ${cristaisSpent}.`,
+        body:  `Ratio gasto/criado em ${targetDate}: ${snapshot.ratioSpentToCreated} (meta 0.7–0.9). Criados: ${totalCreated} · Gastos: ${spent}.`,
         type:  'inflation_alert',
-        data: {
-          date:  targetDate,
-          ratio: String(snapshot.ratioSpentToCreated),
-        },
-      }).catch((error) => {
-        console.warn('[inflationMonitor] Falha ao notificar admins:', error);
-      });
+        data:  { date: targetDate, ratio: String(snapshot.ratioSpentToCreated) },
+      }).catch(error => console.warn('[inflationMonitor] Falha ao notificar admins:', error));
     }
 
-    console.log(
-      `[inflationMonitor] Ratio: ${ratio.toFixed(2)} | Criado: ${totalCreated} | ` +
-      `Gasto: ${cristaisSpent} | Usuários únicos: ${uniqueUsers.size} | Novas carteiras: ${newWallets}`
-    );
-  }
+    console.log(`[inflationMonitor] ${targetDate} — criados ${totalCreated}, gastos ${spent}, fragmentos +${frag.gerados}`);
+  },
 );
 
-// ------------------------------------------
-// CF para o painel admin — lista snapshots
-// Apenas superadmin acessa
-// ------------------------------------------
 export const getEconomySnapshots = onCall(
   { region: 'us-central1' },
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Não autenticado.');
 
-    const db = admin.firestore();
-
-    // Verifica superadmin server-side — nunca confia no cliente
-    const userDoc = await db.collection('users').doc(uid).get();
-    const role    = userDoc.data()?.role;
-    if (role !== 'superadmin') {
-      throw new HttpsError('permission-denied', 'Acesso restrito a superadmins.');
-    }
+    const db   = admin.firestore();
+    const role = (await db.collection('users').doc(uid).get()).data()?.role;
+    if (role !== 'superadmin') throw new HttpsError('permission-denied', 'Acesso restrito a superadmins.');
 
     const { days } = (request.data ?? {}) as { days?: number };
-    const limitDays = Math.min(Math.max(days ?? 30, 1), 90);
+    const limitDays = Math.min(Math.max(Number(days) || 30, 1), 90);
 
-    const snap = await db
-      .collection('economySnapshots')
-      .orderBy('date', 'desc')
-      .limit(limitDays)
-      .get();
+    const [snap, activeSubs] = await Promise.all([
+      db.collection('economySnapshots').orderBy('date', 'desc').limit(limitDays).get(),
+      db.collection('galaxiaPlus')
+        .where('expiresAt', '>', admin.firestore.Timestamp.now())
+        .count().get(),
+    ]);
 
-    const snapshots = snap.docs.map(d => d.data() as DailyEconomySnapshot);
+    const snapshots = snap.docs.map(d => d.data() as Partial<DailyEconomySnapshot> & { date: string });
 
-    // Agregados do período
-    const totals = snapshots.reduce(
-      (acc, s) => ({
-        created:   acc.created   + s.cristaisCreatedGratuitos + s.cristaisCreatedPremium,
-        spent:     acc.spent     + s.cristaisSpent,
-        purchased: acc.purchased + s.cristaisPurchased,
-        newUsers:  acc.newUsers  + (s.newWallets ?? 0),
-      }),
-      { created: 0, spent: 0, purchased: 0, newUsers: 0 }
-    );
+    const totals = {
+      created: 0, spent: 0, purchased: 0, refunded: 0, newUsers: 0,
+      fragments: { gerados: 0, convertidos: 0, gastos: 0 },
+      impulsos: {} as Record<string, { total: number; assinatura: number }>,
+      galaxiaAtivacoes: 0,
+    };
 
-    const periodRatio = totals.created > 0
-      ? Math.round((totals.spent / totals.created) * 100) / 100
-      : 0;
+    for (const s of snapshots) {
+      totals.created   += (s.cristaisCreatedGratuitos ?? 0) + (s.cristaisCreatedPremium ?? 0);
+      totals.spent     += s.cristaisSpent ?? 0;
+      totals.purchased += s.cristaisPurchased ?? 0;
+      totals.refunded  += s.cristaisRefunded ?? 0;
+      totals.newUsers  += s.newWallets ?? 0;
+      totals.fragments.gerados     += s.fragmentos?.gerados ?? 0;
+      totals.fragments.convertidos += s.fragmentos?.convertidos ?? 0;
+      totals.fragments.gastos      += s.fragmentos?.gastos ?? 0;
+      totals.galaxiaAtivacoes      += s.galaxiaPlus?.ativacoes ?? 0;
+      Object.entries(s.impulsos ?? {}).forEach(([k, v]) => {
+        const e = totals.impulsos[k] ?? { total: 0, assinatura: 0 };
+        e.total += v.total;
+        e.assinatura += v.assinatura;
+        totals.impulsos[k] = e;
+      });
+    }
 
-    // Saúde da economia
+    const ratio = totals.created > 0 ? Math.round((totals.spent / totals.created) * 100) / 100 : 0;
     let health: 'HEALTHY' | 'WARNING' | 'CRITICAL' = 'HEALTHY';
-    if (periodRatio < 0.5)      health = 'CRITICAL';
-    else if (periodRatio < 0.7) health = 'WARNING';
+    if (ratio < 0.5) health = 'CRITICAL';
+    else if (ratio < 0.7) health = 'WARNING';
 
     return {
       snapshots,
-      totals: { ...totals, ratio: periodRatio },
+      totals: { ...totals, ratio },
       health,
       alertCount: snapshots.filter(s => s.alertSent).length,
+      activeSubscribers: activeSubs.data().count,
     };
-  }
+  },
 );
 
 function startOfDay(date: string): admin.firestore.Timestamp {
   return admin.firestore.Timestamp.fromDate(new Date(`${date}T00:00:00-03:00`));
 }
 
-// 23:59:59.999 — sem os milissegundos, um log gravado em
-// 23:59:59.500 ficava fora da janela, porque Timestamp compara
-// com precisão de nanossegundos.
 function endOfDay(date: string): admin.firestore.Timestamp {
   return admin.firestore.Timestamp.fromDate(new Date(`${date}T23:59:59.999-03:00`));
 }

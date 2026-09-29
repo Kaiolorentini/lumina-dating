@@ -11,6 +11,19 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 const db = admin.firestore();
 
+/**
+ * Número finito e não negativo; qualquer outra coisa vira 0.
+ *
+ * Os campos de xp NÃO são confiáveis como tipo: um totalXP editado
+ * no console como TEXTO ("1849") fez o XPService calcular
+ * "1849" + 2 = "18492" — concatenação — e a conta saltou do nível 9
+ * ao 35, recebendo os marcos 10/20/30.
+ */
+function toSafeNumber(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 export interface XPSnapshot {
   totalXP:     number;
   treeXP:      number;
@@ -40,10 +53,10 @@ export const XPRepository = {
     const xp   = data.xp ?? {};
     const arv  = data.progression?.arvore ?? {};
     return {
-      totalXP:     xp.totalXP     ?? 0,
-      treeXP:      xp.treeXP      ?? 0,
-      xpToday:     xp.xpToday     ?? 0,
-      xpTodayDate: xp.xpTodayDate ?? '',
+      totalXP:     toSafeNumber(xp.totalXP),
+      treeXP:      toSafeNumber(xp.treeXP),
+      xpToday:     toSafeNumber(xp.xpToday),
+      xpTodayDate: typeof xp.xpTodayDate === 'string' ? xp.xpTodayDate : '',
       fertilizanteAtivo:    arv.fertilizanteAtivo    === true,
       fertilizanteExpiraEm: arv.fertilizanteExpiraEm?.toDate?.() ?? null,
     };

@@ -25,7 +25,7 @@
 // vêm 20 fragmentos no lugar, porque o badge já é da pessoa e
 // receber nada seria uma renovação mais pobre que a primeira.
 // ============================================
-
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { GALAXIA_PLUS } from '../config/economy';
@@ -152,6 +152,22 @@ export async function activateGalaxiaPlus(
       timestamp:   FieldValue.serverTimestamp(),
       imutavel:    true,
     });
+
+    // Registro da economia: os 300 são COMPRA (o Pix da assinatura).
+    const premiumBefore = (wallet.coinsPremium as number) ?? 0;
+    auditLogFinanceiro({
+      uid, tipo: 'GALAXIA_PLUS_ATIVACAO', coinTipo: 'premium',
+      valor: GALAXIA_PLUS.CRYSTALS_ON_ACTIVATION, origem: 'activateGalaxiaPlus',
+      saldoAnteriorPremium: premiumBefore,
+      saldoPosteriorPremium: premiumBefore + GALAXIA_PLUS.CRYSTALS_ON_ACTIVATION,
+      metadata: { saleId, renovacao: !isFirstTime },
+    }, t);
+    if (fragments > 0) {
+      auditLogFinanceiro({
+        uid, tipo: 'FRAG_GALAXIA_PLUS', valor: fragments, origem: 'activateGalaxiaPlus',
+        metadata: { saleId },
+      }, t);
+    }
 
     return {
       expiresAt,

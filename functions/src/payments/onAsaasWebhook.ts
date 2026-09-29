@@ -45,6 +45,7 @@ import { handleCoinsChargeback } from './handleCoinsChargeback';
 import { activateGalaxiaPlus }   from './activateGalaxiaPlus';
 import { incrementMetrics }      from '../utils/incrementMetric';
 import { MissionService }        from '../gamification/services/MissionService';
+import { creditCreator, debitCreator, round2 } from '../utils/creatorLedger';
 
 const db = admin.firestore();
 
@@ -78,7 +79,7 @@ function checkPaidAmount(paymentValue: unknown, saleAmount: unknown, saleId: str
   notifyAdmins({
     title: '⚠️ Valor pago divergente',
     body:  `sale ${saleId} — pago R$ ${paid.toFixed(2)}, esperado R$ ${expected.toFixed(2)}`,
-    type:  'promocao',
+    type:  'admin_sale',
   }).catch(() => {});
 }
 
@@ -271,10 +272,12 @@ export const onAsaasWebhook = functions.onRequest(
         // Métricas — compra de cristais é receita direta da
         // plataforma, sem comissão de criador.
         incrementMetrics({
-          totalSales:     1,
-          todaySales:     1,
-          todayRevenue:   sale.amount ?? 0,
-          monthlyRevenue: sale.amount ?? 0,
+          totalSales:          1,
+          todaySales:          1,
+          todayRevenue:        sale.amount ?? 0,
+          monthlyRevenue:      sale.amount ?? 0,
+          monthlyCoinsSales:   1,
+          monthlyCoinsRevenue: sale.amount ?? 0,
         }).catch(() => {});
 
         // Notificações — fire-and-forget
@@ -292,7 +295,7 @@ export const onAsaasWebhook = functions.onRequest(
         notifyAdmins({
           title: '💎 Nova compra de cristais',
           body:  `${sale.packageLabel} — R$ ${sale.amount?.toFixed(2)} — uid: ${uid}`,
-          type:  'promocao',
+          type:  'admin_sale',
         }).catch(() => {});
 
         // Conquista FIRST_PURCHASE — fire-and-forget
@@ -344,7 +347,7 @@ export const onAsaasWebhook = functions.onRequest(
             notifyAdmins({
               title: '🚨 Galáxia Plus não ativou',
               body:  `Pagamento confirmado mas a ativação falhou — uid ${uid}, sale ${saleId}`,
-              type:  'promocao',
+              type:  'admin_sale',
             }).catch(() => {});
           }
         }
@@ -405,12 +408,9 @@ export const onAsaasWebhook = functions.onRequest(
         const sellerWalletSnap = await t.get(sellerWalletRef);
         const sellerWallet     = sellerWalletSnap.data() ?? {};
 
-        // Credita seller — direto em availableBalance (sem pendingBalance)
-        t.set(sellerWalletRef, {
-          availableBalance: FieldValue.increment(sellerAmount),
-          totalEarned:      FieldValue.increment(sellerAmount),
-          updatedAt:        FieldValue.serverTimestamp(),
-        }, { merge: true });
+        // Credita o criador: abate a DÍVIDA primeiro (reembolso ou
+        // estorno anterior), o resto vai para o disponível.
+        creditCreator(t, sellerWalletRef, sellerWallet, sellerAmount);
 
         // Cria purchase para o buyer
         const purchaseId  = `${buyerId}_${sale.productId}`;
@@ -436,8 +436,9 @@ export const onAsaasWebhook = functions.onRequest(
           updatedAt:     FieldValue.serverTimestamp(),
         });
 
-        // walletAuditLog
-        t.set(db.collection('walletAuditLogs').doc(), {
+        // Crédito do criador em REAIS — coleção própria. Na
+        // walletAuditLogs (cristais) ele se misturava à economia.
+        t.set(db.collection('creatorWalletLogs').doc(), {
           uid:           sellerId,
           type:          'sale_credit',
           amount:        sellerAmount,
@@ -480,26 +481,28 @@ export const onAsaasWebhook = functions.onRequest(
       // O webhook processa TODA venda paga e nunca incrementava nada:
       // o dashboard ficou parado nos números das vendas gratuitas.
       incrementMetrics({
-        totalSales:        1,
-        totalProductsSold: 1,
-        totalCommission:   platformFee,
-        monthlyCommission: platformFee,
-        todaySales:        1,
-        todayRevenue:      saleAmount,
-        monthlyRevenue:    saleAmount,
+        totalSales:                1,
+        totalProductsSold:         1,
+        totalCommission:           platformFee,
+        monthlyCommission:         platformFee,
+        todaySales:                1,
+        todayRevenue:              saleAmount,
+        monthlyRevenue:            saleAmount,
+        monthlyMarketplaceSales:   1,
+        monthlyMarketplaceRevenue: saleAmount,
       }).catch(() => {});
 
       // Notificações — fire-and-forget
       notifyUser({
         userId: sellerId,
-        type:   'promocao',
+        type:   'sale_completed',
         title:  '🎉 Você fez uma venda!',
         body:   `${product.title ?? 'Seu produto'} foi vendido! +R$ ${sellerAmount.toFixed(2)} disponível.`,
       }).catch(() => {});
 
       notifyUser({
         userId: buyerId,
-        type:   'promocao',
+        type:   'purchase_confirmed',
         title:  '✅ Compra confirmada',
         body:   `${product.title ?? 'Produto'} está disponível na sua biblioteca.`,
       }).catch(() => {});
@@ -507,7 +510,7 @@ export const onAsaasWebhook = functions.onRequest(
       notifyAdmins({
         title: '💰 Nova venda realizada',
         body:  `${product.title ?? 'Produto'} — R$ ${saleAmount.toFixed(2)} — seller: ${sellerId}`,
-        type:  'promocao',
+        type:  'admin_sale',
       }).catch(() => {});
 
       // Screenshot protection trigger
@@ -565,24 +568,44 @@ export const onAsaasWebhook = functions.onRequest(
         const currentStatus = freshSale.data()?.status as string | undefined;
         if (currentStatus === 'refunded' || currentStatus === 'cancelled') return null;
 
+        // Produto já creditado ao criador: 'paid' ou com reembolso pedido.
+        const creditedProduct =
+          (currentStatus === 'paid' || currentStatus === 'refund_requested') &&
+          sale.type !== 'coins_purchase' && !!sellerId;
+
+        // Leitura da carteira ANTES de qualquer escrita (regra da transação).
+        const sellerWalletRef  = creditedProduct ? db.collection('creatorWallets').doc(sellerId) : null;
+        const sellerWalletSnap = sellerWalletRef ? await t.get(sellerWalletRef) : null;
+
         t.update(saleDoc.ref, {
           status:    eventType === 'PAYMENT_REFUNDED' ? 'refunded' : 'cancelled',
           updatedAt: FieldValue.serverTimestamp(),
         });
 
-        // Se era produto e estava pago, revoga purchase
-        if (currentStatus === 'paid' && sale.type !== 'coins_purchase') {
-          const purchaseId  = `${buyerId}_${sale.productId}`;
-          const purchaseRef = db.collection('purchases').doc(purchaseId);
-          t.update(purchaseRef, {
+        if (creditedProduct && sellerWalletRef) {
+          const purchaseRef = db.collection('purchases').doc(`${buyerId}_${sale.productId}`);
+          t.set(purchaseRef, {
             status:    'refunded',
             isRevoked: true,
             updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+
+          // Os 80% saem do criador; o que faltar vira dívida. Antes ele
+          // ficava com o valor devolvido ao comprador pelo banco.
+          debitCreator(t, sellerWalletRef, sellerWalletSnap?.data() ?? {}, round2(Number(sale.sellerAmount ?? 0)), {
+            userId:      sellerId,
+            type:        'chargeback',
+            description: 'Pagamento estornado pelo banco',
+            saleId,
           });
         }
 
         return currentStatus ?? 'unknown';
       });
+
+      if (previousStatus === 'paid' || previousStatus === 'refund_requested') {
+        incrementMetrics({ totalChargebacks: 1, monthlyChargebacks: 1 }).catch(() => {});
+      }
 
       // ── Estorno de compra de cristais ──
       // Fora da transaction acima porque handleCoinsChargeback abre
@@ -622,7 +645,7 @@ export const onAsaasWebhook = functions.onRequest(
             notifyAdmins({
               title: cb.debtCreated > 0 ? '🚨 Estorno com dívida' : '↩️ Estorno de cristais',
               body:  `uid ${cbUid} — R$ ${(sale.amount ?? 0).toFixed(2)} — revertidos ${cb.coinsReverted}, dívida ${cb.debtCreated}`,
-              type:  'promocao',
+              type:  'fraud_flag',
             }).catch(() => {});
           }
         } catch (error) {

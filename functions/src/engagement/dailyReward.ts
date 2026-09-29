@@ -11,7 +11,7 @@
 // 6. Streak: máx 7 dias (reinicia após 48h sem login)
 // 20. auditLog para toda movimentação
 // ============================================
-
+import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import * as functions from 'firebase-functions/v2/https';
 import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -158,6 +158,14 @@ export const claimDailyReward = functions.onCall(
           coinsGratuitos: FieldValue.increment(crystals),
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
+
+        // Registro da economia — antes só ia para a subcoleção da
+        // carteira, que o monitor não lê.
+        auditLogFinanceiro({
+          uid, tipo: 'LOGIN_DIARIO', coinTipo: 'gratuito', valor: crystals, origem: 'dailyReward',
+          saldoAnteriorGratuito: coinsGratuitos, saldoPosteriorGratuito: coinsGratuitos + crystals,
+          metadata: { streak: currentStreak },
+        }, t);
 
         // ── REGRA 20: auditLog ──
         const auditDocRef = auditRef.doc(`daily_${todayStr}`);

@@ -10,7 +10,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator,
+  TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
 import { useNavigation }  from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -68,10 +68,9 @@ export default function NotificationsScreen() {
   });
 
   function handleNotificationPress(item: AppNotification) {
-    // Marca como lida
     markRead(item.id);
 
-    // Se for gatilho emocional → abre modal
+    // Gatilho emocional → modal de revelação
     if (isTriggerType(item.type)) {
       setTriggerModal({
         visible:   true,
@@ -85,21 +84,23 @@ export default function NotificationsScreen() {
       return;
     }
 
-    // Outras notificações → navegação normal
+    // Cada tipo leva à tela onde o assunto está. A mesma tabela vale
+    // para o toque no push (AppNavigator) — manter as duas iguais.
     switch (item.type) {
+      // ── Conexões e conversas ──
       case 'sintonia':
         navigation.navigate('MainTabs');
         break;
       case 'mensagem':
-        navigation.navigate('MainTabs', { screen: 'Sintonias' } as any);
+      case 'message':
+      case 'request_accepted':
+        navigation.navigate('MainTabs', { screen: 'Sintonias' } as never);
         break;
-      case 'promocao':
-      case 'coins_purchased':
-        navigation.navigate('MainTabs', { screen: 'Store' } as any);
+      case 'request':
+        navigation.navigate('Requests');
         break;
-      // Curtida recebida: o texto é anônimo; o toque revela quem
-      // curtiu — a pessoa conhece todos que a curtiram.
       case 'like_received': {
+        // Texto anônimo; o toque revela quem curtiu.
         const likedBy = dadosString(item, 'likedBy');
         if (likedBy) navigation.navigate('RealProfile', { userId: likedBy });
         break;
@@ -109,13 +110,27 @@ export default function NotificationsScreen() {
         if (sintoniaWith) navigation.navigate('RealProfile', { userId: sintoniaWith });
         break;
       }
+
+      // ── Loja, impulsos e Galáxia Plus ──
+      case 'promocao':
+      case 'coins_purchased':
+        navigation.navigate('MainTabs', { screen: 'Store' } as never);
+        break;
       case 'galaxia_plus_activated':
+      case 'galaxia_turbos_expiring':
         navigation.navigate('GalaxiaPlus');
         break;
+      // Relatório do impulso: leva à loja para impulsionar de novo.
+      case 'boost_report':
+      case 'destaque_aberto':
+      case 'visibilidade_caindo':
+        navigation.navigate('Boosts');
+        break;
+
+      // ── Gamificação ──
       case 'cofre_pronto':
         navigation.navigate('Vault');
         break;
-      // Gamificação: cada aviso leva à tela onde o ganho aparece.
       case 'level_up':
       case 'tree_evolution':
         navigation.navigate('XP');
@@ -127,6 +142,90 @@ export default function NotificationsScreen() {
       case 'ranking_reward':
         navigation.navigate('Ranking');
         break;
+      case 'prestige_marco':
+      case 'prestige_stage':
+      case 'prestige_evolution':
+        navigation.navigate('Prestige');
+        break;
+      case 'streak_risco':
+        navigation.navigate('MainTabs');
+        break;
+
+      // ── Marketplace: comprador ──
+      case 'purchase_confirmed':
+      case 'refund_processed':
+        navigation.navigate('MyPurchases');
+        break;
+      case 'screenshot_warning':
+        Alert.alert('⚠️ Aviso', item.message);
+        break;
+
+      // ── Marketplace: criador ──
+      case 'creator_approved':
+      case 'product_approved':
+      case 'product_rejected':
+      case 'marketplace_unbanned':
+        navigation.navigate('MyProducts');
+        break;
+      case 'creator_rejected':
+        navigation.navigate('CreatorRequest');
+        break;
+      case 'sale_completed':
+      case 'sale_refunded':
+      case 'withdrawal_approved':
+      case 'withdrawal_paid':
+      case 'withdrawal_rejected':
+        navigation.navigate('MyEarnings');
+        break;
+
+      // ── Conta e suporte ──
+      case 'marketplace_banned':
+      case 'age_verification_rejected':
+        navigation.navigate('Support');
+        break;
+      case 'support_reply':
+      case 'support_new': {
+        const ticketId = dadosString(item, 'ticketId');
+        if (ticketId) navigation.navigate('SupportTicket', { ticketId });
+        else navigation.navigate('Support');
+        break;
+      }
+
+      // ── Admin ──
+      case 'product_review_new': {
+        const productId = dadosString(item, 'productId');
+        if (productId) navigation.navigate('AdminProductReview', { productId });
+        else navigation.navigate('AdminProductsModeration');
+        break;
+      }
+      case 'product_pending':
+        navigation.navigate('AdminProductsModeration');
+        break;
+      case 'creator_request':
+        navigation.navigate('AdminCreatorRequests');
+        break;
+      case 'withdrawal_request':
+        navigation.navigate('AdminWithdrawals');
+        break;
+      case 'refund_requested':
+        navigation.navigate('AdminRefundRequests');
+        break;
+      case 'fraud_flag':
+        navigation.navigate('AdminFraudFlags');
+        break;
+      case 'inflation_alert':
+        navigation.navigate('AdminInflation');
+        break;
+      case 'age_verification_pending':
+        navigation.navigate('AdminAgeVerification');
+        break;
+      case 'admin_sale':
+        navigation.navigate('AdminSales');
+        break;
+      case 'gallery_photo_removed':
+        navigation.navigate('MainTabs', { screen: 'Profile' } as never);
+        break;
+
       default:
         break;
     }
