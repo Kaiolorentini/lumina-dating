@@ -100,6 +100,6 @@ export type TabParamList = {
   // Sintonize (singular) é a aba do carrossel — um perfil por
   // vez, para decidir. Sintonias (plural) é a lista de quem já
   // sintonizou. Nomes parecidos, telas diferentes.
-  Home: undefined; Sintonize: undefined; Media: undefined; Sintonias: undefined;
+  Home: undefined; Sintonize: undefined; Sintonias: undefined;
   Store: undefined; Marketplace: undefined; Profile: undefined; Admin: undefined;
 };

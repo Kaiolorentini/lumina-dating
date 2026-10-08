@@ -9,6 +9,11 @@
 //   - assertAuthenticated + assertSuperAdmin + assertUserNotBlocked
 //   - o arquivo assinado DEVE constar em products/{productId}.files[]
 //     (impede assinatura de caminho arbitrário no Storage)
+//   - e DEVE estar na pasta do próprio produto:
+//     marketplace/products/{productId}/files/ (auditoria Parte 5,
+//     08/10/2026 — mesma trava do content/getSignedUrl). Sem ela, um
+//     files[] com caminho de outra pasta (verificação de idade,
+//     galeria privada) seria assinado para o moderador.
 //   - URL expira sozinha em 10 minutos (não é downloadURL permanente)
 //   - registra VIEW_MODERATOR_FILE no auditLog
 //
@@ -43,10 +48,12 @@ export const getModeratorFileUrl = onCall(async (request) => {
     fileIndex?: number;
   };
 
-  if (!productId) {
+  // productId vira caminho do Firestore e prefixo do Storage: só
+  // id simples, sem barra (barra mudaria o documento lido).
+  if (typeof productId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(productId)) {
     throw new HttpsError("invalid-argument", "productId obrigatório");
   }
-  if (typeof fileIndex !== "number" || fileIndex < 0) {
+  if (typeof fileIndex !== "number" || !Number.isInteger(fileIndex) || fileIndex < 0) {
     throw new HttpsError("invalid-argument", "fileIndex inválido");
   }
 
@@ -74,6 +81,26 @@ export const getModeratorFileUrl = onCall(async (request) => {
     throw new HttpsError(
       "failed-precondition",
       "Arquivo sem caminho de armazenamento válido"
+    );
+  }
+
+  // Só arquivos da pasta deste produto. ".." e "//" barrados para o
+  // caminho não sair da pasta depois do prefixo.
+  const expectedPrefix = `marketplace/products/${productId}/files/`;
+  if (
+    !storagePath.startsWith(expectedPrefix) ||
+    storagePath.length <= expectedPrefix.length ||
+    storagePath.includes("..") ||
+    storagePath.includes("//")
+  ) {
+    console.warn("[getModeratorFileUrl] caminho fora da pasta do produto", {
+      uid,
+      productId,
+      fileIndex,
+    });
+    throw new HttpsError(
+      "failed-precondition",
+      "Arquivo fora da pasta deste produto"
     );
   }
 

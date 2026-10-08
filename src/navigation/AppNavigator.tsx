@@ -38,7 +38,9 @@ import AccountBannedScreen from '../screens/Onboarding/AccountBannedScreen';
 import GateErrorScreen from '../screens/Onboarding/GateErrorScreen';
 import { clearDraft as clearVerificationDraft } from '../modules/verification/services/verificationDraft';
 
-import MediaScreen from '../modules/media/screens/MediaScreen';
+// MediaScreen removido (auditoria Parte 5, 08/10/2026): a tela
+// não estava registrada em nenhum navegador e a coleção mediaItems
+// foi fechada nas regras.
 import ProfileScreen from '../modules/profile/screens/ProfileScreen';
 import RealProfileScreen from '../screens/Profile/RealProfileScreen';
 import UserChatScreen from '../modules/chat/screens/UserChatScreen';

@@ -317,6 +317,33 @@ service cloud.firestore {
           .difference(chatId.split('_').toSet()).size() == 0;
     }
 
+    // Entregue/lida (Parte 5): só quem recebeu marca, e só para true
+    // (ninguém "desmarca" a leitura). O markAsDelivered/markAsRead do
+    // app já filtra senderId != eu.
+    function isValidReceiptChange() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return !changed.hasAny(['delivered', 'deliveredAt', 'read', 'readAt']) || (
+        resource.data.senderId != request.auth.uid &&
+        (!changed.hasAny(['delivered']) || request.resource.data.delivered == true) &&
+        (!changed.hasAny(['read'])      || request.resource.data.read == true) &&
+        (!changed.hasAny(['deliveredAt']) || request.resource.data.deliveredAt == request.time) &&
+        (!changed.hasAny(['readAt'])      || request.resource.data.readAt == request.time)
+      );
+    }
+
+    // Reações (Parte 5): o mapa reactions só muda na chave de quem
+    // reage. Valor: emoji curto. Tirar a própria reação também passa.
+    function isValidReactionChange() {
+      let before = resource.data.get('reactions', {});
+      let after  = request.resource.data.get('reactions', {});
+      let uid    = request.auth.uid;
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions']) || (
+        after is map &&
+        after.diff(before).affectedKeys().hasOnly([uid]) &&
+        (!after.keys().hasAny([uid]) || (after[uid] is string && after[uid].size() >= 1 && after[uid].size() <= 16))
+      );
+    }
+
     match /chatAccess/{chatId} {
       allow read, write: if false;
     }
@@ -340,17 +367,29 @@ service cloud.firestore {
           ]) &&
           request.resource.data.text is string &&
           request.resource.data.text.size() <= 2000;
-        allow update: if canUseChat(chatId) && (
-          resource.data.senderId == request.auth.uid ||
+        // Parte 5 (decisão 2A, 08/10/2026): texto, áudio, remetente e
+        // horário são IMUTÁVEIS depois do envio. Antes o remetente
+        // regravava a mensagem inteira (trocar o texto depois que a
+        // outra pessoa leu, ou o senderId), e quem RECEBIA não
+        // conseguia reagir — a reação era negada.
+        // Agora, nos dois lados, só mudam:
+        //   - entregue/lida: só por quem RECEBEU, e só para true;
+        //   - reações: cada um só a PRÓPRIA (reactions.{uid}).
+        allow update: if canUseChat(chatId) &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['delivered', 'deliveredAt', 'read', 'readAt'])
-        );
+            .hasOnly(['delivered', 'deliveredAt', 'read', 'readAt', 'reactions']) &&
+          isValidReceiptChange() &&
+          isValidReactionChange();
         allow delete: if false;
       }
 
+      // "Digitando…": só o próprio indicador, só estes dois campos.
       match /typing/{userId} {
         allow read:  if canUseChat(chatId);
-        allow write: if canUseChat(chatId) && isOwner(userId);
+        allow write: if canUseChat(chatId) && isOwner(userId) &&
+          request.resource.data.keys().hasOnly(['isTyping', 'updatedAt']) &&
+          request.resource.data.isTyping is bool &&
+          request.resource.data.updatedAt == request.time;
       }
     }
     
@@ -418,8 +457,23 @@ service cloud.firestore {
         resource.data.blockerId == request.auth.uid ||
         resource.data.blockedId == request.auth.uid
       );
+      // Parte 5: só os campos que o bloquearUsuario grava. Antes
+      // qualquer campo extra passava (documento inchado, dados
+      // falsos sobre a outra pessoa).
       allow create: if isAuthenticated() &&
-        request.resource.data.blockerId == request.auth.uid;
+        request.resource.data.keys().hasOnly([
+          'blockerId', 'blockedId', 'blockedName', 'blockedPhoto', 'timestamp',
+        ]) &&
+        request.resource.data.blockerId == request.auth.uid &&
+        request.resource.data.blockedId is string &&
+        request.resource.data.blockedId.size() >= 1 &&
+        request.resource.data.blockedId.size() <= 128 &&
+        request.resource.data.blockedId != request.auth.uid &&
+        request.resource.data.blockedName is string &&
+        request.resource.data.blockedName.size() <= 200 &&
+        request.resource.data.blockedPhoto is string &&
+        request.resource.data.blockedPhoto.size() <= 2048 &&
+        request.resource.data.timestamp == request.time;
       allow delete: if isAuthenticated() &&
         resource.data.blockerId == request.auth.uid;
       allow update: if false;
@@ -489,15 +543,13 @@ service cloud.firestore {
     // ============================================
     // MEDIA ITEMS
     // ============================================
+    // Fechada na Parte 5 (decisão 1A, 08/10/2026): a tela Mídia saiu
+    // do app (não estava em nenhum navegador). A coleção aceitava
+    // link de imagem de fora (ImgBB) sem moderação, visível para
+    // toda conta verificada. Documentos antigos ficam onde estão,
+    // inacessíveis ao cliente.
     match /mediaItems/{itemId} {
-      allow read: if isVerified();
-      allow create: if isVerified() && isNotBlocked() &&
-        request.resource.data.uploadedBy == request.auth.uid;
-      allow update: if isAuthenticated() &&
-        resource.data.uploadedBy == request.auth.uid;
-      allow delete: if isAuthenticated() && (
-        resource.data.uploadedBy == request.auth.uid || isAdmin()
-      );
+      allow read, write: if false;
     }
 
     // ============================================
@@ -531,6 +583,16 @@ service cloud.firestore {
     // ============================================
     // Vitrine pública por decisão de produto (auditoria M7): a
     // moderação garante capa e prévia sem nudez.
+    // Os 20 campos que o createProduct do app grava (Parte 5).
+    function productCreateFields() {
+      return [
+        'ownerId', 'title', 'description', 'price', 'isFree', 'category', 'tags',
+        'status', 'coverImage', 'previewImages', 'previewFiles', 'files',
+        'isFeatured', 'isDeleted', 'averageRating', 'reviewsCount',
+        'version', 'changelog', 'createdAt', 'updatedAt',
+      ];
+    }
+
     match /products/{productId} {
       allow get: if resource.data.status == 'approved' &&
         resource.data.isDeleted != true;
@@ -547,14 +609,43 @@ service cloud.firestore {
       // filtro a regra não se confirma e a consulta é recusada.
       allow list: if isAuthenticated() &&
         resource.data.ownerId == request.auth.uid;
+      // Parte 5: create por LISTA BRANCA — exatamente os 20 campos do
+      // createProduct do app, com os valores iniciais fixos. Antes
+      // qualquer campo extra passava (hasPendingChanges, pendingCover,
+      // coverStoragePath, files já preenchido…). Capa, prévias e
+      // arquivos entram depois, pelo update de rascunho.
       allow create: if isCreator() && isMarketplaceEnabled() &&
+        request.resource.data.keys().hasOnly(productCreateFields()) &&
+        request.resource.data.keys().hasAll(productCreateFields()) &&
         request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.title is string &&
+        request.resource.data.title.size() >= 1 &&
+        request.resource.data.title.size() <= 200 &&
+        request.resource.data.description is string &&
+        request.resource.data.description.size() <= 5000 &&
+        request.resource.data.price is number &&
+        request.resource.data.price >= 0 &&
+        request.resource.data.price <= 100000 &&
+        request.resource.data.isFree == (request.resource.data.price == 0) &&
+        request.resource.data.category is string &&
+        request.resource.data.category.size() >= 1 &&
+        request.resource.data.category.size() <= 50 &&
+        request.resource.data.tags is list &&
+        request.resource.data.tags.size() <= 50 &&
         request.resource.data.status == 'draft' &&
+        request.resource.data.coverImage == '' &&
+        request.resource.data.previewImages == [] &&
+        request.resource.data.previewFiles == [] &&
+        request.resource.data.files == [] &&
         request.resource.data.isFeatured == false &&
+        request.resource.data.isDeleted == false &&
         // Nota e contagem só pela CF submitProductReview.
-        request.resource.data.get('averageRating', 0) == 0 &&
-        request.resource.data.get('reviewsCount', 0) == 0 &&
-        !request.resource.data.keys().hasAny(['ratingSum', 'ratingUpdatedAt']);
+        request.resource.data.averageRating == 0 &&
+        request.resource.data.reviewsCount == 0 &&
+        request.resource.data.version == 1 &&
+        request.resource.data.changelog == '' &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
       // Edição normal: o dono altera conteúdo, nunca status nem
       // campos de curadoria.
       allow update: if isCreator() &&
@@ -565,6 +656,9 @@ service cloud.firestore {
           'ratingSum', 'ratingUpdatedAt',
           // Retirada e moderação de alterações: só pelas CFs.
           'isDeleted', 'deletedAt', 'hasPendingChanges', 'pendingCover', 'lastChangesRejection',
+          // Parte 5: versão e caminho da capa no Storage são do
+          // servidor (aprovação de alterações).
+          'version', 'coverStoragePath', 'createdAt',
         ]);
 
       // Envio para revisão: única transição de status permitida ao
@@ -592,9 +686,14 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
+      // Parte 5: só os 3 campos do createCreatorRequest. Antes dava
+      // para criar o pedido já com reviewedBy, rejectionReason ou
+      // createdAt no passado (furando a ordem da fila do admin).
       allow create: if isAuthenticated() && isNotBlocked() &&
+        request.resource.data.keys().hasOnly(['userId', 'status', 'createdAt']) &&
         request.resource.data.userId == request.auth.uid &&
-        request.resource.data.status == 'pending';
+        request.resource.data.status == 'pending' &&
+        request.resource.data.createdAt == request.time;
       allow update: if isAuthenticated() && (
         (
           resource.data.userId == request.auth.uid &&
@@ -704,8 +803,16 @@ match /coinsPurchases/{docId} {
         (resource == null || resource.data.userId == request.auth.uid);
       allow list: if isAuthenticated() &&
         resource.data.userId == request.auth.uid;
+      // Parte 5: id = {uid}_{productId} (o mesmo do app — um favorito
+      // por produto) e só os 3 campos do addFavorite.
       allow create: if isAuthenticated() &&
-        request.resource.data.userId == request.auth.uid;
+        request.resource.data.keys().hasOnly(['userId', 'productId', 'createdAt']) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.productId is string &&
+        request.resource.data.productId.size() >= 1 &&
+        request.resource.data.productId.size() <= 128 &&
+        favoriteId == request.auth.uid + '_' + request.resource.data.productId &&
+        request.resource.data.createdAt == request.time;
       allow delete: if isAuthenticated() &&
         resource.data.userId == request.auth.uid;
       allow update: if false;
@@ -788,19 +895,23 @@ match /coinsPurchases/{docId} {
     // ============================================
     // MARKETPLACE — COUPONS
     // ============================================
-    // PENDENTE (auditoria M5): cupom privado continua listável por
-    // qualquer conta verificada. Corrigir com validação por CF.
+    // Parte 5 (auditoria M5, 08/10/2026): o cupom é validado só no
+    // servidor (validateCoupon / buildPurchasePricing) — o app nunca
+    // lê a coleção fora do painel do admin. Antes qualquer conta
+    // verificada LISTAVA todos os cupons ativos, inclusive os
+    // privados de campanha.
+    // Escrita: só pelas CFs createCoupon/updateCoupon/toggleCoupon,
+    // que já registram auditoria.
     match /coupons/{couponId} {
-      allow read: if isVerified() && resource.data.isActive == true;
       allow read: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow write: if false;
     }
 
+    // Uso de cupom: ninguém do app grava (o servidor registra o uso
+    // na compra). Antes qualquer conta criava documentos aqui.
     match /couponUses/{useId} {
       allow read: if isAdmin();
-      allow create: if isVerified() && isNotBlocked() &&
-        request.resource.data.userId == request.auth.uid;
-      allow update, delete: if false;
+      allow write: if false;
     }
 
     // ============================================
@@ -886,11 +997,22 @@ match /coinsPurchases/{docId} {
         // quem insista em chamar o incremento muitas vezes.
         // Se um dia views influenciarem posição no marketplace, isto
         // precisa virar Cloud Function.
+        // Parte 5: só incremento de 1 por gravação (views +1,
+        // favorites ±1) e shard novo começando em 0 ou 1. Antes o
+        // cliente gravava qualquer número (views: 999999).
+        // downloads é só do servidor.
         allow create: if isAuthenticated() && isNotBlocked() &&
-          request.resource.data.keys().hasOnly(['views', 'downloads', 'favorites']);
+          request.resource.data.keys().hasOnly(['views', 'downloads', 'favorites']) &&
+          request.resource.data.get('views', 0) in [0, 1] &&
+          request.resource.data.get('downloads', 0) == 0 &&
+          request.resource.data.get('favorites', 0) in [0, 1];
         allow update: if isAuthenticated() && isNotBlocked() &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['views', 'downloads', 'favorites']);
+            .hasOnly(['views', 'favorites']) &&
+          request.resource.data.get('views', 0) is number &&
+          request.resource.data.get('favorites', 0) is number &&
+          (request.resource.data.get('views', 0) - resource.data.get('views', 0)) in [0, 1] &&
+          (request.resource.data.get('favorites', 0) - resource.data.get('favorites', 0)) in [-1, 0, 1];
         allow delete: if false;
       }
     }
