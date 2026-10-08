@@ -1,6 +1,12 @@
 // ============================================
 // useProfileSetup — HOOK
 // src/modules/profile/hooks/useProfileSetup.ts
+//
+// 08/10/2026 (auditoria M8): createdAt saiu do payload. Era
+// regravado a cada edição — a data de cadastro virava a data da
+// última edição, e o próprio app controlava o campo. Agora quem
+// grava é o servidor (acceptAppTerms) ou o saveProfile, só na
+// criação do documento.
 // ============================================
 
 import { useState, useEffect } from 'react';
@@ -181,7 +187,6 @@ export function useProfileSetup(
         gender:    gender!,
         preferences,
         bio,
-        createdAt: new Date(),
         ...seedField,
       });
 

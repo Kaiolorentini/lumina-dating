@@ -11,6 +11,10 @@ import { UserProfile } from '../../../shared/types';
 // esses campos protegidos NÃO entram no payload — evitando
 // que a regra hasNoProtectedFields() bloqueie o update.
 //
+// createdAt também só no create (auditoria M8, 08/10/2026).
+// Qualquer createdAt que chegue em `data` numa edição é
+// descartado aqui: a data de cadastro não muda.
+//
 // Backup de segurança: initWallet (Admin SDK) garante
 // role/isBlocked caso o documento seja criado por outro
 // caminho antes do saveProfile.
@@ -23,9 +27,12 @@ export async function saveProfile(
   const profileRef = doc(db, COLLECTIONS.USERS, uid);
   const existing   = await getDoc(profileRef);
 
+  const { createdAt: _ignored, ...rest } = data;
+  const isNew = !existing.exists();
+
   await setDoc(profileRef, {
-    ...data,
-    ...(!existing.exists() && { role: 'user', isBlocked: false }),
+    ...rest,
+    ...(isNew && { role: 'user', isBlocked: false, createdAt: new Date() }),
     updatedAt: new Date(),
   }, { merge: true });
 }
