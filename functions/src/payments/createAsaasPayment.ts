@@ -14,6 +14,7 @@ import { calculateCommission } from "../utils/calculateCommission";
 import { buildPurchasePricing } from "../utils/buildPurchasePricing";
 import { createAuditLog } from "../utils/auditLog";
 import { assertValidCpf } from "../utils/validateCpf";
+import { assertVerified } from "../utils/assertVerified";
 import {
   findOrCreateCustomer,
   createPixPayment,
@@ -29,6 +30,8 @@ export const createAsaasPayment = onCall(
     if (!uid) throw new HttpsError("unauthenticated", "Não autenticado");
 
     await assertUserNotBlocked(uid);
+    // Compra só de conta verificada (maior de idade comprovado).
+    assertVerified(request.auth);
 
     const { productId, paymentMethod, couponCode, cpf } = request.data as {
       productId: string;

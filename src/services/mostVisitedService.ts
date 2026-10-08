@@ -1,6 +1,11 @@
 // ============================================
-// LUMINA — MOST VISITED SERVICE v6.0
+// LUMINA — MOST VISITED SERVICE v6.1
 // src/services/mostVisitedService.ts
+//
+// v6.1:
+// - O card leva também o FIM do boost (boostUntil), para a Home
+//   tirar o selo quando ele vence sem buscar de novo. O isActive
+//   saiu: o activeBoost agora devolve o prazo junto do tipo.
 //
 // v6.0 (27/09):
 // - Perfis buscados EM PARALELO. Eram 20 leituras em série,
@@ -18,7 +23,16 @@ import { db }                      from './firebase';
 import { getMostVisitedProfiles }  from './visitsService';
 import { getProfile }              from './profileService';
 import { calcularSintonia }        from '../utils/sintoniaEngine';
+import { isListableProfile } from '../shared/utils/profileVisibility';
 import { UserProfile, ProfileCardData, BoostType } from '../shared/types';
+
+interface ActiveBoostInfo {
+  type:  BoostType | null;
+  /** Fim do boost em ms. */
+  until: number | null;
+}
+
+const NO_BOOST: ActiveBoostInfo = { type: null, until: null };
 
 /**
  * Cosmético equipado, descartando aluguel vencido.
@@ -33,37 +47,45 @@ function activeCosmetic(id: unknown, until: unknown): string | null {
   return date.getTime() > Date.now() ? id : null;
 }
 
-function isActive(expiresAt: unknown, now: number): boolean {
+function expiryMs(expiresAt: unknown): number | null {
   const date = (expiresAt as { toDate?: () => Date })?.toDate?.() ?? null;
-  return !!date && date.getTime() > now;
+  return date ? date.getTime() : null;
 }
 
 /** Mesma precedência do usersService: Turbo, Destaque (só na mesma cidade), Impulso. */
-function activeBoostType(data: Record<string, any>, viewerRegiaoId: string | null): BoostType | null {
+function activeBoost(data: Record<string, any>, viewerRegiaoId: string | null): ActiveBoostInfo {
   const now = Date.now();
-  if (isActive(data.turbo?.expiresAt, now)) return 'turbo';
-  if (isActive(data.destaqueRegional?.expiresAt, now)) {
+
+  const turbo = expiryMs(data.turbo?.expiresAt);
+  if (turbo !== null && turbo > now) return { type: 'turbo', until: turbo };
+
+  const destaque = expiryMs(data.destaqueRegional?.expiresAt);
+  if (destaque !== null && destaque > now) {
     const target = data.destaqueRegional?.regiaoId ?? data.regiaoId ?? null;
-    if (viewerRegiaoId && target === viewerRegiaoId) return 'destaque';
+    if (viewerRegiaoId && target === viewerRegiaoId) return { type: 'destaque', until: destaque };
   }
-  if (isActive(data.impulso?.expiresAt, now)) return 'impulso';
-  return null;
+
+  const impulso = expiryMs(data.impulso?.expiresAt);
+  if (impulso !== null && impulso > now) return { type: 'impulso', until: impulso };
+
+  return NO_BOOST;
 }
 
 function toCard(
   profile: UserProfile,
   currentUser: UserProfile | null,
-  boostType: BoostType | null,
+  boost: ActiveBoostInfo,
 ): ProfileCardData {
   const prog = (profile as { progression?: Record<string, unknown> })?.progression ?? {};
   return {
-    id:       profile.uid,
-    name:     profile.name,
-    age:      profile.age,
-    location: `${profile.city || ''}, ${profile.state || ''}`,
-    sintonia: currentUser ? calcularSintonia(currentUser, profile).score : 50,
-    photoURL: profile.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
-    boostType,
+    id:         profile.uid,
+    name:       profile.name,
+    age:        profile.age,
+    location:   `${profile.city || ''}, ${profile.state || ''}`,
+    sintonia:   currentUser ? calcularSintonia(currentUser, profile).score : 50,
+    photoURL:   profile.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
+    boostType:  boost.type,
+    boostUntil: boost.until,
     equippedFrame:       activeCosmetic(prog.equippedFrame, prog.equippedFrameUntil),
     equippedBadge:       activeCosmetic(prog.equippedBadge, prog.equippedBadgeUntil),
     equippedBadgeRarity: (prog.equippedBadgeRarity as string) ?? null,
@@ -94,8 +116,9 @@ export async function getMostVisitedProfileCards(
 
     profiles.forEach(profile => {
       if (!profile || !profile.name || !profile.age) return;
+      if (!isListableProfile(profile)) return;
       if (currentUser && profile.uid === currentUser.uid) return;
-      cards.push(toCard(profile, currentUser, activeBoostType(profile as Record<string, any>, region)));
+      cards.push(toCard(profile, currentUser, activeBoost(profile as Record<string, any>, region)));
     });
 
     return cards;
@@ -121,11 +144,17 @@ export async function getTurboProfileCards(
 
     const cards: ProfileCardData[] = [];
     snap.docs.forEach(docSnap => {
-      const profile = docSnap.data() as UserProfile;
+      const raw     = docSnap.data();
+      const profile = raw as UserProfile;
       if (!profile.name || !profile.age) return;
+      if (!isListableProfile(raw)) return;
       if ((profile as { isBlocked?: boolean }).isBlocked === true) return;
       if (currentUser && docSnap.id === currentUser.uid) return;
-      cards.push(toCard({ ...profile, uid: docSnap.id }, currentUser, 'turbo'));
+      cards.push(toCard(
+        { ...profile, uid: docSnap.id },
+        currentUser,
+        { type: 'turbo', until: expiryMs(raw.boostActiveUntil) },
+      ));
     });
 
     return cards.slice(0, limitCount);

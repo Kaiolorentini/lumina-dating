@@ -1,6 +1,14 @@
 // ============================================
-// LUMINA — REAL PROFILE SCREEN v5.3
+// LUMINA — REAL PROFILE SCREEN v5.4
 // src/screens/Profile/RealProfileScreen.tsx
+//
+// v5.4 — MODO "COMO OS OUTROS VEEM".
+// O card do Meu Perfil abre esta tela com o uid do próprio
+// usuário. Nesse modo (isSelf) a tela só MOSTRA: nada de visita
+// registrada, curtida, conexão, bloqueio, denúncia ou Sintonia
+// consigo mesmo. A visita a si mesmo já é recusada no servidor
+// (registerProfileVisit → self_visit); aqui ela nem é chamada,
+// para não gastar a chamada à toa.
 //
 // v5.3: progressMission chamado em visita e curtida
 // para registrar progresso das missões diárias.
@@ -84,6 +92,8 @@ export default function RealProfileScreen() {
   const navigation   = useNavigation<NavProp>();
   const route        = useRoute<any>();
   const targetUserId: string = route.params?.userId;
+  /** O próprio usuário vendo o perfil como os outros veem. */
+  const isSelf = Boolean(user?.uid) && targetUserId === user?.uid;
 
   const [targetProfile,  setTargetProfile]  = useState<UserProfile | null>(null);
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
@@ -106,6 +116,34 @@ export default function RealProfileScreen() {
 
   async function loadData() {
     if (!user) return;
+
+    // Prévia do próprio perfil: uma leitura só e as conquistas.
+    // Conexão, bloqueio, curtida e visita não se aplicam.
+    if (isSelf) {
+      try {
+        const me = await getProfile(user.uid);
+        if (me) {
+          setTargetProfile(me);
+          setCurrentProfile(me);
+        }
+        const achFn = httpsCallable<AchievementsReq, AchievementsRes>(
+          functions,
+          'getPublicAchievements',
+        );
+        achFn({ userId: user.uid })
+          .then(res => {
+            setAchievements(res.data.achievements ?? []);
+            setTotalAch(res.data.totalAvailable ?? 0);
+          })
+          .catch(() => { /* perfil sem conquistas não é erro */ });
+      } catch (error) {
+        console.error('Erro ao carregar o próprio perfil:', error);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const [target, current] = await Promise.all([
         getProfile(targetUserId),
@@ -177,7 +215,7 @@ export default function RealProfileScreen() {
   }
 
   async function handleSendRequest() {
-    if (!user || !currentProfile || !targetProfile) return;
+    if (!user || !currentProfile || !targetProfile || isSelf) return;
     setSending(true);
     try {
       await enviarSolicitacao(
@@ -197,7 +235,7 @@ export default function RealProfileScreen() {
   }
 
   async function handleBlock() {
-    if (!user || !targetProfile) return;
+    if (!user || !targetProfile || isSelf) return;
 
     if (Platform.OS === 'web') {
       const confirmed = window.confirm(`Deseja bloquear ${targetProfile.name}?`);
@@ -233,7 +271,7 @@ export default function RealProfileScreen() {
   }
 
   async function handleLike() {
-    if (!user || liked || liking) return;
+    if (!user || liked || liking || isSelf) return;
     setLiking(true);
     // Otimista: o coração responde na hora, a CF confirma depois.
     setLiked(true);
@@ -354,15 +392,29 @@ export default function RealProfileScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title={targetProfile?.name || 'Perfil'}
+        title={isSelf ? 'Seu perfil' : (targetProfile?.name || 'Perfil')}
         showBack={true}
         showHome={true}
         rightElement={
-          <TouchableOpacity onPress={handleBlock}>
-            <Text style={styles.blockIcon}>🚫</Text>
-          </TouchableOpacity>
+          isSelf ? undefined : (
+            <TouchableOpacity
+              onPress={handleBlock}
+              accessibilityRole="button"
+              accessibilityLabel={`Bloquear ${targetProfile?.name ?? 'usuário'}`}
+            >
+              <Text style={styles.blockIcon}>🚫</Text>
+            </TouchableOpacity>
+          )
         }
       />
+
+      {isSelf && (
+        <View style={styles.selfBanner} accessibilityRole="text">
+          <Text style={styles.selfBannerText}>
+            👁️ É assim que as outras pessoas veem o seu perfil
+          </Text>
+        </View>
+      )}
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Foto principal.
@@ -483,18 +535,21 @@ export default function RealProfileScreen() {
             </View>
           )}
 
-          {/* Sintonia */}
-          <View style={styles.card}>
-            <Text style={styles.milestoneText}>{getSintoniaLabel()}</Text>
-            <SintoniaBar
-              score={sintonia}
-              showLabel={true}
-              showBreakdown={true}
-              breakdown={sintoniaBreakdown}
-            />
-          </View>
+          {/* Sintonia — compara QUEM VÊ com o perfil. Não existe
+              Sintonia consigo mesmo. */}
+          {!isSelf && (
+            <View style={styles.card}>
+              <Text style={styles.milestoneText}>{getSintoniaLabel()}</Text>
+              <SintoniaBar
+                score={sintonia}
+                showLabel={true}
+                showBreakdown={true}
+                breakdown={sintoniaBreakdown}
+              />
+            </View>
+          )}
 
-          {sintonia >= 60 && (
+          {!isSelf && sintonia >= 60 && (
             <View style={styles.connectionCard}>
               <Text style={styles.connectionText}>💫 Vocês têm uma conexão forte!</Text>
             </View>
@@ -539,7 +594,8 @@ export default function RealProfileScreen() {
             </View>
           )}
 
-          {/* Botões de ação */}
+          {/* Botões de ação — não existem no próprio perfil. */}
+          {!isSelf && (
           <View style={styles.actions}>
             {connected ? (
               <TouchableOpacity
@@ -581,6 +637,7 @@ export default function RealProfileScreen() {
               }
             </TouchableOpacity>
           </View>
+          )}
 
           <View style={{ height: 40 }} />
         </View>
@@ -591,7 +648,8 @@ export default function RealProfileScreen() {
         initialIndex={viewerIndex ?? 0}
         visible={viewerIndex !== null}
         onClose={() => setViewerIndex(null)}
-        onReport={() => navigation.navigate('SupportNew', {
+        // Sem denúncia da própria foto: o botão some no isSelf.
+        onReport={isSelf ? undefined : () => navigation.navigate('SupportNew', {
           reportUid:  targetUserId,
           reportName: targetProfile?.name ?? '',
         })}
@@ -666,4 +724,6 @@ const styles = StyleSheet.create({
   likeButton:           { width: 56, height: 56, borderRadius: borderRadius.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.grayDark, alignItems: 'center', justifyContent: 'center' },
   likeButtonActive:     { backgroundColor: '#E91E63', borderColor: '#E91E63' },
   likeButtonText:       { fontSize: 24 },
+  selfBanner:           { backgroundColor: colors.gold + '18', borderBottomWidth: 1, borderBottomColor: colors.gold + '44', paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
+  selfBannerText:       { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold', textAlign: 'center' },
 });

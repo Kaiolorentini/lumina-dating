@@ -18,6 +18,15 @@
 //
 // Idempotência: o registro vira REPORTED com precondição de versão
 // ANTES do aviso — execução repetida não avisa duas vezes.
+//
+// LIMPEZA DO PERFIL (06/10): as CFs de ativação gravam
+// boostType/boostActiveUntil e {turbo|impulso|destaqueRegional}.active
+// no users, e nada os apagava. Toda leitura confere o prazo, então
+// não havia bug visível — mas o dado mentia. Ao encerrar o registro,
+// os campos vencidos são limpos numa transação que confere o prazo
+// DE NOVO: se a pessoa já ativou outro boost, nada é apagado.
+// Ficam intactos: lastActivatedAt (cooldown) e os expiresAt dos
+// sub-objetos (assertSingleBoost e o feed dependem deles).
 // ============================================
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -29,14 +38,54 @@ const db = admin.firestore();
 
 const BATCH_SIZE = 200;
 
-const BOOSTS: Record<string, { label: string; icon: string }> = {
-  TURBO:             { label: 'Turbo',             icon: '⚡' },
-  IMPULSO_PERFIL:    { label: 'Impulso',           icon: '🚀' },
-  DESTAQUE_REGIONAL: { label: 'Destaque Regional', icon: '📍' },
+const BOOSTS: Record<string, { label: string; icon: string; userField: string }> = {
+  TURBO:             { label: 'Turbo',             icon: '⚡', userField: 'turbo' },
+  IMPULSO_PERFIL:    { label: 'Impulso',           icon: '🚀', userField: 'impulso' },
+  DESTAQUE_REGIONAL: { label: 'Destaque Regional', icon: '📍', userField: 'destaqueRegional' },
 };
 
 function plural(n: number, singular: string, pluralForm: string): string {
   return `${n} ${n === 1 ? singular : pluralForm}`;
+}
+
+function toMillis(value: unknown): number | null {
+  return (value as Timestamp | undefined)?.toMillis?.() ?? null;
+}
+
+/**
+ * Limpa do users os campos de boost que JÁ venceram. Lê e grava na
+ * mesma transação: se um boost novo foi ativado depois do fim deste,
+ * o prazo no documento está no futuro e nada é tocado.
+ * Nunca lança — limpeza é higiene, não pode impedir o relatório.
+ */
+async function clearExpiredBoostFields(uid: string, userField: string): Promise<void> {
+  const ref = db.collection('users').doc(uid);
+  try {
+    await db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      if (!snap.exists) return;
+
+      const data = snap.data() ?? {};
+      const now  = Date.now();
+      const updates: Record<string, unknown> = {};
+
+      const activeUntil = toMillis(data.boostActiveUntil);
+      if (activeUntil !== null && activeUntil <= now) {
+        updates.boostActiveUntil = FieldValue.delete();
+        updates.boostType        = FieldValue.delete();
+      }
+
+      const sub = data[userField] as { active?: unknown; expiresAt?: unknown } | undefined;
+      const subUntil = toMillis(sub?.expiresAt);
+      if (sub?.active === true && subUntil !== null && subUntil <= now) {
+        updates[`${userField}.active`] = false;
+      }
+
+      if (Object.keys(updates).length > 0) t.update(ref, updates);
+    });
+  } catch (error) {
+    console.warn('[reportBoostResults] limpeza do perfil falhou para', uid, error);
+  }
 }
 
 export const reportBoostResults = onSchedule(
@@ -56,15 +105,21 @@ export const reportBoostResults = onSchedule(
       const boost = BOOSTS[data.featureType as string];
       const start = data.activatedAt as Timestamp | undefined;
       const end   = data.expiresAt   as Timestamp;
+      const uid   = data.uid as string | undefined;
 
       // Fertilizante e registros sem início: só encerram.
       if (!boost || !start) {
         await doc.ref.update({ status: 'EXPIRED' }).catch(() => {});
+        if (boost && uid) await clearExpiredBoostFields(uid, boost.userField);
         closed++;
         continue;
       }
 
-      const uid = data.uid as string;
+      if (!uid) {
+        await doc.ref.update({ status: 'EXPIRED' }).catch(() => {});
+        closed++;
+        continue;
+      }
 
       const [visitsAgg, likesAgg] = await Promise.all([
         db.collection('profile_visits')
@@ -92,6 +147,8 @@ export const reportBoostResults = onSchedule(
       } catch {
         continue;
       }
+
+      await clearExpiredBoostFields(uid, boost.userField);
 
       const body = visits + likes > 0
         ? `Ele trouxe ${plural(visits, 'visita', 'visitas')} e ${plural(likes, 'curtida', 'curtidas')}. Impulsione de novo para continuar em destaque.`

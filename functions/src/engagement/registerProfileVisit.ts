@@ -34,6 +34,7 @@ import * as admin     from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { todayBr }   from '../utils/dateBr';
 import { MissionService } from '../gamification/services/MissionService';
+import { assertVerified, isVerifiedProfile } from '../utils/assertVerified';
 const db = admin.firestore();
 
 // Janela de deduplicação: revisitas dentro deste intervalo não
@@ -67,6 +68,14 @@ export const registerProfileVisit = functions.onCall(
     const targetDoc = await db.collection('users').doc(profileId).get();
     if (!targetDoc.exists) {
       throw new functions.HttpsError('not-found', 'Perfil não encontrado.');
+    }
+
+    // Visitante e visitado precisam ser contas verificadas. Visita
+    // a perfil não verificado não conta: retorno silencioso, como
+    // na auto-visita.
+    assertVerified(request.auth);
+    if (!isVerifiedProfile(targetDoc.data())) {
+      return { registered: false, reason: 'unavailable' };
     }
 
     // ── Bloqueio mútuo: visita não é registrada em nenhuma direção ──

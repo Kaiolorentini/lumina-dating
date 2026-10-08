@@ -1,6 +1,10 @@
 // ============================================
-// LUMINA — PRODUCT CARD v3.0
+// LUMINA — PRODUCT CARD v3.1
 // src/components/marketplace/ProductCard.tsx
+//
+// v3.1 — nota estilo Mercado Livre: "★ 4,8 (12)" ou "Novo" sem
+// avaliações. Média e contagem vêm do próprio produto (sem leitura
+// extra). Antes só aparecia a média, e só quando > 0.
 //
 // v3.0 — identidade do marketplace: base roxa em gradiente,
 // dourado reservado para preço e destaque. O card anterior
@@ -20,6 +24,7 @@ import {
   spacing, borderRadius,
 } from '../../theme/marketplace';
 import { Product } from '../../shared/types/marketplace';
+import { ratingShort, ratingCount, ratingA11y } from '../../shared/utils/rating';
 
 interface ProductCardProps {
   product: Product;
@@ -95,12 +100,14 @@ export const ProductCard = memo(function ProductCard({
             <Text style={styles.catLabel} numberOfLines={1}>
               {cat?.label ?? product.category}
             </Text>
-            {product.averageRating > 0 && (
-              <>
-                <View style={styles.catDivider} />
-                <Text style={styles.rating}>★ {product.averageRating.toFixed(1)}</Text>
-              </>
-            )}
+            <View style={styles.catDivider} />
+            <Text
+              style={[styles.rating, ratingCount(product) === 0 && styles.ratingNew]}
+              numberOfLines={1}
+              accessibilityLabel={ratingA11y(product)}
+            >
+              {ratingShort(product)}
+            </Text>
           </View>
 
           <Text style={styles.title} numberOfLines={2}>{product.title}</Text>
@@ -230,7 +237,9 @@ const styles = StyleSheet.create({
     color: MP.goldLight,
     fontSize: MP_FONT.size.xs,
     fontWeight: MP_FONT.weight.bold,
+    flexShrink: 0,
   },
+  ratingNew: { color: MP.purpleLight },
 
   title: {
     color: MP.text,

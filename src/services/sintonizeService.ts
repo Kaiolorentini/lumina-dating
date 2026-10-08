@@ -25,6 +25,7 @@ import { db } from './firebase';
 import { UserProfile } from '../types';
 import { calcularSintonia } from '../utils/sintoniaEngine';
 import { RealProfile } from './usersService';
+import { isListableProfile } from '../shared/utils/profileVisibility';
 
 const FETCH_SIZE = 20;
 
@@ -104,6 +105,7 @@ function buildFromData(
   if (data.uid === currentUser.uid) return null;
   if (!data.name || !data.age || !data.gender) return null;
   if ((data as { isBlocked?: boolean }).isBlocked === true) return null;
+  if (!isListableProfile(raw)) return null;
 
   const sintoniaResult = calcularSintonia(currentUser, data);
   const prog = (raw as { progression?: Record<string, unknown> }).progression ?? {};
@@ -114,6 +116,7 @@ function buildFromData(
     sintoniaLabel: sintoniaResult.label,
     boostScore: 0,
     boostType:  null,
+    boostUntil: null,
     equippedFrame:       (prog.equippedFrame as string) ?? null,
     equippedBadge:       (prog.equippedBadge as string) ?? null,
     equippedBadgeRarity: (prog.equippedBadgeRarity as string) ?? null,
@@ -148,7 +151,10 @@ async function fetchTurboProfiles(
     if (dismissedUids.has(docSnap.id)) continue;
     if (!viewerAccepts(currentUser, docSnap.data().gender)) continue;
     const profile = buildProfile(docSnap, currentUser);
-    if (profile) out.push({ ...profile, boostType: 'turbo', boostScore: 180 });
+    if (!profile) continue;
+    const until = (docSnap.data().boostActiveUntil as { toDate?: () => Date } | undefined)
+      ?.toDate?.()?.getTime() ?? null;
+    out.push({ ...profile, boostType: 'turbo', boostScore: 180, boostUntil: until });
   }
   return out;
 }

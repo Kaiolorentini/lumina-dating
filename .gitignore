@@ -57,4 +57,5 @@ serviceAccountKey.json
 functions/lib/
 
 # backups locais
-*.bak
+*.bakfunctions/node_modules/
+*.log

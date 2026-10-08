@@ -1,6 +1,12 @@
 // ============================================
-// LUMINA — USERS SERVICE v5.5
+// LUMINA — USERS SERVICE v5.6
 // src/services/usersService.ts
+//
+// v5.6 — CARD DO PRÓPRIO USUÁRIO
+// buildOwnProfileCard() monta o card do Meu Perfil com as MESMAS
+// regras do feed (boost ativo, aluguel vencido, título, prestígio).
+// Antes, cada tela que quisesse o card teria a própria cópia
+// dessas regras — e elas divergiriam.
 //
 // v5.5 — REGIÃO POR CÓDIGO IBGE
 // normalizeRegion() foi REMOVIDO. Ele existia duplicado aqui e
@@ -51,7 +57,9 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { UserProfile } from '../types';
+import { ProfileCardData } from '../shared/types';
 import { calcularSintonia } from '../utils/sintoniaEngine';
+import { isListableProfile } from '../shared/utils/profileVisibility';
 
 // ============================================
 // CONFIGURAÇÃO
@@ -102,6 +110,8 @@ export interface RealProfile extends UserProfile {
   sintoniaLabel: string;
   boostScore: number;           // interno — nunca exibido para outros usuários
   boostType: BoostType | null;  // dirige o badge na Home
+  /** Fim do boost em ms (null sem boost). */
+  boostUntil: number | null;
   // Cosméticos já filtrados por validade — FASE 5 Etapa 2.
   equippedFrame:       string | null;
   equippedBadge:       string | null;
@@ -128,9 +138,11 @@ export interface ProfilePage {
 interface ActiveBoost {
   score: number;
   type: BoostType | null;
+  /** Fim do boost em ms. */
+  until: number | null;
 }
 
-const NO_BOOST: ActiveBoost = { score: 0, type: null };
+const NO_BOOST: ActiveBoost = { score: 0, type: null, until: null };
 
 // ============================================
 // REGIÃO
@@ -168,7 +180,7 @@ function getActiveBoostScore(
   // Turbo Sintonia — global
   const turboExpiry: Date | null = data?.turbo?.expiresAt?.toDate?.() ?? null;
   if (!isExpired(turboExpiry, now)) {
-    return { score: data.turbo.boostScore ?? 0, type: 'turbo' };
+    return { score: data.turbo.boostScore ?? 0, type: 'turbo', until: turboExpiry!.getTime() };
   }
 
   // Destaque Regional — SÓ vale na mesma região do espectador
@@ -186,7 +198,7 @@ function getActiveBoostScore(
       viewerRegiaoId === targetRegiaoId;
 
     if (sameRegion) {
-      return { score: data.destaqueRegional.boostScore ?? 0, type: 'destaque' };
+      return { score: data.destaqueRegional.boostScore ?? 0, type: 'destaque', until: destaqueExpiry!.getTime() };
     }
     // Fora da região: sem boost e sem badge. Segue para Impulso.
   }
@@ -194,7 +206,7 @@ function getActiveBoostScore(
   // Impulso de Perfil — global
   const impulsoExpiry: Date | null = data?.impulso?.expiresAt?.toDate?.() ?? null;
   if (!isExpired(impulsoExpiry, now)) {
-    return { score: data.impulso.boostScore ?? 0, type: 'impulso' };
+    return { score: data.impulso.boostScore ?? 0, type: 'impulso', until: impulsoExpiry!.getTime() };
   }
 
   return NO_BOOST;
@@ -245,6 +257,9 @@ function buildProfile(
   // Ignora perfis bloqueados
   if ((data as any).isBlocked === true) return null;
 
+  // Só verificados e não banidos aparecem para outras pessoas.
+  if (!isListableProfile(docSnap.data())) return null;
+
   const sintoniaResult = calcularSintonia(currentUser, data);
   const boost = getActiveBoostScore(docSnap.data(), viewerRegiaoId, now);
 
@@ -260,6 +275,7 @@ function buildProfile(
     sintoniaLabel: sintoniaResult.label,
     boostScore: boost.score,
     boostType: boost.type,
+    boostUntil: boost.until,
     equippedFrame: activeCosmetic(prog.equippedFrame, prog.equippedFrameUntil),
     equippedBadge: activeCosmetic(prog.equippedBadge, prog.equippedBadgeUntil),
     equippedBadgeRarity: (prog.equippedBadgeRarity as string) ?? null,
@@ -268,6 +284,47 @@ function buildProfile(
     equippedTitle: (prog.equippedTitle as string) ?? null,
     // Prestígio também é permanente — por diretriz, nunca diminui.
     prestigeStage: (prog.prestigeStage as number) ?? 0,
+  };
+}
+
+// ============================================
+// CARD DO PRÓPRIO USUÁRIO — Meu Perfil
+//
+// Mesmas regras do buildProfile, sem os filtros de quem pode
+// aparecer no feed: o dono sempre vê o próprio card.
+//
+// Destaque Regional: o "espectador" é a própria região do dono,
+// então o selo aparece como para quem está na região que ele
+// pagou. Sintonia vai 0 — o card esconde o selo de % com a prop
+// hideSintonia.
+// ============================================
+export function buildOwnProfileCard(
+  uid: string,
+  data: unknown,
+  now: Date = new Date(),
+): ProfileCardData | null {
+  if (!uid || !data || typeof data !== 'object') return null;
+
+  const raw = data as Record<string, any>;
+  const regiaoDono =
+    getRegiaoId(raw.destaqueRegional) ?? getRegiaoId(raw);
+  const boost = getActiveBoostScore(raw, regiaoDono, now);
+  const prog  = (raw.progression as Record<string, unknown> | undefined) ?? {};
+
+  return {
+    id:         uid,
+    name:       typeof raw.name === 'string' ? raw.name : '',
+    age:        typeof raw.age === 'number' ? raw.age : 0,
+    location:   `${raw.city || ''}, ${raw.state || ''}`,
+    sintonia:   0,
+    photoURL:   typeof raw.photoURL === 'string' ? raw.photoURL : '',
+    boostType:  boost.type,
+    boostUntil: boost.until,
+    equippedFrame:       activeCosmetic(prog.equippedFrame, prog.equippedFrameUntil),
+    equippedBadge:       activeCosmetic(prog.equippedBadge, prog.equippedBadgeUntil),
+    equippedBadgeRarity: (prog.equippedBadgeRarity as string) ?? null,
+    equippedTitle:       (prog.equippedTitle as string) ?? null,
+    prestigeStage:       (prog.prestigeStage as number) ?? 0,
   };
 }
 

@@ -36,6 +36,7 @@ import AgeVerificationScreen from '../screens/Onboarding/AgeVerificationScreen';
 import VerificationPendingScreen from '../screens/Onboarding/VerificationPendingScreen';
 import AccountBannedScreen from '../screens/Onboarding/AccountBannedScreen';
 import GateErrorScreen from '../screens/Onboarding/GateErrorScreen';
+import { clearDraft as clearVerificationDraft } from '../modules/verification/services/verificationDraft';
 
 import MediaScreen from '../modules/media/screens/MediaScreen';
 import ProfileScreen from '../modules/profile/screens/ProfileScreen';
@@ -63,6 +64,7 @@ import CreatorRequestScreen from '../screens/marketplace/CreatorRequestScreen';
 import CheckoutScreen from '../screens/marketplace/CheckoutScreen';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useUserPermissions } from '../hooks/useUserPermissions';
+import { useAccessClaims } from '../hooks/useAccessClaims';
 import { useAdminPendingTotal } from '../hooks/useAdminPendingTotal';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import AdminCreatorRequestsScreen from '../screens/admin/AdminCreatorRequestsScreen';
@@ -96,6 +98,7 @@ import SupportHomeScreen from '../modules/support/screens/SupportHomeScreen';
 import SupportNewScreen from '../modules/support/screens/SupportNewScreen';
 import SupportTicketScreen from '../modules/support/screens/SupportTicketScreen';
 import AdminSupportScreen from '../screens/admin/AdminSupportScreen';
+import DeleteAccountScreen from '../modules/profile/screens/DeleteAccountScreen';
 import { useProfileBadges } from '../modules/profile/hooks/useProfileBadges';
 import {
   AdminProductsModerationScreen,
@@ -380,6 +383,7 @@ function MainStack() {
       <Stack.Screen name="SupportNew" component={SupportNewScreen} />
       <Stack.Screen name="SupportTicket" component={SupportTicketScreen} />
       <Stack.Screen name="AdminSupport" component={AdminSupportScreen} />
+      <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
     </Stack.Navigator>
   );
 }
@@ -397,7 +401,7 @@ interface InAppNotifState {
 let _adminBootDone = false;
 
 function AppContent() {
-  const { user, loading: authLoading, hasProfile } = useAuth();
+  const { user, loading: authLoading, hasProfile, profileError, refreshProfile } = useAuth();
   const {
     isSuperAdmin, isBlocked, loading: permLoading,
     accessGate, loadError, retry,
@@ -412,21 +416,24 @@ function AppContent() {
 
   usePushNotifications();
 
-  // Renova o token de Auth quando a conta é aprovada. As custom
-  // claims da PARTE 9 vivem no token, e sem o refresh as
-  // primeiras leituras depois da aprovação dariam
-  // permission-denied. Hoje é inofensivo e prepara o terreno.
-  const wasVerifiedRef = useRef(false);
+  // Claim de acesso (av) no token ANTES do app principal: as Rules
+  // exigem a claim, e sem ela as primeiras leituras dariam
+  // permission-denied. Substitui o refresh único que havia aqui —
+  // renovar uma vez não basta se a claim ainda não chegou.
+  const needsAccessClaim = !!user && !permLoading && (accessGate.ageVerified || isSuperAdmin);
+  const accessClaims = useAccessClaims(user?.uid, needsAccessClaim);
+  
+  
+  // Foto de documento não fica no aparelho depois que a conta sai.
+  const lastUidRef = useRef<string | null>(user?.uid ?? null);
   useEffect(() => {
-    if (!accessGate.ageVerified) return;
-    if (wasVerifiedRef.current) return;
-    wasVerifiedRef.current = true;
-
-    auth.currentUser?.getIdToken(true).catch(error => {
-      console.warn('[AppContent] Refresh do token falhou:', error);
-    });
-  }, [accessGate.ageVerified]);
-
+    const uid = user?.uid ?? null;
+    const previous = lastUidRef.current;
+    lastUidRef.current = uid;
+    if (previous && previous !== uid) {
+      clearVerificationDraft(previous).catch(() => {});
+    }
+  }, [user?.uid]);
   function handleNotificationNavigation(data: Record<string, any>) {
     if (!navigationRef.current) return;
     const type = data?.type as string;
@@ -643,6 +650,17 @@ function AppContent() {
     </Stack.Navigator>
   );
 
+  // Falha ao LER o perfil não é "perfil inexistente": sem isto a
+  // pessoa caía no cadastro e podia gravar por cima do perfil
+  // verdadeiro (erro ou tempo esgotado na primeira abertura).
+  if (profileError && !hasProfile) return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="GateError">
+        {() => <GateErrorScreen onRetry={() => { refreshProfile(); }} />}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+
   // ============================================
   // GATE DE ACESSO
   // ============================================
@@ -726,6 +744,20 @@ function AppContent() {
   );
 
   // gateStep === 'app' daqui para baixo.
+
+  // Espera a claim de acesso no token (ver useAccessClaims).
+  if (!accessClaims.ready) return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {accessClaims.error ? (
+        <Stack.Screen name="GateError">
+          {() => <GateErrorScreen onRetry={accessClaims.retry} />}
+        </Stack.Screen>
+      ) : (
+        <Stack.Screen name="Splash" component={AppLoadingScreen} />
+      )}
+    </Stack.Navigator>
+  );
+
   if (canAccessAdminPanel && !adminBootReady) return (
     <AdminLoadingScreen onFinish={() => { _adminBootDone = true; setAdminBootReady(true); }} />
   );

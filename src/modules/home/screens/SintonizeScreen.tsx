@@ -50,6 +50,8 @@ import { SintonizeBackground } from '../../../components/SintonizeBackground';
 import ProfileCard from '../../../components/ProfileCard';
 import { HeartBurst } from '../../../components/profile/HeartBurst';
 import { useLike } from '../../../hooks/useLike';
+import { useBoostExpiryTicker } from '../../../hooks/useBoostExpiryTicker';
+import { hasTimedBoost, clearExpiredBoosts } from '../../../shared/utils/boostExpiry';
 
 const { width } = Dimensions.get('window');
 
@@ -70,7 +72,8 @@ function toCardData(p: RealProfile): ProfileCardData {
     sintonia:  p.sintonia,
     photoURL:  p.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
     // Só o Turbo chega com tipo (sintonizeService) — é o selo.
-    boostType: p.boostType,
+    boostType:  p.boostType,
+    boostUntil: p.boostUntil,
     equippedFrame:       p.equippedFrame,
     equippedBadge:       p.equippedBadge,
     equippedBadgeRarity: p.equippedBadgeRarity,
@@ -113,6 +116,12 @@ export default function SintonizeScreen() {
   const [dismissedList,    setDismissedList]    = useState<DismissedProfile[]>([]);
   const [loadingDismissed, setLoadingDismissed] = useState(false);
   const [bringingId,       setBringingId]       = useState<string | null>(null);
+
+  // Turbo vencido perde o selo. Só o selo: reordenar a fila faria
+  // o card atual pular debaixo do dedo.
+  useBoostExpiryTicker(hasTimedBoost(queue), () => {
+    setQueue(prev => clearExpiredBoosts(prev, Date.now()));
+  });
 
   const loadMore = useCallback(async (replace: boolean) => {
     const profile = profileRef.current;

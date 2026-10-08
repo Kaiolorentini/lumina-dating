@@ -22,6 +22,7 @@ import { createAuditLog } from "../utils/auditLog";
 import { notifyUser } from "../utils/notifyUser";
 import { deleteVerificationImages } from "./deleteVerificationImages";
 import { MAX_ATTEMPTS, REJECTION_REASONS, AgeRejectionReason } from "./constants";
+import { syncAccessClaimsFor } from "../utils/accessClaims";
 
 interface RejectPayload {
   userId: string;
@@ -113,6 +114,19 @@ export const rejectAgeVerification = onCall<RejectPayload, Promise<RejectResult>
 
       tx.set(userRef, userPatch, { merge: true });
     });
+
+    // Claims alinhadas ao documento: av sai, e ban entra no UNDERAGE.
+    await syncAccessClaimsFor(userId).catch((error) => {
+      console.error("[rejectAgeVerification] claim de acesso falhou:", error);
+    });
+
+    // Menor de idade: derruba as sessões abertas. O token atual vale
+    // até 1 h; sem isto a conta seguiria usando o app nesse intervalo.
+    if (isUnderage) {
+      await admin.auth().revokeRefreshTokens(userId).catch((error) => {
+        console.error("[rejectAgeVerification] revogação de sessão falhou:", error);
+      });
+    }
 
     // Fora da transação: o Storage não participa dela.
     const deleteResult = await deleteVerificationImages(userId);

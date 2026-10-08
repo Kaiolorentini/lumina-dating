@@ -5,7 +5,14 @@ service cloud.firestore {
     // ============================================
     // FUNÇÕES AUXILIARES
     // ============================================
-
+    
+       // Pré-cadastro da landing — só as Cloud Functions (Admin SDK) leem e escrevem
+   match /preRegistrations/{uid} {
+     allow read, write: if false;
+   }
+   match /counters/creatorFounders {
+     allow read, write: if false;
+   }
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -54,6 +61,21 @@ service cloud.firestore {
         get(/databases/$(database)/documents/appSettings/config).data.maintenanceMode != true;
     }
 
+    // ── Claims de acesso (PARTE 9) ──
+    // Gravadas por functions/src/utils/accessClaims.ts e lidas do
+    // TOKEN — sem leitura cobrada.
+    //   av  = verificação de idade aprovada (ou admin/superadmin)
+    //   ban = conta encerrada (accountBanned — não o isBlocked, que
+    //         é o ban temporário do marketplace)
+    // get() com padrão: claim ausente não pode estourar a regra.
+    // O app só entra na árvore principal com a claim no token
+    // (hooks/useAccessClaims).
+    function isVerified() {
+      return isAuthenticated() &&
+        request.auth.token.get('av', false) == true &&
+        request.auth.token.get('ban', false) != true;
+    }
+
     // Campos que o cliente NUNCA escreve no próprio documento —
     // nem no create, nem no update.
     // role e isBlocked NÃO estão aqui porque o create os EXIGE com
@@ -73,7 +95,7 @@ service cloud.firestore {
         'ageVerified', 'ageVerifiedAt', 'birthDate',
         'ageVerificationStatus', 'ageRejectionReason', 'ageRejectionNote',
         'screenshotWarnings', 'screenshotWarningStatus', 'adminFlags', 'creatorStatus',
-        // Token de push: a coleção users tem `allow list` aberto,
+        // Token de push: a coleção users tinha `allow list` aberto,
         // então qualquer conta logada lia o token de todo mundo e
         // mandava push com a marca do Lumina. Agora vive em
         // users/{uid}/private/push e é gravado pela CF
@@ -129,8 +151,14 @@ service cloud.firestore {
     // USERS
     // ============================================
     match /users/{userId} {
-      allow get: if isAuthenticated();
-      allow list: if isAuthenticated();
+      // Perfil de OUTRA pessoa só para conta verificada (auditoria
+      // C2). Antes, qualquer conta logada — inclusive criada na
+      // landing em segundos — listava a base inteira de um app
+      // adulto: fotos, idade, cidade e campos de moderação.
+      // O dono sempre lê o próprio documento: o gate de acesso
+      // depende dele antes da verificação.
+      allow get: if isOwner(userId) || isVerified() || isAdmin();
+      allow list: if isVerified() || isAdmin();
       // O CREATE barra TODOS os campos protegidos, não só os de
       // economia. Antes, uma conta nova podia nascer com
       // ageVerificationStatus 'approved', xp e conquistas
@@ -194,27 +222,54 @@ service cloud.firestore {
     // imutável. Validar por ele custa ZERO leituras e é imune ao
     // bug do participants (setDoc/merge substitui o array e pode
     // remover um membro do próprio chat).
+    //
+    // isVerified(): conta não verificada ou banida não conversa.
+    // A exigência de Sintonia mútua fica para a Parte 3 da auditoria.
     function isChatMember(chatId) {
       return isAuthenticated() && chatId.split('_').hasAny([request.auth.uid]);
     }
 
+    // Chat liberado pelo servidor: pedido aceito (ou Sintonia mútua)
+    // e nenhum bloqueio entre os dois. Ver functions/src/social/
+    // chatAccess.ts. Uma leitura por avaliação.
+    function canUseChat(chatId) {
+      return isChatMember(chatId) && isVerified() &&
+        exists(/databases/$(database)/documents/chatAccess/$(chatId));
+    }
+
+    // Documento do chat: só os metadados que o app grava, e
+    // participants restrito aos dois membros do id.
+    function isValidChatMeta(chatId) {
+      return request.resource.data.keys()
+          .hasOnly(['lastMessage', 'lastMessageTime', 'updatedAt', 'participants']) &&
+        request.resource.data.get('participants', []).toSet()
+          .difference(chatId.split('_').toSet()).size() == 0;
+    }
+
+    match /chatAccess/{chatId} {
+      allow read, write: if false;
+    }
+
     match /chats/{chatId} {
       // O documento de chat guarda lastMessage e lastMessageTime —
-      // conteúdo de conversa privada. Com `isAuthenticated()` qualquer
-      // conta lia a última mensagem de qualquer par de usuários e
-      // podia sobrescrever os metadados de conversas alheias.
-      // isChatMember valida pelo próprio id (uidA_uidB ordenado),
-      // custa ZERO leituras e cobre leitura e escrita.
-      allow read:   if isChatMember(chatId);
-      allow create: if isChatMember(chatId);
-      allow update: if isChatMember(chatId);
+      // conteúdo de conversa privada. Só quem tem o chat liberado
+      // (canUseChat) lê ou escreve.
+      allow read:   if canUseChat(chatId);
+      allow create: if canUseChat(chatId) && isValidChatMeta(chatId);
+      allow update: if canUseChat(chatId) && isValidChatMeta(chatId);
       allow delete: if false;
 
       match /messages/{messageId} {
-        allow read: if isChatMember(chatId);
-        allow create: if isChatMember(chatId) &&
-          request.resource.data.senderId == request.auth.uid;
-        allow update: if isChatMember(chatId) && (
+        allow read: if canUseChat(chatId);
+        allow create: if canUseChat(chatId) &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.keys().hasOnly([
+            'text', 'senderId', 'senderName', 'timestamp',
+            'delivered', 'read', 'audioUrl', 'audioDuration',
+          ]) &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() <= 2000;
+        allow update: if canUseChat(chatId) && (
           resource.data.senderId == request.auth.uid ||
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['delivered', 'deliveredAt', 'read', 'readAt'])
@@ -223,8 +278,8 @@ service cloud.firestore {
       }
 
       match /typing/{userId} {
-        allow read:  if isChatMember(chatId);
-        allow write: if isChatMember(chatId) && isOwner(userId);
+        allow read:  if canUseChat(chatId);
+        allow write: if canUseChat(chatId) && isOwner(userId);
       }
     }
     
@@ -251,15 +306,35 @@ service cloud.firestore {
     // ============================================
     // SOLICITAÇÕES DE CONEXÃO
     // ============================================
+    // Criar e aceitar exigem conta verificada. A validação dos
+    // campos do pedido (status na criação) fica para a Parte 3.
     match /connectionRequests/{requestId} {
       allow read: if isAuthenticated() && (
         resource.data.fromUserId == request.auth.uid ||
         resource.data.toUserId == request.auth.uid
       );
-      allow create: if isAuthenticated() && isNotBlocked() &&
-        request.resource.data.fromUserId == request.auth.uid;
-      allow update: if isAuthenticated() &&
+      // Criação: id remetente_destinatário (duplicata vira update e é
+      // negada), só os campos conhecidos, sempre 'pending', nunca para
+      // si mesmo. 'accepted' só nasce pelo servidor (Sintonia).
+      allow create: if isVerified() && isNotBlocked() &&
+        requestId == request.auth.uid + '_' + request.resource.data.toUserId &&
+        request.resource.data.keys().hasOnly([
+          'fromUserId', 'toUserId', 'fromUserName', 'fromUserPhoto', 'status', 'timestamp',
+        ]) &&
+        request.resource.data.fromUserId == request.auth.uid &&
+        request.resource.data.toUserId is string &&
+        request.resource.data.toUserId != request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.timestamp == request.time &&
+        request.resource.data.fromUserName is string &&
+        request.resource.data.fromUserName.size() <= 100 &&
+        request.resource.data.fromUserPhoto is string &&
+        request.resource.data.fromUserPhoto.size() <= 2048;
+      // Resposta: só o destinatário, só saindo de 'pending', só status.
+      allow update: if isVerified() &&
         resource.data.toUserId == request.auth.uid &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status in ['accepted', 'rejected'] &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
       allow delete: if false;
     }
@@ -296,7 +371,7 @@ service cloud.firestore {
     // Incremento deve vir de Cloud Function (R13: usuários únicos,
     // não eventos).
     match /profile_visit_counts/{profileId} {
-      allow read:  if isAuthenticated();
+      allow read:  if isVerified();
       allow write: if false;
     }
 // ============================================
@@ -344,8 +419,8 @@ service cloud.firestore {
     // MEDIA ITEMS
     // ============================================
     match /mediaItems/{itemId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isNotBlocked() &&
+      allow read: if isVerified();
+      allow create: if isVerified() && isNotBlocked() &&
         request.resource.data.uploadedBy == request.auth.uid;
       allow update: if isAuthenticated() &&
         resource.data.uploadedBy == request.auth.uid;
@@ -357,9 +432,10 @@ service cloud.firestore {
     // ============================================
     // UNLOCKED CONTENT
     // ============================================
+    // Coleção sem uso: nem o app nem as funções leem ou gravam
+    // (auditoria A3). Fechada nos dois sentidos.
     match /unlockedContent/{contentId} {
-      allow read: if isAuthenticated();
-      allow write: if false;
+      allow read, write: if false;
     }
 
     // ============================================
@@ -373,14 +449,17 @@ service cloud.firestore {
     // ============================================
     // CONNECTIONS
     // ============================================
+    // Coleção sem uso: as conexões vivem em connectionRequests
+    // (auditoria A3). Fechada nos dois sentidos.
     match /connections/{connectionId} {
-      allow read: if isAuthenticated();
-      allow write: if false;
+      allow read, write: if false;
     }
 
     // ============================================
     // MARKETPLACE — PRODUCTS
     // ============================================
+    // Vitrine pública por decisão de produto (auditoria M7): a
+    // moderação garante capa e prévia sem nudez.
     match /products/{productId} {
       allow get: if resource.data.status == 'approved' &&
         resource.data.isDeleted != true;
@@ -392,10 +471,19 @@ service cloud.firestore {
       allow list: if resource.data.status == 'approved' &&
         resource.data.isDeleted != true;
       allow list: if isAdmin();
+      // Meus Produtos: o dono lista os próprios produtos em qualquer
+      // status. A busca precisa filtrar ownerId == uid; sem esse
+      // filtro a regra não se confirma e a consulta é recusada.
+      allow list: if isAuthenticated() &&
+        resource.data.ownerId == request.auth.uid;
       allow create: if isCreator() && isMarketplaceEnabled() &&
         request.resource.data.ownerId == request.auth.uid &&
         request.resource.data.status == 'draft' &&
-        request.resource.data.isFeatured == false;
+        request.resource.data.isFeatured == false &&
+        // Nota e contagem só pela CF submitProductReview.
+        request.resource.data.get('averageRating', 0) == 0 &&
+        request.resource.data.get('reviewsCount', 0) == 0 &&
+        !request.resource.data.keys().hasAny(['ratingSum', 'ratingUpdatedAt']);
       // Edição normal: o dono altera conteúdo, nunca status nem
       // campos de curadoria.
       allow update: if isCreator() &&
@@ -403,6 +491,7 @@ service cloud.firestore {
         resource.data.status in ['draft', 'rejected'] &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'status', 'isFeatured', 'ownerId', 'averageRating', 'reviewsCount',
+          'ratingSum', 'ratingUpdatedAt',
           // Retirada e moderação de alterações: só pelas CFs.
           'isDeleted', 'deletedAt', 'hasPendingChanges', 'pendingCover', 'lastChangesRejection',
         ]);
@@ -466,6 +555,7 @@ match /coinsPurchases/{docId} {
     // ============================================
     // MARKETPLACE — PURCHASES
     // ============================================
+    // Criadas só pelas CFs de compra, que exigem conta verificada.
     match /purchases/{purchaseId} {
       allow get: if isAuthenticated() && (
         resource.data.buyerId == request.auth.uid || isAdmin()
@@ -512,17 +602,22 @@ match /coinsPurchases/{docId} {
     // ============================================
     // MARKETPLACE — REVIEWS
     // ============================================
+   // Avaliações — gravadas SÓ pelas CFs de
+    // functions/src/products/productReviews.ts (nota 1–5, comentário
+    // até 500 sem contatos, compra ativa e conteúdo já aberto, média
+    // do produto na mesma transaction).
     match /productReviews/{reviewId} {
-      allow read: if isAuthenticated() && resource.data.isHidden != true;
+      // Lista pública do produto: só as não ocultas. A busca do app
+      // já filtra isHidden == false, então a regra se confirma.
+      allow list: if isAuthenticated() && resource.data.isHidden != true;
+      // Leitura de um documento: não ocultas, ou a PRÓPRIA avaliação
+      // (o autor vê que o comentário foi ocultado e pode editar).
+      allow get: if isAuthenticated() && (
+        resource.data.isHidden != true ||
+        resource.data.userId == request.auth.uid
+      );
       allow read: if isAdmin();
-      allow create: if isAuthenticated() && isNotBlocked() &&
-        request.resource.data.userId == request.auth.uid &&
-        hasActivePurchase(request.resource.data.productId);
-      allow update: if isAuthenticated() &&
-        resource.data.userId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['rating', 'comment', 'isEdited', 'updatedAt']);
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     // ============================================
@@ -573,6 +668,8 @@ match /coinsPurchases/{docId} {
     // ============================================
     // SUPORTE — escrita só pelas CFs de supportTickets
     // ============================================
+    // Sem isVerified() de propósito: quem ainda está na verificação
+    // também precisa conseguir pedir ajuda.
     match /supportTickets/{ticketId} {
       allow read: if isAuthenticated() &&
         (resource.data.uid == request.auth.uid || isAdmin());
@@ -620,15 +717,17 @@ match /coinsPurchases/{docId} {
     // ============================================
     // MARKETPLACE — COUPONS
     // ============================================
+    // PENDENTE (auditoria M5): cupom privado continua listável por
+    // qualquer conta verificada. Corrigir com validação por CF.
     match /coupons/{couponId} {
-      allow read: if isAuthenticated() && resource.data.isActive == true;
+      allow read: if isVerified() && resource.data.isActive == true;
       allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
 
     match /couponUses/{useId} {
       allow read: if isAdmin();
-      allow create: if isAuthenticated() && isNotBlocked() &&
+      allow create: if isVerified() && isNotBlocked() &&
         request.resource.data.userId == request.auth.uid;
       allow update, delete: if false;
     }
@@ -873,12 +972,25 @@ match /achievementTriggers/{docId} {
     // próprio histórico (direito de acesso, LGPD art. 18) mas
     // nunca escreve: consentimento auto-declarado não é prova.
     match /termsAcceptances/{userId} {
+      
       allow read:  if isOwner(userId) || isSuperAdmin();
       allow write: if false;
 
       match /history/{version} {
         allow read:  if isOwner(userId) || isSuperAdmin();
         allow write: if false;
+            // ============================================
+    // EXCLUSÃO DE CONTA — só o servidor
+    // ============================================
+    // Pedido (accountDeletions/{uid}) e comprovante pseudônimo
+    // (accountDeletionLog/{anonId}). Ver functions/src/users/
+    // accountDeletion.ts.
+    match /accountDeletions/{uid} {
+      allow read, write: if false;
+    }
+    match /accountDeletionLog/{anonId} {
+      allow read, write: if false;
+    }
       }
     }
 

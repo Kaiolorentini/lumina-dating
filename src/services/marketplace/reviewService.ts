@@ -1,15 +1,24 @@
 // ============================================
-// REVIEW SERVICE — MARKETPLACE
+// REVIEW SERVICE — MARKETPLACE v2.0
+// src/services/marketplace/reviewService.ts
+//
+// v2.0 — GRAVAÇÃO SÓ PELO SERVIDOR.
+// createReview e updateReview gravavam direto no Firestore: dava
+// para mandar nota 999, texto sem limite e links, e a média do
+// produto nunca era atualizada. Agora:
+//   • submitReview → CF submitProductReview (cria OU edita, valida
+//     tudo e atualiza a média na mesma transaction);
+//   • moderateReview → CF moderateProductReview (superadmin);
+//   • as regras negam qualquer gravação do app em productReviews.
+// As leituras (lista paginada e a avaliação do próprio usuário)
+// continuam no cliente.
 //
 // reviewId = userId_productId (composto único)
-// Verifica purchase ativa antes de criar review.
-// averageRating atualizado por Cloud Function (FASE 6).
 // ============================================
 
 import {
   collection,
   doc,
-  setDoc,
   getDoc,
   getDocs,
   query,
@@ -17,88 +26,98 @@ import {
   orderBy,
   limit,
   startAfter,
-  serverTimestamp,
   DocumentSnapshot,
+  DocumentData,
 } from 'firebase/firestore';
-import { db } from '../../core/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app, { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
-import { ProductReview } from '../../shared/types/marketplace';
-import { createAuditLog } from './auditService';
+import {
+  ProductReview, ReviewRating, ReviewEligibility, SubmitReviewResult,
+} from '../../shared/types/marketplace/review.types';
+
+/** Espelha MAX_COMMENT da CF — o servidor confere de novo. */
+export const REVIEW_COMMENT_MAX = 500;
 
 function buildReviewId(userId: string, productId: string): string {
   return `${userId}_${productId}`;
 }
 
-async function verifyActivePurchase(userId: string, productId: string): Promise<void> {
-  const purchaseId = `${userId}_${productId}`;
-  const purchaseRef = doc(db, MARKETPLACE_COLLECTIONS.PURCHASES, purchaseId);
-  const snap = await getDoc(purchaseRef);
-  if (!snap.exists() || snap.data().status !== 'active') {
-    throw new Error('Você precisa comprar este produto para avaliá-lo');
+function toReview(id: string, data: DocumentData): ProductReview {
+  return {
+    id,
+    productId:    String(data.productId ?? ''),
+    userId:       String(data.userId ?? ''),
+    userName:     typeof data.userName === 'string' ? data.userName : undefined,
+    rating:       data.rating as ReviewRating,
+    comment:      typeof data.comment === 'string' ? data.comment : '',
+    isHidden:     data.isHidden === true,
+    hiddenReason: typeof data.hiddenReason === 'string' ? data.hiddenReason : undefined,
+    isEdited:     data.isEdited === true,
+    createdAt:    data.createdAt?.toDate?.() ?? new Date(),
+    updatedAt:    data.updatedAt?.toDate?.() ?? new Date(),
+  };
+}
+
+/** Mensagem da CF (HttpsError) ou uma genérica. */
+function errorMessage(error: unknown, fallback: string): string {
+  const msg = (error as { message?: unknown })?.message;
+  return typeof msg === 'string' && msg && msg !== 'internal' ? msg : fallback;
+}
+
+// ── Gravação (servidor) ──
+
+export async function submitReview(
+  productId: string,
+  rating: ReviewRating,
+  comment: string,
+): Promise<SubmitReviewResult> {
+  try {
+    const fn = httpsCallable<
+      { productId: string; rating: number; comment: string },
+      SubmitReviewResult
+    >(getFunctions(app, 'us-central1'), 'submitProductReview');
+    const result = await fn({ productId, rating, comment: comment.trim() });
+    return result.data;
+  } catch (error) {
+    throw new Error(errorMessage(error, 'Não foi possível enviar sua avaliação. Tente de novo.'));
   }
 }
 
-export async function createReview(
-  productId: string,
-  userId: string,
-  data: { rating: 1 | 2 | 3 | 4 | 5; comment: string },
+export async function moderateReview(
+  reviewId: string,
+  hide: boolean,
+  reason: string,
 ): Promise<void> {
-  await verifyActivePurchase(userId, productId);
-
-  const reviewId = buildReviewId(userId, productId);
-  const reviewRef = doc(db, MARKETPLACE_COLLECTIONS.REVIEWS, reviewId);
-
-  const existing = await getDoc(reviewRef);
-  if (existing.exists()) throw new Error('Você já avaliou este produto. Use a edição.');
-
-  await setDoc(reviewRef, {
-    productId,
-    userId,
-    rating: data.rating,
-    comment: data.comment,
-    isHidden: false,
-    isEdited: false,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  // Audit — fire-and-forget
-  createAuditLog({
-    action: 'review_created',
-    performedBy: userId,
-    targetId: reviewId,
-    targetType: 'review',
-    metadata: { productId, rating: data.rating },
-  }).catch(() => { /* auditoria nunca bloqueia */ });
+  try {
+    const fn = httpsCallable<{ reviewId: string; hide: boolean; reason: string }, { success: boolean }>(
+      getFunctions(app, 'us-central1'),
+      'moderateProductReview',
+    );
+    await fn({ reviewId, hide, reason: reason.trim() });
+  } catch (error) {
+    throw new Error(errorMessage(error, 'Não foi possível moderar a avaliação.'));
+  }
 }
 
-export async function updateReview(
-  productId: string,
+// ── Leitura (cliente) ──
+
+/**
+ * Pode avaliar? Lê a compra do próprio usuário (1 leitura, só
+ * quando ele toca em "Avaliar"). O servidor confere de novo.
+ */
+export async function getReviewEligibility(
   userId: string,
-  data: { rating: 1 | 2 | 3 | 4 | 5; comment: string },
-): Promise<void> {
-  const reviewId = buildReviewId(userId, productId);
-  const reviewRef = doc(db, MARKETPLACE_COLLECTIONS.REVIEWS, reviewId);
-
-  const existing = await getDoc(reviewRef);
-  if (!existing.exists()) throw new Error('Avaliação não encontrada');
-  if (existing.data().userId !== userId) throw new Error('Sem permissão');
-
-  await setDoc(reviewRef, {
-    rating: data.rating,
-    comment: data.comment,
-    isEdited: true,
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
-
-  // Audit — fire-and-forget
-  createAuditLog({
-    action: 'review_updated',
-    performedBy: userId,
-    targetId: reviewId,
-    targetType: 'review',
-    metadata: { productId, newRating: data.rating },
-  }).catch(() => { /* auditoria nunca bloqueia */ });
+  productId: string,
+): Promise<ReviewEligibility> {
+  const snap = await getDoc(
+    doc(db, MARKETPLACE_COLLECTIONS.PURCHASES, `${userId}_${productId}`),
+  );
+  if (!snap.exists()) return 'not_buyer';
+  const data = snap.data();
+  if (data.status !== 'active' || data.isRevoked === true) return 'not_buyer';
+  if (!data.firstViewedAt) return 'not_viewed';
+  return 'ok';
 }
 
 export async function getMyReview(
@@ -108,11 +127,7 @@ export async function getMyReview(
   const reviewId = buildReviewId(userId, productId);
   const snap = await getDoc(doc(db, MARKETPLACE_COLLECTIONS.REVIEWS, reviewId));
   if (!snap.exists()) return null;
-  return {
-    ...snap.data(),
-    createdAt: snap.data().createdAt?.toDate() ?? new Date(),
-    updatedAt: snap.data().updatedAt?.toDate() ?? new Date(),
-  } as ProductReview;
+  return toReview(snap.id, snap.data());
 }
 
 export async function getProductReviews(
@@ -135,11 +150,7 @@ export async function getProductReviews(
 
   const hasMore = snapshot.docs.length > pageSize;
   const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
-  const reviews = docs.map(d => ({
-    ...d.data(),
-    createdAt: d.data().createdAt?.toDate() ?? new Date(),
-    updatedAt: d.data().updatedAt?.toDate() ?? new Date(),
-  } as ProductReview));
+  const reviews = docs.map(d => toReview(d.id, d.data()));
 
   return { reviews, lastDoc: docs.length > 0 ? docs[docs.length - 1] : null, hasMore };
 }

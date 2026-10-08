@@ -3,12 +3,15 @@ import * as admin from "firebase-admin";
 import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { createAuditLog } from "../utils/auditLog";
 import { incrementMetrics } from "../utils/incrementMetric";
+import { assertVerified } from "../utils/assertVerified";
 
 export const createFreeProductPurchase = onCall(async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Não autenticado");
 
   await assertUserNotBlocked(uid);
+  // Conteúdo do marketplace (mesmo grátis) só para conta verificada.
+  assertVerified(request.auth);
 
   const { productId } = request.data as { productId: string };
   if (!productId) throw new HttpsError("invalid-argument", "productId obrigatório");

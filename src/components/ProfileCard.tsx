@@ -1,6 +1,15 @@
 // ============================================
-// LUMINA — PROFILE CARD v3.1
+// LUMINA — PROFILE CARD v3.2
 // src/components/ProfileCard.tsx
+//
+// v3.2 — PRÉVIA DO PRÓPRIO CARD.
+//
+// O Meu Perfil mostra o card do usuário como ele aparece para
+// os outros. A prop nova `hideSintonia` (padrão false, então
+// Home e Sintonize não mudam) esconde o selo de %: ele compara
+// o card com QUEM VÊ, e no próprio card o número não faz
+// sentido. O tamanho maior vem de fora, pelo mesmo transform
+// de 1.45 do Sintonize — o card continua com uma largura só.
 //
 // v3.1 — PERFORMANCE E ACESSIBILIDADE.
 //
@@ -101,10 +110,14 @@ interface Props {
   /** Chamado depois que a curtida foi registrada. O Sintonize
    *  usa para comemorar e avançar. */
   onLiked?: () => void;
+  /** Esconde o selo de % Sintonia. Usado na prévia do próprio
+   *  card, no Meu Perfil. Padrão false. */
+  hideSintonia?: boolean;
 }
 
 function ProfileCard({
   data, onPress, viewerUid, animatedAura = false, onLiked,
+  hideSintonia = false,
 }: Props) {
   const frame = frameAppearanceById(data.equippedFrame);
   const badge = data.equippedBadge
@@ -194,7 +207,11 @@ function ProfileCard({
       onPress={onPress}
       activeOpacity={0.9}
       accessibilityRole="button"
-      accessibilityLabel={`${data.name}, ${data.age} anos, ${data.location}. ${data.sintonia}% de sintonia.`}
+      accessibilityLabel={
+        hideSintonia
+          ? `${data.name}, ${data.age} anos, ${data.location}.`
+          : `${data.name}, ${data.age} anos, ${data.location}. ${data.sintonia}% de sintonia.`
+      }
       accessibilityHint="Abre o perfil"
       accessibilityActions={canLike ? [{ name: A11Y_ACTION_LIKE, label: 'Sintonizar' }] : undefined}
       onAccessibilityAction={handleAccessibilityAction}
@@ -258,10 +275,12 @@ function ProfileCard({
         </View>
       )}
 
-      <View style={styles.sintoniaContainer}>
-        <Text style={styles.sintoniaText}>{data.sintonia}%</Text>
-        <Text style={styles.sintoniaLabel}>Sintonia</Text>
-      </View>
+      {!hideSintonia && (
+        <View style={styles.sintoniaContainer}>
+          <Text style={styles.sintoniaText}>{data.sintonia}%</Text>
+          <Text style={styles.sintoniaLabel}>Sintonia</Text>
+        </View>
+      )}
 
       {/* Faixa do badge: atravessa o card e separa a foto das
           informações. O badge sozinho não comunica "só de
@@ -333,6 +352,7 @@ function areEqual(prev: Props, next: Props): boolean {
   if (prev.animatedAura !== next.animatedAura) return false;
   if (prev.onPress      !== next.onPress)      return false;
   if (prev.onLiked      !== next.onLiked)      return false;
+  if (prev.hideSintonia !== next.hideSintonia) return false;
 
   const a = prev.data;
   const b = next.data;

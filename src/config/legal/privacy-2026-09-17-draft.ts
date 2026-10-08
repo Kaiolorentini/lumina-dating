@@ -16,6 +16,11 @@
 // código: o campo users/{uid}.cpf foi eliminado da base e
 // o CPF vai direto ao Asaas a cada compra.
 //
+// Seções 4 e 20 (pré-cadastro pelo website), 04/10: a CF
+// registerPreSignup grava preRegistrations/{uid} com nome, tipo,
+// @ e categoria (criador), consentimento e UTM — sem copiar o
+// e-mail, que fica só no Auth. A sessão web é encerrada no fim.
+//
 // Seções 12 e 13 (chaves Pix), 28/09: a chave do Criador vive em
 // users/{uid}/private/payout, fechada a todo cliente (nem o dono lê;
 // o app recebe a versão mascarada pelo servidor) e é copiada para o
@@ -57,6 +62,9 @@ export const PRIVACY_2026_09_17_DRAFT: LegalDocument = {
         'Podemos tratar nome; e-mail; data de nascimento; idade; foto de perfil; e credenciais e identificadores de conta.',
         'Esses dados são utilizados para criação e manutenção da conta; autenticação; funcionamento do perfil; comunicação; segurança; e prevenção de fraude.',
         'Base legal, em regra: execução de contrato ou procedimentos preliminares (art. 7º, V, LGPD); cumprimento de obrigação legal (art. 7º, II), quando aplicável; e legítimo interesse (art. 7º, IX), quando adequado e após avaliação de necessidade e balanceamento.',
+        'Pré-cadastro pelo website: antes da inauguração do aplicativo, é possível criar a conta pelo website oficial informando nome, e-mail e senha. Quem se cadastra como Criador também pode informar o @ de uma rede social (opcional) e o tipo de conteúdo que pretende vender. Esses dados são utilizados para criar a conta, reservar vaga no Programa Criadores Fundadores, quando aplicável, e avisar sobre o lançamento.',
+        'A senha é gerenciada pelo serviço de autenticação do Google Firebase e não fica acessível à Lumina. O e-mail fica registrado apenas no serviço de autenticação. O website também registra a origem da visita (parâmetros de campanha, como utm_source e utm_campaign) para medir a eficácia da divulgação.',
+        'Base legal do pré-cadastro: procedimentos preliminares relacionados ao contrato (art. 7º, V) e consentimento (art. 7º, I), colhido no formulário. Os dados do pré-cadastro de contas não ativadas no aplicativo serão eliminados em até [PREENCHER: prazo] após o lançamento.',
       ],
     },
     {
@@ -194,6 +202,7 @@ export const PRIVACY_2026_09_17_DRAFT: LegalDocument = {
       body: [
         'O website da Lumina poderá utilizar cookies e tecnologias semelhantes para autenticação; segurança; funcionamento; preferências; métricas internas; e melhoria da experiência.',
         'A Lumina não utiliza cookies para vender dados pessoais a terceiros. Quando houver cookies não essenciais sujeitos a consentimento, o usuário deverá receber informação adequada e mecanismo apropriado de escolha.',
+        'Durante o pré-cadastro, o website armazena no navegador apenas o necessário ao seu funcionamento: a confirmação de maioridade exibida na entrada, a origem da visita durante a sessão de navegação e a sessão de autenticação, que é encerrada ao final do cadastro. O website não utiliza cookies de publicidade.',
         'A ANPD possui orientação específica sobre cookies e proteção de dados pessoais.',
       ],
     },

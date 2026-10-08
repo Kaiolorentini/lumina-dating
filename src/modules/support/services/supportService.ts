@@ -11,6 +11,7 @@ import {
   Timestamp, DocumentData,
 } from 'firebase/firestore';
 import { ref, uploadBytes } from 'firebase/storage';
+import { resolveImageBlob } from '../../../shared/utils/imageBlob';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
@@ -203,30 +204,21 @@ export async function getAttachmentUrl(ticketId: string, path: string): Promise<
 
 // ── Print ──
 
-const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-/** Decodifica base64 sem depender de atob (nem sempre global no RN). */
-function base64ToBytes(b64: string): Uint8Array {
-  const clean = b64.replace(/[^A-Za-z0-9+/]/g, '');
-  const bytes = new Uint8Array(Math.floor((clean.length * 3) / 4));
-  let byteIndex = 0;
-  for (let i = 0; i < clean.length; i += 4) {
-    const n =
-      (B64.indexOf(clean[i]) << 18) |
-      (B64.indexOf(clean[i + 1]) << 12) |
-      ((B64.indexOf(clean[i + 2] ?? 'A') & 63) << 6) |
-      (B64.indexOf(clean[i + 3] ?? 'A') & 63);
-    bytes[byteIndex++] = (n >> 16) & 255;
-    if (clean[i + 2] !== undefined) bytes[byteIndex++] = (n >> 8) & 255;
-    if (clean[i + 3] !== undefined) bytes[byteIndex++] = n & 255;
-  }
-  return bytes.subarray(0, byteIndex);
-}
-
-/** Envia o print para support/{uid}/ e devolve o caminho. */
-export async function uploadSupportImage(uid: string, base64: string): Promise<string> {
+/**
+ * Envia o print para support/{uid}/ e devolve o caminho.
+ *
+ * O Blob vem do resolveImageBlob (fetch da URI, base64 como plano B):
+ * no React Native, entregar bytes (Uint8Array) ao Storage faz o SDK
+ * montar um Blob a partir de ArrayBuffer, o que não é suportado.
+ * Ver o histórico em shared/utils/imageBlob.ts.
+ */
+export async function uploadSupportImage(
+  uid: string,
+  image: { uri: string; base64: string | null },
+): Promise<string> {
   const path = `support/${uid}/${Date.now()}.jpg`;
-  await uploadBytes(ref(storage, path), base64ToBytes(base64), { contentType: 'image/jpeg' });
+  const blob = await resolveImageBlob(image.uri, image.base64);
+  await uploadBytes(ref(storage, path), blob, { contentType: 'image/jpeg' });
   return path;
 }
 

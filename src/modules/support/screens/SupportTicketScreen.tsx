@@ -85,7 +85,7 @@ export default function SupportTicketScreen() {
     if (!user?.uid || (!text.trim() && !image)) return;
     setSending(true);
     try {
-      const attachmentPath = image ? await uploadSupportImage(user.uid, image.base64) : null;
+      const attachmentPath = image ? await uploadSupportImage(user.uid, image) : null;
       await replyTicket(ticketId, text.trim(), attachmentPath);
       setText('');
       setImage(null);

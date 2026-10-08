@@ -1,6 +1,10 @@
-﻿// ============================================
-// LUMINA — ACHIEVEMENTS SYSTEM v5.4
+// ============================================
+// LUMINA — ACHIEVEMENTS SYSTEM v5.5
 // functions/src/engagement/achievements.ts
+//
+// v5.5 — repairAchievements REMOVIDA (auditoria A6, 08/10/2026).
+// Era uma tarefa agendada diária que lia até 100 usuários e só
+// escrevia um log: custo de leitura todo dia sem efeito nenhum.
 //
 // v5.4 — checkAchievements REMOVIDA (CRÍTICO).
 //
@@ -24,7 +28,6 @@
 // ============================================
 
 import * as functions from 'firebase-functions/v2/https';
-import * as scheduler from 'firebase-functions/v2/scheduler';
 import * as admin     from 'firebase-admin';
 import { ACHIEVEMENTS_CATALOG } from '../config/achievementsCatalog';
 import { COLLECTIONS_CATALOG } from '../config/collectionsCatalog';
@@ -71,16 +74,3 @@ export const getAchievementsStatus = functions.onCall(
   }
 );
 
-// ── repairAchievements ── (inalterada)
-export const repairAchievements = scheduler.onSchedule(
-  { schedule: 'every 24 hours', region: 'us-central1' },
-  async () => {
-    const now       = new Date();
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const usersSnap = await db.collection('users')
-      .where('lastActive', '>=', yesterday)
-      .limit(100)
-      .get();
-    console.log(`[repairAchievements] Verificando ${usersSnap.size} usuários`);
-  }
-);

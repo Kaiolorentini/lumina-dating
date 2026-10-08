@@ -1,3 +1,15 @@
+// ============================================
+// LUMINA — AUTENTICAÇÃO
+// src/context/AuthContext.tsx
+//
+// hasProfile vs profileError: "o perfil não existe" e "não consegui
+// ler o perfil" são coisas diferentes. Antes, tempo esgotado ou erro
+// na leitura viravam hasProfile=false e a pessoa caía no formulário
+// de cadastro — podendo gravar por cima do perfil verdadeiro. Agora
+// a falha de leitura vira profileError, e o AppNavigator mostra a
+// tela de erro com "Tentar novamente".
+// ============================================
+
 import React, {
   createContext,
   useContext,
@@ -20,6 +32,10 @@ import { getProfile } from '../services/profileService';
 const HAS_PROFILE_KEY = '@lumina:hasProfile';
 const USER_UID_KEY    = '@lumina:userUid';
 
+/** Primeira leitura com o app frio pode passar de 4 s. */
+const PROFILE_TIMEOUT_MS = 8000;
+const PROFILE_ATTEMPTS   = 2;
+
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
@@ -27,6 +43,27 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
       setTimeout(() => reject(new Error('timeout')), ms)
     ),
   ]);
+}
+
+type ProfileRead =
+  | { ok: true;  found: boolean }
+  | { ok: false };
+
+/**
+ * Lê o perfil com novas tentativas. ok:false = não foi possível LER
+ * (erro ou tempo esgotado) — diferente de ler e não encontrar.
+ */
+async function readProfile(uid: string): Promise<ProfileRead> {
+  for (let attempt = 1; attempt <= PROFILE_ATTEMPTS; attempt++) {
+    try {
+      const profile = await withTimeout(getProfile(uid), PROFILE_TIMEOUT_MS);
+      return { ok: true, found: !!profile?.name };
+    } catch (error) {
+      console.warn(`[AuthContext] Leitura do perfil falhou (tentativa ${attempt}):`, error);
+    }
+    if (attempt < PROFILE_ATTEMPTS) await new Promise(r => setTimeout(r, 1000));
+  }
+  return { ok: false };
 }
 
 export function translateAuthError(code: string): string {
@@ -49,6 +86,8 @@ interface AuthContextData {
   user:           User | null;
   loading:        boolean;
   hasProfile:     boolean;
+  /** Não foi possível LER o perfil (erro ou tempo esgotado). */
+  profileError:   boolean;
   setHasProfile:  (value: boolean) => void;
   refreshProfile: () => Promise<void>;
   signUp:         (email: string, password: string) => Promise<void>;
@@ -62,73 +101,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user,           setUser]            = useState<User | null>(null);
   const [loading,        setLoading]         = useState(true);
   const [hasProfile,     setHasProfileState] = useState(false);
+  const [profileError,   setProfileError]    = useState(false);
   const userRef = useRef<User | null>(null);
 
   useEffect(() => {
     const globalTimeout = setTimeout(() => {
       console.warn('[AuthContext] Timeout global — liberando loading');
       setLoading(false);
-    }, 15000);
+    }, 20000);
 
     const unsubscribe = onAuthStateChanged(auth, async firebaseUser => {
       clearTimeout(globalTimeout);
-      console.log('Firebase:', firebaseUser ? 'Logado' : 'Nao logado');
 
       setUser(firebaseUser);
       userRef.current = firebaseUser;
 
-      if (firebaseUser) {
-        await AsyncStorage.setItem(USER_UID_KEY, firebaseUser.uid);
+      if (!firebaseUser) {
+        setHasProfileState(false);
+        setProfileError(false);
+        setLoading(false);
+        return;
+      }
 
-        // Verifica cache primeiro — path rápido
-        const cached = await AsyncStorage.getItem(
-          `${HAS_PROFILE_KEY}:${firebaseUser.uid}`
-        );
+      await AsyncStorage.setItem(USER_UID_KEY, firebaseUser.uid).catch(() => {});
 
-        if (cached === 'true') {
-          console.log('Perfil no cache!');
-          setHasProfileState(true);
-          setLoading(false);
+      // Cache primeiro — caminho rápido. A confirmação roda em
+      // segundo plano e só reforça o cache.
+      const cached = await AsyncStorage.getItem(
+        `${HAS_PROFILE_KEY}:${firebaseUser.uid}`
+      ).catch(() => null);
 
-          withTimeout(getProfile(firebaseUser.uid), 8000)
-            .then(profile => {
-              if (profile?.name) {
-                AsyncStorage.setItem(
-                  `${HAS_PROFILE_KEY}:${firebaseUser.uid}`, 'true'
-                ).catch(console.error);
-              }
-            })
-            .catch(() => {
-              console.log('[AuthContext] Erro background — mantendo cache');
-            });
+      if (cached === 'true') {
+        setHasProfileState(true);
+        setProfileError(false);
+        setLoading(false);
 
-          return;
-        }
-
-        let profile = null;
-        for (let i = 1; i <= 2; i++) {
-          console.log(`[AuthContext] Buscando perfil tentativa ${i}...`);
-          try {
-            profile = await withTimeout(getProfile(firebaseUser.uid), 4000);
-            if (profile?.name) break;
-          } catch (e) {
-            console.warn(`[AuthContext] Erro tentativa ${i}:`, e);
+        readProfile(firebaseUser.uid).then(result => {
+          if (result.ok && result.found) {
+            AsyncStorage.setItem(
+              `${HAS_PROFILE_KEY}:${firebaseUser.uid}`, 'true'
+            ).catch(() => {});
           }
-          if (i < 2) await new Promise(r => setTimeout(r, 1000));
-        }
+        });
+        return;
+      }
 
-        const found = !!(profile?.name);
-        console.log('[AuthContext] hasProfile:', found);
+      const result = await readProfile(firebaseUser.uid);
 
-        if (found) {
+      if (result.ok) {
+        if (result.found) {
           await AsyncStorage.setItem(
             `${HAS_PROFILE_KEY}:${firebaseUser.uid}`, 'true'
-          );
+          ).catch(() => {});
         }
-
-        setHasProfileState(found);
+        setHasProfileState(result.found);
+        setProfileError(false);
       } else {
+        // Não conseguiu ler: NÃO afirma que o perfil não existe.
         setHasProfileState(false);
+        setProfileError(true);
       }
 
       setLoading(false);
@@ -141,8 +172,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setHasProfile = useCallback((value: boolean) => {
-    console.log('setHasProfile:', value);
     setHasProfileState(value);
+    if (value) setProfileError(false);
     if (userRef.current) {
       AsyncStorage.setItem(
         `${HAS_PROFILE_KEY}:${userRef.current.uid}`,
@@ -151,20 +182,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  async function refreshProfile() {
+  const refreshProfile = useCallback(async () => {
     const u = userRef.current;
     if (!u) return;
-    try {
-      const profile = await withTimeout(getProfile(u.uid), 8000);
-      const found   = !!(profile?.name);
-      setHasProfileState(found);
-      if (found) {
-        await AsyncStorage.setItem(`${HAS_PROFILE_KEY}:${u.uid}`, 'true');
-      }
-    } catch {
-      console.warn('[AuthContext] refreshProfile timeout');
+
+    const result = await readProfile(u.uid);
+    if (!result.ok) {
+      setProfileError(true);
+      return;
     }
-  }
+
+    setHasProfileState(result.found);
+    setProfileError(false);
+    if (result.found) {
+      await AsyncStorage.setItem(`${HAS_PROFILE_KEY}:${u.uid}`, 'true').catch(() => {});
+    }
+  }, []);
 
   async function signUp(email: string, password: string) {
     await createUserWithEmailAndPassword(auth, email, password);
@@ -184,7 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, hasProfile,
+      user, loading, hasProfile, profileError,
       setHasProfile, refreshProfile,
       signUp, signIn, logout,
     }}>

@@ -37,6 +37,7 @@ interface Props {
 export default function AgeVerificationScreen({ onSubmitted }: Props) {
   const {
     stepIndex, currentStep, captures, isComplete,
+    restoring, capturing,
     submitting, progress, error, cameraDenied,
     capture, retake, goToStep, submit,
   } = useAgeVerification();
@@ -100,7 +101,12 @@ export default function AgeVerificationScreen({ onSubmitted }: Props) {
         </View>
 
         {/* Prévia ou área de captura */}
-        {currentImage ? (
+        {restoring ? (
+          <View style={styles.progressWrap}>
+            <ActivityIndicator color={colors.gold} />
+            <Text style={styles.progressText}>Recuperando suas fotos…</Text>
+          </View>
+        ) : currentImage ? (
           <View style={styles.previewWrap}>
             <Image source={{ uri: currentImage.uri }} style={styles.preview} />
             <TouchableOpacity
@@ -115,7 +121,7 @@ export default function AgeVerificationScreen({ onSubmitted }: Props) {
           <TouchableOpacity
             style={styles.captureArea}
             onPress={capture}
-            disabled={submitting}
+            disabled={submitting || capturing}
           >
             <Text style={styles.captureIcon}>📷</Text>
             <Text style={styles.captureText}>Abrir a câmera</Text>

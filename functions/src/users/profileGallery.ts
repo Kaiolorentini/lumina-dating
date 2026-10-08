@@ -53,12 +53,12 @@ export const setGalleryPhoto = onCall(async (request) => {
   const path   = galleryPath(uid, slot);
   const bucket = admin.storage().bucket();
 
-  let meta: { contentType?: string; size?: string | number; metadata?: Record<string, string> };
-  try {
-    [meta] = await bucket.file(path).getMetadata();
-  } catch {
+  const file = bucket.file(path);
+  const [exists] = await file.exists();
+  if (!exists) {
     throw new HttpsError('failed-precondition', 'A foto não terminou de enviar. Tente de novo.');
   }
+  const [meta] = await file.getMetadata();
 
   if (!String(meta.contentType ?? '').startsWith('image/')) {
     throw new HttpsError('invalid-argument', 'O arquivo precisa ser uma imagem.');

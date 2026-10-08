@@ -18,6 +18,11 @@ export { toggleProductFeatured }    from "./products/toggleProductFeatured";
 export {
   submitProductChanges, reviewProductChanges, unpublishProduct, getPurchasedContent,
 } from "./products/productChanges";
+// Avaliações de produtos (08/10/2026)
+export {
+  submitProductReview, moderateProductReview,
+  onPurchaseRevokedRemoveReview, recomputeProductRatings,
+} from "./products/productReviews";
 export { getCurationDashboard }     from "./admin/getCurationDashboard";
 
 export { getAdminDashboard }        from "./admin/getAdminDashboard";
@@ -26,7 +31,9 @@ export {
   markSupportTicketRead, getSupportAttachmentUrl,
 } from "./support/supportTickets";
 export { onRejectProduct }          from "./products/onRejectProduct";
-export { releaseCreatorBalance }    from "./wallet/releaseCreatorBalance";
+// releaseCreatorBalance REMOVIDA em 08/10/2026 (auditoria A6): qualquer
+// admin liberava o saldo pendente de qualquer criador, inclusive vendas
+// dentro do prazo de reembolso. Não era chamada pelo app.
 export { createFreeProductPurchase } from "./payments/createFreeProductPurchase";
 export { requestRefund }            from "./payments/requestRefund";
 export { rejectRefund }             from "./payments/rejectRefund";
@@ -66,6 +73,7 @@ export { registerPushToken }        from "./notifications/registerPushToken";
 export { submitAgeVerification }    from "./verification/submitAgeVerification";
 export { listPendingVerifications } from "./verification/listPendingVerifications";
 export { approveAgeVerification }   from "./verification/approveAgeVerification";
+export { syncAccessClaims } from "./verification/syncAccessClaims";
 export { rejectAgeVerification }    from "./verification/rejectAgeVerification";
 export { expireMarketplaceBans }    from "./users/expireMarketplaceBans";
 
@@ -165,7 +173,9 @@ export { earnXP, getXPStatus } from './engagement/xp';
 // checkAchievements REMOVIDA: callable que aceitava ação e valor do
 // app e desbloqueava qualquer conquista. Conquistas entram só pelo
 // servidor, via achievementTriggers → onAchievementTrigger.
-export { getAchievementsStatus, repairAchievements } from './engagement/achievements';
+// repairAchievements REMOVIDA em 08/10/2026: agendada diária que só lia
+// 100 usuários e escrevia um log — custo sem efeito.
+export { getAchievementsStatus } from './engagement/achievements';
 // registerRankingXP REMOVIDA (27/09): o app escolhia quanto XP de
 // ranking recebia. O ranking é alimentado pelo Engine
 // (RankingRepository), no servidor.
@@ -220,7 +230,9 @@ export { dismissProfile } from './engagement/dismissProfile';
 export { secondChance }   from './engagement/secondChance';
 export { clearPrestigeReveal } from './engagement/clearPrestigeReveal';
 export { getPublicAchievements } from './users/getPublicAchievements';
-export { gamificationHealthCheck } from './gamification/health/healthCheck';
+// gamificationHealthCheck (URL pública, sem login) virou callable só
+// para superadmin em 08/10/2026 (auditoria A6).
+export { getGamificationHealth } from './gamification/health/healthCheck';
 export { onProductPending } from "./triggers/onProductPending";
 export { onAchievementTrigger } from "./triggers/onAchievementTrigger";
 export {
@@ -246,5 +258,9 @@ export { onWithdrawalCreated }     from './triggers/onWithdrawalCreated';
 export { onCreatorRequestCreated } from './triggers/onCreatorRequestCreated';
 export { clearLevelReveal } from './engagement/clearLevelReveal';
 export { getGalaxiaPlusStatus } from './payments/getGalaxiaPlusStatus';
-// Migração única (28/09) — APAGAR depois de executada.
-export { migrateNotificationTypes } from './maintenance/migrateNotificationTypes';
+export { registerPreSignup } from './preRegistration/registerPreSignup';
+export { getPreRegistrationStats } from './preRegistration/getPreRegistrationStats';
+export { assignVerifiedFounders } from './preRegistration/assignVerifiedFounders';
+export { onConnectionRequestWritten, onBlockWritten } from "./social/chatAccess";
+export { deleteMyAccount, processAccountDeletion } from "./users/accountDeletion";
+

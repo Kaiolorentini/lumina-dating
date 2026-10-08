@@ -31,8 +31,34 @@ service firebase.storage {
              request.resource.contentType == 'application/x-zip-compressed';
     }
 
+    // Prévia é PÚBLICA: sem zip, que poderia carregar executável
+    // servido com a marca do Lumina.
+    function isAllowedPreviewFile() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType.matches('video/.*') ||
+             request.resource.contentType.matches('audio/.*') ||
+             request.resource.contentType == 'application/pdf';
+    }
+
+    // Dono do produto, conferido no Firestore (firestore.get lê com a
+    // conta de serviço do Storage, fora das Firestore Rules).
+    //
+    // - O app cria o documento ANTES de subir capa e arquivos
+    //   (CreateProductScreen), então o dono já está gravado.
+    // - Produto inexistente: o get falha e a regra nega.
+    // - isBlocked = ban temporário do MARKETPLACE: durante o ban a
+    //   criadora não envia arquivo novo.
+    // Custo: 2 leituras por upload. Downloads não passam por aqui.
+    function canUploadToProduct(productId) {
+      let product = firestore.get(/databases/(default)/documents/products/$(productId));
+      let uploader = firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
+      return product.data.ownerId == request.auth.uid &&
+             product.data.isDeleted != true &&
+             uploader.data.isBlocked != true;
+    }
+
     // ============================================
-    // FOTOS DE PERFIL — ADICIONADO
+    // FOTOS DE PERFIL
     // ============================================
     match /profile_photos/{userId}/{fileName} {
       allow read:   if true;
@@ -49,10 +75,8 @@ service firebase.storage {
     //
     // LEITURA NEGADA A TODOS, inclusive ao dono: depois de
     // enviar, ninguém baixa a imagem pelo app. O admin vê por
-    // URL assinada de 10 minutos, gerada por Cloud Function.
-    //
-    // Storage Rules NÃO leem o Firestore, então a checagem de
-    // superadmin não pode viver aqui — é a CF que autoriza.
+    // URL assinada de 10 minutos, gerada por Cloud Function,
+    // que é quem confere o superadmin.
     //
     // Os arquivos são APAGADOS pelo Admin SDK na aprovação e
     // na rejeição: documento de identidade guardado
@@ -68,6 +92,8 @@ service firebase.storage {
     // ============================================
     // MÍDIA DO USUÁRIO
     // ============================================
+    // PENDENTE (auditoria M3): qualquer tipo até 50 MB e leitura por
+    // qualquer conta. Restringir depois de mapear quem usa.
     match /users/{userId}/media/{fileName} {
       allow read:   if isAuthenticated();
       allow write:  if isOwner(userId) &&
@@ -78,41 +104,52 @@ service firebase.storage {
     // ============================================
     // MARKETPLACE — PRODUTOS
     // ============================================
+    // Regras comuns aos quatro caminhos:
+    // - Só o DONO do produto envia (canUploadToProduct).
+    // - Só CRIAR, nunca sobrescrever: os nomes são únicos
+    //   (Date.now()); sobrescrever trocaria conteúdo aprovado, que os
+    //   compradores pagaram, sem passar pela moderação.
+    // - Ninguém apaga pelo app: quem decide o que pode sumir é o
+    //   servidor (unpublishProduct, moderação), pelo Admin SDK.
 
-    // Capa do produto — pública
+    // Capa — pública
     match /marketplace/products/{productId}/cover/{fileName} {
       allow read:   if true;
-      allow write:  if isAuthenticated() &&
+      allow create: if isAuthenticated() &&
                        isImage() &&
-                       isUnderSizeMB(10);
-      allow delete: if isAuthenticated();
+                       isUnderSizeMB(10) &&
+                       canUploadToProduct(productId);
+      allow update, delete: if false;
     }
 
-    // Previews — públicos
+    // Prévias em imagem — públicas
     match /marketplace/products/{productId}/previews/{fileName} {
       allow read:   if true;
-      allow write:  if isAuthenticated() &&
-                       isUnderSizeMB(20);
-      allow delete: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                       isImage() &&
+                       isUnderSizeMB(10) &&
+                       canUploadToProduct(productId);
+      allow update, delete: if false;
     }
 
-    // Preview files — públicos (demos/amostras)
+    // Arquivos de amostra — públicos
     match /marketplace/products/{productId}/previewFiles/{fileName} {
       allow read:   if true;
-      allow write:  if isAuthenticated() &&
-                       isAllowedProductFile() &&
-                       isUnderSizeMB(50);
-      allow delete: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                       isAllowedPreviewFile() &&
+                       isUnderSizeMB(50) &&
+                       canUploadToProduct(productId);
+      allow update, delete: if false;
     }
 
-    // Arquivos pagos — SOMENTE upload autenticado
-    // Leitura via Cloud Function (getSignedUrl) — nunca direto
+    // Arquivos pagos — leitura só por URL assinada (getSignedUrl)
     match /marketplace/products/{productId}/files/{fileName} {
       allow read:   if false;
-      allow write:  if isAuthenticated() &&
+      allow create: if isAuthenticated() &&
                        isAllowedProductFile() &&
-                       isUnderSizeMB(500);
-      allow delete: if isAuthenticated();
+                       isUnderSizeMB(500) &&
+                       canUploadToProduct(productId);
+      allow update, delete: if false;
     }
 
     // ============================================

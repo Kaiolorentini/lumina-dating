@@ -372,6 +372,9 @@ export interface ProfileCardData {
   sintonia:   number;
   photoURL:   string;
   boostType?: BoostType | null;
+  /** Fim do boost em ms. A Home tira o selo quando ele passa:
+   *  a lista não é buscada de novo durante a sessão. */
+  boostUntil?: number | null;
   // Cosméticos equipados — FASE 5 Etapa 2.
   equippedFrame?:       string | null;
   equippedBadge?:       string | null;

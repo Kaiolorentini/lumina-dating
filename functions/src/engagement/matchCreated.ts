@@ -21,6 +21,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { MatchService } from '../gamification/services/MatchService';
 import { MissionService } from '../gamification/services/MissionService';
 import { notifyUser }   from '../utils/notifyUser';
+import { assertVerified, isVerifiedProfile } from '../utils/assertVerified';
 
 const db = admin.firestore();
 
@@ -38,6 +39,15 @@ export const onCreateMatch = functions.onCall(
 
     if (uid === targetUid) {
       throw new functions.HttpsError('invalid-argument', 'Auto-match não permitido.');
+    }
+
+    // Quem curte e quem é curtido precisam ser contas verificadas e
+    // não banidas: sem isto dava para curtir (e mandar push para)
+    // um perfil pendente ou encerrado por menoridade.
+    assertVerified(request.auth);
+    const targetSnap = await db.collection('users').doc(targetUid).get();
+    if (!isVerifiedProfile(targetSnap.data())) {
+      throw new functions.HttpsError('failed-precondition', 'Este perfil não está disponível.');
     }
 
     // Curtida do dia — mesmo id que o cliente usava, para não

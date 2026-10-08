@@ -2,6 +2,9 @@
 // LUMINA — CARROSSEL DE DESTAQUES
 // src/components/marketplace/FeaturedCarousel.tsx
 //
+// Nota (08/10/2026): mesmo formato do card — "★ 4,8 (12)" ou
+// "Novo" — via shared/utils/rating.
+//
 // Coverflow 3D: o card central de frente, os vizinhos rotacionados
 // no eixo Y e reduzidos. O painel de informação vive ABAIXO, em
 // texto reto — a rotação prejudicaria a leitura de preço e título
@@ -33,6 +36,7 @@ import {
   spacing, borderRadius,
 } from '../../theme/marketplace';
 import { Product } from '../../shared/types/marketplace';
+import { ratingShort, ratingCount, ratingA11y } from '../../shared/utils/rating';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -219,12 +223,13 @@ export function FeaturedCarousel({ products, onPressProduct }: Props) {
         <View style={styles.catRow}>
           <Text style={styles.catIcon}>{cat?.icon ?? '✧'}</Text>
           <Text style={styles.catLabel}>{cat?.label ?? active.category}</Text>
-          {active.averageRating > 0 && (
-            <>
-              <View style={styles.dot} />
-              <Text style={styles.rating}>★ {active.averageRating.toFixed(1)}</Text>
-            </>
-          )}
+          <View style={styles.dot} />
+          <Text
+            style={[styles.rating, ratingCount(active) === 0 && styles.ratingNew]}
+            accessibilityLabel={ratingA11y(active)}
+          >
+            {ratingShort(active)}
+          </Text>
         </View>
 
         <Text style={styles.title} numberOfLines={1}>{active.title}</Text>
@@ -330,6 +335,7 @@ const styles = StyleSheet.create({
     fontSize: MP_FONT.size.xs,
     fontWeight: MP_FONT.weight.bold,
   },
+  ratingNew: { color: MP.purpleLight },
 
   title: {
     color: MP.text,

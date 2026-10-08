@@ -1,6 +1,11 @@
 // ============================================
-// LUMINA — MINHAS COMPRAS v2.0
+// LUMINA — MINHAS COMPRAS v2.1
 // src/screens/marketplace/MyPurchasesScreen.tsx
+//
+// v2.1 — botão "⭐ Avaliar" em cada compra ativa. O fluxo é o
+// mesmo do detalhe do produto (useReviewComposer): confere se o
+// conteúdo já foi aberto, abre o modal com a avaliação atual para
+// edição e grava pela CF submitProductReview.
 //
 // v2.0 — tema do marketplace.
 //
@@ -37,6 +42,8 @@ import { BADGE_TYPES } from '../../modules/profile/hooks/useProfileBadges';
 import {
   PixKeyType, validatePixKeyFormat,
 } from '../../services/marketplace/creatorPaymentSetupService';
+import ReviewFormModal from '../../components/marketplace/ReviewFormModal';
+import { useReviewComposer } from '../../hooks/useReviewComposer';
 
 /** Direito de arrependimento (CDC art. 49). O servidor confere de novo. */
 const REFUND_WINDOW_DAYS = 7;
@@ -67,6 +74,9 @@ export default function MyPurchasesScreen() {
   const { purchases, loading, loadMore, hasMore, loadingMore, refresh } = usePurchases(user?.uid);
   const [requestingRefund, setRequestingRefund] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<PurchaseTab>('content');
+  const reviewComposer = useReviewComposer(user?.uid);
+  const openReview     = reviewComposer.open;
+  const openingReview  = reviewComposer.openingId;
 
   // Abrir a área apaga o balão dela no Perfil.
   useFocusEffect(useCallback(() => {
@@ -207,6 +217,23 @@ export default function MyPurchasesScreen() {
             </TouchableOpacity>
           )}
 
+          {isActive && (
+            <TouchableOpacity
+              style={styles.rateBtn}
+              onPress={() => openReview(item.productId, product?.title)}
+              disabled={openingReview !== null}
+              accessibilityRole="button"
+              accessibilityLabel={`Avaliar ${product?.title ?? 'conteúdo'}`}
+              accessibilityState={{ busy: openingReview === item.productId }}
+            >
+              {openingReview === item.productId ? (
+                <ActivityIndicator color={MP.gold} size="small" />
+              ) : (
+                <Text style={styles.rateBtnText}>⭐</Text>
+              )}
+            </TouchableOpacity>
+          )}
+
           {isActive && item.saleId && item.amount > 0 && withinRefundWindow(item.createdAt) && (
             <TouchableOpacity
               style={styles.refundBtn}
@@ -223,7 +250,7 @@ export default function MyPurchasesScreen() {
         </View>
       </View>
     );
-  }, [user?.uid, requestingRefund, navigation, productMap]);
+  }, [user?.uid, requestingRefund, navigation, productMap, openReview, openingReview]);
 
   return (
     <ScreenContainer>
@@ -299,6 +326,8 @@ export default function MyPurchasesScreen() {
           renderItem={renderItem}
         />
       )}
+
+      <ReviewFormModal {...reviewComposer.modalProps} />
 
       <Modal
         visible={refundModal}
@@ -494,6 +523,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   refundBtnText: { color: MP.error, fontSize: 17 },
+  // Avaliar: mesmo formato redondo do reembolso, em dourado.
+  rateBtn: {
+    width: 42, height: 42,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rateBtnText: { fontSize: 17 },
 
   modalOverlay: {
     flex: 1,

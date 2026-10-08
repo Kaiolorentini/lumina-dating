@@ -88,6 +88,7 @@ export type RootStackParamList = {
   Titles: undefined;
   /** Suporte: início, questionário e conversa (usuário e admin). */
   Support:       undefined;
+    DeleteAccount: undefined;
   /** Com reportUid, o questionário abre em Denúncia com a pessoa escolhida. */
   SupportNew:    { reportUid?: string; reportName?: string } | undefined;
   SupportTicket: { ticketId: string };

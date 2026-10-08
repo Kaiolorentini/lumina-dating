@@ -182,7 +182,7 @@ export default function SupportNewScreen() {
     if (!category || !user?.uid) return;
     setSending(true);
     try {
-      const attachmentPath = image ? await uploadSupportImage(user.uid, image.base64) : null;
+      const attachmentPath = image ? await uploadSupportImage(user.uid, image) : null;
       const ticketId = await createTicket({
         category:      category.id,
         categoryLabel: category.label,

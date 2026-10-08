@@ -31,6 +31,7 @@ import { notifyUser } from "../utils/notifyUser";
 import { deleteVerificationImages } from "./deleteVerificationImages";
 import { claimFounderSlot, FOUNDER_COUNTER_PATH } from "./founderCounter";
 import { MIN_AGE } from "./constants";
+import { syncAccessClaimsFor } from "../utils/accessClaims";
 
 interface ApprovePayload {
   userId: string;
@@ -191,6 +192,13 @@ export const approveAgeVerification = onCall<ApprovePayload, Promise<ApproveResu
       );
       founderNumber = claim.founderNumber;
       founderGranted = claim.granted;
+    });
+
+    // Claim de acesso logo após o commit: o app vê a aprovação pelo
+    // onSnapshot e renova o token. Falha aqui não desfaz a aprovação —
+    // o app chama syncAccessClaims ao ver a conta aprovada sem a claim.
+    await syncAccessClaimsFor(userId).catch((error) => {
+      console.error("[approveAgeVerification] claim de acesso falhou:", error);
     });
 
     const deleteResult = await deleteVerificationImages(userId);

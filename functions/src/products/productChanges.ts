@@ -18,6 +18,8 @@
 //
 // getPurchasedContent (comprador) — os arquivos que ESTA compra pode
 //   ver: sem os que estão em análise e sem os removidos depois dela.
+//   Na PRIMEIRA abertura grava purchases.firstViewedAt — é o que
+//   libera a avaliação do produto (productReviews.ts).
 //
 // Tamanho e tipo dos arquivos novos vêm dos METADADOS do Storage,
 // nunca do app.
@@ -56,7 +58,11 @@ function assertPathUnder(path: unknown, prefix: string): string {
   }
   return path;
 }
-
+// O Firebase converte `undefined` em `null` na chamada:
+// campo não enviado chega como null. Os dois significam "não mexer".
+function isProvided(value: unknown): boolean {
+  return value !== undefined && value !== null;
+}
 // ============================================
 // EDIÇÃO (criador)
 // ============================================
@@ -75,14 +81,14 @@ export const submitProductChanges = onCall(async (request) => {
   const bucket      = admin.storage().bucket();
 
   let description: string | undefined;
-  if (data.description !== undefined) {
+  if (isProvided(data.description)) {
     if (typeof data.description !== 'string') throw new HttpsError('invalid-argument', 'Descrição inválida.');
     description = data.description.trim().slice(0, MAX_DESCRIPTION);
   }
 
   // Arquivos novos: tamanho e tipo dos metadados do Storage.
   const adds: ProductFileEntry[] = [];
-  if (data.addFiles !== undefined) {
+  if (isProvided(data.addFiles)) {
     if (!Array.isArray(data.addFiles) || data.addFiles.length > MAX_ADDS) {
       throw new HttpsError('invalid-argument', `Envie até ${MAX_ADDS} arquivos por vez.`);
     }
@@ -104,7 +110,7 @@ export const submitProductChanges = onCall(async (request) => {
   }
 
   const removes: string[] = [];
-  if (data.removeFiles !== undefined) {
+  if (isProvided(data.removeFiles)) {
     if (!Array.isArray(data.removeFiles) || data.removeFiles.length > MAX_FILES_TOTAL) {
       throw new HttpsError('invalid-argument', 'Lista de remoção inválida.');
     }
@@ -112,7 +118,7 @@ export const submitProductChanges = onCall(async (request) => {
   }
 
   let coverPath: string | undefined;
-  if (data.newCoverPath !== undefined) {
+  if (isProvided(data.newCoverPath)) {
     coverPath = assertPathUnder(data.newCoverPath, coverPrefix);
     let meta: { contentType?: string };
     try {
@@ -378,6 +384,15 @@ export const getPurchasedContent = onCall(async (request) => {
   }
   const product = productSnap.data();
   if (!product) throw new HttpsError('not-found', 'Produto não encontrado');
+
+  // Primeira visualização: libera a avaliação. Só grava quando o
+  // campo ainda não existe — uma gravação na vida da compra. Falha
+  // aqui não pode impedir o comprador de ver o que pagou.
+  if (!purchase.firstViewedAt) {
+    await purchaseSnap.ref
+      .update({ firstViewedAt: FieldValue.serverTimestamp() })
+      .catch(error => console.warn('[getPurchasedContent] firstViewedAt falhou:', error));
+  }
 
   const purchasedAt = (purchase.createdAt as Timestamp | undefined)?.toDate() ?? null;
   const files = ((product.files ?? []) as ProductFileEntry[])

@@ -11,6 +11,11 @@
 // Print 4 → conta sinalizada (flagged) + notifyAdmins crítico + fraudFlag piracy
 //
 // Push de admin centralizado em notifyAdmins (sem UID hardcoded).
+//
+// 08/10/2026 (auditoria A6): productId validado. Antes qualquer
+// texto, de qualquer tamanho, era gravado no usuário, no evento e
+// na auditoria. O aviso continua sendo SÓ da própria conta (uid do
+// token) — ninguém soma avisos para outra pessoa.
 // ============================================
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
@@ -27,8 +32,13 @@ export const reportScreenshot = onCall(async (request) => {
 
   await assertUserNotBlocked(safeUid);
 
-  const { productId } = request.data as { productId: string };
-  if (!productId) throw new HttpsError("invalid-argument", "productId obrigatório");
+  const { productId } = (request.data ?? {}) as { productId?: unknown };
+  if (
+    typeof productId !== "string" || !productId ||
+    productId.length > 200 || productId.includes("/")
+  ) {
+    throw new HttpsError("invalid-argument", "productId inválido");
+  }
 
   const db = admin.firestore();
   const userRef = db.collection("users").doc(safeUid);

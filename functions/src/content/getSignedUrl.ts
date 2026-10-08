@@ -1,14 +1,35 @@
+// ============================================
+// LUMINA — LINK TEMPORÁRIO PARA CONTEÚDO COMPRADO
+// functions/src/content/getSignedUrl.ts
+//
+// O acesso é da COMPRA: produto tirado da venda continua acessível a
+// quem comprou, e arquivos em análise ou removidos antes da compra
+// ficam de fora (isVisibleToBuyer).
+//
+// v3 (29/09):
+// - Link "inline" (exibir no app). Com "attachment", o sistema
+//   tratava como download e o leitor de PDF não abria.
+// - Validade por tipo: vídeo 2 h (a reprodução inteira sem trocar de
+//   link); imagem e PDF 15 min (carregam de uma vez).
+// - Limite por minuto de 5 para 10: trocar entre os arquivos de um
+//   produto não é abuso.
+// - Contadores com expireAt: apagados pela política de TTL (grupos
+//   'counts' e 'minutes'), em vez de acumular para sempre.
+// ============================================
+
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { createAuditLog } from "../utils/auditLog";
 import { ProductFileEntry, isVisibleToBuyer } from "../products/productFiles";
 
-const SIGNED_URL_EXPIRY_MS = 5 * 60 * 1000;
-const RATE_LIMIT_PER_HOUR = 30;
-const RATE_LIMIT_PER_MINUTE = 5;
+const VIDEO_URL_EXPIRY_MS   = 2 * 60 * 60 * 1000;
+const DEFAULT_URL_EXPIRY_MS = 15 * 60 * 1000;
+const RATE_LIMIT_PER_HOUR   = 30;
+const RATE_LIMIT_PER_MINUTE = 10;
+/** Contadores do limite somem sozinhos (política de TTL no campo expireAt). */
+const COUNTER_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 
-// ✅ Tipo explícito em vez de Parameters<typeof HttpsError>[0]
 type HttpsErrorCode =
   | "ok" | "cancelled" | "unknown" | "invalid-argument"
   | "deadline-exceeded" | "not-found" | "already-exists"
@@ -23,7 +44,6 @@ export const getSignedUrl = onCall(async (request) => {
     storagePath?: string;
   };
 
-  // ✅ Helper com tipo explícito
   async function denyAccess(
     reason: string,
     code: HttpsErrorCode,
@@ -43,7 +63,7 @@ export const getSignedUrl = onCall(async (request) => {
         req: request.rawRequest,
       });
     } catch {
-      // falha silenciosa — auditoria nunca bloqueia o fluxo
+      // auditoria nunca bloqueia o fluxo
     }
     throw new HttpsError(code, userMessage);
   }
@@ -52,7 +72,6 @@ export const getSignedUrl = onCall(async (request) => {
   if (!uid) {
     return denyAccess("auth_missing", "unauthenticated", "Não autenticado");
   }
-
   if (!productId) {
     return denyAccess("product_id_missing", "invalid-argument", "productId obrigatório");
   }
@@ -69,7 +88,7 @@ export const getSignedUrl = onCall(async (request) => {
 
   const db = admin.firestore();
 
-  // Rate limit
+  // Limite de acessos
   const now = Date.now();
   const currentHour = Math.floor(now / (60 * 60 * 1000));
   const currentMinute = Math.floor(now / (60 * 1000));
@@ -98,7 +117,7 @@ export const getSignedUrl = onCall(async (request) => {
     );
   }
 
-  // StoragePath — camada 1: prefixo
+  // Caminho — camada 1: prefixo do produto
   const expectedPrefix = `marketplace/products/${productId}/files/`;
   if (!storagePath.startsWith(expectedPrefix)) {
     return denyAccess(
@@ -108,7 +127,7 @@ export const getSignedUrl = onCall(async (request) => {
     );
   }
 
-  // Purchase ativa
+  // Compra ativa
   const purchaseId = `${uid}_${productId}`;
   const purchaseSnap = await db.collection("purchases").doc(purchaseId).get();
 
@@ -129,15 +148,14 @@ export const getSignedUrl = onCall(async (request) => {
     return denyAccess("purchase_revoked", "permission-denied", "Acesso revogado");
   }
   if (purchase.buyerId !== uid) {
-    return denyAccess(`purchase_buyer_mismatch`, "permission-denied", "Acesso negado");
+    return denyAccess("purchase_buyer_mismatch", "permission-denied", "Acesso negado");
   }
   if (purchase.productId !== productId) {
-    return denyAccess(`purchase_product_mismatch`, "permission-denied", "Acesso negado");
+    return denyAccess("purchase_product_mismatch", "permission-denied", "Acesso negado");
   }
 
   // Produto — o acesso é da COMPRA. Produto tirado da venda
-  // (isDeleted) continua acessível a quem comprou: decisão de
-  // produto de 28/09. Antes, retirar da venda cortava o acesso pago.
+  // (isDeleted) continua acessível a quem comprou.
   const productSnap = await db.collection("products").doc(productId).get();
 
   if (!productSnap.exists) {
@@ -146,8 +164,8 @@ export const getSignedUrl = onCall(async (request) => {
 
   const product = productSnap.data()!;
 
-  // StoragePath — camada 2: o arquivo pertence ao produto E está
-  // visível para ESTA compra (nem em análise, nem removido antes dela).
+  // Caminho — camada 2: o arquivo pertence ao produto E está visível
+  // para ESTA compra (nem em análise, nem removido antes dela).
   const files: ProductFileEntry[] = product.files ?? [];
   const productFile = files.find((f) => f.storagePath === storagePath);
   const purchasedAt = (purchase.createdAt as admin.firestore.Timestamp | undefined)?.toDate() ?? null;
@@ -160,16 +178,18 @@ export const getSignedUrl = onCall(async (request) => {
     );
   }
 
-  // Gerar Signed URL — 5 minutos
+  // Link temporário para EXIBIR no app, com a validade do tipo.
   const bucket = admin.storage().bucket();
   const file = bucket.file(storagePath);
+  const mimeType = String((productFile as ProductFileEntry & { mimeType?: string }).mimeType ?? "");
+  const expiryMs = mimeType.startsWith("video/") ? VIDEO_URL_EXPIRY_MS : DEFAULT_URL_EXPIRY_MS;
 
   let signedUrl: string;
   try {
     const [url] = await file.getSignedUrl({
       action: "read",
-      expires: Date.now() + SIGNED_URL_EXPIRY_MS,
-      responseDisposition: "attachment",
+      expires: Date.now() + expiryMs,
+      responseDisposition: "inline",
     });
     signedUrl = url;
   } catch (error) {
@@ -180,10 +200,11 @@ export const getSignedUrl = onCall(async (request) => {
     );
   }
 
-  // Incrementar rate limit
+  // Contadores do limite, com expiração para o TTL apagar.
+  const expireAt = admin.firestore.Timestamp.fromMillis(now + COUNTER_TTL_MS);
   const batch = db.batch();
-  batch.set(hourRef, { count: admin.firestore.FieldValue.increment(1) }, { merge: true });
-  batch.set(minuteRef, { count: admin.firestore.FieldValue.increment(1) }, { merge: true });
+  batch.set(hourRef, { count: admin.firestore.FieldValue.increment(1), expireAt }, { merge: true });
+  batch.set(minuteRef, { count: admin.firestore.FieldValue.increment(1), expireAt }, { merge: true });
   await batch.commit();
 
   await createAuditLog({
@@ -191,7 +212,7 @@ export const getSignedUrl = onCall(async (request) => {
     performedBy: uid,
     targetId: productId,
     targetType: "product",
-    metadata: { storagePath, purchaseId },
+    metadata: { storagePath, purchaseId, expiresInMin: Math.round(expiryMs / 60000) },
     req: request.rawRequest,
   });
 

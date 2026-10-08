@@ -1,14 +1,28 @@
 // ============================================
-// LUMINA — PROFILE SCREEN v5.3
+// LUMINA — PROFILE SCREEN v5.4
 // src/modules/profile/screens/ProfileScreen.tsx
+//
+// v5.4 — O TOPO VIROU O CARD DA HOME.
+// No lugar da foto redonda, o card do usuário exatamente como os
+// outros o veem no feed: foto, moldura, badge com significado,
+// título, aura de prestígio e selo de boost ativo. Montado pelo
+// buildOwnProfileCard (usersService), com as mesmas regras do
+// feed. Tamanho do Sintonize (transform 1.45, mesmo mecanismo).
+//
+// - Tocar no card abre o perfil completo em modo "como os
+//   outros veem" (RealProfile com o próprio uid).
+// - Trocar a foto passou para o botão "📷 Trocar foto" abaixo
+//   do card — o fluxo de upload é o mesmo de antes.
+// - A linha de nome, badge, título e significado saiu: o card
+//   já mostra os quatro, e repetir abaixo dele duplicava tudo.
 //
 // v5.3: data → prestigeData (fix erro linha 226)
 // ============================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, ActivityIndicator, Alert, Platform,
+  ActivityIndicator, Alert, Platform, LayoutChangeEvent,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -25,13 +39,8 @@ import { UserProfile }       from '../../../shared/types';
 import { RootStackParamList } from '../../../navigation/types';
 import Header                from '../../../components/Header';
 import XPBar                 from '../../../components/XPBar';
-import { ProfileFrame }      from '../../../components/profile/ProfileFrame';
-import { Badge }             from '../../../components/profile/Badge';
-import {
-  frameAppearanceById, badgeAppearanceById, badgeMeaningById, Rarity,
-} from '../../../config/cosmeticsCatalog';
-import { TitleSeal } from '../../../components/profile/TitleSeal';
-import { titleById } from '../../../config/titlesCatalog';
+import ProfileCard           from '../../../components/ProfileCard';
+import { buildOwnProfileCard } from '../../../services/usersService';
 import { useProfileBadges } from '../hooks/useProfileBadges';
 import { useMissionsSummary } from '../../engagement/hooks/useMissionsSummary';
 import GalleryEditor from '../components/GalleryEditor';
@@ -48,6 +57,9 @@ function MenuBadge({ n }: { n: number | boolean }) {
 }
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
+
+/** Mesma escala do card na aba Sintonize. */
+const CARD_SCALE = 1.45;
 
 function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
@@ -74,6 +86,10 @@ export default function ProfileScreen() {
   const [profile, setProfile]               = useState<UserProfile | null>(null);
   const [loading, setLoading]               = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  /** Altura real do card, medida antes da escala. O transform não
+   *  ocupa espaço no layout: sem reservar a altura escalada, o
+   *  card maior invadiria o que vem abaixo dele. */
+  const [cardHeight, setCardHeight]         = useState(0);
 
   const isCreator   = role === 'creator';
   const isAdminUser = isAdmin || isSuperAdmin;
@@ -142,27 +158,24 @@ export default function ProfileScreen() {
     }
   }
 
-  // Cosméticos do próprio usuário. O aluguel vencido é
-  // descartado aqui como nas demais telas — a limpeza do
-  // getFramesStatus só roda quando ele abre a tela de Molduras.
-  function activeCosmetic(id: unknown, until: unknown): string | null {
-    if (typeof id !== 'string' || !id) return null;
-    if (until === null || until === undefined) return id;  // permanente
-    const date = (until as { toDate?: () => Date })?.toDate?.() ?? null;
-    if (!date) return id;
-    return date.getTime() > Date.now() ? id : null;
-  }
-
-  const prog = (profile as { progression?: Record<string, unknown> } | null)?.progression ?? {};
-  const myFrame = frameAppearanceById(
-    activeCosmetic(prog.equippedFrame, prog.equippedFrameUntil)
+  // O card com as mesmas regras do feed: aluguel vencido some,
+  // boost só com prazo válido. Recalculado a cada carga do
+  // perfil (o useFocusEffect recarrega ao voltar para a tela).
+  const ownCard = useMemo(
+    () => (user?.uid && profile ? buildOwnProfileCard(user.uid, profile) : null),
+    [user?.uid, profile],
   );
-  const myBadgeId = activeCosmetic(prog.equippedBadge, prog.equippedBadgeUntil);
-  const myBadge = myBadgeId
-    ? badgeAppearanceById(myBadgeId, (prog.equippedBadgeRarity as Rarity) ?? 'COMMON')
-    : null;
-  const myMeaning = badgeMeaningById(myBadgeId);
-  const myTitle   = titleById(prog.equippedTitle as string | undefined);
+
+  // Estável para o memo do ProfileCard não re-renderizar à toa.
+  const openOwnProfile = useCallback(() => {
+    if (!user?.uid) return;
+    navigation.navigate('RealProfile', { userId: user.uid });
+  }, [navigation, user?.uid]);
+
+  function handleCardLayout(event: LayoutChangeEvent) {
+    const h = event.nativeEvent.layout.height;
+    if (h > 0 && Math.abs(h - cardHeight) > 1) setCardHeight(h);
+  }
 
   if (loading) return (
     <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -175,55 +188,58 @@ export default function ProfileScreen() {
       <Header title="Meu Perfil" showBack={false} />
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
-        {/* Foto e nome */}
+        {/* Card da Home — é aqui que o usuário confere como
+            aparece para os outros e o que comprou (moldura,
+            badge, aura). */}
         <View style={styles.photoSection}>
-          {/* Com moldura, a cena substitui o círculo: é aqui que
-              o usuário confere o que comprou. O ícone de câmera
-              fica FORA da cena, senão compete com ela e a área de
-              toque vira ambígua. */}
-          <TouchableOpacity onPress={handleChangePhoto} disabled={uploadingPhoto}>
-            {uploadingPhoto ? (
-              <View style={styles.photoContainer}>
-                <ActivityIndicator color={colors.gold} />
-              </View>
-            ) : myFrame && profile?.photoURL ? (
-              <View style={styles.framedBox}>
-                <ProfileFrame
-                  photoURL={profile.photoURL}
-                  size={168}
-                  frame={myFrame}
+          {ownCard ? (
+            <View
+              style={[
+                styles.cardStage,
+                cardHeight > 0 && { height: cardHeight * CARD_SCALE },
+              ]}
+            >
+              <View
+                style={[styles.cardScale, cardHeight === 0 && styles.cardMeasuring]}
+                onLayout={handleCardLayout}
+              >
+                <ProfileCard
+                  data={ownCard}
+                  onPress={openOwnProfile}
+                  hideSintonia
+                  animatedAura
                 />
-                <View style={styles.cameraIconFramed}>
-                  <Text style={{ fontSize: 14 }}>📷</Text>
-                </View>
               </View>
+            </View>
+          ) : (
+            <View style={styles.cardFallback}>
+              <Text style={styles.cardFallbackText}>
+                Não foi possível montar o seu card agora.
+              </Text>
+              <TouchableOpacity onPress={loadProfile} accessibilityRole="button">
+                <Text style={styles.cardFallbackRetry}>Tentar de novo</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <Text style={styles.cardCaption}>
+            Assim seu card aparece para os outros. Toque nele para ver o perfil completo.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.changePhotoBtn, uploadingPhoto && styles.changePhotoBtnBusy]}
+            onPress={handleChangePhoto}
+            disabled={uploadingPhoto}
+            accessibilityRole="button"
+            accessibilityLabel="Trocar foto de perfil"
+            accessibilityState={{ disabled: uploadingPhoto, busy: uploadingPhoto }}
+          >
+            {uploadingPhoto ? (
+              <ActivityIndicator color={colors.gold} size="small" />
             ) : (
-              <View style={styles.photoContainer}>
-                {profile?.photoURL ? (
-                  <Image source={{ uri: profile.photoURL }} style={styles.photo} />
-                ) : (
-                  <View style={styles.photoPlaceholder}>
-                    <Text style={styles.photoPlaceholderText}>👤</Text>
-                  </View>
-                )}
-                <View style={styles.cameraIcon}>
-                  <Text style={{ fontSize: 14 }}>📷</Text>
-                </View>
-              </View>
+              <Text style={styles.changePhotoText}>📷 Trocar foto</Text>
             )}
           </TouchableOpacity>
-
-          <View style={styles.nameRow}>
-            {myBadge && <Badge appearance={myBadge} size={30} />}
-            <Text style={styles.name}>{profile?.name ?? 'Usuário'}</Text>
-            {/* O mesmo símbolo que aparece no card, para a pessoa
-                conferir o que escolheu sem sair daqui. */}
-            {myTitle && <TitleSeal title={myTitle} size={28} />}
-          </View>
-
-          {myMeaning && (
-            <Text style={styles.meaning}>{myMeaning}</Text>
-          )}
 
           {xpStatus && (
             <View style={styles.levelBadge}>
@@ -457,6 +473,14 @@ export default function ProfileScreen() {
         >
           <Text style={styles.logoutText}>Sair da conta</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.deleteAccountLink}
+          onPress={() => navigation.navigate('DeleteAccount')}
+          accessibilityRole="button"
+        >
+          <Text style={styles.deleteAccountText}>Excluir conta</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -466,17 +490,21 @@ const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: colors.background },
   scrollContent: { paddingBottom: spacing.xl * 2 },
   photoSection:  { alignItems: 'center', paddingVertical: spacing.xl },
-  photoContainer: { width: 100, height: 100, borderRadius: 50, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.gold },
-  photo:         { width: 100, height: 100, borderRadius: 50 },
-  photoPlaceholder: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center' },
-  photoPlaceholderText: { fontSize: 40 },
-  cameraIcon:    { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.gold, borderRadius: 12, padding: 4 },
-  framedBox:     { width: 168, height: 168, alignItems: 'center', justifyContent: 'center' },
-  // Câmera na borda da cena, não sobre ela.
-  cameraIconFramed: { position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.gold, borderRadius: 12, padding: 4 },
-  nameRow:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
-  name:          { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold' },
-  meaning:       { color: colors.gold, fontSize: fonts.sizes.sm, fontStyle: 'italic', marginTop: spacing.xs, opacity: 0.85, textAlign: 'center', paddingHorizontal: spacing.xl },
+  // Reserva a altura do card JÁ escalado e centraliza: o
+  // transform cresce a partir do centro, então o card cabe
+  // exatamente no espaço reservado.
+  cardStage:     { width: '100%', alignItems: 'center', justifyContent: 'center' },
+  cardScale:     { transform: [{ scale: CARD_SCALE }] },
+  // Invisível no primeiro quadro, antes da medida: sem isso o
+  // card aparece por um instante sobre o texto de baixo.
+  cardMeasuring: { opacity: 0 },
+  cardFallback:  { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
+  cardFallbackText: { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center' },
+  cardFallbackRetry: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  cardCaption:   { color: colors.gray, fontSize: fonts.sizes.xs, textAlign: 'center', marginTop: spacing.sm, paddingHorizontal: spacing.xl },
+  changePhotoBtn: { marginTop: spacing.md, minWidth: 160, minHeight: 40, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.gold + '18' },
+  changePhotoBtnBusy: { opacity: 0.6 },
+  changePhotoText: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   levelBadge:    { backgroundColor: colors.gold + '22', borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.gold, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, marginTop: spacing.xs },
   levelText:     { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   crystalsRow:   { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
@@ -518,4 +546,6 @@ const styles = StyleSheet.create({
   badgeDot:  { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error, marginRight: spacing.xs },
   logoutButton:  { margin: spacing.md, marginTop: spacing.lg, backgroundColor: colors.error + '22', borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.error, padding: spacing.md, alignItems: 'center' },
   logoutText:    { color: colors.error, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  deleteAccountLink: { alignSelf: 'center', padding: spacing.sm, marginBottom: spacing.md },
+  deleteAccountText: { color: colors.gray, fontSize: fonts.sizes.sm, textDecorationLine: 'underline' },
 });

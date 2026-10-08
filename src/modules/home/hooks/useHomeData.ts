@@ -1,16 +1,26 @@
 // ============================================
-// LUMINA — USE HOME DATA v5.3
+// LUMINA — USE HOME DATA v5.5
 // src/modules/home/hooks/useHomeData.ts
+//
+// v5.5:
+// - Vencimento de boost também no Em Alta: no ranking orgânico o
+//   card só perde o selo; em "Impulsionados agora" ele sai, porque
+//   a seção só existe por causa do Turbo.
+// - Relógio e regras de vencimento extraídos para
+//   hooks/useBoostExpiryTicker e shared/utils/boostExpiry — o
+//   Sintonize usa os mesmos.
+//
+// v5.4:
+// - Boost vencido sai do card sem nova busca. A lista é buscada
+//   uma vez por sessão e a Home fica montada (é uma aba): sem
+//   isto, quem abriu o app durante um Turbo via o card fixado no
+//   topo, com selo, até atualizar a tela.
 //
 // v5.3:
 // - Paginação por cursor. A Home carrega PROFILE_PAGE_SIZE
 //   perfis e busca mais conforme o usuário rola.
-// - boostType propagado até o card (o .map anterior descartava
-//   boostScore e o badge nunca teria como saber qual boost está
-//   ativo).
-// - errorProfiles: o catch anterior só fazia console.error e
-//   deixava a tela em estado ambíguo — sem erro visível e sem
-//   dados. Agora o erro sobe para a tela.
+// - boostType propagado até o card.
+// - errorProfiles: o erro sobe para a tela.
 //
 // v5.2: removida simulateVisits() — visitas fictícias
 // de visitor_1/2/3 removidas da produção.
@@ -22,6 +32,7 @@ import { useAuth }          from '../../../context/AuthContext';
 import { useCoins }         from '../../../context/CoinsContext';
 import { useNotifications } from '../../notifications/hooks/useNotifications';
 import { useVisits }        from '../../../hooks/useVisits';
+import { useBoostExpiryTicker } from '../../../hooks/useBoostExpiryTicker';
 import { getProfile }       from '../../profile/services/profileService';
 import {
   getCompatibleProfilesPage,
@@ -33,6 +44,9 @@ import {
 } from '../../../services/mostVisitedService';
 import { getMostVisitedProfiles }     from '../../../services/visitsService';
 import { ProfileCardData, UserProfile } from '../../../shared/types';
+import {
+  hasTimedBoost, expireAndUnpin, clearExpiredBoosts, removeExpiredBoosts,
+} from '../../../shared/utils/boostExpiry';
 
 export type HomeTab = 'perfis' | 'visitados' | 'conversas';
 
@@ -59,13 +73,14 @@ interface UseHomeDataReturn {
 
 function toCardData(p: RealProfile): ProfileCardData {
   return {
-    id:        p.uid,
-    name:      p.name,
-    age:       p.age,
-    location:  `${p.city || ''}, ${p.state || ''}`,
-    sintonia:  p.sintonia,
-    photoURL:  p.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
-    boostType: p.boostType,
+    id:         p.uid,
+    name:       p.name,
+    age:        p.age,
+    location:   `${p.city || ''}, ${p.state || ''}`,
+    sintonia:   p.sintonia,
+    photoURL:   p.photoURL || 'https://randomuser.me/api/portraits/lego/1.jpg',
+    boostType:  p.boostType,
+    boostUntil: p.boostUntil,
     // FASE 5 Etapa 2 — já vêm filtrados por validade do
     // usersService; aqui é só repasse.
     equippedFrame:       p.equippedFrame,
@@ -109,6 +124,19 @@ export function useHomeData(): UseHomeDataReturn {
   useEffect(() => {
     if (user) loadInitialData();
   }, [user]);
+
+  // ── Boost vencido sai dos cards ──
+  // Feed: perde o selo e desce do topo. Em Alta orgânico: perde o
+  // selo. "Impulsionados agora": o card sai.
+  const hasBoostedCard =
+    hasTimedBoost(realProfiles) || hasTimedBoost(mostVisited) || hasTimedBoost(promotedVisited);
+
+  useBoostExpiryTicker(hasBoostedCard, () => {
+    const now = Date.now();
+    setRealProfiles(prev => expireAndUnpin(prev, now));
+    setMostVisited(prev => clearExpiredBoosts(prev, now));
+    setPromotedVisited(prev => removeExpiredBoosts(prev, now));
+  });
 
   async function loadInitialData() {
     if (!user) return;

@@ -1,19 +1,32 @@
 // ============================================
-// CONTENT VIEWER SCREEN — DRM PROTEGIDO
+// LUMINA — CONTEÚDO COMPRADO (visualizador protegido)
+// src/screens/marketplace/ContentViewerScreen.tsx
 //
-// getSignedUrl real implementado.
-// URL expira em 5 minutos — auto-refresh on error.
-// Screenshot: apenas DETECTADO e SINALIZADO em ambos os SOs
-//   (não bloqueia — FLAG_SECURE não é confiável em MIUI etc.)
-//   Dupla detecção sem permissão: addScreenshotListener + AppState.
-// Watermark com UID do usuário.
+// v3 (29/09):
+// - VÍDEO: reprodutor protegido (expo-video). Antes, vídeo comprado
+//   não abria — só aparecia o nome do arquivo.
+// - BLOQUEIO de captura: Android (print e gravação saem pretos) e
+//   iOS (gravação sai preta). O print do iOS não pode ser bloqueado
+//   por app nenhum: ali ficam os dois detectores.
+// - Detectores: listener nativo de print (os dois SOs) + perda de
+//   foco rápida (só iOS, com carência de 2 s ao abrir). No Android a
+//   captura é bloqueada — o detector de foco só puniria falsos
+//   positivos (cortina de notificações, chamada).
+// - Marca d'água móvel (e-mail parcial + uid) em imagem e vídeo.
+// - Link renovado só quando FALHA — antes, a troca a cada 4min30
+//   recarregava a imagem e reiniciaria o vídeo.
+// - Tamanho da tela acompanha a rotação (useWindowDimensions).
+//
+// O acesso é decidido pelo servidor (getPurchasedContent e
+// getSignedUrl): compra, arquivos removidos depois dela, produto
+// tirado da venda.
 // ============================================
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator,
-  Alert, TouchableOpacity, Dimensions, Image,
-  FlatList, Platform, AppState, AppStateStatus,
+  Alert, TouchableOpacity, Image, FlatList, Platform,
+  AppState, AppStateStatus, useWindowDimensions,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ScreenCapture from 'expo-screen-capture';
@@ -24,17 +37,30 @@ import { RootStackParamList } from '../../navigation/types';
 import app from '../../core/firebase';
 import { getPurchasedContent } from '../../services/marketplace/productService';
 import ScreenContainer from '../../components/ScreenContainer';
+import ProtectedVideoPlayer from '../../components/media/ProtectedVideoPlayer';
+import ProtectedPdfViewer from '../../components/media/ProtectedPdfViewer';
+import MovingWatermark, { maskEmail } from '../../components/media/MovingWatermark';
 
 type RouteProps = RouteProp<RootStackParamList, 'ContentViewer'>;
-const { width, height } = Dimensions.get('window');
 
 interface ProductFile {
   storagePath: string;
-  type: string;
-  name: string;
-  size: number;
-  mimeType: string;
+  type:        string;
+  name:        string;
+  size:        number;
+  mimeType:    string;
 }
+
+type SignedUrlReq = { productId: string; storagePath: string };
+type SignedUrlRes = { url: string };
+
+/** Perda de foco mais curta que isto conta como possível print (iOS). */
+const FOCUS_LOSS_MAX_MS = 1500;
+/** Ao abrir, transições do sistema também tiram o foco — ignoradas. */
+const FOCUS_GRACE_MS = 2000;
+/** Um print pode disparar os dois detectores — conta uma vez. */
+const REPORT_DEBOUNCE_MS = 1200;
+const HIDE_AFTER_CAPTURE_MS = 3000;
 
 const WARNING_MESSAGES = [
   {
@@ -71,97 +97,85 @@ function getFileIcon(mimeType: string): string {
 export default function ContentViewerScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProps>();
-  const { productId, purchaseId } = route.params;
+  const { productId } = route.params;
   const { user } = useAuth();
+  const { width } = useWindowDimensions();
 
-  const [title, setTitle] = useState('Conteúdo');
-  const [files, setFiles] = useState<ProductFile[]>([]);
+  // Bloqueio de captura enquanto a tela estiver aberta.
+  ScreenCapture.usePreventScreenCapture();
+
+  const [title, setTitle]               = useState('Conteúdo');
+  const [files, setFiles]               = useState<ProductFile[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [urlLoading, setUrlLoading] = useState(false);
+  const [signedUrl, setSignedUrl]       = useState<string | null>(null);
+  const [loading, setLoading]           = useState(true);
+  const [urlLoading, setUrlLoading]     = useState(false);
   const [contentHidden, setContentHidden] = useState(false);
-  const [imageError, setImageError] = useState(false);
+  const [imageError, setImageError]     = useState(false);
+  const [fullscreen, setFullscreen]     = useState(false);
 
-  const screenshotCount = useRef(0);
-  const urlExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const screenshotCount  = useRef(0);
+  const lastReportRef    = useRef(0);
+  const backgroundedAt   = useRef<number | null>(null);
+  const mountedAt        = useRef(Date.now());
+  const hideTimer        = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Debounce anti-duplicidade: se listener e AppState dispararem
-  // quase juntos para o MESMO print, conta só uma vez.
-  const lastReportRef = useRef<number>(0);
+  const watermark = [maskEmail(user?.email), user?.uid?.slice(0, 8)].filter(Boolean).join(' · ');
 
-  // AppState: marca quando o app deixou de ficar ativo
-  const backgroundedAtRef = useRef<number | null>(null);
-
-  // handleScreenshot precisa ser estável para os listeners
+  // ============================================
+  // Captura detectada (listener nativo ou perda de foco no iOS)
+  // ============================================
   const handleScreenshot = useCallback(async () => {
-    // Debounce de 1.2s — evita contagem dupla no mesmo print
     const now = Date.now();
-    if (now - lastReportRef.current < 1200) return;
+    if (now - lastReportRef.current < REPORT_DEBOUNCE_MS) return;
     lastReportRef.current = now;
 
     screenshotCount.current += 1;
     const count = screenshotCount.current;
 
     setContentHidden(true);
-    setTimeout(() => setContentHidden(false), 3000);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setContentHidden(false), HIDE_AFTER_CAPTURE_MS);
 
     if (user?.uid) {
-      try {
-        const functions = getFunctions(app, 'us-central1');
-        const report = httpsCallable(functions, 'reportScreenshot');
-        await report({ productId });
-      } catch {
-        // Falha silenciosa — não bloqueia o fluxo
-      }
+      httpsCallable(getFunctions(app, 'us-central1'), 'reportScreenshot')({ productId })
+        .catch(() => { /* não bloqueia o fluxo */ });
     }
 
-    const warningIndex = Math.min(count - 1, WARNING_MESSAGES.length - 1);
-    const warning = WARNING_MESSAGES[warningIndex];
-    Alert.alert(warning.title, warning.message, [
-      { text: warning.button, style: 'default' },
-    ]);
+    const warning = WARNING_MESSAGES[Math.min(count - 1, WARNING_MESSAGES.length - 1)];
+    Alert.alert(warning.title, warning.message, [{ text: warning.button, style: 'default' }]);
   }, [productId, user?.uid]);
 
-  // ============================================
-  // DRM — Detecção de screenshot (ambos SOs, sem bloqueio)
-  // ============================================
   useEffect(() => {
-    // 1. Listener nativo de screenshot (iOS + Android)
-    const subscription = ScreenCapture.addScreenshotListener(() => {
-      handleScreenshot();
-    });
+    // 1. Listener nativo de print (iOS + Android)
+    const subscription = ScreenCapture.addScreenshotListener(() => { handleScreenshot(); });
 
-    // 2. AppState — indício de print por perda rápida de foco.
-    //    Complementa o listener no Android sem exigir permissão.
-    //    Só conta se voltar em menos de 1.5s (padrão de screenshot),
-    //    não uma troca de app comum.
-    const onAppStateChange = (state: AppStateStatus) => {
-      if (state === 'active') {
-        const bgAt = backgroundedAtRef.current;
-        if (bgAt !== null) {
+    // 2. Perda de foco rápida — só iOS, onde o print não é bloqueável.
+    let appStateSub: { remove: () => void } | null = null;
+    if (Platform.OS === 'ios') {
+      appStateSub = AppState.addEventListener('change', (state: AppStateStatus) => {
+        if (state === 'active') {
+          const bgAt = backgroundedAt.current;
+          backgroundedAt.current = null;
+          if (bgAt === null) return;
+          if (bgAt - mountedAt.current < FOCUS_GRACE_MS) return;
           const away = Date.now() - bgAt;
-          if (away > 0 && away < 1500) {
-            handleScreenshot();
-          }
+          if (away > 0 && away < FOCUS_LOSS_MAX_MS) handleScreenshot();
+        } else {
+          backgroundedAt.current = Date.now();
         }
-        backgroundedAtRef.current = null;
-      } else {
-        // inactive / background
-        backgroundedAtRef.current = Date.now();
-      }
-    };
-    const appStateSub = AppState.addEventListener('change', onAppStateChange);
+      });
+    }
 
     return () => {
       subscription.remove();
-      appStateSub.remove();
-      if (urlExpiryTimer.current) clearTimeout(urlExpiryTimer.current);
+      appStateSub?.remove();
+      if (hideTimer.current) clearTimeout(hideTimer.current);
     };
   }, [handleScreenshot]);
 
   // ============================================
-  // Load product + files
+  // Produto e arquivos (o servidor filtra pela compra)
   // ============================================
   useEffect(() => {
     loadProduct();
@@ -170,18 +184,13 @@ export default function ContentViewerScreen() {
   async function loadProduct() {
     setLoading(true);
     try {
-      // O servidor devolve só o que ESTA compra pode ver: nem arquivos
-      // em análise, nem os removidos depois da compra. Funciona também
-      // com o produto tirado da venda.
       const content = await getPurchasedContent(productId);
       setTitle(content.title);
-
       if (content.files.length === 0) {
         Alert.alert('Aviso', 'Este produto não possui arquivos disponíveis.');
         navigation.goBack();
         return;
       }
-
       setFiles(content.files as ProductFile[]);
     } catch {
       Alert.alert('Erro', 'Não foi possível carregar o conteúdo.');
@@ -192,41 +201,25 @@ export default function ContentViewerScreen() {
   }
 
   // ============================================
-  // Load signed URL for selected file
+  // Link temporário
   // ============================================
-  useEffect(() => {
-    if (files.length > 0 && files[selectedIndex]) {
-      loadSignedUrl(files[selectedIndex].storagePath);
-    }
-  }, [selectedIndex, files]);
+  const fetchSignedUrl = useCallback(async (storagePath: string): Promise<string> => {
+    const getUrl = httpsCallable<SignedUrlReq, SignedUrlRes>(getFunctions(app, 'us-central1'), 'getSignedUrl');
+    const result = await getUrl({ productId, storagePath });
+    return result.data.url;
+  }, [productId]);
 
-  async function loadSignedUrl(storagePath: string) {
+  const loadSelected = useCallback(async (storagePath: string) => {
     setUrlLoading(true);
     setSignedUrl(null);
     setImageError(false);
-
-    // Clear previous expiry timer
-    if (urlExpiryTimer.current) clearTimeout(urlExpiryTimer.current);
-
     try {
-      const functions = getFunctions(app, 'us-central1');
-      const getUrl = httpsCallable(functions, 'getSignedUrl');
-      const result = await getUrl({ productId, storagePath }) as any;
-      const url: string = result.data.url;
-      setSignedUrl(url);
-
-      // Auto-refresh a 4min30s (URL expira em 5min)
-      urlExpiryTimer.current = setTimeout(() => {
-        loadSignedUrl(storagePath);
-      }, 4 * 60 * 1000 + 30 * 1000);
-    } catch (error: any) {
-      const code = error?.code ?? '';
+      setSignedUrl(await fetchSignedUrl(storagePath));
+    } catch (error: unknown) {
+      const code = (error as { code?: string })?.code ?? '';
       if (code === 'functions/permission-denied') {
-        Alert.alert(
-          'Acesso negado',
-          'Você não tem acesso a este conteúdo.',
-          [{ text: 'Voltar', onPress: () => navigation.goBack() }]
-        );
+        Alert.alert('Acesso negado', 'Você não tem acesso a este conteúdo.',
+          [{ text: 'Voltar', onPress: () => navigation.goBack() }]);
       } else if (code === 'functions/resource-exhausted') {
         Alert.alert('Limite atingido', 'Você atingiu o limite de acessos. Tente novamente mais tarde.');
         navigation.goBack();
@@ -236,10 +229,15 @@ export default function ContentViewerScreen() {
     } finally {
       setUrlLoading(false);
     }
-  }
+  }, [fetchSignedUrl, navigation]);
+
+  useEffect(() => {
+    const file = files[selectedIndex];
+    if (file) loadSelected(file.storagePath);
+  }, [selectedIndex, files, loadSelected]);
 
   // ============================================
-  // Render file content
+  // Conteúdo
   // ============================================
   function renderContent() {
     if (urlLoading) {
@@ -262,8 +260,23 @@ export default function ContentViewerScreen() {
 
     const currentFile = files[selectedIndex];
     if (!currentFile || !signedUrl) return null;
-
     const mimeType = currentFile.mimeType ?? '';
+
+    // Vídeo
+    if (mimeType.startsWith('video/')) {
+      return (
+        <View style={styles.videoArea}>
+          <ProtectedVideoPlayer
+            key={currentFile.storagePath}
+            uri={signedUrl}
+            watermark={watermark}
+            refreshUrl={() => fetchSignedUrl(currentFile.storagePath)}
+            onFullscreenChange={setFullscreen}
+          />
+          {!fullscreen && <Text style={styles.videoName} numberOfLines={2}>{currentFile.name}</Text>}
+        </View>
+      );
+    }
 
     // Imagem
     if (mimeType.startsWith('image/')) {
@@ -272,55 +285,56 @@ export default function ContentViewerScreen() {
           <View style={styles.center}>
             <Text style={styles.bigIcon}>⚠️</Text>
             <Text style={styles.errorText}>Erro ao carregar imagem</Text>
-            <TouchableOpacity
-              style={styles.retryBtn}
-              onPress={() => {
-                setImageError(false);
-                loadSignedUrl(currentFile.storagePath);
-              }}
-            >
+            <TouchableOpacity style={styles.retryBtn} onPress={() => loadSelected(currentFile.storagePath)}>
               <Text style={styles.retryBtnText}>Tentar novamente</Text>
             </TouchableOpacity>
           </View>
         );
       }
-
       return (
-        <Image
-          source={{ uri: signedUrl }}
-          style={styles.imageContent}
-          resizeMode="contain"
-          onError={() => setImageError(true)}
+        <View style={styles.imageArea}>
+          <Image
+            source={{ uri: signedUrl }}
+            style={[styles.imageContent, { width }]}
+            resizeMode="contain"
+            onError={() => setImageError(true)}
+          />
+          <MovingWatermark text={watermark} />
+        </View>
+      );
+    }
+
+    // PDF
+    if (mimeType === 'application/pdf') {
+      return (
+        <ProtectedPdfViewer
+          key={currentFile.storagePath}
+          uri={signedUrl}
+          watermark={watermark}
+          refreshUrl={() => fetchSignedUrl(currentFile.storagePath)}
         />
       );
     }
 
-    // Outros tipos — info do arquivo
+    // Demais tipos (ex.: .zip) — não são exibidos dentro do app.
     return (
       <View style={styles.center}>
         <Text style={styles.bigIcon}>{getFileIcon(mimeType)}</Text>
         <Text style={styles.fileTitle}>{currentFile.name}</Text>
         <Text style={styles.fileMeta}>{formatBytes(currentFile.size)}</Text>
         <View style={styles.protectedBox}>
-          <Text style={styles.protectedText}>
-            🔒 Conteúdo protegido carregado
-          </Text>
-          <Text style={styles.protectedSubtext}>
-            Visualização disponível no app
-          </Text>
+          <Text style={styles.protectedText}>🔒 Conteúdo protegido</Text>
+          <Text style={styles.protectedSubtext}>Este formato não é exibido no app. Se precisar de ajuda, fale com o suporte.</Text>
         </View>
       </View>
     );
   }
 
-  // ============================================
-  // Loading state
-  // ============================================
   if (loading) {
     return (
       <ScreenContainer>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Voltar">
             <Text style={styles.backBtn}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Conteúdo</Text>
@@ -334,24 +348,19 @@ export default function ContentViewerScreen() {
     );
   }
 
-  // ============================================
-  // Main render
-  // ============================================
   return (
     <ScreenContainer>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>‹</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {title}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+      {!fullscreen && (
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Voltar">
+            <Text style={styles.backBtn}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      )}
 
-      {/* Seletor de arquivo — se múltiplos */}
-      {files.length > 1 && (
+      {!fullscreen && files.length > 1 && (
         <View style={styles.fileSelector}>
           <FlatList
             data={files}
@@ -361,22 +370,12 @@ export default function ContentViewerScreen() {
             contentContainerStyle={styles.fileSelectorContent}
             renderItem={({ item, index }) => (
               <TouchableOpacity
-                style={[
-                  styles.fileTab,
-                  index === selectedIndex && styles.fileTabActive,
-                ]}
-                onPress={() => {
-                  if (index !== selectedIndex) {
-                    setSelectedIndex(index);
-                    setImageError(false);
-                  }
-                }}
+                style={[styles.fileTab, index === selectedIndex && styles.fileTabActive]}
+                onPress={() => { if (index !== selectedIndex) setSelectedIndex(index); }}
+                accessibilityRole="tab"
               >
                 <Text style={styles.fileTabIcon}>{getFileIcon(item.mimeType)}</Text>
-                <Text
-                  style={[styles.fileTabText, index === selectedIndex && styles.fileTabTextActive]}
-                  numberOfLines={1}
-                >
+                <Text style={[styles.fileTabText, index === selectedIndex && styles.fileTabTextActive]} numberOfLines={1}>
                   {item.name}
                 </Text>
               </TouchableOpacity>
@@ -385,65 +384,54 @@ export default function ContentViewerScreen() {
         </View>
       )}
 
-      {/* Conteúdo */}
       <View style={styles.contentArea}>
         {renderContent()}
-      </View>
-
-      {/* Watermark com UID */}
-      <View style={styles.watermark} pointerEvents="none">
-        <Text style={styles.watermarkText}>{user?.uid?.slice(0, 8)}</Text>
       </View>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: spacing.md, paddingBottom: spacing.md,
     borderBottomWidth: 0.5, borderBottomColor: colors.gold + '44',
   },
-  backBtn: { color: colors.gold, fontSize: 28 },
+  backBtn:     { color: colors.gold, fontSize: 28 },
   headerTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold', flex: 1, textAlign: 'center' },
-  fileSelector: {
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.grayDark,
-    maxHeight: 60,
-  },
+  fileSelector: { borderBottomWidth: 0.5, borderBottomColor: colors.grayDark, maxHeight: 60 },
   fileSelectorContent: { paddingHorizontal: spacing.md, gap: spacing.sm, alignItems: 'center' },
   fileTab: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark,
-    maxWidth: 160,
+    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark, maxWidth: 160,
   },
-  fileTabActive: { borderColor: colors.gold, backgroundColor: colors.gold + '11' },
-  fileTabIcon: { fontSize: 16 },
-  fileTabText: { color: colors.gray, fontSize: fonts.sizes.xs },
+  fileTabActive:     { borderColor: colors.gold, backgroundColor: colors.gold + '11' },
+  fileTabIcon:       { fontSize: 16 },
+  fileTabText:       { color: colors.gray, fontSize: fonts.sizes.xs },
   fileTabTextActive: { color: colors.gold, fontWeight: 'bold' },
   contentArea: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  center:      { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   loadingText: { color: colors.gray, marginTop: spacing.md, fontSize: fonts.sizes.md },
-  bigIcon: { fontSize: 64, marginBottom: spacing.md },
-  hiddenText: { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center' },
-  imageContent: { flex: 1, width },
-  fileTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', textAlign: 'center', marginBottom: spacing.xs },
-  fileMeta: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.lg },
+  bigIcon:     { fontSize: 64, marginBottom: spacing.md },
+  hiddenText:  { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center' },
+  videoArea:   { flex: 1, justifyContent: 'center', gap: spacing.md },
+  videoName:   { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center', paddingHorizontal: spacing.lg },
+  imageArea:   { flex: 1 },
+  imageContent: { flex: 1 },
+  fileTitle:   { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', textAlign: 'center', marginBottom: spacing.xs },
+  fileMeta:    { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.lg },
   protectedBox: {
     backgroundColor: colors.gold + '11', borderRadius: borderRadius.md,
     borderWidth: 1, borderColor: colors.gold + '33',
     padding: spacing.md, alignItems: 'center', gap: spacing.xs,
   },
-  protectedText: { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  protectedSubtext: { color: colors.gray, fontSize: fonts.sizes.sm },
-  errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center', marginBottom: spacing.lg },
+  protectedText:    { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  protectedSubtext: { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center' },
+  errorText:   { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center', marginBottom: spacing.lg },
   retryBtn: {
     backgroundColor: colors.gold, borderRadius: borderRadius.md,
     paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
   },
   retryBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
-  watermark: { position: 'absolute', bottom: spacing.xl, right: spacing.md, opacity: 0.15 },
-  watermarkText: { color: colors.white, fontSize: fonts.sizes.xs },
 });

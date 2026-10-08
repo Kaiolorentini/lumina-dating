@@ -3,6 +3,7 @@
     "name": "Lumina Dating",
     "slug": "lumina-dating",
     "version": "1.4.0",
+    "platforms": ["ios", "android"],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -45,6 +46,8 @@
       "bundler": "metro"
     },
     "plugins": [
+      "@config-plugins/react-native-blob-util",
+      "@config-plugins/react-native-pdf",
       [
         "expo-notifications",
         {
@@ -59,7 +62,9 @@
           "photosPermission": "O Lumina precisa acessar sua galeria para fotos de perfil.",
           "cameraPermission": "O Lumina precisa acessar sua camera para tirar fotos."
         }
-      ]
+      ],
+      "expo-video",
+      "react-native-blob-util"
     ],
     "extra": {
       "eas": {

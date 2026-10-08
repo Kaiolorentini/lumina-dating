@@ -1,6 +1,6 @@
 import {
   collection,
-  addDoc,
+  setDoc,
   query,
   where,
   getDocs,
@@ -66,10 +66,14 @@ export async function enviarSolicitacao(
     const existing = await getSolicitacaoEntre(fromUserId, toUserId);
     if (existing) return false;
 
-    await addDoc(collection(db, COLLECTIONS.CONNECTION_REQUESTS), {
+    // Id determinístico remetente_destinatário: a regra só aceita
+    // este formato, então um segundo envio (dois toques rápidos)
+    // vira alteração de documento existente e é negado — sem
+    // pedido duplicado.
+    await setDoc(doc(db, COLLECTIONS.CONNECTION_REQUESTS, `${fromUserId}_${toUserId}`), {
       fromUserId,
       toUserId,
-      fromUserName: fromUserName || '',
+      fromUserName: (fromUserName || '').slice(0, 100),
       fromUserPhoto: fromUserPhoto || '',
       status: 'pending',
       timestamp: serverTimestamp(),
