@@ -1,6 +1,13 @@
 // ============================================
-// LUMINA — REAL PROFILE SCREEN v5.4
+// LUMINA — REAL PROFILE SCREEN v5.5
 // src/screens/Profile/RealProfileScreen.tsx
+//
+// v5.5 — CONTEÚDOS DO CRIADOR NO PERFIL.
+// Logo depois da galeria, a faixa com os produtos à venda de quem
+// tem o perfil aberto (CreatorProductsRow). Só busca quando a
+// pessoa pode vender (criador/admin) e o marketplace está aberto;
+// perfil comum não gasta nenhuma leitura. Aparece também no modo
+// "Seu perfil", para o criador ver como os outros veem.
 //
 // v5.4 — MODO "COMO OS OUTROS VEEM".
 // O card do Meu Perfil abre esta tela com o uid do próprio
@@ -14,7 +21,7 @@
 // para registrar progresso das missões diárias.
 // ============================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -57,6 +64,8 @@ import { getFunctions, httpsCallable }           from 'firebase/functions';
 import { db }                                    from '../../services/firebase';
 import { galleryPhotos } from '../../modules/profile/services/photoService';
 import GalleryViewer from '../../modules/profile/components/GalleryViewer';
+import CreatorProductsRow from '../../components/marketplace/CreatorProductsRow';
+import { useAppSettings } from '../../hooks/useAppSettings';
 
 const { width, height } = Dimensions.get('window');
 const functions         = getFunctions();
@@ -111,6 +120,11 @@ export default function RealProfileScreen() {
   const [achievements, setAchievements] = useState<PublicAchievement[]>([]);
   const [totalAch,     setTotalAch]     = useState(0);
   const [viewerIndex,  setViewerIndex]  = useState<number | null>(null);
+  const { marketplaceEnabled } = useAppSettings();
+
+  const openProduct = useCallback((productId: string) => {
+    navigation.navigate('ProductDetail', { productId });
+  }, [navigation]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -358,6 +372,10 @@ export default function RealProfileScreen() {
       return 0;
     });
 
+  // Quem pode vender: as mesmas funções do isCreator() das regras.
+  const targetRole = (targetProfile as { role?: string } | null)?.role;
+  const canSell = targetRole === 'creator' || targetRole === 'admin' || targetRole === 'superadmin';
+
   function getSintoniaLabel(): string {
     if (sintonia >= 95) return '✦ Sintonia Perfeita';
     if (sintonia >= 85) return '🔥 Alta Sintonia';
@@ -480,6 +498,14 @@ export default function RealProfileScreen() {
               ))}
             </View>
           )}
+
+          {/* Conteúdos à venda — só criador com produto aprovado. */}
+          <CreatorProductsRow
+            ownerId={targetUserId}
+            ownerName={targetProfile?.name}
+            enabled={canSell && marketplaceEnabled === true}
+            onOpenProduct={openProduct}
+          />
 
           {/* O que a pessoa está dizendo sobre si. Vem antes da
               Sintonia de propósito: é o que ela escolheu declarar,
@@ -727,3 +753,4 @@ const styles = StyleSheet.create({
   selfBanner:           { backgroundColor: colors.gold + '18', borderBottomWidth: 1, borderBottomColor: colors.gold + '44', paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
   selfBannerText:       { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold', textAlign: 'center' },
 });
+
