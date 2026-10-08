@@ -80,6 +80,9 @@ service cloud.firestore {
     // nem no create, nem no update.
     // role e isBlocked NÃO estão aqui porque o create os EXIGE com
     // valor fixo; no update eles entram via hasNoProtectedFields.
+    // A4 (08/10/2026): a proteção principal agora é a lista branca
+    // (profileClientFields). Esta lista segue como SEGUNDA barreira
+    // no update e como registro dos campos do servidor.
     // randomSeed tem regra própria (isRandomSeedChangeAllowed).
     function clientBlockedUserFields() {
       return [
@@ -147,6 +150,60 @@ service cloud.firestore {
         (!('randomSeed' in resource.data) && isValidRandomSeed(request.resource.data));
     }
 
+    // ── Lista branca do perfil (auditoria A4, 08/10/2026) ──
+    // Antes o update era por LISTA NEGRA (hasNoProtectedFields):
+    // qualquer campo fora da lista era gravável — photoURL apontando
+    // para fora do Storage (foto sem moderação no feed), valores sem
+    // limite e campos que o servidor cria no futuro.
+    // Agora o cliente só grava estes campos, cada um validado.
+    // São EXATAMENTE os que o app envia hoje (useProfileSetup,
+    // saveProfile, uploadProfilePhoto) — nenhuma tela muda.
+    // Tudo o mais (role, isBlocked, progression, xp, boosts,
+    // moderação, termos, verificação, galeria…) é só do servidor.
+    function profileClientFields() {
+      return [
+        'uid', 'email', 'name', 'age', 'city', 'state', 'regiaoId', 'estadoId',
+        'gender', 'preferences', 'bio', 'photoURL',
+        'createdAt', 'updatedAt', 'randomSeed',
+      ];
+    }
+
+    // Foto de perfil: só o arquivo da PRÓPRIA pasta, no Storage
+    // DESTE projeto (os dois nomes de bucket do Lumina). Bucket de
+    // outro projeto com o mesmo caminho não passa.
+    function isOwnProfilePhotoUrl(url, userId) {
+      return url is string && url.size() <= 1024 &&
+        url.matches(
+          'https://firebasestorage[.]googleapis[.]com/v0/b/lumina-ff667[.](firebasestorage[.]app|appspot[.]com)/o/profile_photos%2F'
+          + userId + '%2Fphoto[.]jpg[?].*'
+        );
+    }
+
+    // Valida cada campo PRESENTE em `changed`. No update, `changed` é o
+    // que mudou (affectedKeys): campo reenviado com o mesmo valor não
+    // é revalidado — conta antiga com valor fora do padrão continua
+    // editando o resto. No create, `changed` é o documento inteiro.
+    // Campo removido também entra em affectedKeys e falha aqui (o
+    // valor não existe), então o cliente não apaga campos do perfil.
+    function isValidProfileFields(d, changed, userId) {
+      return (!changed.hasAny(['uid'])  || d.uid == userId) &&
+        (!changed.hasAny(['email'])       || (d.email is string && d.email == request.auth.token.get('email', ''))) &&
+        (!changed.hasAny(['name'])        || (d.name is string && d.name.size() >= 1 && d.name.size() <= 80)) &&
+        (!changed.hasAny(['age'])         || (d.age is number && d.age >= 18 && d.age <= 100)) &&
+        (!changed.hasAny(['city'])        || (d.city is string && d.city.size() >= 1 && d.city.size() <= 100)) &&
+        (!changed.hasAny(['state'])       || (d.state is string && d.state.size() == 2)) &&
+        (!changed.hasAny(['regiaoId'])    || (d.regiaoId is string && d.regiaoId.matches('[0-9]{7}'))) &&
+        (!changed.hasAny(['estadoId'])    || (d.estadoId is number && d.estadoId >= 11 && d.estadoId <= 53)) &&
+        (!changed.hasAny(['gender'])      || d.gender in ['masculino', 'feminino', 'trans', 'nao-binario']) &&
+        (!changed.hasAny(['preferences']) || (d.preferences is list &&
+                                           d.preferences.size() >= 1 && d.preferences.size() <= 4 &&
+                                           d.preferences.toSet().hasOnly(['homens', 'mulheres', 'trans', 'todos']))) &&
+        (!changed.hasAny(['bio'])         || (d.bio is string && d.bio.size() <= 1000)) &&
+        (!changed.hasAny(['photoURL'])    || isOwnProfilePhotoUrl(d.photoURL, userId)) &&
+        (!changed.hasAny(['createdAt'])   || d.createdAt is timestamp) &&
+        (!changed.hasAny(['updatedAt'])   || d.updatedAt is timestamp);
+    }
+
     // ============================================
     // USERS
     // ============================================
@@ -163,12 +220,26 @@ service cloud.firestore {
       // economia. Antes, uma conta nova podia nascer com
       // ageVerificationStatus 'approved', xp e conquistas
       // arbitrárias — furando o gate de idade inteiro.
+      //
+      // A4: o create também é por lista branca. Normalmente o
+      // documento nasce na CF acceptAppTerms (Admin SDK); o create
+      // pelo app só acontece no saveProfile de uma conta sem
+      // documento, e ele manda só campos da lista + role/isBlocked.
       allow create: if isOwner(userId) &&
         request.resource.data.role == 'user' &&
         request.resource.data.isBlocked == false &&
-        !request.resource.data.keys().hasAny(clientBlockedUserFields()) &&
+        request.resource.data.keys().hasOnly(profileClientFields().concat(['role', 'isBlocked'])) &&
+        isValidProfileFields(request.resource.data, request.resource.data.keys(), userId) &&
         isValidRandomSeed(request.resource.data);
-      allow update: if isOwner(userId) && hasNoProtectedFields() && isRandomSeedChangeAllowed();
+      // A4: só campos da lista branca, validados. role, isBlocked e
+      // todo campo do servidor ficam fora — inclusive os que forem
+      // criados no futuro.
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(profileClientFields()) &&
+        hasNoProtectedFields() &&
+        isValidProfileFields(request.resource.data,
+                             request.resource.data.diff(resource.data).affectedKeys(), userId) &&
+        isRandomSeedChangeAllowed();
       allow delete: if false;
 
       match /transactions/{transactionId} {
@@ -979,19 +1050,25 @@ match /achievementTriggers/{docId} {
       match /history/{version} {
         allow read:  if isOwner(userId) || isSuperAdmin();
         allow write: if false;
-            // ============================================
+      }
+    }
+
+    // ============================================
     // EXCLUSÃO DE CONTA — só o servidor
     // ============================================
     // Pedido (accountDeletions/{uid}) e comprovante pseudônimo
     // (accountDeletionLog/{anonId}). Ver functions/src/users/
     // accountDeletion.ts.
+    // Corrigido em 08/10/2026: estes dois blocos estavam DENTRO de
+    // termsAcceptances/{userId}/history/{version}, ou seja, valiam
+    // para um caminho que não existe. As coleções reais já estavam
+    // fechadas pelo bloqueio padrão do Firestore; agora a regra
+    // explícita está no lugar certo.
     match /accountDeletions/{uid} {
       allow read, write: if false;
     }
     match /accountDeletionLog/{anonId} {
       allow read, write: if false;
-    }
-      }
     }
 
   }
