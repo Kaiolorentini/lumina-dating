@@ -24,7 +24,10 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
-import { createAuditLog } from './auditService';
+// Auditoria do app REMOVIDA (08/10/2026): o cliente gravava em
+// auditLogs, que as regras fecham para o app — toda gravação era
+// recusada e o erro engolido. Registro confiável só sai do servidor
+// (Cloud Functions), e esses continuam funcionando.
 
 const SHARD_COUNT = 5;
 
@@ -67,16 +70,8 @@ export async function addFavorite(userId: string, productId: string): Promise<vo
     createdAt: serverTimestamp(),
   });
 
-  // Analytics e audit — fire-and-forget
+  // Analytics — fire-and-forget
   incrementFavoriteShard(productId, 1).catch(() => {});
-
-  createAuditLog({
-    action: 'favorite_added',
-    performedBy: userId,
-    targetId: favoriteId,
-    targetType: 'product',
-    metadata: { productId },
-  }).catch(() => { /* auditoria nunca bloqueia */ });
 }
 
 export async function removeFavorite(userId: string, productId: string): Promise<void> {
@@ -88,16 +83,8 @@ export async function removeFavorite(userId: string, productId: string): Promise
 
   await deleteDoc(favoriteRef);
 
-  // Analytics e audit — fire-and-forget
+  // Analytics — fire-and-forget
   incrementFavoriteShard(productId, -1).catch(() => {});
-
-  createAuditLog({
-    action: 'favorite_removed',
-    performedBy: userId,
-    targetId: favoriteId,
-    targetType: 'product',
-    metadata: { productId },
-  }).catch(() => { /* auditoria nunca bloqueia */ });
 }
 
 export async function isFavorited(userId: string, productId: string): Promise<boolean> {

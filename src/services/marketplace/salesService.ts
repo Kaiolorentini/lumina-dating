@@ -33,7 +33,10 @@ import {
 import { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
 import { Sale, SaleStatus, PaymentMethod } from '../../shared/types/marketplace';
-import { createAuditLog } from './auditService';
+// Auditoria do app REMOVIDA (08/10/2026): o cliente gravava em
+// auditLogs, que as regras fecham para o app — toda gravação era
+// recusada e o erro engolido. Registro confiável só sai do servidor
+// (Cloud Functions), e esses continuam funcionando.
 import { getAppSettings } from './appSettingsService';
 
 function validateNotSelfPurchase(buyerId: string, sellerId: string): void {
@@ -93,24 +96,10 @@ export async function createSale(input: CreateSaleInput): Promise<string> {
   if (input.discountAmount) saleData.discountAmount = input.discountAmount;
   if (input.originalAmount) saleData.originalAmount = input.originalAmount;
 
-  // Operação principal — nunca deve falhar por causa de audit
   const docRef = await addDoc(
     collection(db, MARKETPLACE_COLLECTIONS.SALES),
     saleData,
   );
-
-  // Audit — fire-and-forget
-  createAuditLog({
-    action: 'sale_created',
-    performedBy: input.buyerId,
-    targetId: docRef.id,
-    targetType: 'sale',
-    metadata: {
-      productId: input.productId,
-      amount: input.amount,
-      paymentMethod: input.paymentMethod,
-    },
-  }).catch(() => { /* auditoria nunca bloqueia */ });
 
   return docRef.id;
 }

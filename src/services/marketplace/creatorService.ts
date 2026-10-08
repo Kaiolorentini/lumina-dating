@@ -20,7 +20,10 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
-import { createAuditLog } from './auditService';
+// Auditoria do app REMOVIDA (08/10/2026): o cliente gravava em
+// auditLogs, que as regras fecham para o app — toda gravação era
+// recusada e o erro engolido. Registro confiável só sai do servidor
+// (Cloud Functions), e esses continuam funcionando.
 // notifySuperAdmins do cliente REMOVIDO — ver productService.
 // O trigger onCreatorRequestCreated já avisa os admins.
 
@@ -58,7 +61,7 @@ export async function getCreatorRequestByUserId(
 }
 
 // ============================================
-// Cria solicitação de criador + notifica superadmins
+// Cria solicitação de criador (o trigger onCreatorRequestCreated avisa os admins)
 // ============================================
 export async function createCreatorRequest(userId: string): Promise<string> {
   const existing = await getCreatorRequestByUserId(userId);
@@ -69,7 +72,6 @@ export async function createCreatorRequest(userId: string): Promise<string> {
     throw new Error('Você já é um criador aprovado');
   }
 
-  // Operação principal — nunca deve falhar por causa de audit/notificação
   const docRef = await addDoc(
     collection(db, MARKETPLACE_COLLECTIONS.CREATOR_REQUESTS),
     {
@@ -79,26 +81,16 @@ export async function createCreatorRequest(userId: string): Promise<string> {
     },
   );
 
-  // Audit e notificação — fire-and-forget, nunca bloqueiam o fluxo
-  createAuditLog({
-    action: 'creator_request_created',
-    performedBy: userId,
-    targetId: docRef.id,
-    targetType: 'creator',
-    metadata: { userId },
-  }).catch(() => { /* auditoria nunca bloqueia */ });
-
-
-
   return docRef.id;
 }
 
 // ============================================
 // Cancela solicitação pendente
+// userId mantido na assinatura: as telas já o passam.
 // ============================================
 export async function cancelCreatorRequest(
   requestId: string,
-  userId: string,
+  _userId: string,
 ): Promise<void> {
   const requestRef = doc(db, MARKETPLACE_COLLECTIONS.CREATOR_REQUESTS, requestId);
   await updateDoc(requestRef, {
@@ -106,15 +98,6 @@ export async function cancelCreatorRequest(
     reviewedAt: serverTimestamp(),
     rejectionReason: 'Cancelado pelo usuário',
   });
-
-  // Audit — fire-and-forget
-  createAuditLog({
-    action: 'creator_request_cancelled',
-    performedBy: userId,
-    targetId: requestId,
-    targetType: 'creator',
-    metadata: { userId },
-  }).catch(() => { /* auditoria nunca bloqueia */ });
 }
 
 // ============================================

@@ -6,7 +6,7 @@
 // - Upload com cancelamento + retry exponencial
 // - Cleanup de Storage ao excluir
 // - Distributed counters para views (5 shards)
-// - Audit logging em todas as operações
+// - Auditoria: só no servidor (Cloud Functions)
 //
 // NÃO incluí: aprovação (Cloud Function — FASE 6)
 // NÃO usa getDownloadURL() para arquivos pagos
@@ -48,7 +48,10 @@ import {
   ProductFileType,
   ProductFile,
 } from '../../shared/types/marketplace';
-import { createAuditLog } from './auditService';
+// Auditoria do app REMOVIDA (08/10/2026): o cliente gravava em
+// auditLogs, que as regras fecham para o app — toda gravação era
+// recusada e o erro engolido. Registro confiável só sai do servidor
+// (Cloud Functions), e esses continuam funcionando.
 // notifySuperAdmins do cliente REMOVIDO: ele lia a lista de
 // superadmins do appSettings/adminConfig (público nas rules) e
 // depois o pushToken deles na coleção users. O trigger
@@ -268,15 +271,6 @@ export async function createProduct(
     updatedAt: serverTimestamp(),
   });
 
-  // Audit — fire-and-forget, nunca bloqueia o fluxo principal
-  createAuditLog({
-    action: 'product_created',
-    performedBy: ownerId,
-    targetId: docRef.id,
-    targetType: 'product',
-    metadata: { title: data.title, category: data.category, price: data.price },
-  }).catch(() => {});
-
   return docRef.id;
 }
 
@@ -321,15 +315,6 @@ export async function updateProduct(
   }
 
   await updateDoc(productRef, updateData);
-
-  // Audit — fire-and-forget
-  createAuditLog({
-    action: 'product_updated',
-    performedBy: ownerId,
-    targetId: productId,
-    targetType: 'product',
-    metadata: { fields: Object.keys(updates) },
-  }).catch(() => {});
 }
 
 export async function submitProductForReview(
@@ -351,16 +336,7 @@ export async function submitProductForReview(
     status: 'pending' as ProductStatus,
     updatedAt: serverTimestamp(),
   });
-
-  // Audit e notificação — fire-and-forget
-  createAuditLog({
-    action: 'product_submitted_for_review',
-    performedBy: ownerId,
-    targetId: productId,
-    targetType: 'product',
-    metadata: { title: snap.data().title },
-  }).catch(() => {});
-
+  // O trigger onProductPending avisa os admins.
 }
 
 /** Mantido pela assinatura antiga: agora tira da venda pelo servidor. */

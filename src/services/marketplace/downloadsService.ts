@@ -12,7 +12,10 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
-import { createAuditLog } from './auditService';
+// Auditoria do app REMOVIDA (08/10/2026): o cliente gravava em
+// auditLogs, que as regras fecham para o app — toda gravação era
+// recusada e o erro engolido. Registro confiável só sai do servidor
+// (Cloud Functions), e esses continuam funcionando.
 
 export async function registerDownload(
   purchaseId: string,
@@ -32,16 +35,6 @@ export async function registerDownload(
       appVersion,
       createdAt: serverTimestamp(),
     });
-
-    // Audit — fire-and-forget, nunca bloqueia o acesso ao conteúdo
-    createAuditLog({
-      action: 'download_registered',
-      performedBy: userId,
-      targetId: purchaseId,
-      targetType: 'product',
-      metadata: { productId, fileIndex },
-    }).catch(() => { /* auditoria nunca bloqueia */ });
-
   } catch (error) {
     console.warn('[downloadsService] Erro ao registrar download:', error);
   }
