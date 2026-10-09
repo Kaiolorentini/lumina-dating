@@ -1,24 +1,21 @@
 // ============================================
 // SALES SERVICE — MARKETPLACE
 //
-// Responsabilidades FASE 5 (cliente):
-// - Criar sale com status pending
+// Só LEITURA de vendas no app:
 // - Buscar sale por ID
-// - Listener de sales do comprador
-// - Listener de sales do vendedor
-// - Verificação de auto-compra
+// - Vendas do comprador e do vendedor (página e tempo real)
 //
-// NÃO implementado aqui (Cloud Functions FASE 6):
-// - Processar pagamento
-// - Atualizar status após webhook
-// - Criar purchase
-// - Atualizar wallet
+// Criar venda, cobrar, processar webhook, criar purchase e mexer
+// em carteira é SÓ do servidor (Cloud Functions). As regras negam
+// gravação em `sales` pelo app.
+//
+// createSale REMOVIDO (08/10/2026): nenhuma tela chamava, a regra
+// recusava a gravação e a comissão era calculada no celular.
 // ============================================
 
 import {
   collection,
   doc,
-  addDoc,
   getDoc,
   getDocs,
   query,
@@ -27,82 +24,11 @@ import {
   limit,
   startAfter,
   onSnapshot,
-  serverTimestamp,
   DocumentSnapshot,
 } from 'firebase/firestore';
 import { db } from '../../core/firebase';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
-import { Sale, SaleStatus, PaymentMethod } from '../../shared/types/marketplace';
-// Auditoria do app REMOVIDA (08/10/2026): o cliente gravava em
-// auditLogs, que as regras fecham para o app — toda gravação era
-// recusada e o erro engolido. Registro confiável só sai do servidor
-// (Cloud Functions), e esses continuam funcionando.
-import { getAppSettings } from './appSettingsService';
-
-function validateNotSelfPurchase(buyerId: string, sellerId: string): void {
-  if (buyerId === sellerId) {
-    throw new Error('Você não pode comprar seu próprio produto');
-  }
-}
-
-async function validateMarketplaceEnabled(): Promise<void> {
-  const settings = await getAppSettings();
-  if (!settings.marketplaceEnabled) {
-    throw new Error('Marketplace temporariamente indisponível');
-  }
-  if (settings.maintenanceMode) {
-    throw new Error(settings.maintenanceMessage);
-  }
-}
-
-interface CreateSaleInput {
-  buyerId: string;
-  sellerId: string;
-  productId: string;
-  amount: number;
-  paymentMethod: PaymentMethod;
-  couponCode?: string;
-  discountAmount?: number;
-  originalAmount?: number;
-}
-
-export async function createSale(input: CreateSaleInput): Promise<string> {
-  await validateMarketplaceEnabled();
-  validateNotSelfPurchase(input.buyerId, input.sellerId);
-
-  const settings = await getAppSettings();
-  const platformCommission = input.amount * settings.commissionRate;
-  const sellerAmount = input.amount - platformCommission;
-  const isFree = input.paymentMethod === 'free' || input.amount === 0;
-
-  const saleData: Record<string, unknown> = {
-    buyerId: input.buyerId,
-    sellerId: input.sellerId,
-    productId: input.productId,
-    amount: input.amount,
-    platformCommission,
-    sellerAmount,
-    status: 'pending' as SaleStatus,
-    paymentStatus: isFree ? 'received' : 'pending',
-    paymentProvider: 'asaas',
-    paymentId: '',
-    paymentMethod: input.paymentMethod,
-    isChargebacked: false,
-    webhookProcessedAt: null,
-    createdAt: serverTimestamp(),
-  };
-
-  if (input.couponCode) saleData.couponCode = input.couponCode;
-  if (input.discountAmount) saleData.discountAmount = input.discountAmount;
-  if (input.originalAmount) saleData.originalAmount = input.originalAmount;
-
-  const docRef = await addDoc(
-    collection(db, MARKETPLACE_COLLECTIONS.SALES),
-    saleData,
-  );
-
-  return docRef.id;
-}
+import { Sale } from '../../shared/types/marketplace';
 
 export async function getSaleById(saleId: string): Promise<Sale | null> {
   const snap = await getDoc(doc(db, MARKETPLACE_COLLECTIONS.SALES, saleId));
