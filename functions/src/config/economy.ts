@@ -224,7 +224,10 @@ export const COIN_PACKAGES = {
     coinsPremium:       100,
     bonus:              0,
     firstPurchaseBonus: 100,  // dobra na primeira compra (1x por conta)
-    priceValue:         5.00,
+    // 09/10/2026: R$ 5,00 → R$ 7,99. A taxa do Pix no Asaas (R$ 1,99)
+    // levava 40% do pacote de R$ 5. Manter igual em economy.ts,
+    // createCoinsPurchase.ts e purchaseService.ts (app).
+    priceValue:         7.99,
     packAsset:          'pack-iniciante',  // assets/premium/pack-iniciante.png
   },
   popular: {

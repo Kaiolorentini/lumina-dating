@@ -1,4 +1,4 @@
-﻿// ============================================
+// ============================================
 // LUMINA — PURCHASE SERVICE v5.3
 // src/modules/economy/services/purchaseService.ts
 //
@@ -39,8 +39,11 @@ export const COIN_PACKAGES_DISPLAY: CoinPackageDisplay[] = [
     coinsPremium:       100,
     bonus:              0,
     total:              100,
-    priceValue:         5.00,
-    priceLabel:         'R$ 5,00',
+    // 09/10/2026: R$ 5,00 → R$ 7,99. A taxa do Pix no Asaas (R$ 1,99)
+    // levava 40% do pacote de R$ 5. Manter igual em economy.ts,
+    // createCoinsPurchase.ts e purchaseService.ts (app).
+    priceValue:         7.99,
+    priceLabel:         'R$ 7,99',
     packAsset:          'pack-iniciante',
     isFirstPurchasePkg: true,
   },

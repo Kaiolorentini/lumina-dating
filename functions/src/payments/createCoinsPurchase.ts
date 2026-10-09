@@ -39,7 +39,10 @@ const PACKAGES: Record<string, {
     coinsPremium: 100,
     bonus:        0,
     total:        100,
-    priceValue:   5.00,
+    // 09/10/2026: R$ 5,00 → R$ 7,99. A taxa do Pix no Asaas (R$ 1,99)
+    // levava 40% do pacote de R$ 5. Manter igual em economy.ts,
+    // createCoinsPurchase.ts e purchaseService.ts (app).
+    priceValue:   7.99,
     isFirstPkg:   true,
   },
   popular: {
