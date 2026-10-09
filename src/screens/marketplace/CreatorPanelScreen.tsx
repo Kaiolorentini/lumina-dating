@@ -17,6 +17,18 @@
 // A mesma tela é a aba (MainTabs → CreatorHub) e a rota de pilha
 // CreatorPanel (atalho do superadmin no Painel Admin).
 //
+// Entrega 2 (09/10/2026) — a parte que prende:
+//  • 🎯 Meta do mês automática: bater o melhor dos 3 meses
+//    anteriores (R$ 50 no começo), com barra de progresso e
+//    comparação com o mês passado.
+//  • 💡 Próximos passos: até 3 sugestões tiradas dos dados reais
+//    (produto recusado, saldo para sacar, produto com visitas e
+//    sem venda, campeão de vendas, mês parado, primeiro conteúdo).
+//  • Gráfico dos últimos 6 meses no rodapé de números.
+//  Sem nível de criador por enquanto (decisão de Kaio).
+//  • Saldo disponível direto no card Meus Ganhos (e a pendência,
+//    se houver) — a mesma escuta da carteira já usada nas sugestões.
+//
 // Balões (09/10/2026): faixa "N novidades" no topo, como a do
 // Painel Admin, e balão em cada card — inclusive no "Seja criador"
 // quando o pedido é recusado (creator_rejected).
@@ -27,7 +39,7 @@
 // notificações de useProfileBadges.
 // ============================================
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
@@ -43,7 +55,11 @@ import { useCreatorRequests } from '../../hooks/useCreatorRequests';
 import { useCreatorStats } from '../../hooks/useCreatorStats';
 import { useProfileBadges } from '../../modules/profile/hooks/useProfileBadges';
 import { formatBRL } from '../../services/marketplace/adminDashboardService';
-import { CreatorStatsBucket, currentMonthKey } from '../../services/marketplace/creatorStatsService';
+import {
+  CreatorMonth, CreatorStats, CreatorStatsBucket, FIRST_GOAL,
+  currentDayOfMonth, currentMonthKey,
+} from '../../services/marketplace/creatorStatsService';
+import { listenToCreatorWallet } from '../../services/marketplace/creatorWalletService';
 import ScreenContainer from '../../components/ScreenContainer';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -56,9 +72,30 @@ const MONTH_NAMES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
 
+function monthNameOf(key: string): string {
+  return MONTH_NAMES[Number(key.slice(5, 7)) - 1] ?? key;
+}
+
 function currentMonthName(): string {
-  const month = Number(currentMonthKey().slice(5, 7));
-  return MONTH_NAMES[month - 1] ?? 'Este mês';
+  return monthNameOf(currentMonthKey());
+}
+
+/** Mesmo mínimo do servidor (requestWithdrawal: MIN_WITHDRAWAL). */
+const MIN_WITHDRAWAL = 10;
+/** Visitas sem nenhum pedido a partir das quais vale sugerir capa/prévia. */
+const VIEWS_WITHOUT_ORDER = 20;
+/** Dia do mês a partir do qual "mês sem venda" vira sugestão. */
+const QUIET_MONTH_DAY = 8;
+
+/** "R$ 1,2 mil" para caber em cima da barra do gráfico. */
+function compactBRL(value: number): string {
+  if (value >= 1000) return `R$ ${(value / 1000).toFixed(1).replace('.', ',')} mil`;
+  return `R$ ${Math.round(value)}`;
+}
+
+/** Altura da barra: mínimo visível quando há valor, traço quando zero. */
+function barHeight(ratio: number): `${number}%` {
+  return `${Math.max(ratio * 100, ratio > 0 ? 6 : 2)}%`;
 }
 
 // ============================================
@@ -87,13 +124,19 @@ interface OptionCardProps {
   icon: string;
   title: string;
   description: string;
+  /** Número em destaque abaixo do título (ex.: saldo). */
+  value?: string;
+  /** Linha de alerta abaixo do valor (ex.: pendência). */
+  valueNote?: string;
   count?: number;
   disabled?: boolean;
   disabledReason?: string;
   onPress: () => void;
 }
 
-function OptionCard({ icon, title, description, count = 0, disabled, disabledReason, onPress }: OptionCardProps) {
+function OptionCard({
+  icon, title, description, value, valueNote, count = 0, disabled, disabledReason, onPress,
+}: OptionCardProps) {
   return (
     <TouchableOpacity
       style={[styles.optionCard, count > 0 && styles.optionCardAlert, disabled && styles.optionCardDisabled]}
@@ -109,6 +152,8 @@ function OptionCard({ icon, title, description, count = 0, disabled, disabledRea
         <Text style={styles.optionIcon}>{icon}</Text>
       </View>
       <Text style={styles.optionTitle}>{title}</Text>
+      {!!value && <Text style={styles.optionValue}>{value}</Text>}
+      {!!valueNote && <Text style={styles.optionValueNote}>{valueNote}</Text>}
       <Text style={styles.optionDescription}>
         {disabled && disabledReason ? disabledReason : description}
       </Text>
@@ -264,8 +309,277 @@ function StatColumn({ label, bucket, highlight }: { label: string; bucket: Creat
   );
 }
 
-function CreatorNumbers({ uid }: { uid: string | undefined }) {
-  const { stats, loading, error, retry } = useCreatorStats(uid, true);
+// ============================================
+// Gráfico dos últimos 6 meses (faturamento)
+// ============================================
+
+function MonthChart({ history }: { history: CreatorMonth[] }) {
+  const max = Math.max(...history.map(m => m.bucket.net), 0);
+  return (
+    <View style={styles.chart}>
+      <Text style={styles.chartTitle}>Faturamento dos últimos 6 meses</Text>
+      <View style={styles.chartBars}>
+        {history.map((m, index) => {
+          const isCurrent = index === history.length - 1;
+          const ratio = max > 0 ? m.bucket.net / max : 0;
+          return (
+            <View
+              key={m.key}
+              style={styles.chartColumn}
+              accessible
+              accessibilityLabel={`${monthNameOf(m.key)}: ${formatBRL(m.bucket.net)}, ${m.bucket.sales} vendas`}
+            >
+              <Text style={[styles.chartValue, isCurrent && styles.chartValueCurrent]} numberOfLines={1}>
+                {m.bucket.net > 0 ? compactBRL(m.bucket.net) : '–'}
+              </Text>
+              <View style={styles.chartTrack}>
+                {isCurrent ? (
+                  <LinearGradient
+                    colors={MP_GRADIENT.gold}
+                    start={{ x: 0, y: 1 }}
+                    end={{ x: 0, y: 0 }}
+                    style={[styles.chartBar, { height: barHeight(ratio) }]}
+                  />
+                ) : (
+                  <View style={[styles.chartBar, styles.chartBarPast, { height: barHeight(ratio) }]} />
+                )}
+              </View>
+              <Text style={[styles.chartLabel, isCurrent && styles.chartLabelCurrent]}>
+                {monthNameOf(m.key).slice(0, 3)}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ============================================
+// 🎯 Meta do mês
+// ============================================
+
+function GoalCard({ stats }: { stats: CreatorStats }) {
+  const monthName = currentMonthName();
+  const earned    = stats.month.net;
+  const goal      = stats.monthlyGoal;
+  const progress  = goal > 0 ? Math.min(1, earned / goal) : 0;
+  const reached   = earned >= goal;
+  const previous  = stats.previousMonth.bucket.net;
+  const prevName  = monthNameOf(stats.previousMonth.key);
+
+  let comparison: { text: string; up: boolean } | null = null;
+  if (previous > 0) {
+    const pct = Math.round(((earned - previous) / previous) * 100);
+    comparison = pct >= 0
+      ? { text: `▲ ${pct}% em relação a ${prevName}`, up: true }
+      : { text: `▼ ${Math.abs(pct)}% em relação a ${prevName} — ainda dá tempo`, up: false };
+  } else if (earned > 0) {
+    comparison = { text: `${prevName} não teve vendas: você já está à frente!`, up: true };
+  }
+
+  return (
+    <LinearGradient
+      colors={MP_GRADIENT.card}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.goalCard, reached && styles.goalCardReached]}
+    >
+      <View style={styles.goalHeader}>
+        <Text style={styles.goalTitle}>🎯 Meta de {monthName}</Text>
+        <Text style={styles.goalTarget}>{formatBRL(goal)}</Text>
+      </View>
+
+      <View
+        style={styles.goalTrack}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
+        accessibilityLabel={`Meta do mês: ${Math.round(progress * 100)}%`}
+      >
+        <LinearGradient
+          colors={reached ? MP_GRADIENT.gold : MP_GRADIENT.purple}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.goalFill, { width: `${Math.max(progress * 100, progress > 0 ? 4 : 0)}%` }]}
+        />
+      </View>
+
+      <Text style={styles.goalStatus}>
+        {reached
+          ? '🎉 Meta batida! Você já igualou ou superou seu melhor mês recente.'
+          : `${formatBRL(earned)} de ${formatBRL(goal)} · faltam ${formatBRL(Math.max(0, goal - earned))}`}
+      </Text>
+
+      {comparison && (
+        <Text style={[styles.goalCompare, comparison.up ? styles.goalCompareUp : styles.goalCompareDown]}>
+          {comparison.text}
+        </Text>
+      )}
+
+      <Text style={styles.goalHint}>
+        {goal === FIRST_GOAL && previous === 0
+          ? `Meta inicial de ${formatBRL(FIRST_GOAL)}. Depois ela passa a ser o seu melhor mês dos últimos 3.`
+          : 'A meta é o seu melhor faturamento dos últimos 3 meses. Bata e ela sobe junto com você.'}
+      </Text>
+    </LinearGradient>
+  );
+}
+
+// ============================================
+// 💡 Próximos passos
+// ============================================
+
+interface Suggestion {
+  key: string;
+  icon: string;
+  title: string;
+  text: string;
+  tone: 'action' | 'win' | 'info';
+  onPress: () => void;
+}
+
+interface SuggestionInputs {
+  stats: CreatorStats;
+  available: number;
+  debt: number;
+  sellBlocked: boolean;
+  openProduct: (productId: string) => void;
+  go: (route: StackRoute) => () => void;
+}
+
+/** Até 3 sugestões, da mais urgente para a mais motivadora. */
+function buildSuggestions({ stats, available, debt, sellBlocked, openProduct, go }: SuggestionInputs): Suggestion[] {
+  const list: Suggestion[] = [];
+  const products = stats.products;
+  const approved = products.filter(p => p.status === 'approved');
+  const pending  = products.filter(p => p.status === 'pending');
+
+  const rejected = products.find(p => p.status === 'rejected');
+  if (rejected) {
+    list.push({
+      key: `rejected-${rejected.id}`, icon: '🛠️', tone: 'action',
+      title: `“${rejected.title}” foi recusado`,
+      text: 'Veja o motivo, ajuste o que foi pedido e envie de novo para revisão.',
+      onPress: () => openProduct(rejected.id),
+    });
+  }
+
+  if (available >= MIN_WITHDRAWAL && debt <= 0) {
+    list.push({
+      key: 'withdraw', icon: '💸', tone: 'win',
+      title: `${formatBRL(available)} prontos para sacar`,
+      text: 'O dinheiro já é seu. Peça o saque e receba por Pix.',
+      onPress: go('Withdrawal'),
+    });
+  }
+
+  if (approved.length === 0 && !sellBlocked) {
+    list.push(pending.length > 0
+      ? {
+        key: 'pending', icon: '⏳', tone: 'info',
+        title: `“${pending[0].title}” está em análise`,
+        text: 'Assim que for aprovado, ele entra na vitrine. Enquanto isso, que tal preparar o próximo?',
+        onPress: go('MyProducts'),
+      }
+      : {
+        key: 'first', icon: '🚀', tone: 'action',
+        title: 'Publique seu primeiro conteúdo',
+        text: 'Capa, prévia e arquivo: em poucos minutos ele vai para revisão.',
+        onPress: go('CreateProduct'),
+      });
+  }
+
+  const stalled = approved
+    .filter(p => p.views >= VIEWS_WITHOUT_ORDER && p.orders === 0)
+    .sort((a, b) => b.views - a.views)[0];
+  if (stalled) {
+    list.push({
+      key: `stalled-${stalled.id}`, icon: '👀', tone: 'action',
+      title: `“${stalled.title}” teve ${stalled.views} visitas e nenhuma venda`,
+      text: 'As pessoas estão olhando. Uma capa mais forte ou uma prévia nova pode virar a chave.',
+      onPress: () => openProduct(stalled.id),
+    });
+  }
+
+  if (approved.length > 0 && stats.month.sales === 0 && stats.month.freeClaims === 0 &&
+      currentDayOfMonth() >= QUIET_MONTH_DAY && !sellBlocked) {
+    list.push({
+      key: 'quiet', icon: '✨', tone: 'action',
+      title: `${currentMonthName()} ainda sem vendas`,
+      text: 'Conteúdo novo dá mais motivos para visitarem seu perfil e sua vitrine.',
+      onPress: go('CreateProduct'),
+    });
+  }
+
+  const champion = approved
+    .filter(p => p.orders > 0)
+    .sort((a, b) => b.orders - a.orders || b.views - a.views)[0];
+  if (champion) {
+    const orders = `${champion.orders} ${champion.orders === 1 ? 'pedido' : 'pedidos'}`;
+    list.push({
+      key: `champion-${champion.id}`, icon: '🏆', tone: 'win',
+      title: `“${champion.title}” é o seu campeão`,
+      text: champion.views > 0
+        ? `${orders} em ${champion.views} visitas. Um conteúdo no mesmo estilo tende a ir bem.`
+        : `${orders}. Um conteúdo no mesmo estilo tende a ir bem.`,
+      onPress: go('MyProducts'),
+    });
+  }
+
+  return list.slice(0, 3);
+}
+
+function SuggestionList({ items }: { items: Suggestion[] }) {
+  if (items.length === 0) {
+    return (
+      <View style={styles.suggestionEmpty}>
+        <Text style={styles.suggestionEmptyText}>
+          Tudo em dia por aqui. Novas dicas aparecem conforme seus conteúdos recebem visitas e vendas.
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.suggestions}>
+      {items.map(item => (
+        <TouchableOpacity
+          key={item.key}
+          style={[
+            styles.suggestion,
+            item.tone === 'win' && styles.suggestionWin,
+            item.tone === 'info' && styles.suggestionInfo,
+          ]}
+          onPress={item.onPress}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={item.title}
+          accessibilityHint={item.text}
+        >
+          <Text style={styles.suggestionIcon}>{item.icon}</Text>
+          <View style={styles.suggestionBody}>
+            <Text style={styles.suggestionTitle} numberOfLines={2}>{item.title}</Text>
+            <Text style={styles.suggestionText}>{item.text}</Text>
+          </View>
+          <Text style={styles.suggestionArrow}>›</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+// ============================================
+// 📊 Rodapé de números
+// ============================================
+
+interface NumbersProps {
+  stats: CreatorStats;
+  loading: boolean;
+  error: string | null;
+  retry: () => void;
+}
+
+function CreatorNumbers({ stats, loading, error, retry }: NumbersProps) {
   const monthName = useMemo(currentMonthName, []);
   const nothingYet = stats.total.sales === 0 && stats.total.freeClaims === 0;
 
@@ -289,6 +603,8 @@ function CreatorNumbers({ uid }: { uid: string | undefined }) {
             <StatColumn label={monthName} bucket={stats.month} highlight />
             <StatColumn label="Desde o início" bucket={stats.total} />
           </View>
+
+          <MonthChart history={stats.history} />
 
           <View style={styles.ratingRow}>
             <Text style={styles.ratingStar}>⭐</Text>
@@ -344,6 +660,39 @@ export default function CreatorPanelScreen() {
 
   // `as never`: mesmo padrão do Painel Admin para rotas sem parâmetro.
   const go = (route: StackRoute) => () => navigation.navigate(route as never);
+  const openProduct = (productId: string) => navigation.navigate('EditProduct', { productId });
+
+  // Números do criador: UMA escuta, compartilhada por meta,
+  // sugestões e rodapé. Quem não vende não escuta nada.
+  const creatorStats = useCreatorStats(user?.uid, canSell);
+
+  // Saldo, só para a sugestão "prontos para sacar".
+  // Saldo: sugestão "prontos para sacar" e o valor no card Meus Ganhos.
+  // `loaded` evita mostrar "R$ 0,00" antes da carteira chegar.
+  const [wallet, setWallet] = useState<{ available: number; debt: number; loaded: boolean }>(
+    { available: 0, debt: 0, loaded: false },
+  );
+  useEffect(() => {
+    if (!user?.uid || !canSell) return undefined;
+    return listenToCreatorWallet(user.uid, w => {
+      setWallet({
+        available: Math.max(0, Number(w?.availableBalance ?? 0) || 0),
+        debt:      Math.max(0, Number(w?.debtBalance ?? 0) || 0),
+        loaded:    true,
+      });
+    });
+  }, [user?.uid, canSell]);
+
+  const suggestions = canSell && !creatorStats.loading && !creatorStats.error
+    ? buildSuggestions({
+      stats: creatorStats.stats,
+      available: wallet.available,
+      debt: wallet.debt,
+      sellBlocked: !!sellBlockedReason,
+      openProduct,
+      go,
+    })
+    : [];
 
   const goToTab = (screen: 'Home' | 'Marketplace') => {
     navigation.dispatch(CommonActions.navigate({ name: 'MainTabs', params: { screen } }));
@@ -431,6 +780,18 @@ export default function CreatorPanelScreen() {
           {/* Área do criador */}
           {canSell ? (
             <>
+              {!creatorStats.loading && !creatorStats.error && (
+                <>
+                  <GoalCard stats={creatorStats.stats} />
+
+                  <SectionHeader
+                    title="💡 Próximos passos"
+                    subtitle="Sugestões a partir das suas visitas, vendas e saldo."
+                  />
+                  <SuggestionList items={suggestions} />
+                </>
+              )}
+
               <SectionHeader
                 title="Área do criador"
                 subtitle="Tudo o que você precisa para publicar e receber."
@@ -467,7 +828,9 @@ export default function CreatorPanelScreen() {
                 <OptionCard
                   icon="💰"
                   title="Meus Ganhos"
-                  description="Saldo disponível, extrato de vendas e estornos."
+                  value={wallet.loaded ? formatBRL(wallet.available) : undefined}
+                  valueNote={wallet.loaded && wallet.debt > 0 ? `Pendência de ${formatBRL(wallet.debt)}` : undefined}
+                  description={wallet.loaded ? 'disponível para saque · extrato de vendas e estornos.' : 'Saldo disponível, extrato de vendas e estornos.'}
                   count={badges.earnings}
                   onPress={go('MyEarnings')}
                 />
@@ -530,7 +893,14 @@ export default function CreatorPanelScreen() {
           </View>
 
           {/* Rodapé — números do criador */}
-          {canSell && <CreatorNumbers uid={user?.uid} />}
+          {canSell && (
+            <CreatorNumbers
+              stats={creatorStats.stats}
+              loading={creatorStats.loading}
+              error={creatorStats.error}
+              retry={creatorStats.retry}
+            />
+          )}
         </ScrollView>
       )}
     </ScreenContainer>
@@ -614,6 +984,10 @@ const styles = StyleSheet.create({
   },
   optionIcon: { fontSize: 20 },
   optionTitle: { color: MP.text, fontSize: MP_FONT.size.md, fontWeight: MP_FONT.weight.bold },
+  optionValue: {
+    color: MP.gold, fontSize: MP_FONT.size.xl, fontWeight: MP_FONT.weight.heavy, marginTop: spacing.xs,
+  },
+  optionValueNote: { color: MP.error, fontSize: MP_FONT.size.xs, fontWeight: MP_FONT.weight.bold, marginTop: 2 },
   optionDescription: { color: MP.textMuted, fontSize: MP_FONT.size.xs, marginTop: spacing.xs, lineHeight: 15 },
 
   badge: {
@@ -697,5 +1071,63 @@ const styles = StyleSheet.create({
   ratingStar: { fontSize: 22 },
   ratingText: { flex: 1, color: MP.textSoft, fontSize: MP_FONT.size.sm, lineHeight: 18 },
   ratingValue: { color: MP.gold, fontSize: MP_FONT.size.xl, fontWeight: MP_FONT.weight.heavy },
+  chart: { marginTop: spacing.md },
+  chartTitle: {
+    color: MP.textMuted, fontSize: MP_FONT.size.xs, fontWeight: MP_FONT.weight.bold,
+    letterSpacing: MP_FONT.tracking.wide, textTransform: 'uppercase', marginBottom: spacing.sm,
+  },
+  chartBars: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 6 },
+  chartColumn: { flex: 1, alignItems: 'center' },
+  chartValue: { color: MP.textMuted, fontSize: 9, marginBottom: 4 },
+  chartValueCurrent: { color: MP.goldLight, fontWeight: MP_FONT.weight.bold },
+  chartTrack: {
+    width: '100%', height: 90, justifyContent: 'flex-end',
+    backgroundColor: MP.purpleSubtle, borderRadius: borderRadius.sm, overflow: 'hidden',
+  },
+  chartBar: { width: '100%', borderRadius: borderRadius.sm },
+  chartBarPast: { backgroundColor: MP.purple },
+  chartLabel: { color: MP.textMuted, fontSize: MP_FONT.size.xs, marginTop: 4 },
+  chartLabelCurrent: { color: MP.gold, fontWeight: MP_FONT.weight.bold },
+
+  goalCard: {
+    borderRadius: borderRadius.lg, borderWidth: 1, borderColor: MP.borderStrong,
+    padding: spacing.md, ...MP_SHADOW.card,
+  },
+  goalCardReached: { borderColor: MP.borderGold, ...MP_SHADOW.goldGlow },
+  goalHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  goalTitle: { color: MP.text, fontSize: MP_FONT.size.lg, fontWeight: MP_FONT.weight.bold },
+  goalTarget: { color: MP.gold, fontSize: MP_FONT.size.lg, fontWeight: MP_FONT.weight.heavy },
+  goalTrack: {
+    height: 12, borderRadius: 6, backgroundColor: MP.bg, marginTop: spacing.md,
+    overflow: 'hidden', borderWidth: 1, borderColor: MP.border,
+  },
+  goalFill: { height: '100%', borderRadius: 6 },
+  goalStatus: {
+    color: MP.textSoft, fontSize: MP_FONT.size.sm, marginTop: spacing.sm, fontWeight: MP_FONT.weight.semibold,
+  },
+  goalCompare: { fontSize: MP_FONT.size.sm, marginTop: spacing.xs, fontWeight: MP_FONT.weight.bold },
+  goalCompareUp: { color: MP.success },
+  goalCompareDown: { color: MP.purpleLight },
+  goalHint: { color: MP.textMuted, fontSize: MP_FONT.size.xs, marginTop: spacing.sm, lineHeight: 15 },
+
+  suggestions: { gap: spacing.sm },
+  suggestion: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: MP.surface, borderRadius: borderRadius.md, borderWidth: 1,
+    borderColor: MP.borderStrong, padding: spacing.md, minHeight: 64,
+  },
+  suggestionWin: { borderColor: MP.borderGold, backgroundColor: MP.surfaceRaised },
+  suggestionInfo: { borderColor: MP.border },
+  suggestionIcon: { fontSize: 24, width: 32, textAlign: 'center' },
+  suggestionBody: { flex: 1 },
+  suggestionTitle: { color: MP.text, fontSize: MP_FONT.size.md, fontWeight: MP_FONT.weight.bold },
+  suggestionText: { color: MP.textMuted, fontSize: MP_FONT.size.xs, marginTop: 2, lineHeight: 15 },
+  suggestionArrow: { color: MP.gold, fontSize: 24 },
+  suggestionEmpty: {
+    backgroundColor: MP.surface, borderRadius: borderRadius.md, borderWidth: 1,
+    borderColor: MP.border, padding: spacing.md,
+  },
+  suggestionEmptyText: { color: MP.textMuted, fontSize: MP_FONT.size.sm, textAlign: 'center', lineHeight: 18 },
+
   emptyNumbers: { color: MP.textMuted, fontSize: MP_FONT.size.xs, marginTop: spacing.md, textAlign: 'center' },
 });

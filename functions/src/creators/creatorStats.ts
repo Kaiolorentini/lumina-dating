@@ -30,6 +30,17 @@
 // mostra o que outubro realmente rendeu. Mês novo começa zerado,
 // sem job à meia-noite: é só outra chave no mapa `months`.
 //
+// ENTREGA 2 (09/10/2026) — mapa `products` no resumo, para as
+// sugestões de próximo passo do painel, por produto:
+//   title, status, isDeleted → espelho do produto (gatilho de products)
+//   views  → soma dos shards de productAnalytics (gatilho dos shards;
+//            valor ABSOLUTO, então reexecução não duplica)
+//   orders → vendas + downloads grátis daquele produto (gatilho de
+//            vendas, junto com as marcas)
+// Marcas da Entrega 1 não tinham productId: a primeira mudança de
+// cada venda antiga se corrige sozinha, e o "Recalcular painéis"
+// do Painel Admin refaz tudo de uma vez.
+//
 // EXCLUSÃO DE CONTA: a anonimização troca sellerId/ownerId por
 // anon_… — gatilho ignora (troca de dono não é venda). Conta em
 // exclusão é ignorada; o resumo é apagado no passo 6 do
@@ -103,12 +114,18 @@ async function isAccountGone(t: Transaction, uid: string): Promise<boolean> {
 interface SaleMark {
   counted: boolean;
   month:   string;
+  productId: string; // '' em marca antiga (Entrega 1)
   isFree:  boolean;
   gross:   number; // valor pago pelo comprador
   net:     number; // parte do criador (sem a comissão)
 }
 
-const NOT_COUNTED: SaleMark = { counted: false, month: '', isFree: false, gross: 0, net: 0 };
+const NOT_COUNTED: SaleMark = { counted: false, month: '', productId: '', isFree: false, gross: 0, net: 0 };
+
+const PRODUCT_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+function productIdOf(value: unknown): string {
+  return typeof value === 'string' && PRODUCT_ID_PATTERN.test(value) ? value : '';
+}
 
 function saleMarkOf(sale: DocumentData | undefined): SaleMark {
   if (!sale || sale.type === 'coins_purchase') return NOT_COUNTED;
@@ -118,6 +135,7 @@ function saleMarkOf(sale: DocumentData | undefined): SaleMark {
   return {
     counted: true,
     month:   monthKeyOf(when),
+    productId: productIdOf(sale.productId),
     isFree:  gross <= 0,
     gross,
     net:     round2(Math.max(0, toNumber(sale.sellerAmount))),
@@ -129,6 +147,7 @@ function readMark(data: DocumentData | undefined): SaleMark {
   return {
     counted: true,
     month:   data.month,
+    productId: productIdOf(data.productId),
     isFree:  data.isFree === true,
     gross:   toNumber(data.gross),
     net:     toNumber(data.net),
@@ -136,7 +155,8 @@ function readMark(data: DocumentData | undefined): SaleMark {
 }
 
 function sameMark(a: SaleMark, b: SaleMark): boolean {
-  return a.counted === b.counted && a.month === b.month && a.isFree === b.isFree &&
+  return a.counted === b.counted && a.month === b.month && a.productId === b.productId &&
+    a.isFree === b.isFree &&
     a.gross === b.gross && a.net === b.net;
 }
 
@@ -225,9 +245,23 @@ export const onSaleWrittenCreatorStats = onDocumentWritten(
         if (Object.keys(inc).length) monthsPatch[key] = inc;
       });
 
+      // Pedidos por produto (vendas + grátis), para as sugestões.
+      const orders = new Map<string, number>();
+      const addOrder = (mark: SaleMark, sign: 1 | -1) => {
+        if (!mark.counted || !mark.productId) return;
+        orders.set(mark.productId, (orders.get(mark.productId) ?? 0) + sign);
+      };
+      addOrder(applied, -1);
+      addOrder(desired, 1);
+      const productsPatch: Record<string, Record<string, FieldValue>> = {};
+      orders.forEach((delta, pid) => {
+        if (delta !== 0) productsPatch[pid] = { orders: FieldValue.increment(delta) };
+      });
+
       t.set(statsRef(sellerId), {
         total:     incrementsOf(total),
         months:    monthsPatch,
+        ...(Object.keys(productsPatch).length > 0 && { products: productsPatch }),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
@@ -242,6 +276,22 @@ export const onSaleWrittenCreatorStats = onDocumentWritten(
 // ============================================
 
 interface RatingMark { ratingSum: number; reviewsCount: number }
+
+interface ProductMeta { title: string; status: string; isDeleted: boolean }
+
+function metaOf(product: DocumentData | undefined): ProductMeta | null {
+  if (!product) return null;
+  return {
+    title:     typeof product.title === 'string' ? product.title.slice(0, 120) : '',
+    status:    typeof product.status === 'string' ? product.status : '',
+    isDeleted: product.isDeleted === true,
+  };
+}
+
+function sameMeta(a: ProductMeta | null, b: ProductMeta | null): boolean {
+  if (!a || !b) return a === b;
+  return a.title === b.title && a.status === b.status && a.isDeleted === b.isDeleted;
+}
 
 function ratingOf(product: DocumentData | undefined): RatingMark {
   if (!product) return { ratingSum: 0, reviewsCount: 0 };
@@ -262,10 +312,12 @@ export const onProductWrittenCreatorStats = onDocumentWritten(
     const ownerId = (after ?? before)?.ownerId;
     if (!isRealUid(ownerId)) return;
 
-    // A maioria das gravações em products não mexe na nota.
+    // A maioria das gravações em products não mexe na nota nem no
+    // título/status (ex.: updatedAt, arquivos em análise).
     const a = ratingOf(before);
     const b = ratingOf(after);
-    if (before && after && a.ratingSum === b.ratingSum && a.reviewsCount === b.reviewsCount) return;
+    if (before && after && a.ratingSum === b.ratingSum && a.reviewsCount === b.reviewsCount &&
+        sameMeta(metaOf(before), metaOf(after))) return;
 
     const productRef = db.collection('products').doc(productId);
     const markRef    = statsRef(ownerId).collection('ratingMarks').doc(productId);
@@ -283,20 +335,72 @@ export const onProductWrittenCreatorStats = onDocumentWritten(
       const applied = ratingOf(markSnap.data());
       const dSum    = desired.ratingSum - applied.ratingSum;
       const dCount  = desired.reviewsCount - applied.reviewsCount;
-      if (dSum === 0 && dCount === 0) return;
+      const meta    = metaOf(fresh);
 
+      // Espelho do produto no mapa `products` (valor absoluto —
+      // reexecução grava o mesmo). Produto apagado sai do mapa.
       t.set(statsRef(ownerId), {
+        products: { [productId]: meta ?? FieldValue.delete() },
         ...(dSum !== 0   && { ratingSum:    FieldValue.increment(dSum) }),
         ...(dCount !== 0 && { reviewsCount: FieldValue.increment(dCount) }),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
+      if (dSum === 0 && dCount === 0) return;
       if (desired.reviewsCount > 0 || desired.ratingSum > 0) {
         t.set(markRef, { ...desired, updatedAt: FieldValue.serverTimestamp() });
       } else {
         t.delete(markRef);
       }
     });
+  },
+);
+
+// ============================================
+// GATILHO — visualizações (shards de productAnalytics)
+// ============================================
+// O app soma +1 num dos 5 shards a cada abertura do produto. Aqui
+// a soma dos shards vira `products.{id}.views` no resumo do dono.
+// Valor ABSOLUTO (relê os shards), então reexecução não duplica.
+// Sem transaction de propósito: travar os shards atrasaria a
+// gravação do app; duas visualizações juntas podem gravar a soma
+// fora de ordem por um instante, e a próxima corrige.
+// Custo por visualização: 1 execução + ~8 leituras + 1 gravação.
+
+const SHARDS_PER_PRODUCT = 5;
+
+async function sumProductViews(productId: string): Promise<number> {
+  const shards = await db.collection('productAnalytics').doc(productId)
+    .collection('shards').limit(SHARDS_PER_PRODUCT * 2).get();
+  return shards.docs.reduce((total, d) => total + Math.max(0, Math.trunc(toNumber(d.get('views')))), 0);
+}
+
+export const onProductViewWrittenCreatorStats = onDocumentWritten(
+  { document: 'productAnalytics/{productId}/shards/{shardId}' },
+  async (event) => {
+    const productId = event.params.productId;
+    const before = event.data?.before.exists ? event.data.before.data() : undefined;
+    const after  = event.data?.after.exists ? event.data.after.data() : undefined;
+
+    // Só visualizações interessam (favoritos também gravam aqui).
+    if (toNumber(before?.views) === toNumber(after?.views)) return;
+    if (!productIdOf(productId)) return;
+
+    const productSnap = await db.collection('products').doc(productId).get();
+    const ownerId = productSnap.get('ownerId');
+    if (!productSnap.exists || !isRealUid(ownerId)) return;
+
+    const [userSnap, deletionSnap, views] = await Promise.all([
+      db.collection('users').doc(ownerId).get(),
+      db.collection('accountDeletions').doc(ownerId).get(),
+      sumProductViews(productId),
+    ]);
+    if (!userSnap.exists || deletionSnap.exists) return;
+
+    await statsRef(ownerId).set({
+      products:  { [productId]: { views } },
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
   },
 );
 
@@ -311,15 +415,25 @@ export const onProductWrittenCreatorStats = onDocumentWritten(
 //   { uid: "<uid>" } → um criador
 //   {}               → todos os que têm venda ou nota
 
+interface ProductEntry { title?: string; status?: string; isDeleted?: boolean; views: number; orders: number }
+
 interface CreatorAccumulator {
   total:     Bucket;
   months:    Map<string, Bucket>;
   saleMarks: Map<string, SaleMark>;
   ratings:   Map<string, RatingMark>;
+  products:  Map<string, ProductEntry>;
 }
 
 function newAccumulator(): CreatorAccumulator {
-  return { total: emptyBucket(), months: new Map(), saleMarks: new Map(), ratings: new Map() };
+  return {
+    total: emptyBucket(), months: new Map(), saleMarks: new Map(), ratings: new Map(), products: new Map(),
+  };
+}
+
+function productEntry(acc: CreatorAccumulator, productId: string): ProductEntry {
+  if (!acc.products.has(productId)) acc.products.set(productId, { views: 0, orders: 0 });
+  return acc.products.get(productId)!;
 }
 
 async function writeCreator(uid: string, acc: CreatorAccumulator): Promise<void> {
@@ -334,10 +448,14 @@ async function writeCreator(uid: string, acc: CreatorAccumulator): Promise<void>
   const months: Record<string, Bucket> = {};
   acc.months.forEach((bucket, key) => { months[key] = bucket; });
 
+  const products: Record<string, ProductEntry> = {};
+  acc.products.forEach((entry, productId) => { products[productId] = entry; });
+
   const writes: Array<(batch: WriteBatch) => void> = [];
   writes.push(batch => batch.set(ref, {
     total:  acc.total,
     months,
+    products,
     ratingSum:    round2(ratingSum),
     reviewsCount,
     rebuiltAt:    FieldValue.serverTimestamp(),
@@ -401,6 +519,7 @@ export const rebuildCreatorStats = onCall(
       if (!mark.counted) return;
       const acc = accFor(sale.sellerId);
       acc.saleMarks.set(saleId, mark);
+      if (mark.productId) productEntry(acc, mark.productId).orders += 1;
       addMark(acc.total, mark, 1);
       if (!acc.months.has(mark.month)) acc.months.set(mark.month, emptyBucket());
       addMark(acc.months.get(mark.month)!, mark, 1);
@@ -409,12 +528,25 @@ export const rebuildCreatorStats = onCall(
     const productsQuery = onlyUid
       ? db.collection('products').where('ownerId', '==', onlyUid).orderBy('__name__')
       : db.collection('products').orderBy('__name__');
+    const ownedProducts: Array<[string, string]> = [];
     await forEachDoc(productsQuery, (productId, product) => {
       if (!isRealUid(product.ownerId)) return;
+      const acc  = accFor(product.ownerId);
+      const meta = metaOf(product)!;
+      Object.assign(productEntry(acc, productId), meta);
+      ownedProducts.push([product.ownerId, productId]);
       const rating = ratingOf(product);
       if (rating.reviewsCount === 0 && rating.ratingSum === 0) return;
-      accFor(product.ownerId).ratings.set(productId, rating);
+      acc.ratings.set(productId, rating);
     });
+
+    // Visualizações: soma dos shards de cada produto (até 5 leituras
+    // por produto), de 20 em 20 para não abrir conexões demais.
+    for (let i = 0; i < ownedProducts.length; i += 20) {
+      await Promise.all(ownedProducts.slice(i, i + 20).map(async ([ownerId, productId]) => {
+        productEntry(accFor(ownerId), productId).views = await sumProductViews(productId);
+      }));
+    }
 
     // Um criador pedido sem nenhuma venda ou nota ainda ganha o
     // resumo zerado (o painel mostra "ainda sem vendas").

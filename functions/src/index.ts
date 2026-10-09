@@ -27,6 +27,7 @@ export { getCurationDashboard }     from "./admin/getCurationDashboard";
 // Painel do Criador (09/10/2026): resumo de vendas e notas por criador.
 export {
   onSaleWrittenCreatorStats, onProductWrittenCreatorStats, rebuildCreatorStats,
+  onProductViewWrittenCreatorStats,
 } from "./creators/creatorStats";
 
 export { getAdminDashboard }        from "./admin/getAdminDashboard";
