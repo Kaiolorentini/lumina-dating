@@ -5,6 +5,10 @@
 // v2.1 (09/10/2026): card "Meu Painel" (o superadmin não tem a aba
 // Painel) e "Recalcular painéis" (manutenção do resumo dos
 // criadores — rebuildCreatorStats).
+// v2.2 (09/10/2026): card "Zerar dados de teste" — uso único antes
+// do Asaas de produção (resetSandboxPaymentData). Primeiro simula e
+// mostra o que vai mudar; só grava depois da segunda confirmação.
+// O servidor recusa quando o Asaas já está em produção.
 //
 // v2 (28/09):
 // - Balão em cada área com pendência (contado no servidor, nunca
@@ -84,6 +88,73 @@ export default function AdminDashboardScreen() {
 
   const { data, loading, refreshing, error, refresh } = useAdminDashboard(!blocked && !guardLoading);
   const [rebuilding, setRebuilding] = useState(false);
+  const [resetting, setResetting]   = useState(false);
+
+  // Zerar dados de pagamento do sandbox (uso único antes da produção).
+  async function handleResetSandbox() {
+    if (resetting) return;
+    setResetting(true);
+    type Report = {
+      dryRun: boolean; pendingSalesCancelled: number; paidSalesCancelled: number;
+      purchasesRevoked: number; creatorWalletsZeroed: number; creatorBalanceTotal: number;
+      withdrawalsRejected: number; crystalWalletsReset: number; crystalsRemoved: number;
+      galaxiaPlusRemoved: number;
+    };
+    const call = httpsCallable<{ dryRun: boolean; confirm?: string }, Report>(
+      getFunctions(app, 'us-central1'), 'resetSandboxPaymentData',
+    );
+    const describe = (r: Report) =>
+      `• ${r.pendingSalesCancelled} cobranças pendentes canceladas\n`
+      + `• ${r.paidSalesCancelled} vendas pagas no sandbox canceladas\n`
+      + `• ${r.purchasesRevoked} compras de produto revogadas\n`
+      + `• ${r.creatorWalletsZeroed} carteiras de criador zeradas (${formatBRL(r.creatorBalanceTotal)} em saldo)\n`
+      + `• ${r.withdrawalsRejected} saques em aberto recusados\n`
+      + `• ${r.crystalWalletsReset} carteiras de cristais zeradas (${r.crystalsRemoved} cristais comprados)\n`
+      + `• ${r.galaxiaPlusRemoved} Galáxia Plus removidas`;
+    try {
+      const simulation = (await call({ dryRun: true })).data;
+      Alert.alert(
+        'Simulação — nada foi alterado ainda',
+        `${describe(simulation)}\n\nIsto NÃO pode ser desfeito. Use só com contas de teste, antes de ligar o Asaas de produção.`,
+        [
+          { text: 'Cancelar', style: 'cancel', onPress: () => setResetting(false) },
+          {
+            text: 'Zerar agora',
+            style: 'destructive',
+            onPress: () => {
+              Alert.alert('Tem certeza?', 'Última confirmação: os dados de pagamento de teste serão zerados.', [
+                { text: 'Não', style: 'cancel', onPress: () => setResetting(false) },
+                {
+                  text: 'Sim, zerar',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      const done = (await call({ dryRun: false, confirm: 'ZERAR-SANDBOX' })).data;
+                      Alert.alert(
+                        '✅ Dados de teste zerados',
+                        `${describe(done)}\n\nAgora toque em "Recalcular painéis" para atualizar o Painel dos criadores.`,
+                      );
+                      refresh();
+                    } catch (e) {
+                      console.error('[AdminDashboard] resetSandboxPaymentData falhou:', e);
+                      Alert.alert('Erro', (e as Error)?.message ?? 'Não foi possível zerar agora.');
+                    } finally {
+                      setResetting(false);
+                    }
+                  },
+                },
+              ]);
+            },
+          },
+        ],
+        { cancelable: false },
+      );
+    } catch (e) {
+      console.error('[AdminDashboard] simulação falhou:', e);
+      Alert.alert('Erro', (e as Error)?.message ?? 'Não foi possível simular agora.');
+      setResetting(false);
+    }
+  }
 
   // Manutenção do Painel do Criador (09/10/2026): refaz o resumo de
   // vendas e notas de todos os criadores a partir dos dados reais.
@@ -208,6 +279,13 @@ export default function AdminDashboardScreen() {
               icon="🔄"
               label={rebuilding ? 'Recalculando…' : 'Recalcular painéis'}
               onPress={handleRebuildCreatorStats}
+            />
+          )}
+          {isSuperAdmin && (
+            <MenuCard
+              icon="🧹"
+              label={resetting ? 'Verificando…' : 'Zerar dados de teste'}
+              onPress={handleResetSandbox}
             />
           )}
         </View>

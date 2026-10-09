@@ -255,6 +255,9 @@ export { registerProfileVisit } from './engagement/registerProfileVisit';
 // ============================================
 export { resolveFraudFlag }        from './admin/resolveFraudFlag';
 export { getModeratorFileUrl }     from './admin/getModeratorFileUrl';
+// Uso único antes do Asaas de produção (09/10/2026): zera vendas,
+// saldos e cristais criados pelo sandbox. Recusa em produção.
+export { resetSandboxPaymentData } from './admin/resetSandboxPaymentData';
 export { createCoupon }            from './marketplace/coupons/createCoupon';
 export { updateCoupon }            from './marketplace/coupons/updateCoupon';
 export { toggleCoupon }            from './marketplace/coupons/toggleCoupon';
