@@ -1,6 +1,10 @@
 // ============================================
-// LUMINA — PAINEL ADMIN v2
+// LUMINA — PAINEL ADMIN v2.1
 // src/screens/admin/AdminDashboardScreen.tsx
+//
+// v2.1 (09/10/2026): card "Meu Painel" (o superadmin não tem a aba
+// Painel) e "Recalcular painéis" (manutenção do resumo dos
+// criadores — rebuildCreatorStats).
 //
 // v2 (28/09):
 // - Balão em cada área com pendência (contado no servidor, nunca
@@ -13,8 +17,10 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, RefreshControl, ActivityIndicator,
+  TouchableOpacity, RefreshControl, ActivityIndicator, Alert,
 } from 'react-native';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app from '../../core/firebase';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -77,6 +83,41 @@ export default function AdminDashboardScreen() {
   const [adminReady, setAdminReady] = useState(_adminSessionReady);
 
   const { data, loading, refreshing, error, refresh } = useAdminDashboard(!blocked && !guardLoading);
+  const [rebuilding, setRebuilding] = useState(false);
+
+  // Manutenção do Painel do Criador (09/10/2026): refaz o resumo de
+  // vendas e notas de todos os criadores a partir dos dados reais.
+  // Usado uma vez depois da atualização (vendas antigas) e se algum
+  // número parecer errado. Só superadmin — o servidor confere.
+  function handleRebuildCreatorStats() {
+    if (rebuilding) return;
+    Alert.alert(
+      'Recalcular painéis dos criadores',
+      'Refaz Vendas, Faturamento e Avaliação de todos os criadores a partir das vendas e avaliações reais. '
+        + 'Use uma vez depois desta atualização ou se algum número parecer errado. Pode levar alguns segundos.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Recalcular',
+          onPress: async () => {
+            setRebuilding(true);
+            try {
+              const rebuild = httpsCallable<Record<string, never>, { creators: number }>(
+                getFunctions(app, 'us-central1'), 'rebuildCreatorStats',
+              );
+              const result = await rebuild({});
+              Alert.alert('✅ Pronto', `${result.data.creators} painel(is) de criador recalculado(s).`);
+            } catch (e) {
+              console.error('[AdminDashboard] rebuildCreatorStats falhou:', e);
+              Alert.alert('Erro', (e as Error)?.message ?? 'Não foi possível recalcular agora.');
+            } finally {
+              setRebuilding(false);
+            }
+          },
+        },
+      ],
+    );
+  }
 
   const go = (route: Route) => () => navigation.navigate(route as never);
 
@@ -159,6 +200,16 @@ export default function AdminDashboardScreen() {
         <Text style={styles.sectionTitle}>Configurações</Text>
         <View style={styles.menuGrid}>
           <MenuCard icon="🎟️" label="Cupons" onPress={go('AdminCoupons')} />
+          {/* O superadmin não tem a aba Painel (8 abas não cabem no
+              rodapé): suas compras e a área de criador ficam aqui. */}
+          {isSuperAdmin && <MenuCard icon="💼" label="Meu Painel" onPress={go('CreatorPanel')} />}
+          {isSuperAdmin && (
+            <MenuCard
+              icon="🔄"
+              label={rebuilding ? 'Recalculando…' : 'Recalcular painéis'}
+              onPress={handleRebuildCreatorStats}
+            />
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>Negócio</Text>

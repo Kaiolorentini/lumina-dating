@@ -747,6 +747,21 @@ match /coinsPurchases/{docId} {
     }
 
     // ============================================
+    // PAINEL DO CRIADOR — resumo de vendas e notas
+    // ============================================
+    // Gravado SÓ pelos gatilhos de functions/src/creators/
+    // creatorStats.ts. Dado financeiro: só o dono e o admin leem.
+    // As marcas internas (saleMarks, ratingMarks) ficam fechadas.
+    match /creatorStats/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if false;
+
+      match /{subcollection}/{docId} {
+        allow read, write: if false;
+      }
+    }
+
+    // ============================================
     // MARKETPLACE — CREATOR TRANSACTIONS
     // ============================================
     match /creatorTransactions/{transactionId} {

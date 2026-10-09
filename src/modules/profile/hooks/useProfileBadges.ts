@@ -10,6 +10,11 @@
 //
 // `total` alimenta o balão da aba Perfil. Notificações gerais não
 // entram nele: já têm o balão do sino na aba Descobrir.
+//
+// 09/10/2026: compras, produtos e ganhos saíram do Perfil para a
+// aba Painel. Os balões deles somam em `panel` (balão da aba
+// Painel) e deixaram de entrar em `total` — senão o Perfil
+// mostraria um número que não aparece em lugar nenhum dele.
 // ============================================
 
 import { useEffect, useState } from 'react';
@@ -23,6 +28,9 @@ export const BADGE_TYPES = {
   purchases: ['refund_processed', 'purchase_confirmed'],
   products:  ['product_approved', 'product_rejected', 'creator_approved'],
   earnings:  ['sale_completed', 'sale_refunded', 'withdrawal_approved', 'withdrawal_paid', 'withdrawal_rejected'],
+  // Pedido de criador recusado (onRejectCreator). A aprovação já
+  // acende "Meus Produtos" (creator_approved, em products).
+  creator:   ['creator_rejected'],
 } as const;
 
 export interface ProfileBadges {
@@ -31,9 +39,14 @@ export interface ProfileBadges {
   purchases:     number;
   products:      number;
   earnings:      number;
+  /** Pedido de criador recusado, ainda não visto. */
+  creator:       number;
   support:       boolean;
   vaultReady:    boolean;
+  /** Balão da aba Perfil: só o que está no Perfil. */
   total:         number;
+  /** Balão da aba Painel: compras, produtos e ganhos. */
+  panel:         number;
 }
 
 interface VaultFields {
@@ -44,7 +57,7 @@ interface VaultFields {
 export function useProfileBadges(uid: string | undefined): ProfileBadges {
   const { wallet } = useCoins();
   const [requests, setRequests] = useState(0);
-  const [unread, setUnread]     = useState({ all: 0, purchases: 0, products: 0, earnings: 0 });
+  const [unread, setUnread]     = useState({ all: 0, purchases: 0, products: 0, earnings: 0, creator: 0 });
   const [support, setSupport]   = useState(false);
   const [now, setNow]           = useState(Date.now());
 
@@ -59,6 +72,7 @@ export function useProfileBadges(uid: string | undefined): ProfileBadges {
         purchases: count(BADGE_TYPES.purchases),
         products:  count(BADGE_TYPES.products),
         earnings:  count(BADGE_TYPES.earnings),
+        creator:   count(BADGE_TYPES.creator),
       });
     });
     const unsubSupport = onSnapshot(
@@ -81,8 +95,8 @@ export function useProfileBadges(uid: string | undefined): ProfileBadges {
     return () => clearTimeout(timer);
   }, [unlockAt]);
 
-  const total = requests + unread.purchases + unread.products + unread.earnings
-    + (support ? 1 : 0) + (vaultReady ? 1 : 0);
+  const total = requests + (support ? 1 : 0) + (vaultReady ? 1 : 0);
+  const panel = unread.purchases + unread.products + unread.earnings + unread.creator;
 
   return {
     requests,
@@ -90,8 +104,10 @@ export function useProfileBadges(uid: string | undefined): ProfileBadges {
     purchases:     unread.purchases,
     products:      unread.products,
     earnings:      unread.earnings,
+    creator:       unread.creator,
     support,
     vaultReady,
     total,
+    panel,
   };
 }

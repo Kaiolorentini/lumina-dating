@@ -24,6 +24,10 @@ export {
   onPurchaseRevokedRemoveReview, recomputeProductRatings,
 } from "./products/productReviews";
 export { getCurationDashboard }     from "./admin/getCurationDashboard";
+// Painel do Criador (09/10/2026): resumo de vendas e notas por criador.
+export {
+  onSaleWrittenCreatorStats, onProductWrittenCreatorStats, rebuildCreatorStats,
+} from "./creators/creatorStats";
 
 export { getAdminDashboard }        from "./admin/getAdminDashboard";
 export {
@@ -263,4 +267,5 @@ export { getPreRegistrationStats } from './preRegistration/getPreRegistrationSta
 export { assignVerifiedFounders } from './preRegistration/assignVerifiedFounders';
 export { onConnectionRequestWritten, onBlockWritten } from "./social/chatAccess";
 export { deleteMyAccount, processAccountDeletion } from "./users/accountDeletion";
+
 

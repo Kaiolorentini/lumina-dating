@@ -60,6 +60,9 @@ export type RootStackParamList = {
   MyEarnings:      undefined;
   Withdrawal:      undefined;
   CreatorRequest:  undefined;
+  /** Meu Painel como rota de pilha — atalho do superadmin no Painel
+   *  Admin (ele não tem a aba). Os demais usam a aba CreatorHub. */
+  CreatorPanel:    undefined;
   Checkout: {
     productId?:    string;
     saleId?:       string;
@@ -101,5 +104,7 @@ export type TabParamList = {
   // vez, para decidir. Sintonias (plural) é a lista de quem já
   // sintonizou. Nomes parecidos, telas diferentes.
   Home: undefined; Sintonize: undefined; Sintonias: undefined;
-  Store: undefined; Marketplace: undefined; Profile: undefined; Admin: undefined;
+  Store: undefined; Marketplace: undefined; CreatorHub: undefined;
+  Profile: undefined; Admin: undefined;
 };
+

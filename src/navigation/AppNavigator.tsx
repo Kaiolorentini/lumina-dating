@@ -63,6 +63,7 @@ import MyFavoritesScreen from '../screens/marketplace/MyFavoritesScreen';
 import MyEarningsScreen from '../screens/marketplace/MyEarningsScreen';
 import WithdrawalScreen from '../screens/marketplace/WithdrawalScreen';
 import CreatorRequestScreen from '../screens/marketplace/CreatorRequestScreen';
+import CreatorPanelScreen from '../screens/marketplace/CreatorPanelScreen';
 import CheckoutScreen from '../screens/marketplace/CheckoutScreen';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useUserPermissions } from '../hooks/useUserPermissions';
@@ -189,6 +190,7 @@ function TabNavigator() {
   }, [user?.uid]);
 
   const totalProfileBadge = profileBadges.total;
+  const panelBadge        = profileBadges.panel;
   const showMarketplace   = marketplaceEnabled && !isBlocked;
 
   return (
@@ -278,6 +280,30 @@ function TabNavigator() {
         }}
       />
 
+      {/* Painel (09/10/2026): compras, favoritos e área do criador.
+          Para todos, MENOS o superadmin (ele entra pelo card do
+          Painel Admin — com a aba Admin seriam 8 abas). Registrada
+          só quando aparece, como a Admin: as outras abas dividem o
+          espaço sem buraco. Não depende do marketplace ligado: as
+          compras precisam continuar acessíveis em manutenção ou ban. */}
+      {!canAccessAdminPanel && (
+        <Tab.Screen name="CreatorHub" component={CreatorPanelScreen}
+          options={{
+            tabBarLabel: 'Painel',
+            tabBarIcon:  ({ color }) => (
+              <View>
+                <Text style={{ fontSize: 20, color }}>💼</Text>
+                {panelBadge > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{panelBadge > 9 ? '9+' : panelBadge}</Text>
+                  </View>
+                )}
+              </View>
+            ),
+          }}
+        />
+      )}
+
       <Tab.Screen name="Profile" component={ProfileScreen}
         options={{
           tabBarLabel: 'Perfil',
@@ -340,6 +366,7 @@ function MainStack() {
       <Stack.Screen name="MyEarnings"            component={MyEarningsScreen} />
       <Stack.Screen name="Withdrawal"            component={WithdrawalScreen} />
       <Stack.Screen name="CreatorRequest"        component={CreatorRequestScreen} />
+      <Stack.Screen name="CreatorPanel"          component={CreatorPanelScreen} />
       <Stack.Screen name="Checkout"              component={CheckoutScreen} />
       <Stack.Screen name="AdminPanel"            component={AdminDashboardScreen} />
       <Stack.Screen name="AdminDashboard"        component={AdminDashboardScreen} />
@@ -830,3 +857,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+

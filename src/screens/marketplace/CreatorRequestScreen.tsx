@@ -1,14 +1,25 @@
+// ============================================
+// LUMINA — SER CRIADOR
+// src/screens/marketplace/CreatorRequestScreen.tsx
+//
+// 09/10/2026: abrir a tela apaga o balão de "pedido recusado" do
+// Meu Painel (notificação creator_rejected), como Meus Ganhos faz
+// com o dele. Nada mais mudou.
+// ============================================
+
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { useCreatorRequests } from '../../hooks/useCreatorRequests';
 import { createCreatorRequest, cancelCreatorRequest } from '../../services/marketplace/creatorService';
 import ScreenContainer from '../../components/ScreenContainer';
+import { markNotificationsReadByTypes } from '../../modules/notifications/services/notificationService';
+import { BADGE_TYPES } from '../../modules/profile/hooks/useProfileBadges';
 
 export default function CreatorRequestScreen() {
   const navigation = useNavigation();
@@ -16,6 +27,11 @@ export default function CreatorRequestScreen() {
   const { request, loading, isPending, isApproved, isRejected } = useCreatorRequests(user?.uid);
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
+
+  // Abrir a tela apaga o balão do pedido recusado no Meu Painel.
+  useFocusEffect(React.useCallback(() => {
+    if (user?.uid) markNotificationsReadByTypes(user.uid, [...BADGE_TYPES.creator]).catch(() => {});
+  }, [user?.uid]));
 
   async function handleSubmit() {
     if (!user) return;

@@ -1,6 +1,11 @@
 // ============================================
-// LUMINA — PROFILE SCREEN v5.4
+// LUMINA — PROFILE SCREEN v5.5
 // src/modules/profile/screens/ProfileScreen.tsx
+//
+// v5.5 (09/10/2026) — A seção Marketplace saiu daqui e virou a
+// aba Painel (CreatorPanelScreen): Minhas Compras, Favoritos,
+// Ser Criador, Meus Produtos, Meus Ganhos e Pagamentos. Aqui fica
+// só o atalho do Painel Admin, para admin e superadmin.
 //
 // v5.4 — O TOPO VIROU O CARD DA HOME.
 // No lugar da foto redonda, o card do usuário exatamente como os
@@ -77,7 +82,7 @@ export default function ProfileScreen() {
   const { user, logout }   = useAuth();
   const { wallet }         = useCoins();
   const navigation         = useNavigation<NavProp>();
-  const { role, isAdmin, isSuperAdmin } = useUserPermissions(user?.uid);
+  const { isAdmin, isSuperAdmin } = useUserPermissions(user?.uid);
   const { status: xpStatus }       = useXP(user?.uid);
   const { data: prestigeData }     = usePrestige(user?.uid); // ← FIX: era 'data', agora 'prestigeData'
   const badges                     = useProfileBadges(user?.uid);
@@ -91,7 +96,6 @@ export default function ProfileScreen() {
    *  card maior invadiria o que vem abaixo dele. */
   const [cardHeight, setCardHeight]         = useState(0);
 
-  const isCreator   = role === 'creator';
   const isAdminUser = isAdmin || isSuperAdmin;
 
   // useFocusEffect e não useEffect: ao voltar do ProfileSetup
@@ -403,56 +407,20 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Marketplace */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🛍️ Marketplace</Text>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('MyPurchases')}>
-            <Text style={styles.menuItemIcon}>📦</Text>
-            <Text style={styles.menuItemText}>Minhas Compras</Text>
-            <MenuBadge n={badges.purchases} />
-            <Text style={styles.menuItemArrow}>›</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('MyFavorites')}>
-            <Text style={styles.menuItemIcon}>❤️</Text>
-            <Text style={styles.menuItemText}>Favoritos</Text>
-            <Text style={styles.menuItemArrow}>›</Text>
-          </TouchableOpacity>
-          {role === 'user' && (
-            <TouchableOpacity style={styles.menuItemHighlight} onPress={() => navigation.navigate('CreatorRequest')}>
-              <Text style={styles.menuItemIcon}>🎨</Text>
-              <Text style={styles.menuItemTextHighlight}>Ser Criador</Text>
-              <Text style={styles.menuItemArrow}>›</Text>
-            </TouchableOpacity>
-          )}
-          {(isCreator || isAdminUser) && (
-            <>
-              <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('MyProducts')}>
-                <Text style={styles.menuItemIcon}>📁</Text>
-                <Text style={styles.menuItemText}>Meus Produtos</Text>
-                <MenuBadge n={badges.products} />
-                <Text style={styles.menuItemArrow}>›</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('MyEarnings')}>
-                <Text style={styles.menuItemIcon}>💰</Text>
-                <Text style={styles.menuItemText}>Meus Ganhos</Text>
-                <MenuBadge n={badges.earnings} />
-                <Text style={styles.menuItemArrow}>›</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PaymentSetup')}>
-                <Text style={styles.menuItemIcon}>💳</Text>
-                <Text style={styles.menuItemText}>Configurar Pagamentos</Text>
-                <Text style={styles.menuItemArrow}>›</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          {isAdminUser && (
+        {/* Marketplace SAIU do Perfil (09/10/2026): compras, favoritos,
+            "Ser Criador" e as ferramentas de criador ficam na aba Painel
+            (CreatorPanelScreen). O superadmin, sem essa aba, entra pelo
+            card "Meu Painel" do Painel Admin. */}
+        {isAdminUser && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>👑 Administração</Text>
             <TouchableOpacity style={styles.menuItemAdmin} onPress={() => navigation.navigate('AdminDashboard')}>
               <Text style={styles.menuItemIcon}>👑</Text>
               <Text style={styles.menuItemTextAdmin}>Painel Admin</Text>
               <Text style={styles.menuItemArrow}>›</Text>
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
 
         {/* Logout */}
         <TouchableOpacity
@@ -530,12 +498,10 @@ const styles = StyleSheet.create({
   editButtonText: { flex: 1, color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   editButtonArrow: { color: colors.gold, fontSize: fonts.sizes.xl },
   menuItem:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark + '55' },
-  menuItemHighlight: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 0.5, borderBottomColor: colors.grayDark + '55', backgroundColor: colors.gold + '11' },
   menuItemAdmin: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: colors.gold + '11' },
   menuItemIcon:  { fontSize: 18, marginRight: spacing.sm },
   menuItemText:  { flex: 1, color: colors.white, fontSize: fonts.sizes.md },
   menuItemSubtext: { color: colors.gray, fontSize: fonts.sizes.xs, marginRight: spacing.xs },
-  menuItemTextHighlight: { flex: 1, color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   menuItemTextAdmin: { flex: 1, color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   menuItemArrow: { color: colors.gray, fontSize: fonts.sizes.xl },
   badge: {

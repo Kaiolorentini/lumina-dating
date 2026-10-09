@@ -344,6 +344,8 @@ async function runDeletion(uid: string, anonId: string): Promise<Record<string, 
     'galaxiaPlus', 'visitorsAccess', 'profile_visit_counts', 'offerLog',
     'activeOffers', 'contentAccessLogs', 'ageVerifications', 'creatorWallets',
     'preRegistrations',
+    // Resumo do Painel do Criador (09/10/2026) — com as marcas.
+    'creatorStats',
   ]) {
     await deleteDocRecursive(collection, uid);
   }
@@ -393,4 +395,5 @@ export const processAccountDeletion = onDocumentCreated(
     console.log(`[processAccountDeletion] concluída — ${anonId}`, JSON.stringify(counts));
   },
 );
+
 
