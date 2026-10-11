@@ -1,6 +1,11 @@
 // ============================================
-// LUMINA — ACHIEVEMENTS SYSTEM v5.5
+// LUMINA — ACHIEVEMENTS SYSTEM v5.6
 // functions/src/engagement/achievements.ts
+//
+// v5.6 (10/10/2026) — coleções coletáveis. Cada coleção devolve
+// também `claimed` (fragmentos já coletados) e `claimable` (botão
+// "Coletar" no app). Os fragmentos são entregues pela callable
+// claimCollectionReward (collectionRewards.ts), no Cofre.
 //
 // v5.5 — repairAchievements REMOVIDA (auditoria A6, 08/10/2026).
 // Era uma tarefa agendada diária que lia até 100 usuários e só
@@ -48,6 +53,7 @@ export const getAchievementsStatus = functions.onCall(
     const unlocked:   string[]               = achData.unlocked            ?? [];
     const progress:   Record<string, number>  = achData.progress            ?? {};
     const completed:  string[]               = achData.completedCollections ?? [];
+    const claimed:    string[]               = achData.claimedCollections   ?? [];
     const unlockedAt: Record<string, string>  = achData.unlockedAt          ?? {};
 
     const achievements = Object.values(ACHIEVEMENTS_CATALOG).map(ach => ({
@@ -59,12 +65,21 @@ export const getAchievementsStatus = functions.onCall(
       description: (!ach.hidden || unlocked.includes(ach.id)) ? ach.description : 'Conquista secreta',
     }));
 
-    const collections = Object.values(COLLECTIONS_CATALOG).map(col => ({
-      ...col,
-      completed:   completed.includes(col.id),
-      achProgress: col.achievementIds.filter(id => unlocked.includes(id)).length,
-      achTotal:    col.achievementIds.length,
-    }));
+    const collections = Object.values(COLLECTIONS_CATALOG).map(col => {
+      const achProgress = col.achievementIds.filter(id => unlocked.includes(id)).length;
+      // Completa no servidor, ou com todas as conquistas desbloqueadas
+      // (a coleta repara a marcação que faltou — ver collectionRewards).
+      const isComplete  = completed.includes(col.id) || achProgress === col.achievementIds.length;
+      const isClaimed   = claimed.includes(col.id);
+      return {
+        ...col,
+        completed:   isComplete,
+        claimed:     isClaimed,
+        claimable:   isComplete && !isClaimed && col.reward.fragments > 0,
+        achProgress,
+        achTotal:    col.achievementIds.length,
+      };
+    });
 
     return {
       achievements, collections,
@@ -73,4 +88,3 @@ export const getAchievementsStatus = functions.onCall(
     };
   }
 );
-

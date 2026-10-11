@@ -1,6 +1,14 @@
 // ============================================
-// LUMINA — ACHIEVEMENT PROCESSOR v1.1
+// LUMINA — ACHIEVEMENT PROCESSOR v1.2
 // functions/src/gamification/services/AchievementProcessor.ts
+//
+// v1.2 (10/10/2026) — FRAGMENTOS DA COLEÇÃO SÃO COLETADOS.
+// A coleção completa NÃO credita mais a carteira na hora: ela fica
+// marcada como completa (título e badge entram na hora, como antes)
+// e os fragmentos esperam o toque em "Coletar" no app, que chama
+// claimCollectionReward (engagement/collectionRewards.ts) e os
+// deposita no COFRE. Antes os +25 caíam na carteira sem nenhum
+// aviso visível e pareciam não ter sido pagos.
 //
 // FASE 2G — núcleo único de conquistas e coleções.
 //
@@ -26,6 +34,19 @@ import { PrestigeService }     from '../../engagement/prestigeService';
 import { auditLogFinanceiro }  from '../../utils/auditLogFinanceiro';
 
 const db = admin.firestore();
+
+/** Texto da notificação de coleção completa. Com fragmentos, avisa
+ *  que eles esperam o toque em "Coletar" (vão para o Cofre). */
+export function collectionCompleteMessage(fragments: number, title: string | null): string {
+  const parts: string[] = [];
+  if (fragments > 0) parts.push(`+${fragments} Fragmentos esperando você`);
+  if (title)         parts.push(`título ${title}`);
+  if (parts.length === 0) return 'Coleção completa!';
+  const text = parts.join(' + ');
+  return fragments > 0
+    ? `${text}. Toque em Coletar em Conquistas > Coleções para guardar no Cofre!`
+    : `${text[0].toUpperCase()}${text.slice(1)}!`;
+}
 
 // Actions que usam currentValue absoluto (não acumulam +1).
 const ABSOLUTE_ACTIONS = new Set([
@@ -177,7 +198,6 @@ export const AchievementProcessor = {
 
   async checkCollections(uid: string, unlockedAchievements: string[]): Promise<void> {
     const userRef   = db.collection('users').doc(uid);
-    const walletRef = db.collection('wallets').doc(uid);
     const userDoc   = await userRef.get();
     const completedCollections: string[] = userDoc.data()?.achievements?.completedCollections ?? [];
 
@@ -186,40 +206,21 @@ export const AchievementProcessor = {
       const allDone = col.achievementIds.every(id => unlockedAchievements.includes(id));
       if (!allDone) continue;
 
-      await db.runTransaction(async (t) => {
-        // ── 1. LEITURAS ──
+      const completedNow = await db.runTransaction(async (t) => {
+        // ── 1. LEITURA ──
         const freshDoc = await t.get(userRef);
         const freshCompleted: string[] = freshDoc.data()?.achievements?.completedCollections ?? [];
-        if (freshCompleted.includes(colId)) return;
-
-        const walletSnap = col.reward.fragments > 0 ? await t.get(walletRef) : null;
+        if (freshCompleted.includes(colId)) return false;
 
         // ── 2. ESCRITAS ──
+        // Fragmentos NÃO entram aqui (v1.2): ficam esperando o
+        // "Coletar" — claimCollectionReward, que deposita no Cofre.
         t.set(userRef, {
           achievements: {
             completedCollections:  FieldValue.arrayUnion(colId),
             collectionCompletedAt: { [colId]: FieldValue.serverTimestamp() },
           },
         }, { merge: true });
-
-        if (walletSnap) {
-          const before = (walletSnap.data()?.fragments as number) ?? 0;
-          t.set(walletRef, {
-            fragments: FieldValue.increment(col.reward.fragments),
-            updatedAt: FieldValue.serverTimestamp(),
-          }, { merge: true });
-          t.set(db.collection('economyLedger').doc(), {
-            uid, tipo: 'COLLECTION_REWARD', collectionId: colId, tier: col.tier,
-            fragmentos:  col.reward.fragments,
-            saldoAntes:  before,
-            saldoDepois: before + col.reward.fragments,
-            timestamp:   FieldValue.serverTimestamp(), imutavel: true,
-          });
-          auditLogFinanceiro({
-            uid, tipo: 'FRAG_COLECAO', valor: col.reward.fragments,
-            origem: 'AchievementProcessor', metadata: { collectionId: colId, tier: col.tier },
-          }, t);
-        }
 
         if (col.reward.badge) {
           t.set(userRef, {
@@ -236,16 +237,19 @@ export const AchievementProcessor = {
         t.set(db.collection('notifications').doc(), {
           userId: uid, type: 'collection_complete',
           title:   `${col.icon} ${col.title} completa!`,
-          message: col.reward.title
-            ? `+${col.reward.fragments} Fragmentos + título ${col.reward.title}!`
-            : `+${col.reward.fragments} Fragmentos!`,
+          message: collectionCompleteMessage(col.reward.fragments, col.reward.title),
           icon:    col.icon, read: false,
-          dados:   { collectionId: colId, tier: col.tier, reward: col.reward },
+          dados:   {
+            collectionId: colId, tier: col.tier, reward: col.reward,
+            claimable:    col.reward.fragments > 0,
+          },
           timestamp: FieldValue.serverTimestamp(),
         });
+
+        return true;
       });
 
-      if (col.tier === 'GOLD') {
+      if (completedNow && col.tier === 'GOLD') {
         await this.checkGoldCollectionMarcos(uid);
       }
     }

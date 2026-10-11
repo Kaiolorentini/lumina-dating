@@ -1,12 +1,19 @@
 // ============================================
-// LUMINA — ACHIEVEMENTS SCREEN v5.1
+// LUMINA — ACHIEVEMENTS SCREEN v5.2
 // src/modules/engagement/screens/AchievementsScreen.tsx
+//
+// v5.2 (10/10/2026) — coleções coletáveis:
+//  • botão "Coletar +N fragmentos" na coleção completa;
+//  • modal de comemoração depois da coleta (CollectionClaimModal),
+//    com atalho para o Cofre — os fragmentos vão para lá;
+//  • contador de coleções para coletar na aba e no resumo;
+//  • estado de erro com "Tentar de novo" e puxar para atualizar.
 // ============================================
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator,
+  TouchableOpacity, ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { useNavigation }   from '@react-navigation/native';
@@ -15,6 +22,7 @@ import { useAuth }           from '../../../context/AuthContext';
 import { useAchievements, Achievement, Collection, AchievementRarity } from '../hooks/useAchievements';
 import { RootStackParamList } from '../../../navigation/types';
 import Header from '../../../components/Header';
+import CollectionClaimModal, { CollectionClaimInfo } from '../components/CollectionClaimModal';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -83,7 +91,15 @@ function AchievementCard({ ach }: { ach: Achievement }) {
   );
 }
 
-function CollectionCard({ col }: { col: Collection }) {
+interface CollectionCardProps {
+  col:        Collection;
+  claiming:   boolean;
+  /** Outra coleção está sendo coletada: este botão espera. */
+  disabled:   boolean;
+  onClaim:    (col: Collection) => void;
+}
+
+function CollectionCard({ col, claiming, disabled, onClaim }: CollectionCardProps) {
   const tierColor = TIER_COLORS[col.tier];
   const pct       = col.achTotal > 0 ? col.achProgress / col.achTotal : 0;
 
@@ -116,7 +132,28 @@ function CollectionCard({ col }: { col: Collection }) {
             <Text style={styles.colRewardText}>👑 Título: {col.reward.title}</Text>
           )}
         </View>
-        {col.completed && <Text style={[styles.colDone, { color: tierColor }]}>✓ Completa!</Text>}
+        {col.claimable && (
+          <TouchableOpacity
+            style={[styles.claimBtn, { backgroundColor: tierColor }, (claiming || disabled) && styles.claimBtnBusy]}
+            onPress={() => onClaim(col)}
+            disabled={claiming || disabled}
+            accessibilityRole="button"
+            accessibilityLabel={`Coletar ${col.reward.fragments} fragmentos da ${col.title}`}
+            accessibilityState={{ disabled: claiming || disabled, busy: claiming }}
+          >
+            {claiming
+              ? <ActivityIndicator color="#111111" />
+              : <Text style={styles.claimText}>🔮 Coletar +{col.reward.fragments} fragmentos</Text>}
+          </TouchableOpacity>
+        )}
+        {col.claimable && !claiming && (
+          <Text style={styles.claimHint}>Os fragmentos vão para o seu Cofre 🗝️</Text>
+        )}
+        {col.completed && !col.claimable && (
+          <Text style={[styles.colDone, { color: tierColor }]}>
+            {col.claimed ? '✓ Completa · fragmentos coletados' : '✓ Completa!'}
+          </Text>
+        )}
       </LinearGradient>
     </View>
   );
@@ -125,11 +162,54 @@ function CollectionCard({ col }: { col: Collection }) {
 export default function AchievementsScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
-  const { data, loading, error } = useAchievements(user?.uid);
+  const { data, loading, error, refresh, claimCollection } = useAchievements(user?.uid);
   const [activeTab, setActiveTab] = useState<Tab>('conquistas');
   const [filter,    setFilter]    = useState<string>('ALL');
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [celebration, setCelebration] = useState<CollectionClaimInfo | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  if (loading) {
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
+
+  const handleClaim = useCallback(async (col: Collection) => {
+    // Trava de toque duplo: uma coleta por vez. O servidor também
+    // recusa pagar duas vezes (transação + claimedCollections).
+    if (claimingId) return;
+    setClaimingId(col.id);
+    try {
+      const result = await claimCollection(col.id);
+      if (result.alreadyClaimed) {
+        Alert.alert('Já coletada', 'Os fragmentos desta coleção já estão no seu Cofre.');
+        return;
+      }
+      setCelebration({
+        icon:           col.icon,
+        title:          col.title,
+        tierColor:      TIER_COLORS[col.tier],
+        fragments:      result.fragments,
+        vaultFragments: result.vaultFragments,
+      });
+    } catch (claimError) {
+      Alert.alert(
+        'Não foi possível coletar',
+        claimError instanceof Error ? claimError.message : 'Tente de novo em instantes.',
+      );
+    } finally {
+      setClaimingId(null);
+    }
+  }, [claimingId, claimCollection]);
+
+  const closeCelebration = useCallback(() => setCelebration(null), []);
+  const openVault = useCallback(() => {
+    setCelebration(null);
+    navigation.navigate('Vault');
+  }, [navigation]);
+
+  if (loading && !data) {
     return (
       <View style={styles.container}>
         <Header title="Conquistas" showBack={true} showHome={true} />
@@ -140,8 +220,24 @@ export default function AchievementsScreen() {
     );
   }
 
+  if (error && !data) {
+    return (
+      <View style={styles.container}>
+        <Header title="Conquistas & Coleções" showBack={true} showHome={true} />
+        <View style={styles.center}>
+          <Text style={styles.stateIcon}>⚠️</Text>
+          <Text style={styles.stateText}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={refresh} accessibilityRole="button">
+            <Text style={styles.retryText}>Tentar de novo</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   const achievements = data?.achievements ?? [];
   const collections  = data?.collections  ?? [];
+  const claimableCount = collections.filter(c => c.claimable).length;
 
   const filtered = filter === 'ALL'
     ? achievements
@@ -163,6 +259,20 @@ export default function AchievementsScreen() {
         </Text>
       </View>
 
+      {claimableCount > 0 && activeTab !== 'colecoes' && (
+        <TouchableOpacity
+          style={styles.claimBanner}
+          onPress={() => setActiveTab('colecoes')}
+          accessibilityRole="button"
+        >
+          <Text style={styles.claimBannerText}>
+            🔮 {claimableCount === 1
+              ? 'Você tem 1 coleção para coletar'
+              : `Você tem ${claimableCount} coleções para coletar`} — toque aqui
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Tabs */}
       <View style={styles.tabs}>
         {(['conquistas', 'colecoes'] as Tab[]).map(tab => (
@@ -172,13 +282,25 @@ export default function AchievementsScreen() {
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === 'conquistas' ? '🏆 Conquistas' : '📚 Coleções'}
+              {tab === 'conquistas'
+                ? '🏆 Conquistas'
+                : `📚 Coleções${claimableCount > 0 ? ` (${claimableCount})` : ''}`}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={COLORS.secondary}
+            colors={[COLORS.secondary]}
+          />
+        }
+      >
         {activeTab === 'conquistas' && (
           <>
             {/* Filtro por categoria */}
@@ -207,14 +329,29 @@ export default function AchievementsScreen() {
 
         {activeTab === 'colecoes' && (
           <View style={styles.list}>
+            {collections.length === 0 && (
+              <Text style={styles.emptyText}>Nenhuma coleção disponível por enquanto.</Text>
+            )}
             {collections.map(col => (
-              <CollectionCard key={col.id} col={col} />
+              <CollectionCard
+                key={col.id}
+                col={col}
+                claiming={claimingId === col.id}
+                disabled={claimingId !== null && claimingId !== col.id}
+                onClaim={handleClaim}
+              />
             ))}
           </View>
         )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <CollectionClaimModal
+        info={celebration}
+        onClose={closeCelebration}
+        onOpenVault={openVault}
+      />
     </View>
   );
 }
@@ -272,4 +409,19 @@ const styles = StyleSheet.create({
   colReward:  { gap: 4 },
   colRewardText: { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
   colDone:    { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.extrabold, textAlign: 'center', marginTop: S.xs },
+
+  // Coleta
+  claimBtn:     { borderRadius: R.full, paddingVertical: S.md, alignItems: 'center', justifyContent: 'center', marginTop: S.sm, minHeight: 48 },
+  claimBtnBusy: { opacity: 0.6 },
+  claimText:    { color: '#111111', fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.extrabold },
+  claimHint:    { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textAlign: 'center' },
+  claimBanner:  { backgroundColor: COLORS.secondary + '22', borderBottomWidth: 1, borderBottomColor: COLORS.secondary + '55', paddingVertical: S.sm, paddingHorizontal: S.md },
+  claimBannerText: { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, textAlign: 'center' },
+
+  // Estados
+  stateIcon:  { fontSize: 40, marginBottom: S.sm },
+  stateText:  { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center', paddingHorizontal: S.lg },
+  retryBtn:   { marginTop: S.md, borderRadius: R.full, borderWidth: 1, borderColor: COLORS.secondary, paddingHorizontal: S.lg, paddingVertical: S.sm },
+  retryText:  { color: COLORS.secondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  emptyText:  { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, textAlign: 'center', paddingVertical: S.lg },
 });
