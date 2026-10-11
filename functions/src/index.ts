@@ -88,7 +88,8 @@ export { expireMarketplaceBans }    from "./users/expireMarketplaceBans";
 export { createAsaasPayment }       from "./payments/createAsaasPayment";
 export { approveRefund }            from "./payments/approveRefund";
 export { markRefundPaid }           from "./payments/markRefundPaid";
-export { verifyAsaasWallet }        from "./payments/verifyAsaasWallet";
+// verifyAsaasWallet REMOVIDA (11/10/2026): nenhuma tela chamava.
+// O recebimento do criador é por chave Pix (saveCreatorPixKey).
 export { onAsaasWebhook }           from "./payments/onAsaasWebhook";
 export { createCoinsPurchase } from "./payments/createCoinsPurchase";
 
@@ -257,9 +258,9 @@ export { registerProfileVisit } from './engagement/registerProfileVisit';
 // ============================================
 export { resolveFraudFlag }        from './admin/resolveFraudFlag';
 export { getModeratorFileUrl }     from './admin/getModeratorFileUrl';
-// Uso único antes do Asaas de produção (09/10/2026): zera vendas,
-// saldos e cristais criados pelo sandbox. Recusa em produção.
-export { resetSandboxPaymentData } from './admin/resetSandboxPaymentData';
+// resetSandboxPaymentData REMOVIDA (11/10/2026): era de uso único
+// antes do Asaas de produção (já ligado). A limpeza do lançamento
+// foi feita pelo scripts/reset-lancamento.js.
 export { createCoupon }            from './marketplace/coupons/createCoupon';
 export { updateCoupon }            from './marketplace/coupons/updateCoupon';
 export { toggleCoupon }            from './marketplace/coupons/toggleCoupon';

@@ -140,7 +140,6 @@ const NavigationPermissionsContext = React.createContext({
   marketplaceEnabled: false,
 });
 
-const hideTabButton = () => null;
 
 // ============================================
 // TAB NAVIGATOR
@@ -284,14 +283,20 @@ function TabNavigator() {
         }}
       />
 
-      <Tab.Screen name="Marketplace" component={MarketplaceHomeScreen}
-        options={{
-          tabBarLabel:   'Marketplace',
-          tabBarIcon:    ({ color }) => <Text style={{ fontSize: 20, color }}>🛍️</Text>,
-          tabBarButton:  showMarketplace ? undefined : hideTabButton,
-          tabBarItemStyle: showMarketplace ? {} : { width: 0, height: 0 },
-        }}
-      />
+      {/* Marketplace (11/10/2026): registrada SÓ quando aparece, como
+          Painel e Admin. O tabBarButton null com tabBarItemStyle
+          zerado deixava um espaço vazio no rodapé quando o
+          marketplace estava desligado ou a conta com ban — o mesmo
+          problema que tirou a aba Mídia. Se o marketplace desligar
+          com a pessoa nesta aba, o navegador volta para a primeira. */}
+      {showMarketplace && (
+        <Tab.Screen name="Marketplace" component={MarketplaceHomeScreen}
+          options={{
+            tabBarLabel: 'Marketplace',
+            tabBarIcon:  ({ color }) => <Text style={{ fontSize: 20, color }}>🛍️</Text>,
+          }}
+        />
+      )}
 
       {/* Painel (09/10/2026): compras, favoritos e área do criador.
           Para todos, MENOS o superadmin (ele entra pelo card do
