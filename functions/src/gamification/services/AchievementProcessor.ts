@@ -1,5 +1,5 @@
 // ============================================
-// LUMINA — ACHIEVEMENT PROCESSOR v1.2
+// LUMINA — ACHIEVEMENT PROCESSOR v1.3
 // functions/src/gamification/services/AchievementProcessor.ts
 //
 // v1.2 (10/10/2026) — FRAGMENTOS DA COLEÇÃO SÃO COLETADOS.
@@ -9,6 +9,11 @@
 // claimCollectionReward (engagement/collectionRewards.ts) e os
 // deposita no COFRE. Antes os +25 caíam na carteira sem nenhum
 // aviso visível e pareciam não ter sido pagos.
+//
+// v1.3 (11/10/2026) — coleção com fragmentos entra em
+// wallets.collectionsToClaim (sai na coleta). O app já escuta a
+// carteira em tempo real: a bolinha "para coletar" do Perfil sai
+// dali sem nenhuma leitura nova.
 //
 // FASE 2G — núcleo único de conquistas e coleções.
 //
@@ -198,6 +203,7 @@ export const AchievementProcessor = {
 
   async checkCollections(uid: string, unlockedAchievements: string[]): Promise<void> {
     const userRef   = db.collection('users').doc(uid);
+    const walletRef = db.collection('wallets').doc(uid);
     const userDoc   = await userRef.get();
     const completedCollections: string[] = userDoc.data()?.achievements?.completedCollections ?? [];
 
@@ -221,6 +227,15 @@ export const AchievementProcessor = {
             collectionCompletedAt: { [colId]: FieldValue.serverTimestamp() },
           },
         }, { merge: true });
+
+        // Bolinha "para coletar" no app (v1.3). Só gravação, sem
+        // leitura: arrayUnion não duplica.
+        if (col.reward.fragments > 0) {
+          t.set(walletRef, {
+            collectionsToClaim: FieldValue.arrayUnion(colId),
+            updatedAt:          FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
 
         if (col.reward.badge) {
           t.set(userRef, {

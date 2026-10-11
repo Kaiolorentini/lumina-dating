@@ -1,6 +1,10 @@
 // ============================================
-// LUMINA — PROFILE SCREEN v5.5
+// LUMINA — PROFILE SCREEN v5.6
 // src/modules/profile/screens/ProfileScreen.tsx
+//
+// v5.6 (11/10/2026) — "Conquistas" mostra o balão e o texto
+// "N para coletar" quando há coleção completa com fragmentos; o
+// toque abre direto a aba Coleções.
 //
 // v5.5 (09/10/2026) — A seção Marketplace saiu daqui e virou a
 // aba Painel (CreatorPanelScreen): Minhas Compras, Favoritos,
@@ -304,9 +308,24 @@ export default function ProfileScreen() {
             <Text style={styles.menuItemSubtext}>Nível {xpStatus?.level ?? 1}</Text>
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Achievements')}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate(
+              'Achievements',
+              badges.collectionsToClaim > 0 ? { initialTab: 'colecoes' } : undefined,
+            )}
+            accessibilityLabel={badges.collectionsToClaim > 0
+              ? `Conquistas, ${badges.collectionsToClaim} ${badges.collectionsToClaim === 1 ? 'coleção' : 'coleções'} para coletar`
+              : 'Conquistas'}
+          >
             <Text style={styles.menuItemIcon}>🏆</Text>
             <Text style={styles.menuItemText}>Conquistas</Text>
+            {badges.collectionsToClaim > 0 && (
+              <Text style={styles.menuItemSubtext}>
+                {badges.collectionsToClaim === 1 ? '1 para coletar' : `${badges.collectionsToClaim} para coletar`}
+              </Text>
+            )}
+            <MenuBadge n={badges.collectionsToClaim} />
             <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Vault')}>

@@ -552,8 +552,11 @@ function AppContent() {
         navigationRef.current.navigate('XP');
         break;
       case 'achievement_unlocked':
-      case 'collection_complete':
         navigationRef.current.navigate('Achievements');
+        break;
+      // Coleção completa: direto na aba Coleções (botão "Coletar").
+      case 'collection_complete':
+        navigationRef.current.navigate('Achievements', { initialTab: 'colecoes' });
         break;
       case 'ranking_reward':
         navigationRef.current.navigate('Ranking');
@@ -857,4 +860,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-

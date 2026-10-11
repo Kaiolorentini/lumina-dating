@@ -7,6 +7,8 @@
 //  • notificações não lidas, agrupadas por área
 //  • Cofre liberado (a carteira já chega inteira pelo onSnapshot)
 //  • suporte respondeu (um chamado com unreadForUser)
+//  • coleções para coletar (wallets.collectionsToClaim, gravado só
+//    pelo servidor — chega no mesmo onSnapshot da carteira)
 //
 // `total` alimenta o balão da aba Perfil. Notificações gerais não
 // entram nele: já têm o balão do sino na aba Descobrir.
@@ -43,6 +45,8 @@ export interface ProfileBadges {
   creator:       number;
   support:       boolean;
   vaultReady:    boolean;
+  /** Coleções completas com fragmentos ainda não coletados. */
+  collectionsToClaim: number;
   /** Balão da aba Perfil: só o que está no Perfil. */
   total:         number;
   /** Balão da aba Painel: compras, produtos e ganhos. */
@@ -52,6 +56,7 @@ export interface ProfileBadges {
 interface VaultFields {
   vaultFragments?: number;
   vaultUnlockAt?:  { toDate?: () => Date } | null;
+  collectionsToClaim?: unknown;
 }
 
 export function useProfileBadges(uid: string | undefined): ProfileBadges {
@@ -95,7 +100,13 @@ export function useProfileBadges(uid: string | undefined): ProfileBadges {
     return () => clearTimeout(timer);
   }, [unlockAt]);
 
-  const total = requests + (support ? 1 : 0) + (vaultReady ? 1 : 0);
+  // Coleções para coletar: lista mantida pelo servidor na carteira.
+  const toClaim = vault?.collectionsToClaim;
+  const collectionsToClaim = Array.isArray(toClaim)
+    ? toClaim.filter((id): id is string => typeof id === 'string').length
+    : 0;
+
+  const total = requests + (support ? 1 : 0) + (vaultReady ? 1 : 0) + collectionsToClaim;
   const panel = unread.purchases + unread.products + unread.earnings + unread.creator;
 
   return {
@@ -107,6 +118,7 @@ export function useProfileBadges(uid: string | undefined): ProfileBadges {
     creator:       unread.creator,
     support,
     vaultReady,
+    collectionsToClaim,
     total,
     panel,
   };

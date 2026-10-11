@@ -1,10 +1,13 @@
 // ============================================
-// LUMINA — NOTIFICATIONS SCREEN v5.2
+// LUMINA — NOTIFICATIONS SCREEN v5.3
 // src/modules/notifications/screens/NotificationsScreen.tsx
 //
 // v5.2: Integração com TriggerNotificationModal
 // Tocar em notificação de gatilho emocional
 // abre o modal correto.
+//
+// v5.3 (11/10/2026): coleção completa abre Conquistas direto na
+// aba Coleções, onde fica o botão "Coletar".
 // ============================================
 
 import React, { useState } from 'react';
@@ -136,8 +139,10 @@ export default function NotificationsScreen() {
         navigation.navigate('XP');
         break;
       case 'achievement_unlocked':
-      case 'collection_complete':
         navigation.navigate('Achievements');
+        break;
+      case 'collection_complete':
+        navigation.navigate('Achievements', { initialTab: 'colecoes' });
         break;
       case 'ranking_reward':
         navigation.navigate('Ranking');

@@ -1,5 +1,5 @@
 // ============================================
-// LUMINA — ACHIEVEMENTS SCREEN v5.2
+// LUMINA — ACHIEVEMENTS SCREEN v5.3
 // src/modules/engagement/screens/AchievementsScreen.tsx
 //
 // v5.2 (10/10/2026) — coleções coletáveis:
@@ -8,24 +8,29 @@
 //    com atalho para o Cofre — os fragmentos vão para lá;
 //  • contador de coleções para coletar na aba e no resumo;
 //  • estado de erro com "Tentar de novo" e puxar para atualizar.
+//
+// v5.3 (11/10/2026) — abre na aba pedida pela rota (initialTab):
+// a notificação de coleção completa leva direto a Coleções, mesmo
+// com a tela já aberta na pilha.
 // ============================================
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
 import { LinearGradient }  from 'expo-linear-gradient';
-import { useNavigation }   from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth }           from '../../../context/AuthContext';
 import { useAchievements, Achievement, Collection, AchievementRarity } from '../hooks/useAchievements';
-import { RootStackParamList } from '../../../navigation/types';
+import { RootStackParamList, AchievementsTab } from '../../../navigation/types';
 import Header from '../../../components/Header';
 import CollectionClaimModal, { CollectionClaimInfo } from '../components/CollectionClaimModal';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '../../../theme/tokens';
 
-type NavProp = NativeStackNavigationProp<RootStackParamList>;
+type NavProp   = NativeStackNavigationProp<RootStackParamList>;
+type RoutePropT = RouteProp<RootStackParamList, 'Achievements'>;
 
 const RARITY_COLORS: Record<AchievementRarity, string> = {
   COMMON:    '#AAAAAA',
@@ -49,7 +54,7 @@ const TIER_COLORS = {
   GOLD:   '#FFD700',
 };
 
-type Tab = 'conquistas' | 'colecoes';
+type Tab = AchievementsTab;
 
 function AchievementCard({ ach }: { ach: Achievement }) {
   const color   = RARITY_COLORS[ach.rarity];
@@ -161,13 +166,21 @@ function CollectionCard({ col, claiming, disabled, onClaim }: CollectionCardProp
 
 export default function AchievementsScreen() {
   const navigation = useNavigation<NavProp>();
+  const route      = useRoute<RoutePropT>();
+  const initialTab = route.params?.initialTab;
   const { user }   = useAuth();
   const { data, loading, error, refresh, claimCollection } = useAchievements(user?.uid);
-  const [activeTab, setActiveTab] = useState<Tab>('conquistas');
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'conquistas');
   const [filter,    setFilter]    = useState<string>('ALL');
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [celebration, setCelebration] = useState<CollectionClaimInfo | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Tela já aberta na pilha + toque em outra notificação: o
+  // navigate só troca o parâmetro — a aba acompanha.
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

@@ -1,5 +1,9 @@
-// LUMINA — NAVIGATION TYPES v5.14
+// LUMINA — NAVIGATION TYPES v5.15
 // AdminInflation + Visitors adicionados; AdminProductReview restaurado
+// v5.15 (11/10/2026): Achievements aceita a aba inicial (o toque na
+// notificação de coleção completa abre direto em Coleções).
+
+export type AchievementsTab = 'conquistas' | 'colecoes';
 
 export type PremiumFeatureStatus = 'LOCKED' | 'READY' | 'ACTIVE' | 'EXPIRED' | 'COOLDOWN';
 
@@ -33,7 +37,8 @@ export type RootStackParamList = {
   Fragments:     undefined;
   Vault:         undefined;
   XP:            undefined;
-  Achievements:  undefined;
+  /** Sem parâmetro abre em Conquistas, como sempre. */
+  Achievements:  { initialTab?: AchievementsTab } | undefined;
   Ranking:       undefined;
   Prestige:      undefined;
   PremiumTools:  undefined;
@@ -107,4 +112,3 @@ export type TabParamList = {
   Store: undefined; Marketplace: undefined; CreatorHub: undefined;
   Profile: undefined; Admin: undefined;
 };
-

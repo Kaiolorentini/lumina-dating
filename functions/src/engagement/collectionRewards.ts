@@ -1,5 +1,5 @@
 // ============================================
-// LUMINA — COLETAR RECOMPENSA DE COLEÇÃO v1.0
+// LUMINA — COLETAR RECOMPENSA DE COLEÇÃO v1.1
 // functions/src/engagement/collectionRewards.ts
 //
 // POR QUE EXISTE (10/10/2026):
@@ -32,6 +32,11 @@
 //    duas abas: a segunda vê claimedCollections e não paga.
 //  • Idempotente: coletar de novo devolve alreadyClaimed, sem erro.
 //  • Ledger imutável + auditLogFinanceiro, como todo crédito.
+//
+// v1.1 (11/10/2026): a coleta tira a coleção de
+// wallets.collectionsToClaim (bolinha "para coletar" do Perfil).
+// Coletar de novo também limpa — corrige uma lista que tenha
+// ficado para trás.
 // ============================================
 
 import * as functions from 'firebase-functions/v2/https';
@@ -108,6 +113,12 @@ export const claimCollectionReward = functions.onCall(
       const vaultBefore = typeof wallet.vaultFragments === 'number' ? wallet.vaultFragments : 0;
 
       if (claimed.includes(collectionId)) {
+        if (Array.isArray(wallet.collectionsToClaim) && wallet.collectionsToClaim.includes(collectionId)) {
+          t.set(walletRef, {
+            collectionsToClaim: FieldValue.arrayRemove(collectionId),
+            updatedAt:          FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
         return {
           success: true, alreadyClaimed: true, collectionId,
           fragments: 0, vaultFragments: vaultBefore, repairedCompletion: false,
@@ -150,6 +161,7 @@ export const claimCollectionReward = functions.onCall(
       const walletPatch: Record<string, unknown> = {
         vaultFragments:        vaultAfter,
         vaultLastContribution: FieldValue.serverTimestamp(),
+        collectionsToClaim:    FieldValue.arrayRemove(collectionId),
         updatedAt:             FieldValue.serverTimestamp(),
       };
       const nowFull = vaultAfter >= VAULT_MAX_FRAGMENTS && wallet.vaultFullNotified !== true;
