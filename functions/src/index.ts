@@ -184,6 +184,8 @@ export { getAchievementsStatus } from './engagement/achievements';
 // registerRankingXP REMOVIDA (27/09): o app escolhia quanto XP de
 // ranking recebia. O ranking é alimentado pelo Engine
 // (RankingRepository), no servidor.
+// Coleções (10/10/2026): botão "Coletar" — fragmentos vão para o Cofre.
+export { claimCollectionReward } from './engagement/collectionRewards';
 export { getRanking, freezeRanking, rewardRanking, resetRanking } from './engagement/ranking';
 // grantPrestigePoints REMOVIDA: era callable e aceitava
 // qualquer marcoId do cliente — dava para pedir ACH_FOUNDER e
