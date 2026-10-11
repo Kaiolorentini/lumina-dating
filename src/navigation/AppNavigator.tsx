@@ -12,6 +12,19 @@ import { COLLECTIONS } from '../core/constants';
 // que o AppContent já chama no topo. As duas instâncias
 // registravam listeners próprios do expo-notifications e cada
 // notificação chegava duplicada.
+//
+// 11/10/2026 — TOQUE NO PUSH COM O APP FECHADO.
+// Abrir o app tocando no push passava pelo carregamento, pelo gate
+// e (no superadmin) pela tela de boot antes de existir a pilha
+// principal: o toque chegava cedo demais, o navigate não achava a
+// tela e a pessoa caía na Home. Agora o toque é guardado e só é
+// usado quando a pilha principal monta (MainStackMountSignal), e
+// getLastNotificationResponse recupera o toque que abriu o app
+// (depois de usado, clearLastNotificationResponse o descarta).
+// Cada notificação é tratada uma vez só (id), mesmo que o
+// listener e a recuperação entreguem a mesma.
+// Os listeners de notificação vivem SÓ aqui — o
+// usePushNotifications cuida apenas do token.
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { auth } from '../services/firebase';
 import { CoinsProvider } from '../context/CoinsContext';
@@ -429,6 +442,16 @@ interface InAppNotifState {
 
 let _adminBootDone = false;
 
+/** Avisa o AppContent quando a pilha principal (MainStack) está
+ *  montada — só então um toque de push guardado pode navegar. */
+function MainStackMountSignal({ onChange }: { onChange: (mounted: boolean) => void }) {
+  useEffect(() => {
+    onChange(true);
+    return () => onChange(false);
+  }, [onChange]);
+  return null;
+}
+
 function AppContent() {
   const { user, loading: authLoading, hasProfile, profileError, refreshProfile } = useAuth();
   const {
@@ -444,6 +467,12 @@ function AppContent() {
   const [forceCapture, setForceCapture]     = useState(false);
 
   usePushNotifications();
+
+  // Toque em push esperando a pilha principal (ver topo do arquivo).
+  const [mainStackMounted, setMainStackMounted] = useState(false);
+  const pendingPushRef  = useRef<Record<string, any> | null>(null);
+  const handledPushIds  = useRef<Set<string>>(new Set());
+  const lastPushUidRef  = useRef<string | null>(user?.uid ?? null);
 
   // Claim de acesso (av) no token ANTES do app principal: as Rules
   // exigem a claim, e sem ela as primeiras leituras dariam
@@ -613,10 +642,56 @@ function AppContent() {
     }
   }
 
+  // Uma notificação tocada é tratada uma vez só. Pilha principal
+  // montada: navega já. Senão: guarda até ela montar.
+  function handlePushResponse(response: Notifications.NotificationResponse) {
+    const id = response.notification.request.identifier;
+    if (handledPushIds.current.has(id)) return;
+    handledPushIds.current.add(id);
+    // Já tratado: limpa o "último toque" do sistema para não ser
+    // usado de novo numa próxima abertura do app.
+    try { Notifications.clearLastNotificationResponse(); } catch { /* sem efeito colateral */ }
+
+    const data = (response.notification.request.content.data ?? {}) as Record<string, any>;
+    if (mainStackMounted && navigationRef.current?.isReady()) {
+      handleNotificationNavigation(data);
+    } else {
+      pendingPushRef.current = data;
+    }
+  }
+
+  // Pilha principal montou: usa o toque guardado.
+  useEffect(() => {
+    if (!mainStackMounted || !pendingPushRef.current) return;
+    if (!navigationRef.current?.isReady()) return;
+    const data = pendingPushRef.current;
+    pendingPushRef.current = null;
+    handleNotificationNavigation(data);
+  }, [mainStackMounted]);
+
+  // Saiu da conta (ou trocou de conta): o toque guardado era da
+  // conta anterior e não é usado.
+  useEffect(() => {
+    const uid = user?.uid ?? null;
+    const previous = lastPushUidRef.current;
+    lastPushUidRef.current = uid;
+    if (previous && previous !== uid) pendingPushRef.current = null;
+  }, [user?.uid]);
+
+  // Toque que ABRIU o app (app fechado). Uma vez por abertura.
+  useEffect(() => {
+    try {
+      const response = Notifications.getLastNotificationResponse();
+      if (response) handlePushResponse(response);
+    } catch (error) {
+      console.warn('[AppNavigator] push que abriu o app:', error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const tapSub = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data as Record<string, any>;
-      handleNotificationNavigation(data);
+      handlePushResponse(response);
     });
 
     const receiveSub = Notifications.addNotificationReceivedListener(notification => {
@@ -655,7 +730,10 @@ function AppContent() {
     });
 
     return () => { tapSub.remove(); receiveSub.remove(); };
-  }, [user]);
+    // mainStackMounted: o listener precisa ver o valor atual para
+    // decidir entre navegar já ou guardar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, mainStackMounted]);
 
   console.log('[APP STATE]', { authLoading, permLoading, user: !!user, hasProfile, canAccessAdminPanel, adminBootReady });
 
@@ -803,6 +881,7 @@ function AppContent() {
       <EngagementInitializer />
       <UpdateChecker />
       <MainStack />
+      <MainStackMountSignal onChange={setMainStackMounted} />
       {inAppNotif && (
         <InAppNotification
           title={inAppNotif.title}

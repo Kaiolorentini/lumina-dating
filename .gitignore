@@ -59,3 +59,5 @@ functions/lib/
 # backups locais
 *.bakfunctions/node_modules/
 *.log
+scripts/reset-relatorios/
+auth-backup.json

@@ -1,26 +1,27 @@
+// ============================================
+// LUMINA — USE PUSH NOTIFICATIONS v2.0
+// src/modules/notifications/hooks/usePushNotifications.ts
+//
+// v2.0 (11/10/2026) — SÓ O TOKEN.
+// Os dois listeners daqui saíram: o de toque só escrevia no log, e
+// o de recebimento guardava um aviso (inAppNotif) que ninguém
+// lia — o AppNavigator ignora o retorno deste hook. Cada push
+// recebido com o app aberto re-renderizava o AppContent inteiro
+// à toa. O aviso na tela e o toque são tratados SÓ no
+// AppNavigator (receiveSub/tapSub).
+// ============================================
+
 import { useState, useEffect } from 'react';
-import * as Notifications from 'expo-notifications';
 import { registerForPushNotifications } from '../services/pushService';
 import { useAuth } from '../../../context/AuthContext';
 
-interface InAppNotif {
-  id: string;
-  title: string;
-  message: string;
-  type: 'message' | 'request' | 'default';
-  data?: Record<string, unknown>;
-}
-
 interface UsePushNotificationsReturn {
   pushToken: string | null;
-  inAppNotif: InAppNotif | null;
-  dismissInAppNotif: () => void;
 }
 
 export function usePushNotifications(): UsePushNotificationsReturn {
   const { user, hasProfile } = useAuth();
   const [pushToken, setPushToken] = useState<string | null>(null);
-  const [inAppNotif, setInAppNotif] = useState<InAppNotif | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -35,41 +36,5 @@ export function usePushNotifications(): UsePushNotificationsReturn {
     });
   }, [user, hasProfile]);
 
-  useEffect(() => {
-    // Listeners de notificação — independentes do perfil
-    const notifSub = Notifications.addNotificationReceivedListener(notif => {
-      console.log('Notificacao recebida em primeiro plano:', notif);
-      const data  = (notif.request.content.data ?? {}) as Record<string, unknown>;
-      const title = notif.request.content.title || 'Lumina';
-      const body  = notif.request.content.body || '';
-      setInAppNotif({
-        id:      notif.request.identifier,
-        title,
-        message: body,
-        type: data?.type === 'message'
-          ? 'message'
-          : data?.type === 'request'
-          ? 'request'
-          : 'default',
-        data,
-      });
-    });
-
-    const responseSub = Notifications.addNotificationResponseReceivedListener(
-      response => {
-        console.log('Notificacao tocada:', response);
-      }
-    );
-
-    return () => {
-      notifSub.remove();
-      responseSub.remove();
-    };
-  }, []);
-
-  function dismissInAppNotif() {
-    setInAppNotif(null);
-  }
-
-  return { pushToken, inAppNotif, dismissInAppNotif };
+  return { pushToken };
 }
