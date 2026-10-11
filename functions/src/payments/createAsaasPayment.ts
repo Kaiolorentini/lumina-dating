@@ -15,6 +15,7 @@ import { buildPurchasePricing } from "../utils/buildPurchasePricing";
 import { createAuditLog } from "../utils/auditLog";
 import { assertValidCpf } from "../utils/validateCpf";
 import { assertVerified } from "../utils/assertVerified";
+import { MIN_PAID_PRODUCT_PRICE, isBelowMinimumPrice } from "../config/marketplacePricing";
 import {
   findOrCreateCustomer,
   createPixPayment,
@@ -65,6 +66,15 @@ export const createAsaasPayment = onCall(
     }
     if (product.isFree || product.price === 0) {
       throw new HttpsError("failed-precondition", "Use createFreeProductPurchase para produtos gratuitos");
+    }
+    // Preço mínimo (09/10/2026). Cobre produto antigo publicado antes
+    // da regra: ele não é vendido até o criador ajustar o preço.
+    if (isBelowMinimumPrice(product.price)) {
+      console.warn("[createAsaasPayment] produto abaixo do mínimo", { productId, price: product.price });
+      throw new HttpsError(
+        "failed-precondition",
+        "Este conteúdo está temporariamente indisponível para compra.",
+      );
     }
 
     // ============================================
@@ -138,6 +148,17 @@ export const createAsaasPayment = onCall(
     });
     if (!pricing.valid) {
       throw new HttpsError("failed-precondition", pricing.reason ?? "Cupom inválido");
+    }
+    // Cupom não pode levar o valor abaixo do mínimo: a taxa do Pix
+    // (R$ 1,99) transformaria a venda em prejuízo de novo. A mensagem
+    // diz o motivo e o preço sem cupom — o app oferece "Comprar sem cupom".
+    if (pricing.hasCoupon && pricing.finalAmount < MIN_PAID_PRODUCT_PRICE) {
+      const brl = (value: number) => `R$ ${value.toFixed(2).replace(".", ",")}`;
+      throw new HttpsError(
+        "failed-precondition",
+        `Este cupom não pode ser usado neste conteúdo: o valor final ficaria abaixo do mínimo de ${brl(MIN_PAID_PRODUCT_PRICE)}. ` +
+        `Você pode comprar sem o cupom por ${brl(Number(product.price))}.`,
+      );
     }
 
     const { platformCommission, sellerAmount } = calculateCommission(pricing.finalAmount);

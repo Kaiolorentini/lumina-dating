@@ -186,12 +186,14 @@ export default function ProductDetailScreen() {
     setAwaitingCpf(false);
   }
 
-  async function handleCpfConfirm(cpfDigits: string) {
+  // couponOverride: usado pelo "Comprar sem cupom" ('' = sem cupom),
+  // porque o setCouponCode('') só vale no próximo render.
+  async function handleCpfConfirm(cpfDigits: string, couponOverride?: string) {
     setBuying(true);
+    const trimmedCoupon = (couponOverride ?? couponCode).trim().toUpperCase();
     try {
       const functions = getFunctions(app, 'us-central1');
       const createPayment = httpsCallable(functions, 'createAsaasPayment');
-      const trimmedCoupon = couponCode.trim().toUpperCase();
       const result = await createPayment({
         productId,
         paymentMethod: 'pix',
@@ -224,6 +226,28 @@ export default function ProductDetailScreen() {
         setAwaitingCpf(false);
         setHasAccess(true);
         Alert.alert('✅', 'Você já possui este produto!');
+        return;
+      }
+
+      // Problema com o cupom (mínimo, inexistente, expirado, esgotado…):
+      // explica o motivo e deixa comprar sem ele num toque, com o
+      // mesmo CPF — o modal continua aberto.
+      if (trimmedCoupon && /cupom/i.test(msg)) {
+        Alert.alert(
+          '🎟️ Cupom não aceito',
+          msg,
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Comprar sem cupom',
+              onPress: () => {
+                setCouponCode('');
+                setShowCoupon(false);
+                handleCpfConfirm(cpfDigits, '');
+              },
+            },
+          ],
+        );
         return;
       }
 

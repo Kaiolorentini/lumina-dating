@@ -583,6 +583,12 @@ service cloud.firestore {
     // ============================================
     // Vitrine pública por decisão de produto (auditoria M7): a
     // moderação garante capa e prévia sem nudez.
+    // Preço de produto: grátis (0) ou pago a partir de R$ 19,99. A
+    // taxa do Pix (R$ 1,99) tornava a venda barata um prejuízo.
+    function isAllowedProductPrice(price) {
+      return price is number && (price == 0 || price >= 19.99);
+    }
+
     // Os 20 campos que o createProduct do app grava (Parte 5).
     function productCreateFields() {
       return [
@@ -626,6 +632,9 @@ service cloud.firestore {
         request.resource.data.price is number &&
         request.resource.data.price >= 0 &&
         request.resource.data.price <= 100000 &&
+        // Preço mínimo (09/10/2026): grátis ou a partir de R$ 19,99.
+        // Mesmo valor de functions/src/config/marketplacePricing.ts.
+        isAllowedProductPrice(request.resource.data.price) &&
         request.resource.data.isFree == (request.resource.data.price == 0) &&
         request.resource.data.category is string &&
         request.resource.data.category.size() >= 1 &&
@@ -659,7 +668,10 @@ service cloud.firestore {
           // Parte 5: versão e caminho da capa no Storage são do
           // servidor (aprovação de alterações).
           'version', 'coverStoragePath', 'createdAt',
-        ]);
+        ]) &&
+        // Preço editado no rascunho também respeita o mínimo.
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['price']) ||
+          isAllowedProductPrice(request.resource.data.price));
 
       // Envio para revisão: única transição de status permitida ao
       // criador. Sem esta regra o submitProductForReview batia em

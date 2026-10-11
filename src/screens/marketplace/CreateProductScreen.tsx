@@ -19,6 +19,12 @@ import {
 import { ProductCategory } from '../../shared/types/marketplace';
 import ScreenContainer from '../../components/ScreenContainer';
 import CreatorGuidelinesModal from '../../components/marketplace/CreatorGuidelinesModal';
+// Preço mínimo de produto pago (09/10/2026): R$ 19,99. Servidor e
+// regras do Firestore conferem de novo; aqui é o aviso ao criador.
+import {
+  CREATOR_SHARE, MIN_PAID_PRODUCT_PRICE_LABEL,
+  formatBRLPrice, parsePriceInput, priceError,
+} from '../../config/marketplacePricing';
 
 const CATEGORIES: { label: string; value: ProductCategory }[] = [
   { label: 'Fotos', value: 'fotos' },
@@ -76,6 +82,11 @@ export default function CreateProductScreen() {
     if (step === 1) {
       if (!title.trim())  { Alert.alert('Falta o título', 'Dê um nome ao seu produto.'); return; }
       if (!category)      { Alert.alert('Escolha uma categoria', 'A categoria define onde seu produto aparece no marketplace.'); return; }
+    }
+    // Etapa do preço: não avança abaixo do mínimo.
+    if (step === 4) {
+      const error = priceError(isFree, price);
+      if (error) { Alert.alert('Preço', error); return; }
     }
     setStep(s => Math.min(s + 1, TOTAL_STEPS));
   }
@@ -181,11 +192,14 @@ export default function CreateProductScreen() {
 
     setSaving(true);
     try {
-      const parsedPrice = isFree ? 0 : parseFloat(price.replace(',', '.'));
-      if (!isFree && (isNaN(parsedPrice) || parsedPrice <= 0)) {
-        Alert.alert('Erro', 'Informe um preço válido.');
+      // Mesma checagem da etapa 4 — rede de segurança no ponto de escrita.
+      const priceProblem = priceError(isFree, price);
+      if (priceProblem) {
+        Alert.alert('Preço', priceProblem);
+        setStep(4);
         return;
       }
+      const parsedPrice = isFree ? 0 : parsePriceInput(price);
 
       // 1. Criar produto
       setUploadLabel('Criando produto...');
@@ -460,15 +474,37 @@ export default function CreateProductScreen() {
 
             {!isFree && (
               <>
+                <View style={styles.priceRule}>
+                  <Text style={styles.priceRuleTitle}>💡 Preço mínimo: {MIN_PAID_PRODUCT_PRICE_LABEL}</Text>
+                  <Text style={styles.priceRuleText}>
+                    Cada venda paga por Pix tem uma taxa de R$ 1,99 do processador de pagamentos.
+                    Abaixo de {MIN_PAID_PRODUCT_PRICE_LABEL} a venda não cobre esse custo. Para um
+                    valor menor, marque o produto como gratuito.
+                  </Text>
+                </View>
+
                 <Text style={styles.label}>Preço (R$)</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, !!price && !!priceError(false, price) && styles.inputError]}
                   value={price}
                   onChangeText={setPrice}
                   placeholder="Ex: 29,90"
                   placeholderTextColor={colors.gray}
                   keyboardType="decimal-pad"
+                  accessibilityLabel={`Preço em reais, mínimo ${MIN_PAID_PRODUCT_PRICE_LABEL}`}
                 />
+                {(() => {
+                  if (!price) return null;
+                  const error = priceError(false, price);
+                  if (error) return <Text style={styles.priceErrorText}>{error}</Text>;
+                  const value = parsePriceInput(price);
+                  return (
+                    <Text style={styles.priceEarnText}>
+                      ✅ Você recebe {formatBRLPrice(Math.round(value * CREATOR_SHARE * 100) / 100)} por venda
+                      (80% de {formatBRLPrice(value)}).
+                    </Text>
+                  );
+                })()}
               </>
             )}
 
@@ -493,7 +529,11 @@ export default function CreateProductScreen() {
               <Text style={styles.reviewRow}>📁 Categoria: <Text style={styles.reviewValue}>
                 {CATEGORIES.find(c => c.value === category)?.label ?? '—'}
               </Text></Text>
-              <Text style={styles.reviewRow}>💰 Preço: <Text style={styles.reviewValue}>{isFree ? 'Grátis' : `R$ ${price}`}</Text></Text>
+              <Text style={styles.reviewRow}>💰 Preço: <Text style={styles.reviewValue}>
+                {isFree
+                  ? 'Grátis'
+                  : Number.isNaN(parsePriceInput(price)) ? `R$ ${price}` : formatBRLPrice(parsePriceInput(price))}
+              </Text></Text>
               <Text style={styles.reviewRow}>🖼️ Capa: <Text style={styles.reviewValue}>{coverUri ? 'Selecionada' : '⚠️ Não selecionada'}</Text></Text>
               <Text style={styles.reviewRow}>📦 Arquivos: <Text style={styles.reviewValue}>{selectedFiles.length} arquivo(s)</Text></Text>
             </View>
@@ -624,6 +664,15 @@ const styles = StyleSheet.create({
   },
   freeToggleActive: { borderColor: colors.gold, backgroundColor: colors.gold + '11' },
   freeToggleText: { color: colors.white, fontSize: fonts.sizes.md },
+  priceRule: {
+    backgroundColor: colors.gold + '11', borderRadius: borderRadius.md, borderWidth: 1,
+    borderColor: colors.gold + '55', padding: spacing.md,
+  },
+  priceRuleTitle: { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  priceRuleText: { color: colors.grayLight, fontSize: fonts.sizes.sm, marginTop: spacing.xs, lineHeight: 18 },
+  inputError: { borderColor: colors.error },
+  priceErrorText: { color: colors.error, fontSize: fonts.sizes.sm, marginTop: spacing.xs },
+  priceEarnText: { color: colors.success, fontSize: fonts.sizes.sm, marginTop: spacing.xs },
   // Navigation
   navRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
   nextBtn: {

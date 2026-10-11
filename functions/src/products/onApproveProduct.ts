@@ -5,6 +5,7 @@ import { assertUserNotBlocked } from "../utils/assertUserNotBlocked";
 import { createAuditLog } from "../utils/auditLog";
 import { incrementMetric } from "../utils/incrementMetric";
 import { notifyUser } from "../utils/notifyUser";
+import { isBelowMinimumPrice } from "../config/marketplacePricing";
 
 export const onApproveProduct = onCall(async (request) => {
   assertAuthenticated(request.auth?.uid);
@@ -28,6 +29,14 @@ export const onApproveProduct = onCall(async (request) => {
     }
     if (productSnap.data()?.status !== "pending") {
       throw new HttpsError("failed-precondition", "Produto não está pendente de aprovação");
+    }
+    // Preço mínimo (09/10/2026): produto pago abaixo de R$ 19,99 não
+    // entra na vitrine — o admin recusa com o motivo para o criador ajustar.
+    if (isBelowMinimumPrice(productSnap.data()?.price)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Preço abaixo do mínimo de R$ 19,99. Recuse o produto pedindo para o criador ajustar o preço.",
+      );
     }
 
     ownerId = productSnap.data()!.ownerId;
