@@ -23,6 +23,8 @@ const MONTHLY_FIELDS = [
   'monthlyCoinsSales', 'monthlyCoinsRevenue',
   'monthlyMarketplaceSales', 'monthlyMarketplaceRevenue',
   'monthlyRefundedAmount', 'monthlyRefundsApproved', 'monthlyChargebacks',
+  // Taxa Pix Asaas (09/10/2026). totalPixFees/totalPixCount não zeram.
+  'monthlyPixFees', 'monthlyPixCount',
 ] as const;
 
 const MONTH_NAMES = [
@@ -107,6 +109,8 @@ export const resetMonthlyMetrics = onSchedule(
     const mktRevenue   = n(m.monthlyMarketplaceRevenue);
     const commission   = n(m.monthlyCommission);
     const refunded     = n(m.monthlyRefundedAmount);
+    const pixFees      = n(m.monthlyPixFees);
+    const pixCount     = n(m.monthlyPixCount);
     const net          = gross - refunded;
     const creators     = creatorsCount.data().count;
     const products     = activeProductsCount.data().count;
@@ -126,6 +130,7 @@ export const resetMonthlyMetrics = onSchedule(
       `• Comissão do marketplace (20%): ${brl(commission)}`,
       `• Reembolsos aprovados: ${n(m.monthlyRefundsApproved)} (${brl(refunded)})`,
       `• Receita líquida (bruta − reembolsos): ${brl(net)}`,
+      `• Taxa Pix Asaas: ${brl(pixFees)} (${pixCount} Pix recebidos)`,
       '',
       'VENDAS',
       `• Pacotes de cristais e Galáxia Plus: ${n(m.monthlyCoinsSales)}`,
@@ -157,6 +162,8 @@ export const resetMonthlyMetrics = onSchedule(
       marketplaceSales: n(m.monthlyMarketplaceSales),
       refundRequests:   refundReqs,
       chargebacks:      n(m.monthlyChargebacks),
+      pixFees,
+      pixCount,
       creators,
       activeProducts:   products,
       text,

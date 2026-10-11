@@ -33,6 +33,10 @@ export interface AdminDashboardMetrics {
   monthlyRefundsApproved:    number;
   monthlyChargebacks:        number;
   totalWithdrawn:            number;
+  /** Taxa Pix Asaas (R$ 1,99 por Pix recebido), desde 09/10/2026. */
+  totalPixFees:              number;
+  monthlyPixFees:            number;
+  monthlyPixCount:           number;
   refundRequestsMonth:       number;
   activeProducts:            number;
   creators:                  number;

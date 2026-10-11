@@ -44,6 +44,7 @@ import { auditLogFinanceiro } from '../utils/auditLogFinanceiro';
 import { handleCoinsChargeback } from './handleCoinsChargeback';
 import { activateGalaxiaPlus }   from './activateGalaxiaPlus';
 import { incrementMetrics }      from '../utils/incrementMetric';
+import { ASAAS_PIX_FEE }         from '../config/paymentFees';
 import { MissionService }        from '../gamification/services/MissionService';
 import { creditCreator, debitCreator, round2 } from '../utils/creatorLedger';
 
@@ -278,6 +279,12 @@ export const onAsaasWebhook = functions.onRequest(
           monthlyRevenue:      sale.amount ?? 0,
           monthlyCoinsSales:   1,
           monthlyCoinsRevenue: sale.amount ?? 0,
+          // Taxa Pix Asaas (09/10/2026): R$ 1,99 por Pix recebido. Só
+          // aqui, depois do crédito — reenvio do Asaas não soma de novo.
+          totalPixFees:        ASAAS_PIX_FEE,
+          monthlyPixFees:      ASAAS_PIX_FEE,
+          totalPixCount:       1,
+          monthlyPixCount:     1,
         }).catch(() => {});
 
         // Notificações — fire-and-forget
@@ -490,6 +497,12 @@ export const onAsaasWebhook = functions.onRequest(
         monthlyRevenue:            saleAmount,
         monthlyMarketplaceSales:   1,
         monthlyMarketplaceRevenue: saleAmount,
+        // Taxa Pix Asaas (09/10/2026): R$ 1,99 por Pix recebido. Só
+        // aqui, depois do crédito — reenvio do Asaas não soma de novo.
+        totalPixFees:        ASAAS_PIX_FEE,
+        monthlyPixFees:      ASAAS_PIX_FEE,
+        totalPixCount:       1,
+        monthlyPixCount:     1,
       }).catch(() => {});
 
       // Notificações — fire-and-forget

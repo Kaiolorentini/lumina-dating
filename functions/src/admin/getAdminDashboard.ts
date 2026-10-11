@@ -74,6 +74,10 @@ export const getAdminDashboard = onCall(async (request) => {
       monthlyRefundsApproved:    n(m.monthlyRefundsApproved),
       monthlyChargebacks:        n(m.monthlyChargebacks),
       totalWithdrawn:            n(m.totalWithdrawn),
+      // Taxa Pix Asaas (09/10/2026) — soma do onAsaasWebhook.
+      totalPixFees:              n(m.totalPixFees),
+      monthlyPixFees:            n(m.monthlyPixFees),
+      monthlyPixCount:           n(m.monthlyPixCount),
       refundRequestsMonth,
       activeProducts,
       creators,

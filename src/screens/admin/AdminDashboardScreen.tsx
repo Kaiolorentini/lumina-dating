@@ -305,6 +305,14 @@ export default function AdminDashboardScreen() {
                 <MetricCard icon="💵" label="Receita total (comissão)" value={formatBRL(m.totalCommission)} />
                 <MetricCard icon="📅" label="Comissão · mês"        value={formatBRL(m.monthlyCommission)} />
                 <MetricCard icon="💸" label="Pago a criadores"      value={formatBRL(m.totalWithdrawn)} />
+                {/* Taxa Pix Asaas (09/10/2026): R$ 1,99 por Pix recebido,
+                    contada pelo webhook a partir da publicação. */}
+                <MetricCard
+                  icon="🏦"
+                  label={`Taxa Pix Asaas · mês (${m.monthlyPixCount ?? 0} Pix)`}
+                  value={formatBRL(m.monthlyPixFees ?? 0)}
+                />
+                <MetricCard icon="🏦" label="Taxa Pix Asaas (total)" value={formatBRL(m.totalPixFees ?? 0)} />
               </>
             )}
             <MetricCard icon="👥" label="Criadores"       value={m.creators} />
