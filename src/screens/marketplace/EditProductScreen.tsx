@@ -13,6 +13,10 @@
 // - Rascunho ou rejeitado: tudo vale na hora, e o botão "Enviar para
 //   análise" manda o produto inteiro para revisão.
 // - Em análise: só leitura.
+//
+// 12/10/2026 — Declaração do Produto: "Enviar para análise" e salvar
+// capa/arquivos novos de produto à venda abrem a declaração antes; o
+// envio só acontece no aceite (o servidor grava a declaração).
 // ============================================
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -33,6 +37,8 @@ import {
 } from '../../services/marketplace/productService';
 import { formatBytes, getFileIcon, validateProductFile } from '../../utils/productFileRules';
 import ScreenContainer from '../../components/ScreenContainer';
+import ProductDeclarationModal from '../../components/marketplace/ProductDeclarationModal';
+import { isContractRequiredError } from '../../services/marketplace/creatorAgreementService';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'EditProduct'>;
@@ -58,6 +64,8 @@ export default function EditProductScreen() {
   const [saving, setSaving]         = useState(false);
   const [progressLabel, setLabel]   = useState('');
   const [progress, setProgress]     = useState(0);
+  // Qual envio espera a declaração: alterações (à venda) ou análise.
+  const [declarationFor, setDeclarationFor] = useState<'changes' | 'review' | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -138,7 +146,26 @@ export default function EditProductScreen() {
     });
   }
 
-  async function save() {
+  // Capa ou arquivo novo em produto à venda vai para análise: pede a
+  // declaração antes. Descrição e remoções salvam direto.
+  function requestSave() {
+    if (!product || !hasChanges) return;
+    if (live && (!!newCoverUri || newFiles.length > 0)) {
+      setDeclarationFor('changes');
+      return;
+    }
+    save(false);
+  }
+
+  function handleAgreementError(e: unknown): boolean {
+    if (!isContractRequiredError(e)) return false;
+    Alert.alert('Contrato do Criador', 'Aceite o Contrato do Criador para enviar à análise.', [
+      { text: 'Ler contrato', onPress: () => navigation.navigate('CreatorAgreement') },
+    ]);
+    return true;
+  }
+
+  async function save(withDeclaration: boolean) {
     if (!product || !hasChanges) return;
     setSaving(true);
     try {
@@ -166,7 +193,9 @@ export default function EditProductScreen() {
         addFiles:     addFiles.length ? addFiles : undefined,
         removeFiles:  removed.size ? Array.from(removed) : undefined,
         newCoverPath,
+        withDeclaration,
       });
+      setDeclarationFor(null);
 
       Alert.alert(
         res.pendingReview && (newCoverPath || addFiles.length) ? '✅ Enviado para análise' : '✅ Alterações salvas',
@@ -176,7 +205,10 @@ export default function EditProductScreen() {
       );
       await load();
     } catch (e: unknown) {
-      Alert.alert('Não foi possível salvar', e instanceof Error ? e.message : 'Tente novamente.');
+      setDeclarationFor(null);
+      if (!handleAgreementError(e)) {
+        Alert.alert('Não foi possível salvar', e instanceof Error ? e.message : 'Tente novamente.');
+      }
     } finally {
       setSaving(false);
       setLabel('');
@@ -184,20 +216,29 @@ export default function EditProductScreen() {
     }
   }
 
-  async function sendToReview() {
+  function requestSendToReview() {
     if (!product || !user) return;
     if (hasChanges) {
       Alert.alert('Salve primeiro', 'Salve as alterações antes de enviar para análise.');
       return;
     }
+    setDeclarationFor('review');
+  }
+
+  async function sendToReview() {
+    if (!product || !user) return;
     setSaving(true);
     try {
       await submitProductForReview(productId, user.uid);
+      setDeclarationFor(null);
       Alert.alert('✅ Enviado para análise', 'Nossa equipe vai analisar seu produto.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (e: unknown) {
-      Alert.alert('Erro', e instanceof Error ? e.message : 'Não foi possível enviar.');
+      setDeclarationFor(null);
+      if (!handleAgreementError(e)) {
+        Alert.alert('Erro', e instanceof Error ? e.message : 'Não foi possível enviar.');
+      }
     } finally {
       setSaving(false);
     }
@@ -367,7 +408,7 @@ export default function EditProductScreen() {
         {!locked && (
           <TouchableOpacity
             style={[styles.saveBtn, (!hasChanges || saving) && styles.saveBtnDisabled]}
-            onPress={save}
+            onPress={requestSave}
             disabled={!hasChanges || saving}
             accessibilityRole="button"
           >
@@ -376,11 +417,20 @@ export default function EditProductScreen() {
         )}
 
         {(status === 'draft' || status === 'rejected') && (
-          <TouchableOpacity style={styles.outlineBtn} onPress={sendToReview} disabled={saving} accessibilityRole="button">
+          <TouchableOpacity style={styles.outlineBtn} onPress={requestSendToReview} disabled={saving} accessibilityRole="button">
             <Text style={styles.outlineText}>🚀 Enviar para análise</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      <ProductDeclarationModal
+        visible={declarationFor !== null}
+        productTitle={product.title}
+        confirmLabel={declarationFor === 'changes' ? 'Aceitar e salvar' : 'Aceitar e enviar para análise'}
+        busy={saving}
+        onConfirm={() => (declarationFor === 'changes' ? save(true) : sendToReview())}
+        onCancel={() => setDeclarationFor(null)}
+      />
     </ScreenContainer>
   );
 }

@@ -72,6 +72,7 @@ import ContentViewerScreen from '../screens/marketplace/ContentViewerScreen';
 import MyProductsScreen from '../screens/marketplace/MyProductsScreen';
 import CreateProductScreen from '../screens/marketplace/CreateProductScreen';
 import EditProductScreen from '../screens/marketplace/EditProductScreen';
+import CreatorAgreementScreen from '../screens/marketplace/CreatorAgreementScreen';
 import MyFavoritesScreen from '../screens/marketplace/MyFavoritesScreen';
 import MyEarningsScreen from '../screens/marketplace/MyEarningsScreen';
 import WithdrawalScreen from '../screens/marketplace/WithdrawalScreen';
@@ -382,6 +383,7 @@ function MainStack() {
       <Stack.Screen name="MyProducts"            component={MyProductsScreen} />
       <Stack.Screen name="CreateProduct"         component={CreateProductScreen} />
       <Stack.Screen name="EditProduct"           component={EditProductScreen} />
+      <Stack.Screen name="CreatorAgreement"      component={CreatorAgreementScreen} />
       <Stack.Screen name="MyFavorites"           component={MyFavoritesScreen} />
       <Stack.Screen name="MyEarnings"            component={MyEarningsScreen} />
       <Stack.Screen name="Withdrawal"            component={WithdrawalScreen} />

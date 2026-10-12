@@ -1,10 +1,23 @@
-import React, { useState } from 'react';
+// ============================================
+// LUMINA — NOVO PRODUTO
+// src/screens/marketplace/CreateProductScreen.tsx
+//
+// 12/10/2026 — Contrato do Criador e Declaração do Produto:
+// • ao abrir, confere se o contrato vigente foi aceito; se não, vai
+//   para CreatorAgreement (que volta para cá depois do aceite);
+// • "Enviar para revisão" abre a Declaração do Produto; o envio só
+//   acontece depois do aceite, pela CF submitProductForReview.
+// ============================================
+
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigation/types';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -19,6 +32,10 @@ import {
 import { ProductCategory } from '../../shared/types/marketplace';
 import ScreenContainer from '../../components/ScreenContainer';
 import CreatorGuidelinesModal from '../../components/marketplace/CreatorGuidelinesModal';
+import ProductDeclarationModal from '../../components/marketplace/ProductDeclarationModal';
+import {
+  hasAcceptedCurrentContract, isContractRequiredError,
+} from '../../services/marketplace/creatorAgreementService';
 // Preço mínimo de produto pago (09/10/2026): R$ 19,99. Servidor e
 // regras do Firestore conferem de novo; aqui é o aviso ao criador.
 import {
@@ -49,13 +66,16 @@ interface SelectedFile {
 }
 
 export default function CreateProductScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuth();
 
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
-  // Abre já na entrada da tela, antes de qualquer campo.
-  const [showGuidelines, setShowGuidelines] = useState(true);
+  // Abre na entrada da tela, antes de qualquer campo — depois de
+  // conferir o contrato (12/10/2026).
+  const [showGuidelines, setShowGuidelines] = useState(false);
+  const [checkingContract, setCheckingContract] = useState(true);
+  const [showDeclaration, setShowDeclaration] = useState(false);
   const [productId, setProductId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadLabel, setUploadLabel] = useState('');
@@ -73,6 +93,31 @@ export default function CreateProductScreen() {
 
   // Arquivos pagos
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
+
+  // Contrato do Criador: sem o aceite da versão vigente, vai para o
+  // contrato antes de qualquer campo. Falha de leitura não trava o
+  // criador aqui — o servidor confere de novo no envio.
+  useEffect(() => {
+    let active = true;
+    if (!user) { setCheckingContract(false); return; }
+    hasAcceptedCurrentContract(user.uid)
+      .then(accepted => {
+        if (!active) return;
+        if (accepted) {
+          setCheckingContract(false);
+          setShowGuidelines(true);
+        } else {
+          navigation.replace('CreatorAgreement', { next: 'CreateProduct' });
+        }
+      })
+      .catch(error => {
+        console.warn('[CreateProduct] situação do contrato indisponível:', error);
+        if (!active) return;
+        setCheckingContract(false);
+        setShowGuidelines(true);
+      });
+    return () => { active = false; };
+  }, [user, navigation]);
 
   // Bloqueia o avanço da etapa 1 sem categoria. Antes o state
   // nascia como 'fotos' e o criador passava direto — resultado:
@@ -273,21 +318,52 @@ export default function CreateProductScreen() {
   // ============================================
   // Submit for review
   // ============================================
-  async function handleSubmit() {
+  // O botão abre a Declaração do Produto; o envio só acontece no aceite.
+  function handleSubmit() {
+    if (!productId || !user) return;
+    setShowDeclaration(true);
+  }
+
+  async function submitWithDeclaration() {
     if (!productId || !user) return;
     setSaving(true);
     try {
       await submitProductForReview(productId, user.uid);
+      setShowDeclaration(false);
       Alert.alert(
         '✅ Enviado para revisão!',
         'Nossa equipe analisará seu produto em breve.',
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
-    } catch (error: any) {
-      Alert.alert('Erro', error.message ?? 'Não foi possível enviar para revisão.');
+    } catch (error: unknown) {
+      setShowDeclaration(false);
+      if (isContractRequiredError(error)) {
+        // Contrato mudou de versão (ou não foi aceito): aceita e volta
+        // para cá com o rascunho intacto.
+        Alert.alert('Contrato do Criador', 'Aceite o Contrato do Criador para enviar produtos.', [
+          { text: 'Ler contrato', onPress: () => navigation.navigate('CreatorAgreement') },
+        ]);
+      } else {
+        Alert.alert('Erro', error instanceof Error ? error.message : 'Não foi possível enviar para revisão.');
+      }
     } finally {
       setSaving(false);
     }
+  }
+
+  if (checkingContract) {
+    return (
+      <ScreenContainer>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Voltar">
+            <Text style={styles.backBtn}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Novo Produto</Text>
+          <View style={{ width: 28 }} />
+        </View>
+        <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
+      </ScreenContainer>
+    );
   }
 
   return (
@@ -581,6 +657,15 @@ export default function CreateProductScreen() {
       <CreatorGuidelinesModal
         visible={showGuidelines}
         onContinue={() => setShowGuidelines(false)}
+      />
+
+      <ProductDeclarationModal
+        visible={showDeclaration}
+        productTitle={title.trim()}
+        confirmLabel="Aceitar e enviar para revisão"
+        busy={saving}
+        onConfirm={submitWithDeclaration}
+        onCancel={() => setShowDeclaration(false)}
       />
     </ScreenContainer>
   );

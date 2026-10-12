@@ -61,6 +61,8 @@ export type RootStackParamList = {
   MyProducts:      undefined;
   CreateProduct:   undefined;
   EditProduct:     { productId: string };
+  /** Contrato do Criador (12/10/2026). next: para onde seguir depois do aceite. */
+  CreatorAgreement: { next?: 'CreateProduct' } | undefined;
   MyFavorites:     undefined;
   MyEarnings:      undefined;
   Withdrawal:      undefined;

@@ -10,12 +10,17 @@
 //   • em rascunho ou rejeitado, tudo vale na hora (o produto inteiro
 //     ainda passa pela análise ao ser enviado).
 //
+//   • 12/10/2026: capa ou arquivos novos em produto À VENDA exigem a
+//     Declaração do Produto (creatorAgreements.ts) e o Contrato do
+//     Criador aceito; a declaração é gravada na MESMA transação e o
+//     id fica em pendingChangesDeclarationId.
+//
 // reviewProductChanges (superadmin) — aprova ou rejeita o que está
 //   em análise. Desde 12/10/2026 exige o questionário de moderação
 //   (config/productChecklist.ts): aprovar só com todos os itens
 //   aprovados; recusar com pelo menos um negado. O motivo é montado
 //   pelo servidor e a análise vai para moderationRecords na mesma
-//   transação.
+//   transação. Aprovar exige a declaração das alterações (12/10/2026).
 //
 // unpublishProduct (criador) — tira da venda. Quem comprou mantém o
 //   acesso; os arquivos só são apagados se ninguém comprou.
@@ -41,6 +46,11 @@ import {
   ChecklistError, buildRejectionReason, hasChildSafetyRejection, parseProductChecklist,
 } from '../config/productChecklist';
 import { snapshotProduct, writeProductModerationRecord } from '../moderation/moderationRecords';
+import {
+  acceptanceContext, assertContractAccepted, assertDeclarationOnFile,
+  assertDeclarationVersion, recordProductDeclaration,
+} from '../creators/creatorAgreements';
+import { PRODUCT_DECLARATION_VERSION } from '../config/creatorAgreement';
 import {
   ProductFileEntry, isPendingFile, isActiveForSale, isVisibleToBuyer,
   isAllowedMime, fileTypeFromMime, publicCoverUrl, deleteStorageQuietly,
@@ -82,6 +92,7 @@ export const submitProductChanges = onCall(async (request) => {
   const data = (request.data ?? {}) as {
     productId?: unknown; description?: unknown;
     addFiles?: unknown; removeFiles?: unknown; newCoverPath?: unknown;
+    declarationVersion?: unknown;
   };
   const productId   = assertProductId(data.productId);
   const filesPrefix = `marketplace/products/${productId}/files/`;
@@ -140,11 +151,22 @@ export const submitProductChanges = onCall(async (request) => {
   }
 
   const productRef = db.collection('products').doc(productId);
+  const context    = acceptanceContext(request);
 
   const result = await db.runTransaction(async (t) => {
     const snap = await t.get(productRef);
     if (!snap.exists) throw new HttpsError('not-found', 'Produto não encontrado');
     const product = snap.data()!;
+
+    // Capa ou arquivo novo em produto à venda vai para análise: exige
+    // a Declaração do Produto e o contrato vigente. Leituras antes de
+    // qualquer gravação (regra das transações).
+    const needsDeclaration = product.status === 'approved' && product.ownerId === uid &&
+      product.isDeleted !== true && (adds.length > 0 || !!coverPath);
+    if (needsDeclaration) {
+      assertDeclarationVersion(data.declarationVersion);
+      await assertContractAccepted(t, uid);
+    }
 
     if (product.ownerId !== uid) throw new HttpsError('permission-denied', 'Sem permissão para editar este produto.');
     if (product.isDeleted === true) throw new HttpsError('failed-precondition', 'Este produto foi retirado da venda.');
@@ -202,6 +224,21 @@ export const submitProductChanges = onCall(async (request) => {
     const pendingNow = live && (files.some(isPendingFile) || !!pendingCover?.storagePath);
     update.hasPendingChanges = pendingNow;
 
+    let declarationId: string | null = null;
+    if (needsDeclaration) {
+      declarationId = recordProductDeclaration(t, {
+        uid,
+        productId,
+        productTitle: String(product.title ?? ''),
+        scope: 'changes',
+        fileCount: adds.length,
+        coverStoragePath: coverPath ?? null,
+        context,
+      });
+      update.pendingChangesDeclarationId = declarationId;
+      update.pendingChangesDeclarationVersion = PRODUCT_DECLARATION_VERSION;
+    }
+
     t.update(productRef, update);
 
     return {
@@ -209,6 +246,7 @@ export const submitProductChanges = onCall(async (request) => {
       pendingNow,
       becamePending: pendingNow && product.hasPendingChanges !== true,
       title: String(product.title ?? 'Produto'),
+      declarationId,
     };
   });
 
@@ -231,6 +269,7 @@ export const submitProductChanges = onCall(async (request) => {
     metadata: {
       description: description !== undefined,
       added: adds.length, removed: removes.length, cover: !!coverPath,
+      declarationId: result.declarationId,
     },
     req: request.rawRequest,
   }).catch(() => {});
@@ -275,6 +314,11 @@ export const reviewProductChanges = onCall(async (request) => {
     if (product.hasPendingChanges !== true) {
       throw new HttpsError('failed-precondition', 'Este produto não tem alterações em análise.');
     }
+    // Aprovar exige a declaração das alterações (12/10/2026). Recusar
+    // não: a recusa tira do ar o que foi enviado.
+    if (approve) {
+      await assertDeclarationOnFile(t, String(product.ownerId ?? ''), productId, product.pendingChangesDeclarationId, 'changes');
+    }
 
     const now   = Timestamp.now();
     const files = (product.files ?? []) as ProductFileEntry[];
@@ -283,6 +327,8 @@ export const reviewProductChanges = onCall(async (request) => {
     const update: Record<string, unknown> = {
       hasPendingChanges: false,
       pendingCover:      FieldValue.delete(),
+      pendingChangesDeclarationId:      FieldValue.delete(),
+      pendingChangesDeclarationVersion: FieldValue.delete(),
       updatedAt:         FieldValue.serverTimestamp(),
     };
 
@@ -389,6 +435,8 @@ export const unpublishProduct = onCall(async (request) => {
       isFeatured:        false,
       hasPendingChanges: false,
       pendingCover:      FieldValue.delete(),
+      pendingChangesDeclarationId:      FieldValue.delete(),
+      pendingChangesDeclarationVersion: FieldValue.delete(),
       files:             files.filter(f => !isPendingFile(f)),
       updatedAt:         FieldValue.serverTimestamp(),
     });

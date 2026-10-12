@@ -8,6 +8,10 @@
 // servidor confere a lista — não basta o app esconder o botão. O
 // registro da análise vai para moderationRecords na MESMA transação
 // que publica o produto: não existe produto aprovado sem registro.
+//
+// 12/10/2026 — DECLARAÇÃO DO PRODUTO: só publica se o envio tiver a
+// declaração do criador gravada (creatorAgreements/{dono}/history),
+// feita pela callable submitProductForReview.
 // ============================================
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
@@ -20,6 +24,7 @@ import { notifyUser } from "../utils/notifyUser";
 import { isBelowMinimumPrice } from "../config/marketplacePricing";
 import { ChecklistError, parseProductChecklist } from "../config/productChecklist";
 import { snapshotProduct, writeProductModerationRecord } from "../moderation/moderationRecords";
+import { assertDeclarationOnFile } from "../creators/creatorAgreements";
 
 export const onApproveProduct = onCall(async (request) => {
   assertAuthenticated(request.auth?.uid);
@@ -52,6 +57,7 @@ export const onApproveProduct = onCall(async (request) => {
 
   let ownerId = "";
   let recordId = "";
+  let declarationId = "";
 
   await db.runTransaction(async (tx) => {
     const productSnap = await tx.get(productRef);
@@ -72,6 +78,10 @@ export const onApproveProduct = onCall(async (request) => {
     }
 
     ownerId = String(product.ownerId ?? "");
+
+    // Leitura antes das gravações: sem declaração, não publica.
+    await assertDeclarationOnFile(tx, ownerId, productId, product.declarationId, "submission");
+    declarationId = String(product.declarationId);
 
     tx.update(productRef, {
       status: "approved",
@@ -99,7 +109,7 @@ export const onApproveProduct = onCall(async (request) => {
     performedBy: uid,
     targetId: productId,
     targetType: "product",
-    metadata: { ownerId, moderationRecordId: recordId, checklistVersion: parsed.version },
+    metadata: { ownerId, moderationRecordId: recordId, checklistVersion: parsed.version, declarationId },
     req: request.rawRequest,
   });
 

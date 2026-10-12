@@ -668,22 +668,21 @@ service cloud.firestore {
           // Parte 5: versão e caminho da capa no Storage são do
           // servidor (aprovação de alterações).
           'version', 'coverStoragePath', 'createdAt',
+          // 12/10/2026: Declaração do Produto — só o servidor grava
+          // (submitProductForReview / submitProductChanges).
+          'declarationId', 'declarationVersion', 'submittedAt',
+          'pendingChangesDeclarationId', 'pendingChangesDeclarationVersion',
         ]) &&
         // Preço editado no rascunho também respeita o mínimo.
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['price']) ||
           isAllowedProductPrice(request.resource.data.price));
 
-      // Envio para revisão: única transição de status permitida ao
-      // criador. Sem esta regra o submitProductForReview batia em
-      // permission-denied e todo produto ficava preso em draft —
-      // o admin nunca era notificado porque a notificação só
-      // dispara depois do update.
-      allow update: if isCreator() &&
-        resource.data.ownerId == request.auth.uid &&
-        resource.data.status in ['draft', 'rejected'] &&
-        request.resource.data.status == 'pending' &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'updatedAt']);
+      // Envio para revisão (draft/rejected → pending): desde 12/10/2026
+      // SÓ pela CF submitProductForReview, que exige o Contrato do
+      // Criador aceito e grava a Declaração do Produto na mesma
+      // transação. A regra antiga deixava o app mudar o status direto,
+      // o que pularia a declaração. O trigger onProductPending continua
+      // avisando os admins (dispara com a gravação do servidor).
       allow delete: if false;
 
       // A subcollection products/{id}/shards não existe — todo o
@@ -1197,6 +1196,24 @@ match /achievementTriggers/{docId} {
       allow write: if false;
 
       match /history/{version} {
+        allow read:  if isOwner(userId) || isSuperAdmin();
+        allow write: if false;
+      }
+    }
+
+    // ============================================
+    // CONTRATO DO CRIADOR E DECLARAÇÕES DE PRODUTO (12/10/2026)
+    // ============================================
+    // Escrita exclusiva das CFs acceptCreatorContract,
+    // submitProductForReview e submitProductChanges. O criador lê a
+    // própria situação (o app decide se mostra o contrato) e o próprio
+    // histórico (direito de acesso, LGPD art. 18); nunca escreve —
+    // aceite auto-gravado não é prova.
+    match /creatorAgreements/{userId} {
+      allow read:  if isOwner(userId) || isSuperAdmin();
+      allow write: if false;
+
+      match /history/{entryId} {
         allow read:  if isOwner(userId) || isSuperAdmin();
         allow write: if false;
       }

@@ -40,6 +40,8 @@ import {
   getDownloadURL,
 } from 'firebase/storage';
 import app, { db, storage } from '../../core/firebase';
+import { PRODUCT_DECLARATION_VERSION } from '../../config/legal/creatorAgreement';
+import { AcceptanceMeta, acceptanceMeta } from './creatorAgreementService';
 import { MARKETPLACE_COLLECTIONS } from '../../core/constants';
 import {
   Product,
@@ -317,26 +319,24 @@ export async function updateProduct(
   await updateDoc(productRef, updateData);
 }
 
+/**
+ * Envia para análise COM a Declaração do Produto (12/10/2026).
+ * Antes o app gravava status 'pending' direto; agora quem muda o
+ * status é a CF submitProductForReview, que exige o Contrato do
+ * Criador aceito e grava a declaração na mesma transação. Chame só
+ * depois de o criador aceitar a declaração (ProductDeclarationModal).
+ * O trigger onProductPending continua avisando os admins.
+ * ownerId mantido pela assinatura antiga — o servidor usa o login.
+ */
 export async function submitProductForReview(
   productId: string,
-  ownerId: string,
+  _ownerId?: string,
 ): Promise<void> {
-  const productRef = doc(db, MARKETPLACE_COLLECTIONS.PRODUCTS, productId);
-  const snap = await getDoc(productRef);
-
-  if (!snap.exists()) throw new Error('Produto não encontrado');
-  if (snap.data().ownerId !== ownerId) throw new Error('Sem permissão');
-  if (!['draft', 'rejected'].includes(snap.data().status)) {
-    throw new Error('Produto já está em revisão ou aprovado');
-  }
-  if (!snap.data().coverImage) throw new Error('Adicione uma capa antes de enviar');
-  if (!snap.data().files?.length) throw new Error('Adicione pelo menos um arquivo antes de enviar');
-
-  await updateDoc(productRef, {
-    status: 'pending' as ProductStatus,
-    updatedAt: serverTimestamp(),
-  });
-  // O trigger onProductPending avisa os admins.
+  const fn = httpsCallable<
+    { productId: string; declarationVersion: string } & AcceptanceMeta,
+    { success: boolean }
+  >(fns(), 'submitProductForReview');
+  await fn({ productId, declarationVersion: PRODUCT_DECLARATION_VERSION, ...acceptanceMeta() });
 }
 
 /** Mantido pela assinatura antiga: agora tira da venda pelo servidor. */
@@ -504,14 +504,24 @@ function fns() {
   return getFunctions(app, 'us-central1');
 }
 
+/**
+ * withDeclaration: capa ou arquivos novos em produto à venda vão para
+ * análise e exigem a Declaração do Produto (12/10/2026) — passe true
+ * depois de o criador aceitar no ProductDeclarationModal.
+ */
 export async function submitProductChanges(input: {
   productId: string;
   description?: string;
   addFiles?: Array<{ storagePath: string; name: string }>;
   removeFiles?: string[];
   newCoverPath?: string;
+  withDeclaration?: boolean;
 }): Promise<{ pendingReview: boolean }> {
-  const result = await httpsCallable<typeof input, { pendingReview: boolean }>(fns(), 'submitProductChanges')(input);
+  const { withDeclaration, ...rest } = input;
+  const payload = withDeclaration
+    ? { ...rest, declarationVersion: PRODUCT_DECLARATION_VERSION, ...acceptanceMeta() }
+    : rest;
+  const result = await httpsCallable<typeof payload, { pendingReview: boolean }>(fns(), 'submitProductChanges')(payload);
   return result.data;
 }
 

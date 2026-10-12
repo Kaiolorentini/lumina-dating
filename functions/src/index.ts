@@ -18,6 +18,10 @@ export { toggleProductFeatured }    from "./products/toggleProductFeatured";
 export {
   submitProductChanges, reviewProductChanges, unpublishProduct, getPurchasedContent,
 } from "./products/productChanges";
+// Contrato do Criador e Declaração do Produto (12/10/2026).
+// submitProductForReview substitui a gravação direta do app (status
+// → pending), que as regras deixam de permitir.
+export { acceptCreatorContract, submitProductForReview } from "./creators/creatorAgreements";
 // Avaliações de produtos (08/10/2026)
 export {
   submitProductReview, moderateProductReview,
