@@ -1,10 +1,23 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// ============================================
+// LUMINA — REVISÃO DE PRODUTO (admin)
+// src/screens/admin/AdminProductReviewScreen.tsx
+//
+// 12/10/2026 — DECISÃO PELO QUESTIONÁRIO.
+// Esta tela continua sendo o lugar de VER o produto (capa, prévias,
+// arquivos, criador, destaque). Aprovar e recusar — produto novo ou
+// alterações — agora acontecem só na tela do questionário
+// (AdminProductChecklist): o servidor passou a exigir as respostas, e
+// os botões diretos antigos (com o modal de motivo livre) seriam
+// recusados por ele. Por isso saíram daqui.
+// ============================================
+
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image,
-  TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput,
+  TouchableOpacity, ActivityIndicator, Alert,
   Linking, Dimensions,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Video, ResizeMode } from 'expo-av';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -73,8 +86,6 @@ export default function AdminProductReviewScreen() {
   const { blocked, loading: guardLoading } = useSuperAdminGuard();
 
   const [product, setProduct] = useState<ProductWithChanges | null>(null);
-  // O mesmo modal de rejeição serve ao produto novo e às alterações.
-  const [rejectMode, setRejectMode] = useState<'product' | 'changes'>('product');
   const [ownerName, setOwnerName] = useState<string>('');
   const [ownerSince, setOwnerSince] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -86,9 +97,6 @@ export default function AdminProductReviewScreen() {
   const [openedVideos, setOpenedVideos] = useState<Record<number, string>>({});
 
   // Ações
-  const [processing, setProcessing] = useState(false);
-  const [rejectModal, setRejectModal] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
   const [togglingFeatured, setTogglingFeatured] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -117,7 +125,8 @@ export default function AdminProductReviewScreen() {
     }
   }, [productId]);
 
-  useEffect(() => { loadData(); }, [productId]);
+  // Ao voltar do questionário, o status pode ter mudado: recarrega.
+  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
 
   if (guardLoading || blocked) return null;
 
@@ -153,29 +162,8 @@ export default function AdminProductReviewScreen() {
     }
   }
 
-  async function handleApprove() {
-    if (!product) return;
-    Alert.alert('Aprovar produto?', `Aprovar "${product.title}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Aprovar',
-        onPress: async () => {
-          setProcessing(true);
-          try {
-            const functions = getFunctions(app, 'us-central1');
-            const approve = httpsCallable(functions, 'onApproveProduct');
-            await approve({ productId });
-            Alert.alert('✅ Produto aprovado!', undefined, [
-              { text: 'OK', onPress: () => navigation.goBack() },
-            ]);
-          } catch (e: any) {
-            Alert.alert('Erro', e.message);
-          } finally {
-            setProcessing(false);
-          }
-        },
-      },
-    ]);
+  function openChecklist(mode: 'product' | 'changes') {
+    navigation.navigate('AdminProductChecklist', { productId, mode });
   }
 
   async function handleToggleFeatured() {
@@ -209,57 +197,6 @@ export default function AdminProductReviewScreen() {
         },
       ],
     );
-  }
-
-  async function reviewChanges(approve: boolean, reason?: string) {
-    setProcessing(true);
-    try {
-      const fn = httpsCallable(getFunctions(app, 'us-central1'), 'reviewProductChanges');
-      await fn({ productId, approve, reason });
-      Alert.alert(approve ? '✅ Alterações aprovadas' : '❌ Alterações rejeitadas');
-      await loadData();
-    } catch (e: any) {
-      Alert.alert('Erro', e.message ?? 'Não foi possível concluir.');
-    } finally {
-      setProcessing(false);
-    }
-  }
-
-  function confirmApproveChanges() {
-    Alert.alert(
-      'Aprovar alterações?',
-      'A capa e os arquivos novos passam a valer no marketplace e para os compradores.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Aprovar', onPress: () => reviewChanges(true) },
-      ],
-    );
-  }
-
-  async function confirmReject() {
-    if (!product) return;
-    if (!rejectReason.trim()) {
-      Alert.alert('Erro', 'Informe o motivo da rejeição.');
-      return;
-    }
-    setRejectModal(false);
-    if (rejectMode === 'changes') {
-      await reviewChanges(false, rejectReason.trim());
-      return;
-    }
-    setProcessing(true);
-    try {
-      const functions = getFunctions(app, 'us-central1');
-      const reject = httpsCallable(functions, 'onRejectProduct');
-      await reject({ productId, reason: rejectReason.trim() });
-      Alert.alert('❌ Produto rejeitado', undefined, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-    } catch (e: any) {
-      Alert.alert('Erro', e.message);
-    } finally {
-      setProcessing(false);
-    }
   }
 
   if (loading) {
@@ -387,21 +324,13 @@ export default function AdminProductReviewScreen() {
               </Text>
             )}
 
-            {processing ? (
-              <ActivityIndicator color={colors.gold} style={{ paddingVertical: spacing.sm }} />
-            ) : (
-              <View style={styles.changesActions}>
-                <TouchableOpacity style={[styles.approveBtn, { flex: 1 }]} onPress={confirmApproveChanges}>
-                  <Text style={styles.approveBtnText}>✅ Aprovar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.rejectBtn, { flex: 1 }]}
-                  onPress={() => { setRejectMode('changes'); setRejectReason(''); setRejectModal(true); }}
-                >
-                  <Text style={styles.rejectBtnText}>❌ Rejeitar</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            <TouchableOpacity
+              style={styles.checklistBtn}
+              onPress={() => openChecklist('changes')}
+              accessibilityRole="button"
+            >
+              <Text style={styles.checklistBtnText}>📋 Analisar alterações (questionário)</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -473,24 +402,19 @@ export default function AdminProductReviewScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Ações — só se pending */}
+        {/* Ação — só se pending: a decisão é tomada no questionário. */}
         {isPending && (
           <View style={styles.actions}>
-            {processing ? (
-              <ActivityIndicator color={colors.gold} style={{ paddingVertical: spacing.md }} />
-            ) : (
-              <>
-                <TouchableOpacity style={styles.approveBtn} onPress={handleApprove}>
-                  <Text style={styles.approveBtnText}>✅ Aprovar produto</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.rejectBtn}
-                  onPress={() => { setRejectMode('product'); setRejectReason(''); setRejectModal(true); }}
-                >
-                  <Text style={styles.rejectBtnText}>❌ Rejeitar produto</Text>
-                </TouchableOpacity>
-              </>
-            )}
+            <Text style={styles.actionsHint}>
+              Veja a capa, as prévias e abra todos os arquivos acima. Depois responda o questionário para aprovar ou recusar.
+            </Text>
+            <TouchableOpacity
+              style={styles.checklistBtn}
+              onPress={() => openChecklist('product')}
+              accessibilityRole="button"
+            >
+              <Text style={styles.checklistBtnText}>📋 Analisar com questionário</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -544,43 +468,6 @@ export default function AdminProductReviewScreen() {
         )}
       </ScrollView>
 
-      {/* Modal de rejeição */}
-      <Modal
-        visible={rejectModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRejectModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {rejectMode === 'changes' ? '❌ Rejeitar alterações' : '❌ Rejeitar produto'}
-            </Text>
-            <Text style={styles.modalSubtitle}>{product.title}</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Informe o motivo da rejeição..."
-              placeholderTextColor={colors.gray}
-              value={rejectReason}
-              onChangeText={setRejectReason}
-              multiline
-              numberOfLines={3}
-              autoFocus
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setRejectModal(false)}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmReject}>
-                <Text style={styles.modalConfirmBtnText}>Confirmar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScreenContainer>
   );
 }
@@ -645,7 +532,6 @@ const styles = StyleSheet.create({
   coverCol: { flex: 1, gap: 4 },
   coverLabel: { color: colors.gray, fontSize: fonts.sizes.xs },
   coverThumb: { width: '100%', aspectRatio: 4 / 3, borderRadius: borderRadius.sm, backgroundColor: colors.surface },
-  changesActions: { flexDirection: 'row', gap: spacing.sm },
   fileIconText: { fontSize: 24 },
   fileName: { color: colors.white, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   fileMeta: { color: colors.gray, fontSize: fonts.sizes.xs },
@@ -672,16 +558,12 @@ const styles = StyleSheet.create({
   },
   profileBtnText: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
   actions: { padding: spacing.md, gap: spacing.sm },
-  approveBtn: {
-    backgroundColor: colors.success + '22', borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.success, padding: spacing.md, alignItems: 'center',
+  actionsHint: { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center', lineHeight: 19 },
+  checklistBtn: {
+    backgroundColor: colors.gold + '22', borderRadius: borderRadius.md,
+    borderWidth: 1, borderColor: colors.gold, padding: spacing.md, alignItems: 'center',
   },
-  approveBtnText: { color: colors.success, fontWeight: 'bold', fontSize: fonts.sizes.md },
-  rejectBtn: {
-    backgroundColor: colors.error + '11', borderRadius: borderRadius.md,
-    borderWidth: 1, borderColor: colors.error, padding: spacing.md, alignItems: 'center',
-  },
-  rejectBtnText: { color: colors.error, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  checklistBtnText: { color: colors.gold, fontWeight: 'bold', fontSize: fonts.sizes.md },
   statusBox: {
     margin: spacing.md, padding: spacing.md,
     backgroundColor: colors.surface, borderRadius: borderRadius.md,
@@ -716,31 +598,4 @@ const styles = StyleSheet.create({
     padding: spacing.md, paddingHorizontal: spacing.xl, marginTop: spacing.md,
   },
   retryBtnText: { color: colors.background, fontWeight: 'bold' },
-  // Modal
-  modalOverlay: {
-    flex: 1, backgroundColor: '#00000088',
-    alignItems: 'center', justifyContent: 'center', padding: spacing.lg,
-  },
-  modalContent: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.grayDark, padding: spacing.lg, width: '100%', gap: spacing.md,
-  },
-  modalTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
-  modalSubtitle: { color: colors.gray, fontSize: fonts.sizes.sm },
-  modalInput: {
-    backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.grayDark, color: colors.white, padding: spacing.md,
-    fontSize: fonts.sizes.md, textAlignVertical: 'top', minHeight: 80,
-  },
-  modalActions: { flexDirection: 'row', gap: spacing.sm },
-  modalCancelBtn: {
-    flex: 1, backgroundColor: colors.grayDark, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalCancelBtnText: { color: colors.white, fontWeight: 'bold' },
-  modalConfirmBtn: {
-    flex: 1, backgroundColor: colors.error, borderRadius: borderRadius.sm,
-    padding: spacing.md, alignItems: 'center',
-  },
-  modalConfirmBtnText: { color: colors.white, fontWeight: 'bold' },
 });

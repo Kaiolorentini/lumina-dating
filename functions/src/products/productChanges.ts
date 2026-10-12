@@ -11,7 +11,11 @@
 //     ainda passa pela análise ao ser enviado).
 //
 // reviewProductChanges (superadmin) — aprova ou rejeita o que está
-//   em análise.
+//   em análise. Desde 12/10/2026 exige o questionário de moderação
+//   (config/productChecklist.ts): aprovar só com todos os itens
+//   aprovados; recusar com pelo menos um negado. O motivo é montado
+//   pelo servidor e a análise vai para moderationRecords na mesma
+//   transação.
 //
 // unpublishProduct (criador) — tira da venda. Quem comprou mantém o
 //   acesso; os arquivos só são apagados se ninguém comprou.
@@ -33,6 +37,10 @@ import { assertUserNotBlocked } from '../utils/assertUserNotBlocked';
 import { createAuditLog } from '../utils/auditLog';
 import { notifyAdmins } from '../utils/notifyAdmins';
 import { notifyUser } from '../utils/notifyUser';
+import {
+  ChecklistError, buildRejectionReason, hasChildSafetyRejection, parseProductChecklist,
+} from '../config/productChecklist';
+import { snapshotProduct, writeProductModerationRecord } from '../moderation/moderationRecords';
 import {
   ProductFileEntry, isPendingFile, isActiveForSale, isVisibleToBuyer,
   isAllowedMime, fileTypeFromMime, publicCoverUrl, deleteStorageQuietly,
@@ -238,11 +246,25 @@ export const reviewProductChanges = onCall(async (request) => {
   const adminUid: string = request.auth!.uid;
   await assertSuperAdmin(adminUid);
 
-  const data = (request.data ?? {}) as { productId?: unknown; approve?: unknown; reason?: unknown };
+  const data = (request.data ?? {}) as { productId?: unknown; approve?: unknown; checklist?: unknown };
   const productId = assertProductId(data.productId);
   const approve   = data.approve === true;
-  const reason    = typeof data.reason === 'string' ? data.reason.trim().slice(0, 300) : '';
-  if (!approve && !reason) throw new HttpsError('invalid-argument', 'Informe o motivo da rejeição.');
+
+  let parsed;
+  try {
+    parsed = parseProductChecklist(data.checklist);
+  } catch (error) {
+    if (error instanceof ChecklistError) throw new HttpsError('failed-precondition', error.message);
+    throw error;
+  }
+  if (approve && !parsed.allApproved) {
+    throw new HttpsError('failed-precondition', 'Há itens negados no questionário. Para aprovar, todos precisam estar aprovados.');
+  }
+  if (!approve && parsed.allApproved) {
+    throw new HttpsError('failed-precondition', 'Para recusar, marque como negado o item que motivou a recusa.');
+  }
+  const reason          = approve ? '' : buildRejectionReason(parsed);
+  const childSafetyFlag = !approve && hasChildSafetyRejection(parsed);
 
   const productRef = db.collection('products').doc(productId);
 
@@ -280,17 +302,44 @@ export const reviewProductChanges = onCall(async (request) => {
     }
 
     t.update(productRef, update);
-    return { toDelete, ownerId: String(product.ownerId), title: String(product.title ?? 'Seu produto') };
+
+    const recordId = writeProductModerationRecord(t, {
+      type:            'product_changes',
+      productId,
+      ownerId:         String(product.ownerId ?? ''),
+      reviewerUid:     adminUid,
+      checklist:       parsed,
+      outcome:         approve ? 'approved' : 'rejected',
+      reason:          approve ? null : reason,
+      childSafetyFlag,
+      snapshot:        snapshotProduct(product, { onlyPendingFiles: true, pendingCoverPath: cover?.storagePath ?? null }),
+    });
+
+    return { toDelete, recordId, ownerId: String(product.ownerId), title: String(product.title ?? 'Seu produto') };
   });
 
-  await deleteStorageQuietly(result.toDelete);
+  // Recusa por proteção de menores: os arquivos FICAM guardados como
+  // prova (fora da venda — já saíram da lista do produto).
+  if (!childSafetyFlag) {
+    await deleteStorageQuietly(result.toDelete);
+  } else {
+    console.warn('[reviewProductChanges] alerta de proteção de menores', JSON.stringify({
+      productId, ownerId: result.ownerId, moderationRecordId: result.recordId, kept: result.toDelete,
+    }));
+    notifyAdmins({
+      title: '🚨 Proteção de menores',
+      body:  `Alterações de "${result.title}" recusadas por item de proteção de menores. Revise a conta do criador.`,
+      type:  'child_safety_alert',
+      data:  { productId, ownerId: result.ownerId },
+    }).catch(() => {});
+  }
 
   notifyUser({
     userId: result.ownerId,
     title:  approve ? '✅ Alterações aprovadas' : 'Alterações não aprovadas',
     body:   approve
       ? `As novidades de "${result.title}" já estão disponíveis.`
-      : `"${result.title}": ${reason}`,
+      : `"${result.title}" precisa de ajustes:\n${reason}`,
     type:   'product_approved',
     data:   { productId },
   }).catch(() => {});
@@ -300,7 +349,12 @@ export const reviewProductChanges = onCall(async (request) => {
     performedBy: adminUid,
     targetId: productId,
     targetType: 'product',
-    metadata: { reason: approve ? null : reason },
+    metadata: {
+      reason: approve ? null : reason,
+      moderationRecordId: result.recordId,
+      rejectedItems: parsed.rejectedIds,
+      childSafetyFlag,
+    },
     req: request.rawRequest,
   });
 

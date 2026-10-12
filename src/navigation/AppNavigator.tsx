@@ -114,6 +114,7 @@ import SupportHomeScreen from '../modules/support/screens/SupportHomeScreen';
 import SupportNewScreen from '../modules/support/screens/SupportNewScreen';
 import SupportTicketScreen from '../modules/support/screens/SupportTicketScreen';
 import AdminSupportScreen from '../screens/admin/AdminSupportScreen';
+import AdminProductChecklistScreen from '../screens/admin/AdminProductChecklistScreen';
 import DeleteAccountScreen from '../modules/profile/screens/DeleteAccountScreen';
 import { useProfileBadges } from '../modules/profile/hooks/useProfileBadges';
 import {
@@ -395,6 +396,7 @@ function MainStack() {
           registrada aqui — o React Navigation avisava no console e
           o toque não fazia nada. */}
       <Stack.Screen name="AdminProductReview"    component={AdminProductReviewScreen} />
+      <Stack.Screen name="AdminProductChecklist" component={AdminProductChecklistScreen} />
       <Stack.Screen name="AdminSales"            component={AdminSalesScreen} />
       <Stack.Screen name="AdminRefundRequests"   component={AdminRefundRequestsScreen} />
       <Stack.Screen name="AdminWithdrawals"      component={AdminWithdrawalsScreen} />

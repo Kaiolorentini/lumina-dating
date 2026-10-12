@@ -80,6 +80,8 @@ export type RootStackParamList = {
   AdminCreatorRequests:     undefined;
   AdminProductsModeration:  undefined;
   AdminProductReview:       { productId: string };
+  /** Questionário de moderação (12/10/2026): produto novo ou alterações. */
+  AdminProductChecklist:    { productId: string; mode: 'product' | 'changes' };
   AdminSales:               undefined;
   AdminRefundRequests:      undefined;
   AdminWithdrawals:         undefined;
