@@ -17,6 +17,9 @@
 // • Menoridade (item "18 anos ou mais" negado) ENCERRA A CONTA: exige
 //   a data dando menos de 18 e confirmação dupla.
 // • Rascunho em memória por usuário (ageModerationService).
+// • 12/10/2026 (ajuste): os botões do rodapé nunca ficam "mortos" —
+//   pronto para concluir, o botão é sólido; faltando algo, o toque
+//   explica o que falta em vez de não fazer nada.
 // ============================================
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -192,7 +195,31 @@ export default function AdminAgeVerificationReviewScreen() {
     }
   }
 
+  /** O que falta para concluir — mostrado no toque, em vez de botão mudo. */
+  function explainBlocked(kind: 'approve' | 'reject') {
+    const missing: string[] = [];
+    if (stale) missing.push('Esta verificação não está mais pendente.');
+    if (!complete) missing.push(`Responda os ${TOTAL_ITEMS - answered} item(ns) que faltam.`);
+    if (kind === 'approve') {
+      if (rejectedCount > 0) missing.push('Há itens negados — para liberar, todos precisam estar aprovados.');
+      if (age === null) {
+        missing.push(dateComplete
+          ? 'A data de nascimento digitada é inválida — confira dia, mês e ano.'
+          : 'Digite a data de nascimento do documento (DD/MM/AAAA), no quadro acima dos itens.');
+      } else if (age < MIN_AGE) {
+        missing.push(`A data dá ${age} anos: negue o item "18 anos ou mais" e recuse.`);
+      }
+    } else {
+      if (ageConflict) missing.push('A data digitada não combina com o item "18 anos ou mais". Confira os dois.');
+      if (isUnderage && (age === null || age >= MIN_AGE)) {
+        missing.push('Para encerrar por menoridade, digite a data do documento (precisa dar menos de 18 anos).');
+      }
+    }
+    Alert.alert('Ainda não dá para concluir', missing.join('\n\n') || 'Confira as respostas e tente de novo.');
+  }
+
   function confirmApprove() {
+    if (!canApprove) { explainBlocked('approve'); return; }
     Alert.alert(
       'Liberar a conta?',
       `Idade pelo documento: ${age} anos. Você confirma que conferiu os 12 itens nas imagens. A análise fica registrada com o seu usuário.`,
@@ -204,7 +231,7 @@ export default function AdminAgeVerificationReviewScreen() {
   }
 
   function confirmReject() {
-    if (!preview) return;
+    if (!canReject || !preview) { explainBlocked('reject'); return; }
 
     if (isUnderage) {
       Alert.alert(
@@ -456,13 +483,12 @@ export default function AdminAgeVerificationReviewScreen() {
           <ActivityIndicator color={colors.gold} style={{ paddingVertical: spacing.md }} />
         ) : rejectedCount > 0 ? (
           <TouchableOpacity
-            style={[styles.rejectBtn, !canReject && styles.btnDisabled]}
+            style={[styles.rejectBtn, canReject ? styles.rejectBtnReady : styles.btnDisabled]}
             onPress={confirmReject}
-            disabled={!canReject}
             accessibilityRole="button"
             accessibilityState={{ disabled: !canReject }}
           >
-            <Text style={styles.rejectBtnText}>
+            <Text style={[styles.rejectBtnText, canReject && styles.rejectBtnTextReady]}>
               {!complete
                 ? `Responda os ${TOTAL_ITEMS - answered} item(ns) que faltam`
                 : ageConflict
@@ -476,13 +502,12 @@ export default function AdminAgeVerificationReviewScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.approveBtn, !canApprove && styles.btnDisabled]}
+            style={[styles.approveBtn, canApprove ? styles.approveBtnReady : styles.btnDisabled]}
             onPress={confirmApprove}
-            disabled={!canApprove}
             accessibilityRole="button"
             accessibilityState={{ disabled: !canApprove }}
           >
-            <Text style={styles.approveBtnText}>
+            <Text style={[styles.approveBtnText, canApprove && styles.approveBtnTextReady]}>
               {!complete
                 ? `Responda os ${TOTAL_ITEMS - answered} item(ns) que faltam`
                 : age === null
@@ -582,6 +607,11 @@ const styles = StyleSheet.create({
   },
   rejectBtnText: { color: colors.error, fontWeight: 'bold', fontSize: fonts.sizes.md, textAlign: 'center' },
   btnDisabled: { opacity: 0.45 },
+  // Pronto para concluir: botão sólido, sem dúvida de que está ativo.
+  approveBtnReady: { backgroundColor: colors.success, borderColor: colors.success },
+  approveBtnTextReady: { color: colors.background },
+  rejectBtnReady: { backgroundColor: colors.error, borderColor: colors.error },
+  rejectBtnTextReady: { color: colors.white },
 
   bigIcon: { fontSize: 44 },
   errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center' },
