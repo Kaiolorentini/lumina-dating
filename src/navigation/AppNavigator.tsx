@@ -88,6 +88,7 @@ import AdminWithdrawalsScreen from '../screens/admin/AdminWithdrawalsScreen';
 import AdminUserSearchScreen from '../screens/admin/AdminUserSearchScreen';
 import AdminBlockedUsersScreen from '../screens/admin/AdminBlockedUsersScreen';
 import AdminAgeVerificationScreen from '../screens/admin/AdminAgeVerificationScreen';
+import AdminAgeVerificationReviewScreen from '../screens/admin/AdminAgeVerificationReviewScreen';
 import AdminUserDetailScreen from '../screens/admin/AdminUserDetailScreen';
 import AdminLoadingScreen from '../screens/admin/AdminLoadingScreen';
 import DestinyCardScreen from '../modules/engagement/screens/DestinyCardScreen';
@@ -403,6 +404,7 @@ function MainStack() {
       <Stack.Screen name="AdminFraudFlags"       component={AdminFraudFlagsScreen} />
       <Stack.Screen name="AdminBlockedUsers"     component={AdminBlockedUsersScreen} />
       <Stack.Screen name="AdminAgeVerification"  component={AdminAgeVerificationScreen} />
+      <Stack.Screen name="AdminAgeVerificationReview" component={AdminAgeVerificationReviewScreen} />
       <Stack.Screen name="AdminUserSearch"       component={AdminUserSearchScreen} />
       <Stack.Screen name="AdminUserDetail"       component={AdminUserDetailScreen} />
       <Stack.Screen name="AdminCoupons"          component={AdminCouponsScreen} />
@@ -557,6 +559,15 @@ function AppContent() {
       // Push para o admin quando alguém envia documento.
       case 'age_verification_pending':
         navigationRef.current.navigate('AdminAgeVerification');
+        break;
+      // Alerta de verificação suspeita (12/10/2026): abre a conta para
+      // a segunda revisão. Sem userId, cai na fila.
+      case 'age_review_alert':
+        if (data.userId) {
+          navigationRef.current.navigate('AdminUserDetail', { userId: data.userId });
+        } else {
+          navigationRef.current.navigate('AdminAgeVerification');
+        }
         break;
       // Push de moderação enviado pelo notifySuperAdmins quando um
       // criador submete produto. Sem este case o admin tocava na

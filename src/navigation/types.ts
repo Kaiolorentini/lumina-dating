@@ -88,6 +88,7 @@ export type RootStackParamList = {
   AdminFraudFlags:          undefined;
   AdminBlockedUsers:        undefined;
   AdminAgeVerification:     undefined;
+  AdminAgeVerificationReview: { userId: string };
   AdminUserSearch:          undefined;
   AdminUserDetail:          { userId: string };
   AdminCoupons:             undefined;

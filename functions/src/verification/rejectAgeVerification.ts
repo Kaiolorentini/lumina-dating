@@ -13,6 +13,20 @@
 //
 // As imagens são apagadas aqui também, não só na
 // aprovação — o raciocínio da LGPD é o mesmo.
+//
+// 12/10/2026 — QUESTIONÁRIO OBRIGATÓRIO (config/ageChecklist.ts):
+// • A recusa exige os 12 itens respondidos e pelo menos um negado.
+//   O motivo (UNDERAGE, MISMATCH, ILLEGIBLE, OTHER) e o texto para o
+//   usuário são decididos pelo SERVIDOR a partir dos itens negados —
+//   o app não escolhe mais o motivo.
+// • UNDERAGE (item age_18 negado) só encerra a conta se a data de
+//   nascimento digitada confirmar menos de 18 anos. Sem a data, ou com
+//   a data dando 18+, a recusa é barrada: encerrar conta por clique
+//   errado não tem volta pelo app.
+// • Itens sigilosos (adulteração, aparência de menor, conta duplicada)
+//   mandam ao usuário só um texto genérico e avisam os superadmins.
+// • O registro da análise vai para moderationRecords na mesma
+//   transação.
 // ============================================
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
@@ -20,28 +34,32 @@ import * as admin from "firebase-admin";
 import { assertAuthenticated, assertSuperAdmin } from "../utils/adminGuard";
 import { createAuditLog } from "../utils/auditLog";
 import { notifyUser } from "../utils/notifyUser";
+import { notifyAdmins } from "../utils/notifyAdmins";
 import { deleteVerificationImages } from "./deleteVerificationImages";
-import { MAX_ATTEMPTS, REJECTION_REASONS, AgeRejectionReason } from "./constants";
+import { MAX_ATTEMPTS, MIN_AGE } from "./constants";
 import { syncAccessClaimsFor } from "../utils/accessClaims";
+import { ageInBrt, parseBirthDate } from "./birthDate";
+import { AgeChecklistError, decideAgeRejection, parseAgeChecklist } from "../config/ageChecklist";
+import { writeAgeModerationRecord } from "../moderation/moderationRecords";
 
 interface RejectPayload {
   userId: string;
-  reason: AgeRejectionReason;
-  note?: string;
+  /** Questionário de verificação (12 itens, pelo menos um negado). */
+  checklist: unknown;
+  /** AAAA-MM-DD — obrigatório quando o item "18 anos ou mais" é negado. */
+  birthDate?: string;
 }
 
 interface RejectResult {
   success: boolean;
   accountBanned: boolean;
   attemptsLeft: number;
+  /** Motivo decidido pelo servidor. */
+  reason: string;
+  /** Texto enviado ao usuário. */
+  userMessage: string;
+  moderationRecordId: string;
 }
-
-const REASON_TEXT: Record<AgeRejectionReason, string> = {
-  UNDERAGE: "O documento indica que você tem menos de 18 anos.",
-  ILLEGIBLE: "Não foi possível ler o documento. Envie fotos nítidas, sem reflexo e com o documento inteiro visível.",
-  MISMATCH: "A pessoa da selfie não corresponde ao documento enviado.",
-  OTHER: "Sua verificação não foi aprovada.",
-};
 
 export const rejectAgeVerification = onCall<RejectPayload, Promise<RejectResult>>(
   async (request) => {
@@ -49,24 +67,60 @@ export const rejectAgeVerification = onCall<RejectPayload, Promise<RejectResult>
     const adminUid: string = request.auth!.uid;
     await assertSuperAdmin(adminUid);
 
-    const { userId, reason, note } = request.data ?? {};
-
-    if (!userId) throw new HttpsError("invalid-argument", "userId obrigatório");
-    if (!reason || !REJECTION_REASONS.includes(reason)) {
-      throw new HttpsError(
-        "invalid-argument",
-        "reason deve ser UNDERAGE, ILLEGIBLE, MISMATCH ou OTHER",
-      );
+    const { userId, checklist, birthDate: rawBirthDate } = request.data ?? {};
+    if (typeof userId !== "string" || !userId || userId.includes("/")) {
+      throw new HttpsError("invalid-argument", "userId obrigatório");
     }
+
+    let parsed;
+    let decision;
+    try {
+      parsed = parseAgeChecklist(checklist);
+      decision = decideAgeRejection(parsed);
+    } catch (error) {
+      if (error instanceof AgeChecklistError) throw new HttpsError("failed-precondition", error.message);
+      throw error;
+    }
+
+    const reason = decision.code;
+    const isUnderage = reason === "UNDERAGE";
+
+    // Encerrar a conta exige a data do documento confirmando a menoridade.
+    let verifiedAge: number | null = null;
+    if (isUnderage) {
+      if (rawBirthDate === undefined || rawBirthDate === null || rawBirthDate === "") {
+        throw new HttpsError(
+          "failed-precondition",
+          "Para recusar por menoridade, digite a data de nascimento que está no documento.",
+        );
+      }
+      verifiedAge = ageInBrt(parseBirthDate(rawBirthDate));
+      if (verifiedAge >= MIN_AGE) {
+        throw new HttpsError(
+          "failed-precondition",
+          `A data digitada dá ${verifiedAge} anos. Confira a data ou marque o item "18 anos ou mais" como aprovado.`,
+        );
+      }
+    } else if (typeof rawBirthDate === "string" && rawBirthDate) {
+      // Data informada sem o item negado: se ela der menos de 18, o
+      // questionário está incoerente — não deixamos passar como reenvio.
+      const age = ageInBrt(parseBirthDate(rawBirthDate));
+      if (age < MIN_AGE) {
+        throw new HttpsError(
+          "failed-precondition",
+          `A data digitada dá ${age} anos. Marque o item "18 anos ou mais" como negado.`,
+        );
+      }
+    }
+
+    const userMessage = decision.userMessage;
 
     const db = admin.firestore();
     const verificationRef = db.collection("ageVerifications").doc(userId);
     const userRef = db.collection("users").doc(userId);
 
-    const isUnderage = reason === "UNDERAGE";
-    const trimmedNote = typeof note === "string" ? note.trim().slice(0, 500) : "";
-
     let attemptsUsed = 0;
+    let recordId = "";
 
     await db.runTransaction(async (tx) => {
       const verificationSnap = await tx.get(verificationRef);
@@ -90,7 +144,7 @@ export const rejectAgeVerification = onCall<RejectPayload, Promise<RejectResult>
       tx.update(verificationRef, {
         status: "rejected",
         rejectionReason: reason,
-        rejectionNote: trimmedNote || null,
+        rejectionNote: userMessage,
         reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
         reviewedBy: adminUid,
         // Os caminhos saem do registro junto com as imagens:
@@ -102,7 +156,7 @@ export const rejectAgeVerification = onCall<RejectPayload, Promise<RejectResult>
         ageVerified: false,
         ageVerificationStatus: "rejected",
         ageRejectionReason: reason,
-        ageRejectionNote: trimmedNote || null,
+        ageRejectionNote: userMessage,
       };
 
       if (isUnderage) {
@@ -113,6 +167,17 @@ export const rejectAgeVerification = onCall<RejectPayload, Promise<RejectResult>
       }
 
       tx.set(userRef, userPatch, { merge: true });
+
+      recordId = writeAgeModerationRecord(tx, {
+        userId,
+        reviewerUid: adminUid,
+        checklist: parsed,
+        outcome: "rejected",
+        rejectionCode: reason,
+        verifiedAge,
+        attempt: attemptsUsed,
+        alert: decision.alert,
+      });
     });
 
     // Claims alinhadas ao documento: av sai, e ban entra no UNDERAGE.
@@ -140,21 +205,39 @@ export const rejectAgeVerification = onCall<RejectPayload, Promise<RejectResult>
       targetType: "user",
       metadata: {
         reason,
-        note: trimmedNote || null,
         accountBanned: isUnderage,
         attemptsUsed,
         attemptsLeft,
         imagesDeleted: deleteResult.deleted,
         imagesFailed: deleteResult.failed,
+        moderationRecordId: recordId,
+        checklistVersion: parsed.version,
+        rejectedItems: parsed.rejectedIds,
+        alert: decision.alert,
       },
       req: request.rawRequest,
     });
 
+    // Itens sigilosos: segunda revisão pelos superadmins. As imagens já
+    // foram apagadas (LGPD); a revisão é da CONTA (perfil, denúncias,
+    // contas parecidas), com o registro da análise como referência.
+    if (decision.alert) {
+      console.warn("[rejectAgeVerification] alerta de verificação", JSON.stringify({
+        userId, reason, moderationRecordId: recordId, rejectedItems: parsed.rejectedIds,
+      }));
+      await notifyAdmins({
+        title: "🚨 Verificação de idade suspeita",
+        body: "Uma verificação foi recusada por suspeita (adulteração, aparência de menor ou conta duplicada). Revise a conta.",
+        type: "age_review_alert",
+        data: { userId, moderationRecordId: recordId },
+      }).catch((error: unknown) => console.error("[rejectAgeVerification] alerta falhou:", error));
+    }
+
     const body = isUnderage
-      ? `${REASON_TEXT.UNDERAGE} O Lumina é exclusivo para maiores de 18 anos e sua conta foi encerrada.`
+      ? `${userMessage} O Lumina é exclusivo para maiores de 18 anos e sua conta foi encerrada.`
       : attemptsLeft > 0
-        ? `${REASON_TEXT[reason]}${trimmedNote ? ` ${trimmedNote}` : ""} Você tem ${attemptsLeft} ${attemptsLeft === 1 ? "tentativa" : "tentativas"} restantes.`
-        : `${REASON_TEXT[reason]} Você atingiu o limite de tentativas — entre em contato com o suporte.`;
+        ? `${userMessage} Você tem ${attemptsLeft} ${attemptsLeft === 1 ? "tentativa" : "tentativas"} restantes.`
+        : `${userMessage} Você atingiu o limite de tentativas — entre em contato com o suporte.`;
 
     await notifyUser({
       userId,
@@ -165,9 +248,16 @@ export const rejectAgeVerification = onCall<RejectPayload, Promise<RejectResult>
     });
 
     console.log(
-      `[rejectAgeVerification] ${userId} — ${reason}, banido: ${isUnderage}, restam ${attemptsLeft}`,
+      `[rejectAgeVerification] ${userId} — ${reason}, banido: ${isUnderage}, restam ${attemptsLeft}, registro ${recordId}`,
     );
 
-    return { success: true, accountBanned: isUnderage, attemptsLeft };
+    return {
+      success: true,
+      accountBanned: isUnderage,
+      attemptsLeft,
+      reason,
+      userMessage,
+      moderationRecordId: recordId,
+    };
   }
 );

@@ -18,8 +18,9 @@
 import * as admin from 'firebase-admin';
 import { FieldValue, Transaction } from 'firebase-admin/firestore';
 import { ParsedChecklist } from '../config/productChecklist';
+import { AgeRejectionCode, ParsedAgeChecklist } from '../config/ageChecklist';
 
-export type ModerationRecordType = 'product' | 'product_changes';
+export type ModerationRecordType = 'product' | 'product_changes' | 'age_verification';
 export type ModerationOutcome = 'approved' | 'rejected';
 
 export interface ProductSnapshot {
@@ -87,6 +88,44 @@ export function writeProductModerationRecord(t: Transaction, input: ProductModer
     reason:           input.reason,
     childSafetyFlag:  input.childSafetyFlag,
     snapshot:         input.snapshot,
+    createdAt:        FieldValue.serverTimestamp(),
+    imutavel:         true,
+  });
+  return ref.id;
+}
+
+// ── Verificação de idade (12/10/2026) ──
+// LGPD: NADA do documento é guardado aqui — nem imagem, nem número,
+// nem data de nascimento. Só as respostas, quem analisou, o resultado
+// e a idade calculada (que já fica no ageVerifications).
+
+export interface AgeModerationInput {
+  userId: string;
+  reviewerUid: string;
+  checklist: ParsedAgeChecklist;
+  outcome: ModerationOutcome;
+  /** Código da recusa (UNDERAGE, MISMATCH, ILLEGIBLE, OTHER) — só na recusa. */
+  rejectionCode: AgeRejectionCode | null;
+  verifiedAge: number | null;
+  attempt: number;
+  alert: boolean;
+}
+
+export function writeAgeModerationRecord(t: Transaction, input: AgeModerationInput): string {
+  const ref = admin.firestore().collection('moderationRecords').doc();
+  t.set(ref, {
+    type:             'age_verification' as ModerationRecordType,
+    userId:           input.userId,
+    reviewerUid:      input.reviewerUid,
+    checklistVersion: input.checklist.version,
+    answers:          input.checklist.answers,
+    notes:            input.checklist.notes,
+    rejectedItems:    input.checklist.rejectedIds,
+    outcome:          input.outcome,
+    rejectionCode:    input.rejectionCode,
+    verifiedAge:      input.verifiedAge,
+    attempt:          input.attempt,
+    alert:            input.alert,
     createdAt:        FieldValue.serverTimestamp(),
     imutavel:         true,
   });

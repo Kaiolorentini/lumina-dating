@@ -20,6 +20,11 @@
 // Imagens apagadas DEPOIS do commit: o Storage não participa
 // da transação, e falha ao apagar não pode desfazer uma
 // aprovação válida.
+//
+// 12/10/2026 — QUESTIONÁRIO OBRIGATÓRIO (config/ageChecklist.ts):
+// aprovar exige os 12 itens respondidos e TODOS aprovados. A análise
+// vai para moderationRecords na mesma transação (sem dado do
+// documento — só respostas, quem analisou e a idade).
 // ============================================
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
@@ -32,11 +37,16 @@ import { deleteVerificationImages } from "./deleteVerificationImages";
 import { claimFounderSlot, FOUNDER_COUNTER_PATH } from "./founderCounter";
 import { MIN_AGE } from "./constants";
 import { syncAccessClaimsFor } from "../utils/accessClaims";
+import { ageInBrt, parseBirthDate } from "./birthDate";
+import { AgeChecklistError, parseAgeChecklist } from "../config/ageChecklist";
+import { writeAgeModerationRecord } from "../moderation/moderationRecords";
 
 interface ApprovePayload {
   userId: string;
   /** Data de nascimento lida no documento, formato YYYY-MM-DD. */
   birthDate: string;
+  /** Questionário de verificação (12 itens, todos aprovados). */
+  checklist: unknown;
 }
 
 interface ApproveResult {
@@ -46,67 +56,30 @@ interface ApproveResult {
   founderNumber: number | null;
 }
 
-/**
- * Idade em anos completos, calculada em America/Sao_Paulo.
- * Nunca usar toISOString() para isto: em BRT ele muda o dia
- * antes da meia-noite local e alguém aniversariando hoje
- * poderia contar um ano a menos.
- */
-function ageInBrt(birthDate: Date): number {
-  const nowBrt = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }),
-  );
-
-  let age = nowBrt.getFullYear() - birthDate.getFullYear();
-  const monthDiff = nowBrt.getMonth() - birthDate.getMonth();
-
-  if (monthDiff < 0 || (monthDiff === 0 && nowBrt.getDate() < birthDate.getDate())) {
-    age--;
-  }
-
-  return age;
-}
-
-function parseBirthDate(raw: unknown): Date {
-  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    throw new HttpsError(
-      "invalid-argument",
-      "birthDate deve estar no formato AAAA-MM-DD",
-    );
-  }
-
-  const [year, month, day] = raw.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-
-  // Rejeita data inexistente (31/02 vira 03/03 no construtor).
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    throw new HttpsError("invalid-argument", "Data de nascimento inválida");
-  }
-
-  if (date.getTime() > Date.now()) {
-    throw new HttpsError("invalid-argument", "Data de nascimento no futuro");
-  }
-
-  // 120 anos: erro de digitação no ano, não pessoa centenária.
-  if (year < new Date().getFullYear() - 120) {
-    throw new HttpsError("invalid-argument", "Data de nascimento improvável — confira o ano");
-  }
-
-  return date;
-}
-
 export const approveAgeVerification = onCall<ApprovePayload, Promise<ApproveResult>>(
   async (request) => {
     assertAuthenticated(request.auth?.uid);
     const adminUid: string = request.auth!.uid;
     await assertSuperAdmin(adminUid);
 
-    const { userId, birthDate: rawBirthDate } = request.data ?? {};
-    if (!userId) throw new HttpsError("invalid-argument", "userId obrigatório");
+    const { userId, birthDate: rawBirthDate, checklist } = request.data ?? {};
+    if (typeof userId !== "string" || !userId || userId.includes("/")) {
+      throw new HttpsError("invalid-argument", "userId obrigatório");
+    }
+
+    let parsed;
+    try {
+      parsed = parseAgeChecklist(checklist);
+    } catch (error) {
+      if (error instanceof AgeChecklistError) throw new HttpsError("failed-precondition", error.message);
+      throw error;
+    }
+    if (!parsed.allApproved) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Há itens negados no questionário. Para liberar a conta, todos precisam estar aprovados — ou recuse a verificação.",
+      );
+    }
 
     const birthDate = parseBirthDate(rawBirthDate);
     const verifiedAge = ageInBrt(birthDate);
@@ -115,7 +88,7 @@ export const approveAgeVerification = onCall<ApprovePayload, Promise<ApproveResu
     if (verifiedAge < MIN_AGE) {
       throw new HttpsError(
         "failed-precondition",
-        `O documento indica ${verifiedAge} anos. Rejeite com o motivo "Menor de idade" em vez de aprovar.`,
+        `O documento indica ${verifiedAge} anos. Marque o item "18 anos ou mais" como negado e recuse em vez de aprovar.`,
       );
     }
 
@@ -131,6 +104,7 @@ export const approveAgeVerification = onCall<ApprovePayload, Promise<ApproveResu
     let declaredAge: number | null = null;
     let founderNumber: number | null = null;
     let founderGranted = false;
+    let recordId = "";
 
     await db.runTransaction(async (tx) => {
       const [verificationSnap, userSnap, counterSnap] = await Promise.all([
@@ -192,6 +166,17 @@ export const approveAgeVerification = onCall<ApprovePayload, Promise<ApproveResu
       );
       founderNumber = claim.founderNumber;
       founderGranted = claim.granted;
+
+      recordId = writeAgeModerationRecord(tx, {
+        userId,
+        reviewerUid: adminUid,
+        checklist: parsed,
+        outcome: "approved",
+        rejectionCode: null,
+        verifiedAge,
+        attempt: typeof verification.attempts === "number" ? verification.attempts : 1,
+        alert: false,
+      });
     });
 
     // Claim de acesso logo após o commit: o app vê a aprovação pelo
@@ -232,6 +217,8 @@ export const approveAgeVerification = onCall<ApprovePayload, Promise<ApproveResu
         founderNumber,
         imagesDeleted: deleteResult.deleted,
         imagesFailed: deleteResult.failed,
+        moderationRecordId: recordId,
+        checklistVersion: parsed.version,
       },
       req: request.rawRequest,
     });
