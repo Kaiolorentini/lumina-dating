@@ -1,6 +1,16 @@
 // ============================================
-// LUMINA — ON MATCH CREATED v2.0
+// LUMINA — ON MATCH CREATED v2.1
 // functions/src/engagement/matchCreated.ts
+//
+// v2.1 (12/10/2026) — análise da Sintonia:
+//   - targetUid validado (texto, sem '/', não vazio).
+//   - BLOQUEIO nos dois sentidos barra a curtida inteira. Antes o
+//     bloqueio só impedia o push: a curtida e a sintonia mútua eram
+//     criadas mesmo assim.
+//   - LIMITE DIÁRIO de curtidas novas por pessoa (DAILY_LIKE_LIMIT).
+//     Sem ele, um script curtia a base inteira todo dia e cada
+//     curtida mandava um push.
+//   - A curtida e o contador do dia entram na MESMA transação.
 //
 // v2.0 — a CF agora é o ÚNICO caminho da curtida.
 //
@@ -25,15 +35,29 @@ import { assertVerified, isVerifiedProfile } from '../utils/assertVerified';
 
 const db = admin.firestore();
 
+/** Curtidas NOVAS por pessoa por dia (horário de Brasília). */
+export const DAILY_LIKE_LIMIT = 150;
+
+/** Dias que o contador diário fica guardado (para a política de TTL). */
+const LIKE_COUNTER_TTL_DAYS = 3;
+
+async function isBlockedEitherWay(a: string, b: string): Promise<boolean> {
+  const [ab, ba] = await Promise.all([
+    db.collection('blocks').where('blockerId', '==', a).where('blockedId', '==', b).limit(1).get(),
+    db.collection('blocks').where('blockerId', '==', b).where('blockedId', '==', a).limit(1).get(),
+  ]);
+  return !ab.empty || !ba.empty;
+}
+
 export const onCreateMatch = functions.onCall(
   { region: 'us-central1' },
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
 
-    const { targetUid } = request.data as { targetUid: string };
+    const { targetUid } = (request.data ?? {}) as { targetUid?: unknown };
 
-    if (!targetUid) {
+    if (typeof targetUid !== 'string' || !targetUid || targetUid.includes('/') || targetUid.length > 128) {
       throw new functions.HttpsError('invalid-argument', 'targetUid obrigatório.');
     }
 
@@ -50,37 +74,53 @@ export const onCreateMatch = functions.onCall(
       throw new functions.HttpsError('failed-precondition', 'Este perfil não está disponível.');
     }
 
+    // Bloqueio em qualquer sentido: nada de curtida, sintonia ou push.
+    // Mesma mensagem do perfil indisponível — não revela o bloqueio.
+    if (await isBlockedEitherWay(uid, targetUid)) {
+      throw new functions.HttpsError('failed-precondition', 'Este perfil não está disponível.');
+    }
+
     // Curtida do dia — mesmo id que o cliente usava, para não
     // invalidar os registros já existentes.
     const todayStr = new Date().toLocaleDateString('en-CA', {
       timeZone: 'America/Sao_Paulo',
     });
     const likeRef = db.collection('likes').doc(`${uid}_${targetUid}_${todayStr}`);
+    const counterRef = db.collection('dailyLikeCounts').doc(`${uid}_${todayStr}`);
 
-    // create() é atômico: falha com ALREADY_EXISTS se o documento
-    // já existe. O par get()+set() anterior deixava uma janela em
-    // que duas invocações simultâneas liam `exists: false` as duas
-    // e ambas retornavam alreadyLiked: false — o cliente emitia
-    // GIVE_LIKE em dobro, com actionId distintos que a idempotência
-    // do earnXP não cruza.
-    let alreadyLiked = false;
-    try {
-      await likeRef.create({
+    // Curtida + contador do dia na MESMA transação: a repetição do
+    // dia é detectada pelo documento da curtida (o mesmo id de
+    // antes), e a curtida nova só entra se ainda houver cota.
+    // A transação também fecha a janela de duas chamadas simultâneas
+    // (antes resolvida pelo create()).
+    const alreadyLiked = await db.runTransaction(async (t) => {
+      const [likeSnap, counterSnap] = await Promise.all([t.get(likeRef), t.get(counterRef)]);
+      if (likeSnap.exists) return true;
+
+      const used = (counterSnap.data()?.count as number | undefined) ?? 0;
+      if (used >= DAILY_LIKE_LIMIT) {
+        throw new functions.HttpsError(
+          'resource-exhausted',
+          `Você chegou ao limite de ${DAILY_LIKE_LIMIT} curtidas de hoje. Amanhã tem mais!`,
+        );
+      }
+
+      t.create(likeRef, {
         fromUid:   uid,
         toUid:     targetUid,
         date:      todayStr,
         createdAt: FieldValue.serverTimestamp(),
       });
-    } catch (err: unknown) {
-      const code = (err as { code?: number | string })?.code;
-      // 6 = ALREADY_EXISTS no gRPC; o Admin SDK pode devolver o
-      // número ou a string, dependendo da versão.
-      if (code === 6 || code === 'already-exists') {
-        alreadyLiked = true;
-      } else {
-        throw err;
-      }
-    }
+      t.set(counterRef, {
+        uid,
+        date:      todayStr,
+        count:     used + 1,
+        // Para a política de TTL do Firestore (campo expiresAt).
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + LIKE_COUNTER_TTL_DAYS * 86_400_000),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return false;
+    });
 
     // MatchService decide se é match mútuo e emite MATCH_CREATED
     // (ADR-001). Ele já cuida do earnXP CREATE_SINTONIA e do

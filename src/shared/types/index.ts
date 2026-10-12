@@ -24,6 +24,9 @@ export interface UserProfile {
   preferences: Preference[];
   bio: string;
   photoURL: string;
+  /** Interesses da Sintonia v2 (12/10/2026): ids de
+   *  src/config/sintonia/interestsCatalog.ts, até 10. */
+  interests?: string[];
   cpf?: string; 
   createdAt: Date;
   updatedAt?: Date;

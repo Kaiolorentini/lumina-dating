@@ -24,6 +24,7 @@ import {
   doc,
 } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import { PUBLIC_PROFILES } from '../../services/publicProfileService';
 import { COLLECTIONS } from '../../core/constants';
 import { generateChatId } from '../../modules/chat/services/messageService';
 import { getConexoesAceitas } from '../../modules/profile/services/requestsService';
@@ -77,7 +78,8 @@ export default function ConversasScreen() {
         const chatRef = doc(db, COLLECTIONS.CHATS, chatId);
         const chatSnap = await getDoc(chatRef);
 
-        const otherUserRef = doc(db, COLLECTIONS.USERS, otherUserId);
+        // Perfil PÚBLICO (users de outra pessoa fechou nas regras).
+        const otherUserRef = doc(db, PUBLIC_PROFILES, otherUserId);
         const otherUserSnap = await getDoc(otherUserRef);
         const otherUser = otherUserSnap.data();
 

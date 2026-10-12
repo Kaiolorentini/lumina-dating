@@ -8,7 +8,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { COLLECTIONS } from '../../core/constants';
+import { PUBLIC_PROFILES } from '../../services/publicProfileService';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { getConexoesAceitas } from '../../modules/profile/services/requestsService';
@@ -53,7 +53,8 @@ export default function SintoniasScreen() {
 
         if (blockedIds.has(otherUserId)) continue;
 
-        const otherUserSnap = await getDoc(doc(db, COLLECTIONS.USERS, otherUserId));
+        // Perfil PÚBLICO (users de outra pessoa fechou nas regras).
+        const otherUserSnap = await getDoc(doc(db, PUBLIC_PROFILES, otherUserId));
         const otherUser = otherUserSnap.data();
         if (!otherUser) continue;
 

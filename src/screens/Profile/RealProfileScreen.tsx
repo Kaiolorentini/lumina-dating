@@ -39,6 +39,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { getProfile } from '../../services/profileService';
+// Perfil de OUTRA pessoa: sempre o público (12/10/2026).
+import { getPublicProfile } from '../../services/publicProfileService';
+import { EMPTY_SINTONIA_BREAKDOWN, SintoniaBreakdown } from '../../modules/ai/services/sintoniaCalculator';
+import { interestLabel } from '../../config/sintonia/interestsCatalog';
 import { RootStackParamList } from '../../navigation/types';
 import Header from '../../components/Header';
 import SintoniaBar from '../../components/SintoniaBar';
@@ -107,9 +111,7 @@ export default function RealProfileScreen() {
   const [targetProfile,  setTargetProfile]  = useState<UserProfile | null>(null);
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
   const [sintonia,       setSintonia]       = useState(0);
-  const [sintoniaBreakdown, setSintoniaBreakdown] = useState({
-    localizacao: 0, preferencia: 0, perfil: 0, interesses: 0,
-  });
+  const [sintoniaBreakdown, setSintoniaBreakdown] = useState<SintoniaBreakdown>(EMPTY_SINTONIA_BREAKDOWN);
   const [loading,      setLoading]      = useState(true);
   const [connected,    setConnected]    = useState(false);
   const [requestSent,  setRequestSent]  = useState(false);
@@ -126,7 +128,14 @@ export default function RealProfileScreen() {
     navigation.navigate('ProductDetail', { productId });
   }, [navigation]);
 
-  useEffect(() => { loadData(); }, []);
+  // Perfil de outra pessoa: carrega uma vez (registra a visita).
+  // O próprio perfil recarrega ao voltar para a tela — por exemplo,
+  // depois de editar os interesses (12/10/2026).
+  useEffect(() => { if (!isSelf) loadData(); }, []);
+  useEffect(() => {
+    if (!isSelf) return;
+    return navigation.addListener('focus', () => { loadData(); });
+  }, [navigation, isSelf]);
 
   async function loadData() {
     if (!user) return;
@@ -160,7 +169,7 @@ export default function RealProfileScreen() {
 
     try {
       const [target, current] = await Promise.all([
-        getProfile(targetUserId),
+        getPublicProfile(targetUserId),
         getProfile(user.uid),
       ]);
 
@@ -330,7 +339,16 @@ export default function RealProfileScreen() {
       }
 
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível registrar a curtida.');
+      // Limite diário e perfil indisponível vêm com texto pronto do
+      // servidor (12/10/2026); o resto, mensagem genérica.
+      const code = (error as { code?: string } | null)?.code ?? '';
+      const message = error instanceof Error ? error.message : '';
+      Alert.alert(
+        code.includes('resource-exhausted') ? 'Limite de curtidas' : 'Erro',
+        (code.includes('resource-exhausted') || code.includes('failed-precondition')) && message
+          ? message
+          : 'Não foi possível registrar a curtida.',
+      );
       setLiked(false);
     } finally {
       setLiking(false);
@@ -581,6 +599,49 @@ export default function RealProfileScreen() {
             </View>
           )}
 
+          {/* Interesses (Sintonia v2, 12/10/2026). Os que vocês dois
+              marcaram ficam em dourado — é por onde a conversa começa. */}
+          {(() => {
+            const list = targetProfile?.interests ?? [];
+            const common = new Set(isSelf ? [] : sintoniaBreakdown.commonInterests);
+            if (list.length === 0 && !isSelf) return null;
+            return (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Interesses</Text>
+                {list.length > 0 ? (
+                  <View style={styles.tagsRow}>
+                    {list.map(id => (
+                      <View key={id} style={[styles.tag, common.has(id) && styles.tagCommon]}>
+                        <Text style={[styles.tagText, common.has(id) && styles.tagCommonText]}>
+                          {common.has(id) ? '✦ ' : ''}{interestLabel(id)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.bio}>
+                    Você ainda não escolheu seus interesses. Eles ajudam a Sintonia a encontrar
+                    pessoas parecidas com você e aparecem aqui no seu perfil.
+                  </Text>
+                )}
+                {!isSelf && common.size > 0 && (
+                  <Text style={styles.commonHint}>✦ Em dourado: o que vocês têm em comum</Text>
+                )}
+                {isSelf && (
+                  <TouchableOpacity
+                    style={styles.editInterestsBtn}
+                    onPress={() => navigation.navigate('Interests')}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.editInterestsText}>
+                      {list.length > 0 ? '✏️ Editar interesses' : '✨ Escolher meus interesses'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })()}
+
           {/* Bio */}
           {targetProfile?.bio ? (
             <View style={styles.card}>
@@ -740,6 +801,11 @@ const styles = StyleSheet.create({
   tagsRow:              { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   tag:                  { backgroundColor: colors.grayDark, borderRadius: borderRadius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   tagText:              { color: colors.grayLight, fontSize: fonts.sizes.sm },
+  tagCommon:            { backgroundColor: colors.gold + '22', borderWidth: 1, borderColor: colors.gold },
+  tagCommonText:        { color: colors.gold, fontWeight: 'bold' },
+  commonHint:           { color: colors.gray, fontSize: fonts.sizes.xs, marginTop: spacing.sm },
+  editInterestsBtn:     { marginTop: spacing.md, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.gold, padding: spacing.sm, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
+  editInterestsText:    { color: colors.gold, fontWeight: 'bold', fontSize: fonts.sizes.sm },
   actions:              { flexDirection: 'row', gap: spacing.md },
   chatButton:           { flex: 1, backgroundColor: colors.gold, borderRadius: borderRadius.sm, padding: spacing.md, alignItems: 'center' },
   chatButtonText:       { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.lg },
@@ -753,4 +819,3 @@ const styles = StyleSheet.create({
   selfBanner:           { backgroundColor: colors.gold + '18', borderBottomWidth: 1, borderBottomColor: colors.gold + '44', paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
   selfBannerText:       { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold', textAlign: 'center' },
 });
-

@@ -36,6 +36,7 @@ import { getConexoesAceitas } from '../../profile/services/requestsService';
 import { generateChatId }     from '../../chat/services/messageService';
 import { getDoc, doc }        from 'firebase/firestore';
 import { db }                 from '../../../services/firebase';
+import { PUBLIC_PROFILES }    from '../../../services/publicProfileService';
 import { COLLECTIONS }        from '../../../core/constants';
 
 type Props = {
@@ -79,7 +80,8 @@ function ConversasTab({ navigation }: { navigation: any }) {
 
           const [chatSnap, userSnap] = await Promise.all([
             getDoc(doc(db, COLLECTIONS.CHATS, chatId)),
-            getDoc(doc(db, COLLECTIONS.USERS, otherUserId)),
+            // Perfil PÚBLICO (users de outra pessoa fechou nas regras).
+            getDoc(doc(db, PUBLIC_PROFILES, otherUserId)),
           ]);
 
           const otherUser = userSnap.data();

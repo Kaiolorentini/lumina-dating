@@ -28,14 +28,13 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { RootStackParamList } from '../../../navigation/types';
 import { useAuth } from '../../../context/AuthContext';
 import { getProfile } from '../../profile/services/profileService';
 import { UserProfile, ProfileCardData } from '../../../shared/types';
-import { RealProfile } from '../../../services/usersService';
+import { FeedCursor, RealProfile } from '../../../services/usersService';
 import {
   fetchSintonizePage, activeDismissalMap, REFILL_THRESHOLD,
   fetchDismissedProfiles, bringBackProfile, DismissedProfile,
@@ -98,7 +97,8 @@ export default function SintonizeScreen() {
 
   const profileRef   = useRef<UserProfile | null>(null);
   const dismissedRef = useRef<Set<string>>(new Set());
-  const cursorRef    = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  // Cursor com a fase (compatíveis primeiro) — 12/10/2026.
+  const cursorRef    = useRef<FeedCursor | null>(null);
   const seedRef      = useRef<number | null>(null);
   const wrappedRef   = useRef(false);
   // Trava reentrante: sem ela o onScroll pede a mesma página

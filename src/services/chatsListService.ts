@@ -9,7 +9,8 @@ import { db } from '../core/firebase';
 import { COLLECTIONS } from '../core/constants';
 import { generateChatId } from '../modules/chat/services/messageService';
 import { getConexoesAceitas } from '../modules/profile/services/requestsService';
-import { getProfile } from './profileService';
+// Perfil de OUTRA pessoa: sempre o público (12/10/2026).
+import { getPublicProfile } from './publicProfileService';
 
 export interface UserChatPreview {
   userId: string;
@@ -53,7 +54,7 @@ export async function getUserConversations(
         conn.fromUserId === currentUserId ? conn.toUserId : conn.fromUserId;
       try {
         const [profile, lastMsg] = await Promise.all([
-          getProfile(otherUserId),
+          getPublicProfile(otherUserId),
           getLastMessage(currentUserId, otherUserId),
         ]);
 

@@ -1,6 +1,22 @@
 // ============================================
-// LUMINA — USERS SERVICE v5.6
+// LUMINA — USERS SERVICE v6.0
 // src/services/usersService.ts
+//
+// v6.0 (12/10/2026) — SINTONIA v2 E PERFIL PÚBLICO
+// • Lê publicProfiles, não users: o documento users de outras
+//   pessoas fechou nas regras (tinha e-mail, data de nascimento,
+//   moderação...). publicProfiles tem os mesmos nomes de campo.
+// • COMPATÍVEIS PRIMEIRO. A trilha B agora tem duas fases:
+//     1. 'compatible' — a própria consulta traz só quem tem
+//        interesse MÚTUO com você: o gênero da pessoa está nas suas
+//        preferências (gender in) E o seu gênero está nas dela
+//        (seeks array-contains). Ordem sorteada (randomSeed), com a
+//        volta no fim, como antes.
+//     2. 'rest' — esgotados os compatíveis, o resto da base, com
+//        nota baixa (no máximo 35%), pulando quem já apareceu.
+//   O cursor (FeedCursor) carrega a fase.
+// • Boost fixado no topo só para quem é compatível com você; o
+//   boost de quem não é segue no fluxo normal.
 //
 // v5.6 — CARD DO PRÓPRIO USUÁRIO
 // buildOwnProfileCard() monta o card do Meu Perfil com as MESMAS
@@ -46,8 +62,6 @@ import {
   getDocs,
   query,
   where,
-  doc,
-  getDoc,
   orderBy,
   limit,
   startAfter,
@@ -60,6 +74,8 @@ import { UserProfile } from '../types';
 import { ProfileCardData } from '../shared/types';
 import { calcularSintonia } from '../utils/sintoniaEngine';
 import { isListableProfile } from '../shared/utils/profileVisibility';
+import { computeSintonia, seeksFromPreferences } from '../config/sintonia/sintoniaFormula';
+import { PUBLIC_PROFILES, getPublicProfile } from './publicProfileService';
 
 // ============================================
 // CONFIGURAÇÃO
@@ -123,10 +139,21 @@ export interface RealProfile extends UserProfile {
   prestigeStage:       number;
 }
 
+/** Fase da trilha B: primeiro os compatíveis, depois o resto. */
+export type FeedPhase = 'compatible' | 'rest';
+
+/** Posição na trilha B. Opaco para quem chama: só guarda e devolve. */
+export interface FeedCursor {
+  phase: FeedPhase;
+  last: QueryDocumentSnapshot<DocumentData> | null;
+  /** Já passou do fim da faixa e está varrendo do começo até o seed. */
+  wrapped: boolean;
+}
+
 export interface ProfilePage {
   profiles: RealProfile[];
   /** Passar de volta em getCompatibleProfilesPage para a próxima página. */
-  cursor: QueryDocumentSnapshot<DocumentData> | null;
+  cursor: FeedCursor | null;
   hasMore: boolean;
   /** Ponto de partida sorteado na primeira página. Volta nas
    *  seguintes para o feed saber onde dar a volta. */
@@ -348,7 +375,7 @@ async function fetchBoostedProfiles(
 ): Promise<RealProfile[]> {
   try {
     const q = query(
-      collection(db, 'users'),
+      collection(db, PUBLIC_PROFILES),
       where('boostActiveUntil', '>', Timestamp.fromDate(now)),
       orderBy('boostActiveUntil', 'desc'),
       limit(BOOSTED_FETCH_LIMIT),
@@ -362,7 +389,11 @@ async function fetchBoostedProfiles(
 
       // boostType null aqui = Destaque Regional de outra região.
       // O perfil não é fixado no topo; aparecerá na trilha B.
-      if (profile && profile.boostType !== null) profiles.push(profile);
+      // Sem interesse mútuo também não é fixado: o boost alcança
+      // quem pode se interessar; o perfil segue no fluxo normal.
+      if (profile && profile.boostType !== null && isMutual(currentUser, docSnap.data())) {
+        profiles.push(profile);
+      }
     });
 
     return sortByScore(profiles);
@@ -375,16 +406,124 @@ async function fetchBoostedProfiles(
 }
 
 // ============================================
+// TRILHA B — compatíveis primeiro, depois o resto
+// ============================================
+
+/** Interesse mútuo entre quem vê e o perfil (mesma regra da fórmula). */
+export function isMutual(viewer: UserProfile, data: DocumentData): boolean {
+  return computeSintonia(viewer, data).parts.mutual === 'both';
+}
+
+function viewerCanFilter(viewer: UserProfile): boolean {
+  return typeof viewer.gender === 'string' && !!viewer.gender &&
+    seeksFromPreferences(viewer.preferences).length > 0;
+}
+
+function phaseConstraints(phase: FeedPhase, viewer: UserProfile) {
+  if (phase !== 'compatible') return [];
+  return [
+    // A pessoa se interessa pelo SEU gênero...
+    where('seeks', 'array-contains', viewer.gender),
+    // ...e o gênero dela está nas SUAS preferências.
+    where('gender', 'in', seeksFromPreferences(viewer.preferences)),
+  ];
+}
+
+interface Segment {
+  docs: QueryDocumentSnapshot<DocumentData>[];
+  /** null = a fase acabou. */
+  next: FeedCursor | null;
+}
+
+/**
+ * Um pedaço da fase atual: do seed até o fim da faixa e, ao acabar,
+ * do começo até o seed (a "volta"). Mesma lógica de antes, agora
+ * por fase.
+ */
+async function fetchSegment(
+  viewer: UserProfile,
+  state: FeedCursor,
+  need: number,
+  seed: number,
+): Promise<Segment> {
+  const base = phaseConstraints(state.phase, viewer);
+
+  if (!state.wrapped) {
+    const snap = await getDocs(query(
+      collection(db, PUBLIC_PROFILES),
+      ...base,
+      orderBy(ORDER_FIELD, 'asc'),
+      ...(state.last ? [startAfter(state.last)] : [where(ORDER_FIELD, '>=', seed)]),
+      limit(need),
+    ));
+    const docs = snap.docs;
+    // Página incompleta: o fim da faixa chegou — a próxima busca dá
+    // a volta e varre do começo até o seed.
+    if (docs.length < need) {
+      return { docs, next: { phase: state.phase, last: null, wrapped: true } };
+    }
+    return { docs, next: { phase: state.phase, last: docs[docs.length - 1], wrapped: false } };
+  }
+
+  const snap = await getDocs(query(
+    collection(db, PUBLIC_PROFILES),
+    ...base,
+    orderBy(ORDER_FIELD, 'asc'),
+    where(ORDER_FIELD, '<', seed),
+    ...(state.last ? [startAfter(state.last)] : []),
+    limit(need),
+  ));
+  const docs = snap.docs;
+  if (docs.length < need) return { docs, next: null };
+  return { docs, next: { phase: state.phase, last: docs[docs.length - 1], wrapped: true } };
+}
+
+/** Teto de consultas por página — evita laço longo em base vazia. */
+const MAX_SEGMENTS_PER_PAGE = 5;
+
+/**
+ * Documentos da trilha B para uma página: compatíveis primeiro,
+ * depois o resto (pulando os compatíveis). Usado pela Home e pelo
+ * Sintonize. Devolve o cursor da próxima página (null = acabou).
+ */
+export async function fetchFeedDocs(
+  viewer: UserProfile,
+  cursor: FeedCursor | null,
+  pageSize: number,
+  seed: number,
+): Promise<{ docs: QueryDocumentSnapshot<DocumentData>[]; cursor: FeedCursor | null }> {
+  const canFilter = viewerCanFilter(viewer);
+  let state: FeedCursor | null = cursor ?? {
+    phase: canFilter ? 'compatible' : 'rest', last: null, wrapped: false,
+  };
+  const docs: QueryDocumentSnapshot<DocumentData>[] = [];
+
+  for (let i = 0; i < MAX_SEGMENTS_PER_PAGE && state && docs.length < pageSize; i++) {
+    const segment = await fetchSegment(viewer, state, pageSize - docs.length, seed);
+    for (const docSnap of segment.docs) {
+      // Na fase 'rest', quem é compatível já apareceu na fase 1.
+      if (state.phase === 'rest' && canFilter && isMutual(viewer, docSnap.data())) continue;
+      docs.push(docSnap);
+    }
+    state = segment.next ?? (state.phase === 'compatible'
+      ? { phase: 'rest', last: null, wrapped: false }
+      : null);
+  }
+
+  return { docs, cursor: state };
+}
+
+// ============================================
 // PÁGINA DE PERFIS — API principal
 // ============================================
 export async function getCompatibleProfilesPage(
   currentUser: UserProfile,
   pageSize: number = PROFILE_PAGE_SIZE,
-  cursor: QueryDocumentSnapshot<DocumentData> | null = null,
+  cursor: FeedCursor | null = null,
   /** Devolvido pela página anterior. Na primeira, é sorteado. */
   seed: number | null = null,
-  /** true se a busca já deu a volta — evita buscar em círculo. */
-  wrapped: boolean = false,
+  /** Mantido pela assinatura antiga; a volta agora vive no cursor. */
+  _wrapped: boolean = false,
 ): Promise<ProfilePage> {
   try {
     const viewerRegiaoId = getRegiaoId(currentUser);
@@ -405,41 +544,8 @@ export async function getCompatibleProfilesPage(
       : [];
     const boostedIds = new Set(boosted.map(p => p.uid));
 
-    // Trilha B — do ponto sorteado em diante. Ao esgotar, dá a
-    // volta e varre do zero até o ponto de partida.
-    const constraints = cursor
-      ? [
-          orderBy(ORDER_FIELD, 'asc'),
-          startAfter(cursor),
-          limit(pageSize),
-        ]
-      : [
-          orderBy(ORDER_FIELD, 'asc'),
-          where(ORDER_FIELD, '>=', startSeed),
-          limit(pageSize),
-        ];
-
-    const snapshot = await getDocs(query(collection(db, 'users'), ...constraints));
-    let didWrap = wrapped;
-    let docs = snapshot.docs;
-
-    // Página INCOMPLETA e ainda sem a volta: completa buscando
-    // do início da faixa.
-    //
-    // A condição antiga era `snapshot.empty`, e isso quebrava o
-    // caso comum: quem sorteia 0.85 acha um ou dois perfis, a
-    // página não vem vazia, a volta nunca dispara e o feed
-    // mostra dois perfis de uma base inteira.
-    if (docs.length < pageSize && !wrapped) {
-      didWrap = true;
-      const wrapSnapshot = await getDocs(query(
-        collection(db, 'users'),
-        orderBy(ORDER_FIELD, 'asc'),
-        where(ORDER_FIELD, '<', startSeed),
-        limit(pageSize - docs.length),
-      ));
-      docs = [...docs, ...wrapSnapshot.docs];
-    }
+    // Trilha B — compatíveis primeiro; esgotados, o resto.
+    const { docs, cursor: state } = await fetchFeedDocs(currentUser, cursor, pageSize, startSeed);
 
     const regular: RealProfile[] = [];
     docs.forEach(docSnap => {
@@ -450,25 +556,12 @@ export async function getCompatibleProfilesPage(
       regular.push(profile);
     });
 
-    // hasMore usa o tamanho BRUTO da página, não o filtrado:
-    // uma página inteira de perfis incompletos ainda tem
-    // continuação e não pode encerrar o scroll.
-    // hasMore usa o tamanho BRUTO da página, não o filtrado.
-    // Depois da volta, uma página incompleta significa fim real
-    // da base.
-    // Depois da volta, uma página incompleta significa que a
-    // base acabou de verdade.
-    const hasMore = docs.length === pageSize && !didWrap;
-    const nextCursor = docs.length > 0
-      ? docs[docs.length - 1]
-      : null;
-
     return {
       profiles: [...boosted, ...sortByScore(regular)],
-      cursor: nextCursor,
-      hasMore,
+      cursor: state,
+      hasMore: state !== null,
       seed: startSeed,
-      wrapped: didWrap,
+      wrapped: state?.wrapped ?? true,
     };
   } catch (error) {
     console.error('[usersService] getCompatibleProfilesPage:', error);
@@ -492,12 +585,10 @@ export async function getCompatibleProfiles(
 // ============================================
 // PERFIL INDIVIDUAL
 // ============================================
+/** Perfil de OUTRA pessoa — sempre o público (users fechou nas regras). */
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   try {
-    const ref = doc(db, 'users', userId);
-    const snap = await getDoc(ref);
-    if (snap.exists()) return snap.data() as UserProfile;
-    return null;
+    return await getPublicProfile(userId);
   } catch (error) {
     console.error('Erro ao buscar perfil:', error);
     return null;

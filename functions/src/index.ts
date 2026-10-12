@@ -70,6 +70,9 @@ export { listBlockedUsers }         from "./users/listBlockedUsers";
 // ONBOARDING — TERMOS E VERIFICAÇÃO DE IDADE
 // ============================================
 export { acceptAppTerms }           from "./users/acceptAppTerms";
+// Perfil público (12/10/2026): projeção segura de users para o feed
+// e as telas que mostram OUTRAS pessoas; tarefas de manutenção.
+export { onUserWrittenPublicProfile, onAdminJobCreated } from "./users/publicProfiles";
 export {
   setGalleryPhoto, removeGalleryPhoto, adminRemoveGalleryPhoto,
 } from "./users/profileGallery";

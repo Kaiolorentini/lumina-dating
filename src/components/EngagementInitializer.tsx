@@ -44,6 +44,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, getDoc, onSnapshot, DocumentData } from 'firebase/firestore';
 import { useAuth }      from '../context/AuthContext';
 import { db }           from '../services/firebase';
+import { PUBLIC_PROFILES } from '../services/publicProfileService';
 import DailyRewardModal from './DailyRewardModal';
 import CosmeticRevealModal from './CosmeticRevealModal';
 import SintoniaRevealModal from './SintoniaRevealModal';
@@ -188,7 +189,8 @@ export default function EngagementInitializer() {
 
   async function loadSintoniaName(uid: string) {
     try {
-      const otherSnap = await getDoc(doc(db, 'users', uid));
+      // Perfil PÚBLICO da outra pessoa (users fechou nas regras, 12/10/2026).
+      const otherSnap = await getDoc(doc(db, PUBLIC_PROFILES, uid));
       const otherName = (otherSnap.data()?.name as string | undefined) ?? 'Alguém';
       if (mountedRef.current) setSintoniaName(otherName);
     } catch {

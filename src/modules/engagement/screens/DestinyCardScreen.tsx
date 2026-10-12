@@ -30,11 +30,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
 import { RootStackParamList } from '../../../navigation/types';
-import { useAuth } from '../../../context/AuthContext';
 import { useCoins } from '../../../context/CoinsContext';
-import { getProfile } from '../../profile/services/profileService';
-import { getUserProfile } from '../../../services/usersService';
-import { calcularSintonia } from '../../../utils/sintoniaEngine';
 import Header from '../../../components/Header';
 import { DestinyBackground } from '../components/DestinyBackground';
 import { DestinyCardFlip } from '../components/DestinyCardFlip';
@@ -76,7 +72,6 @@ interface ChoosePayload {
 
 export default function DestinyCardScreen() {
   const navigation = useNavigation<NavProp>();
-  const { user }   = useAuth();
   const { wallet, refreshWallet } = useCoins();
 
   const [state,    setState]    = useState<CardState | null>(null);
@@ -87,21 +82,6 @@ export default function DestinyCardScreen() {
   // quem paga por outra tem direito ao mesmo momento de virar.
   const [cardKey,  setCardKey]  = useState(0);
   const [revealed, setRevealed] = useState(false);
-  /**
-   * Sintonia recalculada no CLIENTE, por uid.
-   *
-   * O servidor usa um cálculo simplificado — preferência,
-   * idade e região — só para ESCOLHER quem mostrar. Mas o
-   * número exibido tem que ser o mesmo que a pessoa vê no
-   * perfil aberto e no card do feed, senão a carta diz 78% e
-   * o perfil diz 64%.
-   *
-   * Portar o calcularSintonia inteiro para o backend
-   * duplicaria ~100 linhas, e o projeto já sofreu com
-   * catálogos duplicados divergindo.
-   */
-  const [localScores, setLocalScores] = useState<Record<string, number>>({});
-
   const load = useCallback(async () => {
     try {
       const fn = httpsCallable<void, CardState>(getFunctions(), 'getDestinyCard');
@@ -119,29 +99,10 @@ export default function DestinyCardScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Recalcula quando os perfis mudam. Duas leituras por
-  // pessoa mostrada — aceitável, porque são no máximo duas
-  // por carta e a carta é rara.
-  useEffect(() => {
-    async function recalc() {
-      if (!user?.uid || !state?.profiles.length) return;
-
-      const me = await getProfile(user.uid);
-      if (!me) return;
-
-      const scores: Record<string, number> = {};
-
-      await Promise.all(state.profiles.map(async p => {
-        const other = await getUserProfile(p.uid);
-        if (!other) return;
-        scores[p.uid] = calcularSintonia(me, other).score;
-      }));
-
-      setLocalScores(prev => ({ ...prev, ...scores }));
-    }
-
-    recalc().catch(() => { /* fica o número do servidor */ });
-  }, [user?.uid, state?.profiles]);
+  // 12/10/2026 — Sintonia v2: o servidor usa a MESMA fórmula do app
+  // (config/sintoniaFormula), então o número da carta já é o do
+  // perfil e do feed. O recálculo no app saiu — eram 2 leituras por
+  // pessoa, e uma delas lia o users de outra pessoa, que fechou.
 
   // Volta do perfil de alguém: recarrega, porque a pessoa
   // pode ter escolhido por lá ou o estado pode ter mudado.
@@ -369,7 +330,7 @@ export default function DestinyCardScreen() {
                         <Image source={{ uri: p.photoURL }} style={styles.personPhoto} />
                         <View style={styles.matchTag}>
                           <Text style={styles.matchTagText}>
-                            {localScores[p.uid] ?? p.sintonia}%
+                            {p.sintonia}%
                           </Text>
                         </View>
                       </TouchableOpacity>

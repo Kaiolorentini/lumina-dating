@@ -165,7 +165,15 @@ service cloud.firestore {
         'uid', 'email', 'name', 'age', 'city', 'state', 'regiaoId', 'estadoId',
         'gender', 'preferences', 'bio', 'photoURL',
         'createdAt', 'updatedAt', 'randomSeed',
+        // 12/10/2026: interesses da Sintonia v2 (lista fechada).
+        'interests',
       ];
+    }
+
+    // Catálogo de interesses — MESMOS ids de
+    // functions/src/config/interestsCatalog.ts e do espelho do app.
+    function interestIds() {
+      return ['sertanejo', 'pop', 'rock', 'funk', 'pagode_samba', 'mpb', 'eletronica', 'rap_trap', 'academia', 'futebol', 'corrida', 'ciclismo', 'lutas', 'danca', 'yoga', 'praia', 'montanha', 'mochilao', 'viagem_internacional', 'roadtrip', 'filmes', 'series', 'anime', 'documentarios', 'games', 'jogos_tabuleiro', 'cozinhar', 'cafe', 'churrasco', 'vinho', 'cerveja_artesanal', 'restaurantes', 'trilhas', 'camping', 'pesca', 'cachorros', 'gatos', 'fotografia', 'leitura', 'arte', 'teatro', 'moda', 'tecnologia', 'barzinho', 'baladas', 'shows', 'karaoke', 'noite_em_casa'];
     }
 
     // Foto de perfil: só o arquivo da PRÓPRIA pasta, no Storage
@@ -199,6 +207,9 @@ service cloud.firestore {
                                            d.preferences.size() >= 1 && d.preferences.size() <= 4 &&
                                            d.preferences.toSet().hasOnly(['homens', 'mulheres', 'trans', 'todos']))) &&
         (!changed.hasAny(['bio'])         || (d.bio is string && d.bio.size() <= 1000)) &&
+        (!changed.hasAny(['interests'])   || (d.interests is list && d.interests.size() <= 10 &&
+                                           d.interests.toSet().size() == d.interests.size() &&
+                                           d.interests.toSet().hasOnly(interestIds()))) &&
         (!changed.hasAny(['photoURL'])    || isOwnProfilePhotoUrl(d.photoURL, userId)) &&
         (!changed.hasAny(['createdAt'])   || d.createdAt is timestamp) &&
         (!changed.hasAny(['updatedAt'])   || d.updatedAt is timestamp);
@@ -214,8 +225,13 @@ service cloud.firestore {
       // adulto: fotos, idade, cidade e campos de moderação.
       // O dono sempre lê o próprio documento: o gate de acesso
       // depende dele antes da verificação.
-      allow get: if isOwner(userId) || isVerified() || isAdmin();
-      allow list: if isVerified() || isAdmin();
+      // 12/10/2026 (análise da Sintonia, CRÍTICO): o documento
+      // inteiro — e-mail, data de nascimento do documento, moderação,
+      // boosts comprados, progressão — passa a ser só do DONO e dos
+      // admins. Outras pessoas leem publicProfiles/{uid}, a projeção
+      // por lista branca gravada pelo servidor.
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
       // O CREATE barra TODOS os campos protegidos, não só os de
       // economia. Antes, uma conta nova podia nascer com
       // ageVerificationStatus 'approved', xp e conquistas
@@ -1199,6 +1215,29 @@ match /achievementTriggers/{docId} {
         allow read:  if isOwner(userId) || isSuperAdmin();
         allow write: if false;
       }
+    }
+
+    // ============================================
+    // PERFIL PÚBLICO (12/10/2026)
+    // ============================================
+    // Gravado SÓ pelo gatilho onUserWrittenPublicProfile, com lista
+    // branca de campos e só para perfis listáveis (idade verificada,
+    // conta ativa). Leitura para contas verificadas — as mesmas que
+    // antes liam users — e admins.
+    match /publicProfiles/{userId} {
+      allow get, list: if isVerified() || isAdmin();
+      allow write: if false;
+    }
+
+    // Tarefas de manutenção (ex.: rebuildPublicProfiles), criadas pelo
+    // Console e executadas pelo gatilho onAdminJobCreated.
+    match /adminJobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    // Contador diário de curtidas (onCreateMatch). Só o servidor.
+    match /dailyLikeCounts/{docId} {
+      allow read, write: if false;
     }
 
     // ============================================

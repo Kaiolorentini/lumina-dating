@@ -1,6 +1,9 @@
 // ============================================
-// LUMINA — MOST VISITED SERVICE v6.1
+// LUMINA — MOST VISITED SERVICE v6.2
 // src/services/mostVisitedService.ts
+//
+// v6.2 (12/10/2026): lê publicProfiles — o documento users de outras
+// pessoas fechou nas regras. Sintonia v2 (mesma do feed).
 //
 // v6.1:
 // - O card leva também o FIM do boost (boostUntil), para a Home
@@ -21,7 +24,7 @@ import {
 } from 'firebase/firestore';
 import { db }                      from './firebase';
 import { getMostVisitedProfiles }  from './visitsService';
-import { getProfile }              from './profileService';
+import { PUBLIC_PROFILES, getPublicProfile } from './publicProfileService';
 import { calcularSintonia }        from '../utils/sintoniaEngine';
 import { isListableProfile } from '../shared/utils/profileVisibility';
 import { UserProfile, ProfileCardData, BoostType } from '../shared/types';
@@ -108,7 +111,7 @@ export async function getMostVisitedProfileCards(
     if (visitCounts.length === 0) return [];
 
     const profiles = await Promise.all(
-      visitCounts.map(v => getProfile(v.profileId).catch(() => null)),
+      visitCounts.map(v => getPublicProfile(v.profileId).catch(() => null)),
     );
 
     const region = viewerRegion(currentUser);
@@ -135,7 +138,7 @@ export async function getTurboProfileCards(
 ): Promise<ProfileCardData[]> {
   try {
     const snap = await getDocs(query(
-      collection(db, 'users'),
+      collection(db, PUBLIC_PROFILES),
       where('boostType', '==', 'turbo'),
       where('boostActiveUntil', '>', Timestamp.now()),
       orderBy('boostActiveUntil', 'desc'),

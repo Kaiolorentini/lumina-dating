@@ -17,6 +17,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import app, { db, storage } from '../../../core/firebase';
+import { PUBLIC_PROFILES } from '../../../services/publicProfileService';
 
 export type TicketStatus   = 'open' | 'answered' | 'resolved';
 export type TicketPriority = 'urgent' | 'normal' | 'low';
@@ -243,7 +244,8 @@ export async function loadReportCandidates(
   const ids = Array.from(new Set(connections.map(c => (c.fromUserId === uid ? c.toUserId : c.fromUserId))))
     .filter(Boolean)
     .slice(0, 30);
-  const snaps = await Promise.all(ids.map(id => getDoc(doc(db, 'users', id)).catch(() => null)));
+  // Perfil PÚBLICO (users de outra pessoa fechou nas regras, 12/10/2026).
+  const snaps = await Promise.all(ids.map(id => getDoc(doc(db, PUBLIC_PROFILES, id)).catch(() => null)));
   return snaps
     .filter((s): s is NonNullable<typeof s> => !!s && s.exists())
     .map(s => {

@@ -27,7 +27,6 @@
 // ============================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { useAuth }          from '../../../context/AuthContext';
 import { useCoins }         from '../../../context/CoinsContext';
 import { useNotifications } from '../../notifications/hooks/useNotifications';
@@ -35,6 +34,7 @@ import { useVisits }        from '../../../hooks/useVisits';
 import { useBoostExpiryTicker } from '../../../hooks/useBoostExpiryTicker';
 import { getProfile }       from '../../profile/services/profileService';
 import {
+  FeedCursor,
   getCompatibleProfilesPage,
   PROFILE_PAGE_SIZE,
   RealProfile,
@@ -110,7 +110,9 @@ export function useHomeData(): UseHomeDataReturn {
 
   // Cursor fora do state: mudá-lo não deve disparar re-render,
   // e precisa estar sempre atualizado dentro de loadMoreProfiles.
-  const cursorRef  = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  // Cursor da busca (12/10/2026): guarda também a fase — compatíveis
+  // primeiro, depois o resto. Opaco aqui: só guarda e devolve.
+  const cursorRef  = useRef<FeedCursor | null>(null);
   // Ponto de partida sorteado na primeira página. Sem guardá-lo,
   // cada página sortearia um ponto novo e a listagem repetiria
   // perfis sem nunca cobrir a base.

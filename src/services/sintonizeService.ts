@@ -1,6 +1,12 @@
 // ============================================
-// LUMINA — FILA DO SINTONIZE v2.1
+// LUMINA — FILA DO SINTONIZE v3.0
 // src/services/sintonizeService.ts
+//
+// v3.0 (12/10/2026) — SINTONIA v2 E PERFIL PÚBLICO: lê publicProfiles
+// (users de outras pessoas fechou nas regras) e usa a mesma busca da
+// Home — compatíveis (interesse mútuo) primeiro, depois o resto. O
+// Turbo do Sintonize passa a exigir interesse MÚTUO (antes bastava o
+// gênero da pessoa estar nas suas preferências).
 //
 // v2.1 (27/09) — SEGUNDA CHANCE: lista de quem foi passado nas
 // últimas 24h (fetchDismissedProfiles) e a chamada paga que traz
@@ -17,14 +23,15 @@
 // ============================================
 
 import {
-  collection, doc, getDoc, getDocs, query, where, orderBy, limit, startAfter, Timestamp,
+  collection, doc, getDoc, getDocs, query, where, orderBy, limit, Timestamp,
   QueryDocumentSnapshot, DocumentData,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from './firebase';
 import { UserProfile } from '../types';
 import { calcularSintonia } from '../utils/sintoniaEngine';
-import { RealProfile } from './usersService';
+import { FeedCursor, RealProfile, fetchFeedDocs, isMutual } from './usersService';
+import { PUBLIC_PROFILES } from './publicProfileService';
 import { isListableProfile } from '../shared/utils/profileVisibility';
 
 const FETCH_SIZE = 20;
@@ -39,27 +46,9 @@ const TURBO_SLOTS = 3;
 /** Quantos passados a lista da Segunda Chance mostra. */
 const DISMISSED_LIST_LIMIT = 20;
 
-/**
- * Preferência → gêneros. Espelha functions/src/utils/compatibility.ts.
- * Manter em sincronia.
- */
-const PREFERENCE_TO_GENDERS: Record<string, string[]> = {
-  homens:   ['masculino'],
-  mulheres: ['feminino'],
-  trans:    ['trans'],
-  todos:    ['masculino', 'feminino', 'trans', 'nao-binario'],
-};
-
-function viewerAccepts(viewer: UserProfile, gender: unknown): boolean {
-  const prefs = ((viewer as { preferences?: string[] }).preferences) ?? [];
-  if (prefs.length === 0) return true;
-  if (typeof gender !== 'string') return false;
-  return prefs.some(p => (PREFERENCE_TO_GENDERS[p] ?? []).includes(gender));
-}
-
 export interface SintonizePage {
   profiles: RealProfile[];
-  cursor:   QueryDocumentSnapshot<DocumentData> | null;
+  cursor:   FeedCursor | null;
   seed:     number;
   wrapped:  boolean;
   hasMore:  boolean;
@@ -138,7 +127,7 @@ async function fetchTurboProfiles(
   dismissedUids: Set<string>,
 ): Promise<RealProfile[]> {
   const snap = await getDocs(query(
-    collection(db, 'users'),
+    collection(db, PUBLIC_PROFILES),
     where('boostType', '==', 'turbo'),
     where('boostActiveUntil', '>', Timestamp.now()),
     orderBy('boostActiveUntil', 'desc'),
@@ -149,7 +138,7 @@ async function fetchTurboProfiles(
   for (const docSnap of snap.docs) {
     if (out.length >= TURBO_SLOTS) break;
     if (dismissedUids.has(docSnap.id)) continue;
-    if (!viewerAccepts(currentUser, docSnap.data().gender)) continue;
+    if (!isMutual(currentUser, docSnap.data())) continue;
     const profile = buildProfile(docSnap, currentUser);
     if (!profile) continue;
     const until = (docSnap.data().boostActiveUntil as { toDate?: () => Date } | undefined)
@@ -162,20 +151,17 @@ async function fetchTurboProfiles(
 export async function fetchSintonizePage(
   currentUser: UserProfile,
   dismissedUids: Set<string>,
-  cursor: QueryDocumentSnapshot<DocumentData> | null = null,
+  cursor: FeedCursor | null = null,
   seed: number | null = null,
-  wrapped: boolean = false,
+  /** Mantido pela assinatura antiga; a volta agora vive no cursor. */
+  _wrapped: boolean = false,
 ): Promise<SintonizePage> {
   try {
     const startSeed = seed ?? Math.random();
     const isFirst   = cursor === null;
 
-    const constraints = cursor
-      ? [orderBy('randomSeed', 'asc'), startAfter(cursor), limit(FETCH_SIZE)]
-      : [orderBy('randomSeed', 'asc'), where('randomSeed', '>=', startSeed), limit(FETCH_SIZE)];
-
-    const [snapshot, turbo] = await Promise.all([
-      getDocs(query(collection(db, 'users'), ...constraints)),
+    const [feed, turbo] = await Promise.all([
+      fetchFeedDocs(currentUser, cursor, FETCH_SIZE, startSeed),
       isFirst
         ? fetchTurboProfiles(currentUser, dismissedUids).catch((error): RealProfile[] => {
             console.error('[sintonizeService] Turbo:', error);
@@ -184,24 +170,10 @@ export async function fetchSintonizePage(
         : Promise.resolve<RealProfile[]>([]),
     ]);
 
-    let docs = snapshot.docs;
-    let didWrap = wrapped;
-
-    if (docs.length < FETCH_SIZE && !wrapped) {
-      didWrap = true;
-      const wrapSnap = await getDocs(query(
-        collection(db, 'users'),
-        orderBy('randomSeed', 'asc'),
-        where('randomSeed', '<', startSeed),
-        limit(FETCH_SIZE - docs.length),
-      ));
-      docs = [...docs, ...wrapSnap.docs];
-    }
-
     const turboIds = new Set(turbo.map(p => p.uid));
     const profiles: RealProfile[] = [...turbo];
 
-    docs.forEach((docSnap) => {
+    feed.docs.forEach((docSnap: QueryDocumentSnapshot<DocumentData>) => {
       if (dismissedUids.has(docSnap.id)) return;
       if (turboIds.has(docSnap.id)) return;
       const profile = buildProfile(docSnap, currentUser);
@@ -210,10 +182,10 @@ export async function fetchSintonizePage(
 
     return {
       profiles,
-      cursor:  docs.length > 0 ? docs[docs.length - 1] : null,
+      cursor:  feed.cursor,
       seed:    startSeed,
-      wrapped: didWrap,
-      hasMore: docs.length === FETCH_SIZE && !didWrap,
+      wrapped: feed.cursor?.wrapped ?? true,
+      hasMore: feed.cursor !== null,
     };
   } catch (error) {
     console.error('[sintonizeService] fetchSintonizePage:', error);
@@ -234,7 +206,7 @@ export async function fetchDismissedProfiles(
     .slice(0, DISMISSED_LIST_LIMIT);
 
   const snaps = await Promise.all(
-    recent.map(([id]) => getDoc(doc(db, 'users', id)).catch(() => null)),
+    recent.map(([id]) => getDoc(doc(db, PUBLIC_PROFILES, id)).catch(() => null)),
   );
 
   const out: DismissedProfile[] = [];

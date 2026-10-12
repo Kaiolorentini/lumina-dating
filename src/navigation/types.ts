@@ -63,6 +63,8 @@ export type RootStackParamList = {
   EditProduct:     { productId: string };
   /** Contrato do Criador (12/10/2026). next: para onde seguir depois do aceite. */
   CreatorAgreement: { next?: 'CreateProduct' } | undefined;
+  /** Meus interesses — Sintonia v2 (12/10/2026). */
+  Interests: undefined;
   MyFavorites:     undefined;
   MyEarnings:      undefined;
   Withdrawal:      undefined;
