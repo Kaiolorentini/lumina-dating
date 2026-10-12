@@ -97,6 +97,9 @@ export function toIsoDate(input: string): string | null {
   return `${digits.slice(4, 8)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
 }
 
+/** Brasília: UTC-3 (sem horário de verão desde 2019). */
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
+
 /** Máscara DD/MM/AAAA enquanto digita. */
 export function maskBirthDate(input: string): string {
   const digits = input.replace(/\D/g, '').slice(0, 8);
@@ -117,14 +120,22 @@ export function previewAge(input: string): number | null {
   const date = new Date(year, month - 1, day);
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
 
-  const nowBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  if (date.getTime() > nowBrt.getTime()) return null;
-  if (year < nowBrt.getFullYear() - 120) return null;
+  // "Hoje" em Brasília SEM toLocaleString: no Hermes (motor do app)
+  // o texto de toLocaleString não volta para Date e dava "NaN anos"
+  // (12/10/2026). Brasília é UTC-3 o ano todo desde 2019 (sem horário
+  // de verão), então basta deslocar e ler os campos em UTC.
+  const nowBrt = new Date(Date.now() - BRT_OFFSET_MS);
+  const todayYear  = nowBrt.getUTCFullYear();
+  const todayMonth = nowBrt.getUTCMonth() + 1;
+  const todayDay   = nowBrt.getUTCDate();
 
-  let age = nowBrt.getFullYear() - year;
-  const monthDiff = nowBrt.getMonth() - (month - 1);
-  if (monthDiff < 0 || (monthDiff === 0 && nowBrt.getDate() < day)) age--;
-  return age;
+  // Data no futuro (comparando só dia/mês/ano).
+  if (year * 10000 + month * 100 + day > todayYear * 10000 + todayMonth * 100 + todayDay) return null;
+  if (year < todayYear - 120) return null;
+
+  let age = todayYear - year;
+  if (todayMonth < month || (todayMonth === month && todayDay < day)) age--;
+  return Number.isFinite(age) ? age : null;
 }
 
 function toPayload(draft: AgeChecklistDraft): AgeChecklistPayload {
