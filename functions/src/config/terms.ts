@@ -21,7 +21,9 @@
 // [PREENCHER]: a versão final terá outro valor, e a troca
 // força todos a aceitar de novo — que é o comportamento
 // correto, já que o documento será materialmente diferente.
-export const APP_TERMS_VERSION = "2026-09-17-draft";
+// 11/10/2026: versão de lançamento (vigência 01/12/2026), texto
+// idêntico ao da landing. Todos aceitam de novo.
+export const APP_TERMS_VERSION = "2026-12-01";
 
 /** Versões já publicadas, da mais recente para a mais antiga. */
-export const KNOWN_TERMS_VERSIONS = ["2026-09-17-draft"] as const;
+export const KNOWN_TERMS_VERSIONS = ["2026-12-01", "2026-09-17-draft"] as const;

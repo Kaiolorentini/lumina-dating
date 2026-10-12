@@ -22,6 +22,8 @@
 
 import { TERMS_2026_09_17_DRAFT } from './terms-2026-09-17-draft';
 import { PRIVACY_2026_09_17_DRAFT } from './privacy-2026-09-17-draft';
+import { TERMS_2026_12_01 } from './terms-2026-12-01';
+import { PRIVACY_2026_12_01 } from './privacy-2026-12-01';
 
 export interface LegalSection {
   /** Título da seção, como aparece no documento. */
@@ -57,9 +59,19 @@ export const LEGAL_VERSIONS: Record<string, LegalVersion> = {
     privacy: PRIVACY_2026_09_17_DRAFT,
     draft: true,
   },
+  // Versão de lançamento (11/10/2026): texto idêntico ao da landing.
+  // draft: false — o documento está completo. A única pendência é o
+  // CPF do co-controlador Jefferson, a completar antes de 01/12/2026
+  // sem trocar a versão (ninguém de fora aceitou antes do lançamento).
+  '2026-12-01': {
+    version: '2026-12-01',
+    terms: TERMS_2026_12_01,
+    privacy: PRIVACY_2026_12_01,
+    draft: false,
+  },
 };
 
-export const CURRENT_LEGAL_VERSION = '2026-09-17-draft';
+export const CURRENT_LEGAL_VERSION = '2026-12-01';
 
 export function getLegalVersion(version: string): LegalVersion | null {
   return LEGAL_VERSIONS[version] ?? null;

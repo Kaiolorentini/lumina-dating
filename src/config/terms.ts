@@ -11,4 +11,5 @@
 // deployar functions ANTES do eas update.
 // ============================================
 
-export const APP_TERMS_VERSION = '2026-09-17-draft';
+// 11/10/2026: versão de lançamento (vigência 01/12/2026).
+export const APP_TERMS_VERSION = '2026-12-01';

@@ -75,10 +75,9 @@ export default function VerificationPendingScreen({ onResubmit }: Props) {
             Você tem até {MAX_ATTEMPTS} tentativas no total.
           </Text>
 
-          {/* LEMBRETE: preencher o e-mail do suporte aqui */}
-          <Text style={styles.support}>
+          <Text style={styles.support} selectable>
             Acha que houve um erro na análise? Escreva para{'\n'}
-            [PREENCHER: e-mail do suporte]
+            luminaaidating@gmail.com
           </Text>
         </ScrollView>
       </ScreenContainer>

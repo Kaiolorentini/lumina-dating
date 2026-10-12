@@ -60,7 +60,6 @@ export default function AccountBannedScreen() {
           </Text>
         </View>
 
-        {/* LEMBRETE: preencher o e-mail do suporte aqui */}
         <View style={styles.supportCard}>
           <Text style={styles.cardTitle}>Houve um erro na análise?</Text>
           <Text style={styles.cardBody}>
@@ -68,7 +67,7 @@ export default function AccountBannedScreen() {
             engano, escreva para o nosso suporte com seu nome e o
             e-mail cadastrado.
           </Text>
-          <Text style={styles.email}>[PREENCHER: e-mail do suporte]</Text>
+          <Text style={styles.email} selectable>luminaaidating@gmail.com</Text>
         </View>
       </ScrollView>
     </ScreenContainer>
