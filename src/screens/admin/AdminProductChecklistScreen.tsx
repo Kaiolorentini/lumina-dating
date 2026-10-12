@@ -6,8 +6,9 @@
 // para produto novo (mode 'product') ou para alterações de produto
 // à venda (mode 'changes').
 //
-// • Cada item: pergunta, "como analisar" (o que olhar, pode / não
-//   pode) e Aprovado / Negado. Negado mostra o motivo que vai para o
+// • Cada item (cartão compartilhado ChecklistItemCard, 12/10/2026):
+//   pergunta, "como analisar" (o que olhar, pode / não pode) e
+//   Aprovado / Negado. Negado mostra o motivo que vai para o
 //   criador e aceita uma observação.
 // • "Aprovar e publicar" só com TODOS os itens aprovados. "Recusar"
 //   com todos respondidos e pelo menos um negado.
@@ -20,7 +21,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, TouchableOpacity,
-  ActivityIndicator, Alert, TextInput,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,8 +30,9 @@ import { RootStackParamList } from '../../navigation/types';
 import { getProduct, ProductWithChanges } from '../../services/marketplace/productService';
 import { useSuperAdminGuard } from '../../hooks/useAdminGuard';
 import ScreenContainer from '../../components/ScreenContainer';
+import ChecklistItemCard from '../../components/moderation/ChecklistItemCard';
 import {
-  ChecklistAnswer, ChecklistItem, PRODUCT_CHECKLIST, PRODUCT_CHECKLIST_ITEMS,
+  ChecklistAnswer, PRODUCT_CHECKLIST, PRODUCT_CHECKLIST_ITEMS,
 } from '../../config/moderation/productChecklist';
 import {
   ChecklistDraft, approveProduct, clearChecklistDraft, getChecklistDraft,
@@ -41,89 +43,7 @@ type NavProp   = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'AdminProductChecklist'>;
 
 const TOTAL_ITEMS = PRODUCT_CHECKLIST_ITEMS.length;
-
-interface ItemCardProps {
-  item: ChecklistItem;
-  answer: ChecklistAnswer | undefined;
-  note: string;
-  onAnswer: (answer: ChecklistAnswer) => void;
-  onNote: (note: string) => void;
-}
-
-function ItemCard({ item, answer, note, onAnswer, onNote }: ItemCardProps) {
-  const [showHelp, setShowHelp] = useState(false);
-  const approved = answer === 'approved';
-  const rejected = answer === 'rejected';
-
-  return (
-    <View style={[styles.itemCard, approved && styles.itemCardOk, rejected && styles.itemCardNo]}>
-      <View style={styles.itemHeader}>
-        <Text style={styles.itemTitle}>
-          {item.childSafety ? '🛡️ ' : ''}{item.title}
-        </Text>
-        <TouchableOpacity
-          onPress={() => setShowHelp(v => !v)}
-          accessibilityRole="button"
-          accessibilityLabel={showHelp ? 'Esconder como analisar' : 'Mostrar como analisar'}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.helpToggle}>{showHelp ? 'Fechar ▲' : 'Como analisar ▼'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {showHelp && (
-        <View style={styles.help}>
-          <Text style={styles.helpLabel}>🔍 O que olhar</Text>
-          <Text style={styles.helpText}>{item.look}</Text>
-          <Text style={[styles.helpLabel, { color: colors.success }]}>✅ Pode</Text>
-          {item.ok.map(text => <Text key={text} style={styles.helpBullet}>• {text}</Text>)}
-          <Text style={[styles.helpLabel, { color: colors.error }]}>❌ Não pode</Text>
-          {item.notOk.map(text => <Text key={text} style={styles.helpBullet}>• {text}</Text>)}
-        </View>
-      )}
-
-      <View style={styles.answerRow}>
-        <TouchableOpacity
-          style={[styles.answerBtn, approved && styles.answerBtnOk]}
-          onPress={() => onAnswer('approved')}
-          accessibilityRole="radio"
-          accessibilityState={{ selected: approved }}
-          accessibilityLabel={`${item.title}: aprovado`}
-        >
-          <Text style={[styles.answerText, approved && styles.answerTextOk]}>✅ Aprovado</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.answerBtn, rejected && styles.answerBtnNo]}
-          onPress={() => onAnswer('rejected')}
-          accessibilityRole="radio"
-          accessibilityState={{ selected: rejected }}
-          accessibilityLabel={`${item.title}: negado`}
-        >
-          <Text style={[styles.answerText, rejected && styles.answerTextNo]}>❌ Negado</Text>
-        </TouchableOpacity>
-      </View>
-
-      {rejected && (
-        <View style={styles.rejectBox}>
-          <Text style={styles.rejectLabel}>Motivo enviado ao criador:</Text>
-          <Text style={styles.rejectReason}>{item.reason}</Text>
-          {item.childSafety && (
-            <Text style={styles.childAlert}>🚨 Este item gera alerta interno para revisar a conta do criador.</Text>
-          )}
-          <TextInput
-            style={styles.noteInput}
-            placeholder="Observação para o criador (opcional, até 300 letras)"
-            placeholderTextColor={colors.gray}
-            value={note}
-            onChangeText={onNote}
-            maxLength={300}
-            multiline
-          />
-        </View>
-      )}
-    </View>
-  );
-}
+const CHILD_SAFETY_WARNING = '🚨 Este item gera alerta interno para revisar a conta do criador.';
 
 export default function AdminProductChecklistScreen() {
   const navigation = useNavigation<NavProp>();
@@ -325,13 +245,22 @@ export default function AdminProductChecklistScreen() {
             <Text style={styles.groupTitle}>{group.title}</Text>
             {group.warning ? <Text style={styles.groupWarning}>⚠️ {group.warning}</Text> : null}
             {group.items.map(item => (
-              <ItemCard
+              <ChecklistItemCard
                 key={item.id}
-                item={item}
+                title={item.title}
+                icon={item.childSafety ? '🛡️' : undefined}
+                look={item.look}
+                ok={item.ok}
+                notOk={item.notOk}
                 answer={draft.answers[item.id]}
                 note={draft.notes[item.id] ?? ''}
                 onAnswer={answer => setAnswer(item.id, answer)}
                 onNote={note => setNote(item.id, note)}
+                reasonLabel="Motivo enviado ao criador:"
+                reasonText={item.reason}
+                rejectWarnings={item.childSafety ? [CHILD_SAFETY_WARNING] : undefined}
+                notePlaceholder="Observação para o criador (opcional, até 300 letras)"
+                disabled={submitting}
               />
             ))}
           </View>
@@ -415,39 +344,8 @@ const styles = StyleSheet.create({
   groupTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold', marginTop: spacing.sm },
   groupWarning: { color: colors.error, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
 
-  itemCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.grayDark,
-    padding: spacing.md, gap: spacing.sm,
-  },
-  itemCardOk: { borderColor: colors.success },
-  itemCardNo: { borderColor: colors.error },
-  itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm },
-  itemTitle: { flex: 1, color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
-  helpToggle: { color: colors.gold, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  help: { gap: 4, padding: spacing.sm, borderRadius: borderRadius.sm, backgroundColor: colors.background },
-  helpLabel: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold', marginTop: 4 },
-  helpText: { color: colors.white, fontSize: fonts.sizes.sm, lineHeight: 19 },
-  helpBullet: { color: colors.gray, fontSize: fonts.sizes.sm, lineHeight: 19 },
 
-  answerRow: { flexDirection: 'row', gap: spacing.sm },
-  answerBtn: {
-    flex: 1, paddingVertical: spacing.sm, borderRadius: borderRadius.sm, borderWidth: 1,
-    borderColor: colors.grayDark, alignItems: 'center', minHeight: 44, justifyContent: 'center',
-  },
-  answerBtnOk: { borderColor: colors.success, backgroundColor: colors.success + '22' },
-  answerBtnNo: { borderColor: colors.error, backgroundColor: colors.error + '22' },
-  answerText: { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
-  answerTextOk: { color: colors.success },
-  answerTextNo: { color: colors.error },
 
-  rejectBox: { gap: 4 },
-  rejectLabel: { color: colors.gray, fontSize: fonts.sizes.xs },
-  rejectReason: { color: colors.white, fontSize: fonts.sizes.sm, fontStyle: 'italic' },
-  childAlert: { color: colors.error, fontSize: fonts.sizes.xs, fontWeight: 'bold' },
-  noteInput: {
-    backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.grayDark,
-    color: colors.white, padding: spacing.sm, fontSize: fonts.sizes.sm, minHeight: 56, textAlignVertical: 'top',
-  },
 
   footer: {
     padding: spacing.md, gap: spacing.sm, borderTopWidth: 1, borderTopColor: colors.grayDark, backgroundColor: colors.surface,

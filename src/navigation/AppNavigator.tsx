@@ -560,6 +560,17 @@ function AppContent() {
       case 'age_verification_pending':
         navigationRef.current.navigate('AdminAgeVerification');
         break;
+      // Alerta de proteção de menores na moderação de produto
+      // (12/10/2026): abre a conta do criador para revisão.
+      case 'child_safety_alert':
+        if (data.ownerId) {
+          navigationRef.current.navigate('AdminUserDetail', { userId: data.ownerId });
+        } else if (data.productId) {
+          navigationRef.current.navigate('AdminProductReview', { productId: data.productId });
+        } else {
+          navigationRef.current.navigate('AdminProductsModeration');
+        }
+        break;
       // Alerta de verificação suspeita (12/10/2026): abre a conta para
       // a segunda revisão. Sem userId, cai na fila.
       case 'age_review_alert':

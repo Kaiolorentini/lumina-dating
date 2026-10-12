@@ -15,7 +15,12 @@
 //
 // O preço (mínimo R$ 19,99 ou grátis) NÃO é item respondido pelo
 // admin: o servidor confere sozinho (marketplacePricing).
+//
+// 12/10/2026: a validação passou para checklistParser.ts (comum ao
+// questionário de idade). Comportamento e mensagens iguais.
 // ============================================
+
+import { ParsedChecklistBase, parseChecklistBase } from './checklistParser';
 
 export const PRODUCT_CHECKLIST_VERSION = 1;
 
@@ -79,17 +84,7 @@ export const PRODUCT_CHECKLIST_ITEMS: readonly ChecklistItemDef[] = [
     reason: 'O produto precisa entregar o conteúdo completo dentro do Lumina.' },
 ] as const;
 
-const ITEM_IDS = new Set(PRODUCT_CHECKLIST_ITEMS.map(item => item.id));
-const NOTE_MAX = 300;
-
-export interface ParsedChecklist {
-  version: number;
-  answers: Record<string, ChecklistAnswer>;
-  /** Observação do admin por item negado (vai junto do motivo). */
-  notes: Record<string, string>;
-  rejectedIds: string[];
-  allApproved: boolean;
-}
+export type ParsedChecklist = ParsedChecklistBase;
 
 export class ChecklistError extends Error {}
 
@@ -97,48 +92,15 @@ export class ChecklistError extends Error {}
  * Valida o questionário enviado pelo app: versão atual, TODOS os
  * itens respondidos, nenhum item desconhecido, observações curtas.
  * Lança ChecklistError com mensagem pronta para o admin.
+ * (Regras em checklistParser.ts, comuns aos dois questionários.)
  */
 export function parseProductChecklist(raw: unknown): ParsedChecklist {
-  if (typeof raw !== 'object' || raw === null) {
-    throw new ChecklistError('Responda o questionário de moderação antes de concluir.');
-  }
-  const data = raw as { version?: unknown; answers?: unknown; notes?: unknown };
-
-  if (data.version !== PRODUCT_CHECKLIST_VERSION) {
-    throw new ChecklistError('O questionário foi atualizado. Atualize o app e responda de novo.');
-  }
-  if (typeof data.answers !== 'object' || data.answers === null) {
-    throw new ChecklistError('Questionário sem respostas.');
-  }
-
-  const rawAnswers = data.answers as Record<string, unknown>;
-  for (const key of Object.keys(rawAnswers)) {
-    if (!ITEM_IDS.has(key)) throw new ChecklistError('Questionário com item desconhecido.');
-  }
-
-  const answers: Record<string, ChecklistAnswer> = {};
-  for (const item of PRODUCT_CHECKLIST_ITEMS) {
-    const value = rawAnswers[item.id];
-    if (value !== 'approved' && value !== 'rejected') {
-      throw new ChecklistError(`Responda todos os itens. Falta: "${item.title}".`);
-    }
-    answers[item.id] = value;
-  }
-
-  const notes: Record<string, string> = {};
-  if (typeof data.notes === 'object' && data.notes !== null) {
-    for (const [key, value] of Object.entries(data.notes as Record<string, unknown>)) {
-      if (!ITEM_IDS.has(key) || typeof value !== 'string') continue;
-      const note = value.trim().slice(0, NOTE_MAX);
-      if (note && answers[key] === 'rejected') notes[key] = note;
-    }
-  }
-
-  const rejectedIds = PRODUCT_CHECKLIST_ITEMS
-    .filter(item => answers[item.id] === 'rejected')
-    .map(item => item.id);
-
-  return { version: PRODUCT_CHECKLIST_VERSION, answers, notes, rejectedIds, allApproved: rejectedIds.length === 0 };
+  return parseChecklistBase(raw, {
+    version: PRODUCT_CHECKLIST_VERSION,
+    items: PRODUCT_CHECKLIST_ITEMS,
+    missingMessage: 'Responda o questionário de moderação antes de concluir.',
+    makeError: message => new ChecklistError(message),
+  });
 }
 
 /** Texto do motivo enviado ao criador, montado pelo SERVIDOR. */

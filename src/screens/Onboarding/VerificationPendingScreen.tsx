@@ -9,6 +9,9 @@
 //   rejected → motivo, tentativas restantes, reenviar
 //   esgotado → contato com o suporte
 //
+// 12/10/2026: o texto da recusa vem pronto do servidor
+// (ageRejectionNote), decidido pelo questionário do admin.
+//
 // NÃO tem botão de atualizar: o useUserPermissions escuta
 // users/{uid} com onSnapshot, então a árvore troca sozinha
 // no instante em que o admin aprova.
@@ -52,11 +55,15 @@ export default function VerificationPendingScreen({ onResubmit }: Props) {
           <Text style={styles.bigIcon}>⚠️</Text>
           <Text style={styles.heading}>Precisamos de novas fotos</Text>
 
+          {/* Desde o questionário de verificação (12/10/2026) o servidor
+              grava em ageRejectionNote o texto COMPLETO da recusa (motivo
+              de cada item negado + observação do admin). Com ele, o texto
+              fixo por motivo seria repetido — fica só como reserva para
+              recusas sem texto. */}
           <View style={styles.reasonCard}>
             <Text style={styles.reasonText}>
-              {reason ? REJECTION_TEXT[reason] ?? REJECTION_TEXT.OTHER : REJECTION_TEXT.OTHER}
+              {note || (reason ? REJECTION_TEXT[reason] ?? REJECTION_TEXT.OTHER : REJECTION_TEXT.OTHER)}
             </Text>
-            {note ? <Text style={styles.noteText}>{note}</Text> : null}
           </View>
 
           <View style={styles.tipsCard}>
@@ -184,7 +191,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   reasonText: { color: colors.white, fontSize: fonts.sizes.md, lineHeight: 22 },
-  noteText: { color: colors.grayLight, fontSize: fonts.sizes.sm, lineHeight: 20 },
   tipsCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,

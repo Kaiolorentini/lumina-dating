@@ -22,7 +22,12 @@
 // hideFromUser: o motivo e a observação do admin NÃO vão para o
 // usuário (não ensinar a fraudar) — ele recebe um texto genérico.
 // alert: negar avisa os superadmins (segunda revisão).
+//
+// A validação das respostas fica em checklistParser.ts (comum ao
+// questionário de produto).
 // ============================================
+
+import { ParsedChecklistBase, parseChecklistBase } from './checklistParser';
 
 export const AGE_CHECKLIST_VERSION = 1;
 
@@ -71,9 +76,6 @@ export const AGE_CHECKLIST_ITEMS: readonly AgeChecklistItemDef[] = [
     reason: 'Não foi possível concluir sua verificação.' },
 ] as const;
 
-const ITEM_IDS = new Set(AGE_CHECKLIST_ITEMS.map(item => item.id));
-const NOTE_MAX = 300;
-
 const OUTCOME_RANK: Record<AgeItemOutcome, number> = { underage: 4, mismatch: 3, illegible: 2, resubmit: 1 };
 const OUTCOME_CODE: Record<AgeItemOutcome, AgeRejectionCode> = {
   underage: 'UNDERAGE', mismatch: 'MISMATCH', illegible: 'ILLEGIBLE', resubmit: 'OTHER',
@@ -81,50 +83,16 @@ const OUTCOME_CODE: Record<AgeItemOutcome, AgeRejectionCode> = {
 
 export class AgeChecklistError extends Error {}
 
-export interface ParsedAgeChecklist {
-  version: number;
-  answers: Record<string, AgeChecklistAnswer>;
-  notes: Record<string, string>;
-  rejectedIds: string[];
-  allApproved: boolean;
-}
+export type ParsedAgeChecklist = ParsedChecklistBase;
 
+/** Validação comum (checklistParser.ts), com o erro e o texto da idade. */
 export function parseAgeChecklist(raw: unknown): ParsedAgeChecklist {
-  if (typeof raw !== 'object' || raw === null) {
-    throw new AgeChecklistError('Responda o questionário de verificação antes de concluir.');
-  }
-  const data = raw as { version?: unknown; answers?: unknown; notes?: unknown };
-  if (data.version !== AGE_CHECKLIST_VERSION) {
-    throw new AgeChecklistError('O questionário foi atualizado. Atualize o app e responda de novo.');
-  }
-  if (typeof data.answers !== 'object' || data.answers === null) {
-    throw new AgeChecklistError('Questionário sem respostas.');
-  }
-  const rawAnswers = data.answers as Record<string, unknown>;
-  for (const key of Object.keys(rawAnswers)) {
-    if (!ITEM_IDS.has(key)) throw new AgeChecklistError('Questionário com item desconhecido.');
-  }
-
-  const answers: Record<string, AgeChecklistAnswer> = {};
-  for (const item of AGE_CHECKLIST_ITEMS) {
-    const value = rawAnswers[item.id];
-    if (value !== 'approved' && value !== 'rejected') {
-      throw new AgeChecklistError(`Responda todos os itens. Falta: "${item.title}".`);
-    }
-    answers[item.id] = value;
-  }
-
-  const notes: Record<string, string> = {};
-  if (typeof data.notes === 'object' && data.notes !== null) {
-    for (const [key, value] of Object.entries(data.notes as Record<string, unknown>)) {
-      if (!ITEM_IDS.has(key) || typeof value !== 'string') continue;
-      const note = value.trim().slice(0, NOTE_MAX);
-      if (note && answers[key] === 'rejected') notes[key] = note;
-    }
-  }
-
-  const rejectedIds = AGE_CHECKLIST_ITEMS.filter(i => answers[i.id] === 'rejected').map(i => i.id);
-  return { version: AGE_CHECKLIST_VERSION, answers, notes, rejectedIds, allApproved: rejectedIds.length === 0 };
+  return parseChecklistBase(raw, {
+    version: AGE_CHECKLIST_VERSION,
+    items: AGE_CHECKLIST_ITEMS,
+    missingMessage: 'Responda o questionário de verificação antes de concluir.',
+    makeError: message => new AgeChecklistError(message),
+  });
 }
 
 export interface AgeRejectionDecision {
