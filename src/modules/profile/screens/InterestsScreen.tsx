@@ -25,6 +25,7 @@ import Header from '../../../components/Header';
 import { getProfile, saveProfile } from '../services/profileService';
 import { sanitizeInterests } from '../../../config/sintonia/interestsCatalog';
 import InterestsPicker, { MIN_INTERESTS, isValidInterestCount } from '../components/InterestsPicker';
+import { friendlyErrorMessage } from '../../../utils/firebaseErrorMessage';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -48,8 +49,7 @@ export default function InterestsScreen() {
       setSelected(current);
       setInitial(current);
     } catch (e) {
-      console.error('[Interests] load:', e);
-      setError('Não foi possível carregar seus interesses.');
+      setError(`Não foi possível carregar seus interesses. ${friendlyErrorMessage(e, 'interests.load')}`);
     } finally {
       setLoading(false);
     }
@@ -78,8 +78,7 @@ export default function InterestsScreen() {
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
     } catch (e) {
-      console.error('[Interests] save:', e);
-      Alert.alert('Não foi possível salvar', 'Verifique sua conexão e tente de novo.');
+      Alert.alert('Não foi possível salvar', friendlyErrorMessage(e, 'interests.save'));
     } finally {
       setSaving(false);
     }

@@ -22,6 +22,7 @@ import { Gender, Preference } from '../../../shared/types';
 import { isRegiaoIdValida } from '../../../services/ibgeService';
 import { sanitizeInterests } from '../../../config/sintonia/interestsCatalog';
 import { MIN_INTERESTS, isValidInterestCount } from '../components/InterestsPicker';
+import { friendlyErrorMessage } from '../../../utils/firebaseErrorMessage';
 
 interface UseProfileSetupProps {
   editMode?: boolean;
@@ -213,9 +214,8 @@ export function useProfileSetup(
         try {
           await uploadProfilePhoto(user.uid, photoURI, photoBase64);
         } catch (uploadError) {
-          const message = uploadError instanceof Error
-            ? uploadError.message
-            : 'Erro ao enviar a foto.';
+          // Mensagem amigável (13/10/2026); o detalhe vai para o log.
+          const message = friendlyErrorMessage(uploadError, 'profile.photo');
           // Os dados de texto já foram salvos; só a foto falhou.
           setError(`Perfil salvo, mas a foto falhou: ${message}`);
           return false;
@@ -224,8 +224,9 @@ export function useProfileSetup(
 
       return true;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erro ao salvar perfil. Tente novamente.';
-      setError(message);
+      // Mensagem amigável (13/10/2026): antes aparecia o texto técnico
+      // do Firebase em inglês ("Missing or insufficient permissions").
+      setError(friendlyErrorMessage(err, 'profile.save'));
       return false;
     } finally {
       setLoading(false);

@@ -112,9 +112,19 @@ service firebase.storage {
     // - Ninguém apaga pelo app: quem decide o que pode sumir é o
     //   servidor (unpublishProduct, moderação), pelo Admin SDK.
 
-    // Capa — pública
+    // ECA Digital (13/10/2026): capa, prévias e amostras NÃO podem
+    // mais ser LISTADAS (antes `read` liberava get e list: sabendo o
+    // id do produto, dava para enumerar as imagens). Continua o get
+    // por link: os links das capas já gravados (com e sem token) são
+    // usados pelo <Image> do app, que não manda login. Quem chega ao
+    // link é quem leu o produto — e o produto agora exige idade
+    // verificada nas regras do Firestore. Fase B (backlog): links
+    // assinados de curta duração e leitura fechada.
+
+    // Capa — link público, sem listagem
     match /marketplace/products/{productId}/cover/{fileName} {
-      allow read:   if true;
+      allow get:    if true;
+      allow list:   if false;
       allow create: if isAuthenticated() &&
                        isImage() &&
                        isUnderSizeMB(10) &&
@@ -122,9 +132,10 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
-    // Prévias em imagem — públicas
+    // Prévias em imagem — link público, sem listagem
     match /marketplace/products/{productId}/previews/{fileName} {
-      allow read:   if true;
+      allow get:    if true;
+      allow list:   if false;
       allow create: if isAuthenticated() &&
                        isImage() &&
                        isUnderSizeMB(10) &&
@@ -132,9 +143,10 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
-    // Arquivos de amostra — públicos
+    // Arquivos de amostra — link público, sem listagem
     match /marketplace/products/{productId}/previewFiles/{fileName} {
-      allow read:   if true;
+      allow get:    if true;
+      allow list:   if false;
       allow create: if isAuthenticated() &&
                        isAllowedPreviewFile() &&
                        isUnderSizeMB(50) &&

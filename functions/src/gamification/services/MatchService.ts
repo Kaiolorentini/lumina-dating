@@ -1,6 +1,12 @@
 // ============================================
-// LUMINA — MATCH SERVICE v2.1
+// LUMINA — MATCH SERVICE v2.2
 // functions/src/gamification/services/MatchService.ts
+//
+// v2.2 (13/10/2026) — SINTONIA PERFEITA. Com a fórmula única no
+// servidor (config/sintoniaFormula), a sintonia nova calcula a nota
+// da dupla; com 95% ou mais, os dois recebem a conquista oculta
+// "Sintonia Perfeita" (ação PERFECT_SINTONIA). A nota é a mesma que
+// os dois veem no app.
 //
 // ADR-001: MatchService emite o evento MATCH_CREATED.
 // Nunca um trigger Firestore.
@@ -51,6 +57,10 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { GamificationIntegrationService } from '../GamificationIntegrationService';
 import { PrestigeService } from '../../engagement/prestigeService';
 import { MissionService } from './MissionService';
+import { computeSintonia } from '../../config/sintoniaFormula';
+
+/** Nota mínima da conquista "Sintonia Perfeita". */
+const PERFECT_SINTONIA_SCORE = 95;
 
 const db = admin.firestore();
 
@@ -138,6 +148,37 @@ async function runSintoniaEffects(uid: string, targetUid: string): Promise<void>
       console.warn('[MatchService] Falha ao criar conexão:', error);
     }),
   ]);
+
+  // 3. Sintonia Perfeita (95%+) — por último: o documento de gatilho
+  //    dispara o onAchievementTrigger, que escreve em users/{uid}.
+  await markPerfectSintoniaIfEarned(uid, targetUid).catch((error) => {
+    console.warn('[MatchService] Falha ao checar Sintonia Perfeita:', error);
+  });
+}
+
+/**
+ * Calcula a Sintonia v2 da dupla (a MESMA do app) e, com 95% ou
+ * mais, enfileira a conquista para os dois. Idempotente pelo próprio
+ * AchievementProcessor: conquista já desbloqueada não paga de novo.
+ */
+async function markPerfectSintoniaIfEarned(uidA: string, uidB: string): Promise<void> {
+  const [snapA, snapB] = await Promise.all([
+    db.collection('users').doc(uidA).get(),
+    db.collection('users').doc(uidB).get(),
+  ]);
+  if (!snapA.exists || !snapB.exists) return;
+
+  const { score } = computeSintonia(snapA.data()!, snapB.data()!);
+  if (score < PERFECT_SINTONIA_SCORE) return;
+
+  await Promise.all([uidA, uidB].map(uid => db.collection('achievementTriggers').add({
+    uid,
+    action:       'PERFECT_SINTONIA',
+    currentValue: score,
+    processedAt:  null,
+    timestamp:    FieldValue.serverTimestamp(),
+  })));
+  console.log(`[MatchService] Sintonia Perfeita: ${uidA} + ${uidB} (${score}%)`);
 }
 
 /**

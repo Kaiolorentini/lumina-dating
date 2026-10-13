@@ -189,7 +189,13 @@ export const ACHIEVEMENTS_CATALOG: Record<string, AchievementDef> = {
 
 // Conquistas verificadas por categoria de ação (REGRA 13)
 export const ACHIEVEMENTS_BY_ACTION: Record<string, string[]> = {
-  CREATE_SINTONIA:   ['FIRST_SINTONIA', 'SINTONIA_10', 'SINTONIA_50', 'SINTONIA_PERFEITA'],
+  CREATE_SINTONIA:   ['FIRST_SINTONIA', 'SINTONIA_10', 'SINTONIA_50'],
+  // 13/10/2026: SINTONIA_PERFEITA tem ação PRÓPRIA. Ligada ao
+  // CREATE_SINTONIA (target 1, progresso +1), ela era concedida na
+  // PRIMEIRA sintonia de qualquer pessoa, sem olhar a nota. Agora o
+  // MatchService calcula a Sintonia v2 no servidor e só dispara
+  // PERFECT_SINTONIA quando a dupla tem 95% ou mais.
+  PERFECT_SINTONIA:  ['SINTONIA_PERFEITA'],
   VISIT_PROFILE:     ['EXPLORER_10', 'EXPLORER_50', 'EXPLORER_100'],
   COMPLETE_MISSION:  ['MISSION_7', 'MISSION_30', 'MISSION_100'],
   STREAK_UPDATE:     ['STREAK_3', 'STREAK_7', 'STREAK_30'],

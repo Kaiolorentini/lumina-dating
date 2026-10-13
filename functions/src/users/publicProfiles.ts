@@ -33,6 +33,7 @@ import * as admin from 'firebase-admin';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { seeksFromPreferences } from '../config/sintoniaFormula';
 import { sanitizeInterests } from '../config/interestsCatalog';
+import { runUserFieldsAudit } from './userFieldsAudit';
 
 export const PUBLIC_PROFILES = 'publicProfiles';
 
@@ -189,7 +190,10 @@ const REBUILD_PAGE = 300;
 
 /**
  * Tarefas de manutenção criadas pelo Console (adminJobs fica fechado
- * para o app nas regras). Hoje: rebuildPublicProfiles.
+ * para o app nas regras):
+ *   rebuildPublicProfiles — refaz todos os perfis públicos;
+ *   auditUserFields       — conta campos sensíveis no users (CPF...)
+ *                           e, com removeCpf: true, apaga (13/10/2026).
  */
 export const onAdminJobCreated = onDocumentCreated(
   { document: 'adminJobs/{jobId}', region: 'us-central1', timeoutSeconds: 540, memory: '512MiB' },
@@ -197,6 +201,21 @@ export const onAdminJobCreated = onDocumentCreated(
     const snap = event.data;
     if (!snap) return;
     const job = snap.data() as Data;
+
+    if (job.type === 'auditUserFields') {
+      await snap.ref.set({ status: 'running', startedAt: FieldValue.serverTimestamp() }, { merge: true });
+      try {
+        const result = await runUserFieldsAudit(job.removeCpf === true);
+        await snap.ref.set({ status: 'done', ...result, finishedAt: FieldValue.serverTimestamp() }, { merge: true });
+      } catch (error) {
+        console.error('[adminJobs] auditUserFields falhou:', error);
+        await snap.ref.set({
+          status: 'error', error: error instanceof Error ? error.message : String(error),
+        }, { merge: true });
+      }
+      return;
+    }
+
     if (job.type !== 'rebuildPublicProfiles') {
       await snap.ref.set({ status: 'ignored', reason: 'tipo desconhecido' }, { merge: true });
       return;

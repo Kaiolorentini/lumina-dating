@@ -16,6 +16,9 @@
 //   análise — o app só envia as respostas.
 // • O rascunho fica em memória: dá para voltar à revisão, abrir os
 //   arquivos e continuar daqui.
+// • 13/10/2026: mostra se o criador aceitou a Declaração do Produto
+//   neste envio. Sem ela o servidor recusa a aprovação — o aviso
+//   evita o admin responder os 18 itens à toa.
 // ============================================
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -197,6 +200,21 @@ export default function AdminProductChecklistScreen() {
   const coverUri    = mode === 'changes' && product.pendingCover?.url ? product.pendingCover.url : product.coverImage;
   const priceLabel  = product.isFree ? 'Grátis' : `R$ ${product.price.toFixed(2).replace('.', ',')}`;
 
+  // Declaração do Produto (contrato do criador, 12/10/2026). Campos
+  // gravados só pelo servidor; não estão no tipo do produto.
+  const extra = product as unknown as {
+    declarationId?: string;
+    submittedAt?: { toDate?: () => Date };
+    pendingChangesDeclarationId?: string;
+  };
+  const hasDeclaration = mode === 'changes' ? !!extra.pendingChangesDeclarationId : !!extra.declarationId;
+  const submittedAt = mode === 'product' ? extra.submittedAt?.toDate?.() ?? null : null;
+  const declarationText = hasDeclaration
+    ? `📜 Declaração do Produto aceita pelo criador${submittedAt
+        ? ` em ${submittedAt.toLocaleDateString('pt-BR')} às ${submittedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+        : ''}.`
+    : '⚠️ Enviado SEM a Declaração do Produto (versão antiga do app). A aprovação será recusada — recuse e peça para o criador enviar de novo.';
+
   return (
     <ScreenContainer>
       {header}
@@ -216,6 +234,12 @@ export default function AdminProductChecklistScreen() {
             </Text>
             <Text style={styles.summaryHint}>Preço mínimo conferido pelo servidor ao aprovar.</Text>
           </View>
+        </View>
+
+        <View style={[styles.declarationBox, !hasDeclaration && styles.declarationBoxMissing]}>
+          <Text style={[styles.declarationText, !hasDeclaration && styles.declarationTextMissing]}>
+            {declarationText}
+          </Text>
         </View>
 
         <TouchableOpacity
@@ -335,6 +359,13 @@ const styles = StyleSheet.create({
     padding: spacing.sm, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.gold + '66', alignItems: 'center',
   },
   filesBtnText: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold', textAlign: 'center' },
+  declarationBox: {
+    padding: spacing.sm, borderRadius: borderRadius.sm, borderWidth: 1,
+    borderColor: colors.success + '66', backgroundColor: colors.success + '11',
+  },
+  declarationBoxMissing: { borderColor: colors.error, backgroundColor: colors.error + '18' },
+  declarationText: { color: colors.success, fontSize: fonts.sizes.sm, textAlign: 'center' },
+  declarationTextMissing: { color: colors.error, fontWeight: 'bold' },
   staleBox: { padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.error + '18', borderWidth: 1, borderColor: colors.error },
   staleText: { color: colors.error, fontSize: fonts.sizes.sm, textAlign: 'center' },
   rule: { padding: spacing.sm, borderRadius: borderRadius.sm, backgroundColor: colors.gold + '11' },

@@ -11,10 +11,15 @@
 // A ordem importa: onCreateMatch PRIMEIRO, porque é ele quem
 // grava a curtida e responde se ela é nova. Só então a
 // gamificação derivada dispara, toda sob o mesmo guard.
+//
+// 13/10/2026: a falha devolve `message` — o texto do servidor quando
+// ele explica (limite diário de curtidas, perfil indisponível) ou
+// uma frase amigável. O ProfileCard mostra esse texto.
 // ============================================
 
 import { useState, useCallback } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { friendlyErrorMessage } from '../utils/firebaseErrorMessage';
 
 
 const functions = getFunctions();
@@ -30,6 +35,8 @@ type ProfileLikeReq = { likerUid: string; targetUid: string };
 export interface LikeResult {
   ok:       boolean;
   isMutual: boolean;
+  /** Só na falha: o que mostrar para a pessoa. */
+  message?: string;
 }
 
 
@@ -67,8 +74,7 @@ export function useLike(likerUid: string | undefined) {
 
       return { ok: true, isMutual: result.data.isMutual };
     } catch (error) {
-      console.error('[useLike] Falha ao curtir:', error);
-      return { ok: false, isMutual: false };
+      return { ok: false, isMutual: false, message: friendlyErrorMessage(error, 'like') };
     } finally {
       setLiking(false);
     }

@@ -145,6 +145,16 @@ service cloud.firestore {
     // Permitido só se o documento ainda não tem seed; depois disso
     // fica imutável — regravar permitiria editar o perfil até cair
     // numa posição boa do feed.
+    // M8 parte 2 (13/10/2026): a data de cadastro não muda. Antes o
+    // app regravava createdAt a cada edição (corrigido no app em
+    // 08/10); agora a regra também barra. Só pode ser gravado se o
+    // documento ainda não tem — o documento nasce na CF acceptAppTerms,
+    // e o primeiro saveProfile chega como update.
+    function isCreatedAtChangeAllowed() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt']) ||
+        !('createdAt' in resource.data);
+    }
+
     function isRandomSeedChangeAllowed() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['randomSeed']) ||
         (!('randomSeed' in resource.data) && isValidRandomSeed(request.resource.data));
@@ -255,7 +265,8 @@ service cloud.firestore {
         hasNoProtectedFields() &&
         isValidProfileFields(request.resource.data,
                              request.resource.data.diff(resource.data).affectedKeys(), userId) &&
-        isRandomSeedChangeAllowed();
+        isRandomSeedChangeAllowed() &&
+        isCreatedAtChangeAllowed();
       allow delete: if false;
 
       match /transactions/{transactionId} {
@@ -616,14 +627,20 @@ service cloud.firestore {
     }
 
     match /products/{productId} {
-      allow get: if resource.data.status == 'approved' &&
+      // ECA Digital (Lei 15.211/2025, art. 8º III e 9º) — 13/10/2026:
+      // a vitrine (capas e prévias com nudez sensual) só para conta com
+      // idade VERIFICADA (claim av). Antes era pública: qualquer pessoa,
+      // até sem login, listava produtos aprovados pela API.
+      allow get: if isVerified() &&
+        resource.data.status == 'approved' &&
         resource.data.isDeleted != true;
       allow get: if isAuthenticated() && (
         resource.data.ownerId == request.auth.uid || isAdmin()
       );
       // Quem comprou lê o produto mesmo depois de tirado da venda.
       allow get: if hasActivePurchase(productId);
-      allow list: if resource.data.status == 'approved' &&
+      allow list: if isVerified() &&
+        resource.data.status == 'approved' &&
         resource.data.isDeleted != true;
       allow list: if isAdmin();
       // Meus Produtos: o dono lista os próprios produtos em qualquer

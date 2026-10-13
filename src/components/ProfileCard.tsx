@@ -170,7 +170,9 @@ function ProfileCard({
 
     if (!result.ok) {
       setLiked(false);
-      Alert.alert('Erro', 'Não foi possível registrar a sintonia.');
+      // Texto do servidor quando ele explica (limite diário de
+      // curtidas, perfil indisponível) — 13/10/2026.
+      Alert.alert('Não foi possível curtir', result.message ?? 'Não foi possível registrar a sintonia.');
       return;
     }
 
