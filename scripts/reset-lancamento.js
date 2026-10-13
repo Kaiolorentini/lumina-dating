@@ -46,6 +46,18 @@
 // não sobrar nada. O relatório final fica em scripts/reset-relatorios/.
 //
 // IRREVERSÍVEL. Faça o export do Firestore ANTES (ver instruções).
+//
+// ── CHAVE DE SERVIÇO (temporária) ──
+// O script lê serviceAccountKey.json na RAIZ do projeto. Gere a chave
+// só na hora do reset e APAGUE logo depois — no disco E no Console
+// (Google Cloud → IAM → Contas de serviço → Chaves). O script lembra
+// disso no final, mesmo se der erro.
+//
+// ── 13/10/2026 ── coleções novas reconhecidas:
+//   • publicProfiles  → uma por conta (fica só a das contas mantidas;
+//                       o gatilho regrava a partir do users reduzido)
+//   • dailyLikeCounts, adminJobs, moderationRecords,
+//     creatorAgreements (com o histórico) → apagadas
 // ============================================
 
 'use strict';
@@ -85,6 +97,8 @@ const PER_ACCOUNT_COLLECTIONS = Object.freeze(new Set([
   'users',
   'termsAcceptances',
   'ageVerifications',
+  // Espelho público do users (13/10/2026).
+  'publicProfiles',
 ]));
 
 // Só estes documentos de counters saem (Fundadores, item C).
@@ -111,9 +125,14 @@ const DELETE_ORDER = Object.freeze([
   'sales', 'purchases', 'refundRequests', 'withdrawals', 'products',
   'productReviews', 'favorites', 'downloads', 'creatorRequests',
   'coupons', 'couponUses', 'contentAccessLogs', 'screenshotEvents',
+  // Contrato do Criador + Declarações do Produto (13/10/2026). São de
+  // contas de teste: o registro jurídico real começa no lançamento.
+  'creatorAgreements',
   // Social e chat (origem)
   'connectionRequests', 'connections', 'blocks', 'likes', 'sintonias',
   'chats', 'profile_visits', 'mediaItems', 'unlockedContent', 'autoMessages',
+  // Limite diário de curtidas (13/10/2026; também some sozinho pelo TTL).
+  'dailyLikeCounts',
   // Pré-cadastro da landing (item C)
   'preRegistrations',
   // Gamificação
@@ -139,6 +158,10 @@ const DELETE_ORDER = Object.freeze([
   'creatorWallets', 'creatorTransactions', 'creatorWalletLogs',
   // Contas e suporte
   'supportTickets', 'accountDeletions', 'accountDeletionLog',
+  // Questionários de moderação dos testes (produto e idade, 12/10/2026)
+  'moderationRecords',
+  // Tarefas de manutenção do Console (rebuild, auditoria) — só registro
+  'adminJobs',
   // DERIVADAS (gatilhos) — por último
   'saleMarks', 'ratingMarks', 'creatorStats', 'productAnalytics',
   'profile_visit_counts', 'chatAccess', 'fraudFlags', 'auditLogs', 'auditLog',
@@ -405,6 +428,12 @@ async function processStorage() {
   console.log(`  ✅ ${report.storage.deleted} arquivos apagados (${report.storage.failed} falhas)`);
 }
 
+function remindKey() {
+  console.log('🔑 LEMBRETE: apague a chave temporária AGORA:');
+  console.log(`   1. Remove-Item "${KEY_PATH}"`);
+  console.log('   2. Google Cloud → IAM → Contas de serviço → Chaves → excluir a chave usada\n');
+}
+
 function saveReport() {
   const dir = path.join(__dirname, 'reset-relatorios');
   fs.mkdirSync(dir, { recursive: true });
@@ -427,6 +456,7 @@ async function main() {
     const answer = await ask(`\nDigite exatamente "${CONFIRM_PHRASE}" para apagar: `);
     if (answer !== CONFIRM_PHRASE) {
       console.log('\nCancelado — nada foi apagado.\n');
+      remindKey();
       process.exit(0);
     }
   }
@@ -461,11 +491,13 @@ async function main() {
     console.log('  3. Confira que o Painel Admin abre e que a landing mostra 0 / 2.000');
     console.log('  4. Rode a simulação de novo: tudo deve aparecer zerado\n');
   }
+  remindKey();
   process.exit(0);
 }
 
 main().catch((error) => {
   console.error('\n❌ ERRO:', error.message || error);
   try { saveReport(); } catch { /* sem relatório */ }
+  remindKey();
   process.exit(1);
 });
