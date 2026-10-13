@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Alert, Text, View, StyleSheet, Platform } from 'react-native';
+import { Alert, Text, View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -25,6 +25,17 @@ import { COLLECTIONS } from '../core/constants';
 // listener e a recuperação entreguem a mesma.
 // Os listeners de notificação vivem SÓ aqui — o
 // usePushNotifications cuida apenas do token.
+//
+// 13/10/2026 — WEB (lote 2):
+// - linking (URL por tela) só no navegador: navigation/linking.web.ts.
+//   No app, appLinking é undefined e nada muda.
+// - restoreWebRoute: F5 / link direto abre a tela da URL quando a
+//   pilha principal monta (mesmo padrão do toque no push).
+// - documentTitle fixo "Lumina" (sem nomes internos de tela na aba).
+// - Removidos: console.log a cada renderização, imports sem uso
+//   (ChatScreen, Platform) e o case duplicado de
+//   age_verification_rejected (era código morto: quem foi recusado
+//   está na árvore do gate, onde a tela Suporte não existe).
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { auth } from '../services/firebase';
 import { CoinsProvider } from '../context/CoinsContext';
@@ -34,7 +45,6 @@ import { LoginScreen, RegisterScreen } from '../modules/auth';
 import { ProfileSetupScreen } from '../modules/profile';
 import { HomeScreen } from '../modules/home';
 import SintonizeScreen from '../modules/home/screens/SintonizeScreen';
-import { ChatScreen } from '../modules/chat';
 import SintoniasScreen from '../screens/Chat/SintoniasScreen';
 import { StoreScreen } from '../modules/economy';
 import { colors } from '../theme';
@@ -42,6 +52,7 @@ import { NotificationsScreen } from '../modules/notifications';
 import EngagementInitializer from '../components/EngagementInitializer';
 import UpdateChecker from '../components/UpdateChecker';
 import { RootStackParamList, TabParamList } from './types';
+import { appLinking, restoreWebRoute } from './linking';
 import { resolveAccessGate } from './accessGate';
 import { APP_TERMS_VERSION } from '../config/terms';
 import TermsAcceptScreen from '../screens/Onboarding/TermsAcceptScreen';
@@ -556,7 +567,9 @@ function AppContent() {
       case 'product_approved':    navigationRef.current.navigate('MyProducts');  break;
       // A aprovação troca a árvore sozinha pelo onSnapshot do
       // useUserPermissions — o push só traz a pessoa de volta
-      // ao app, não precisa navegar para nada.
+      // ao app, não precisa navegar para nada. Na recusa a pessoa
+      // está na árvore do gate (tela de verificação), onde a tela
+      // Suporte não existe: também não navega.
       case 'age_verification_approved':
       case 'age_verification_rejected':
         break;
@@ -639,7 +652,6 @@ function AppContent() {
         navigationRef.current.navigate('Notifications');
         break;
       case 'marketplace_banned':
-      case 'age_verification_rejected':
         navigationRef.current.navigate('Support');
         break;
       case 'product_pending':
@@ -692,6 +704,15 @@ function AppContent() {
       pendingPushRef.current = data;
     }
   }
+
+  // Web: F5 ou link aberto direto — leva à tela da URL quando a
+  // pilha principal monta (antes disso só existem as telas do gate).
+  // No app, restoreWebRoute não faz nada. Roda antes do toque de
+  // push guardado: se houver os dois, o push decide a tela final.
+  useEffect(() => {
+    if (!mainStackMounted) return;
+    restoreWebRoute(navigationRef.current);
+  }, [mainStackMounted]);
 
   // Pilha principal montou: usa o toque guardado.
   useEffect(() => {
@@ -767,8 +788,6 @@ function AppContent() {
     // decidir entre navegar já ou guardar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, mainStackMounted]);
-
-  console.log('[APP STATE]', { authLoading, permLoading, user: !!user, hasProfile, canAccessAdminPanel, adminBootReady });
 
   if (authLoading) return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -935,7 +954,13 @@ export default function AppNavigator() {
   return (
     <AuthProvider>
       <CoinsProvider>
-        <NavigationContainer ref={navigationRef}>
+        {/* linking só existe no navegador (linking.web.ts); no app é
+            undefined. documentTitle só tem efeito na web. */}
+        <NavigationContainer
+          ref={navigationRef}
+          linking={appLinking}
+          documentTitle={{ formatter: () => 'Lumina' }}
+        >
           <AppContent />
         </NavigationContainer>
       </CoinsProvider>

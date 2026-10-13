@@ -2,35 +2,23 @@
 // LUMINA — MOLDURA (WEB)
 // src/components/web/WebFrame.web.tsx
 //
-// No PC o app fica numa coluna central (largura de celular grande),
-// em vez de esticado ou em "meia tela". No navegador do celular a
-// coluna ocupa a tela toda. overflow hidden recorta telas que ainda
-// calculam a largura pela janela inteira (Dimensions.get — lote 3).
+// 13/10/2026: volta a ocupar a tela cheia (decisão de Kaio — a
+// coluna central de 480 px não organizava as telas para o PC).
+// Este componente fica como o ponto onde entra o layout de
+// computador da auditoria de responsividade (menu lateral,
+// larguras por tipo de tela).
 // ============================================
 
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { colors } from '../../theme';
-import { WEB_FRAME_MAX_WIDTH } from '../../utils/layout';
 
 interface Props { children: React.ReactNode }
 
 export default function WebFrame({ children }: Props) {
-  return (
-    <View style={styles.outer}>
-      <View style={styles.column}>{children}</View>
-    </View>
-  );
+  return <View style={styles.root}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
-  outer: {
-    flex: 1, alignItems: 'center', backgroundColor: '#000000',
-  },
-  column: {
-    flex: 1, width: '100%', maxWidth: WEB_FRAME_MAX_WIDTH,
-    overflow: 'hidden', backgroundColor: colors.background,
-    borderLeftWidth: StyleSheet.hairlineWidth, borderRightWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.gold + '33',
-  },
+  root: { flex: 1, backgroundColor: colors.background },
 });
