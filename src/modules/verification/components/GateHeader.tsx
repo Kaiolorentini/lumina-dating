@@ -8,10 +8,14 @@
 //
 // Aqui a única saída é sair da conta, com confirmação:
 // sair por engano no meio da verificação é frustrante.
+//
+// 13/10/2026 (web lote 4): sem o desvio window.confirm para a web.
+// O Alert.alert com botões funciona no navegador desde o lote 1
+// (WebAlertHost), com o mesmo texto e os mesmos botões do Android.
 // ============================================
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, spacing } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
@@ -35,13 +39,6 @@ export default function GateHeader({ title, hideLogout }: Props) {
   }
 
   function confirmLogout() {
-    // Platform.OS === 'web' porque Alert.alert com botões
-    // não funciona no navegador — mesmo padrão do ProfileScreen.
-    if (Platform.OS === 'web') {
-      if ((window as any).confirm('Sair da conta?')) doLogout();
-      return;
-    }
-
     Alert.alert('Sair da conta?', 'Você pode entrar novamente quando quiser.', [
       { text: 'Continuar aqui', style: 'cancel' },
       { text: 'Sair', style: 'destructive', onPress: doLogout },

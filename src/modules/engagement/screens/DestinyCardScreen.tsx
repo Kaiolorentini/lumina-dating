@@ -18,12 +18,17 @@
 // Cada passo diz o que fazer e o que vai acontecer. Kaio
 // pediu explícito: a pessoa não pode gastar cristais sem
 // entender, nem escolher sem saber que encerra o dia.
+//
+// 13/10/2026 (web lote 4): confirm() usa o Alert.alert em todas as
+// plataformas — o navegador ganhou o Alert no lote 1. Na web a
+// confirmação agora tem título e botões, como no Android, em vez
+// da caixa do navegador.
 // ============================================
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, ActivityIndicator, Alert, Platform,
+  Image, ActivityIndicator, Alert,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -421,13 +426,9 @@ export default function DestinyCardScreen() {
   );
 }
 
-/** Confirmação que funciona no Android, no iOS e na web. */
+/** Confirmação que funciona no Android, no iOS e na web
+ *  (na web, o WebAlertHost desenha o Alert — Esc = Cancelar). */
 function confirm(title: string, message: string): Promise<boolean> {
-  if (Platform.OS === 'web') {
-    return Promise.resolve((window as unknown as { confirm: (m: string) => boolean })
-      .confirm(`${title}\n\n${message}`));
-  }
-
   return new Promise(resolve => {
     Alert.alert(title, message, [
       { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },

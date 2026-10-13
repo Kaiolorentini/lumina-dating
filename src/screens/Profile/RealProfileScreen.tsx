@@ -1,6 +1,12 @@
 // ============================================
-// LUMINA — REAL PROFILE SCREEN v5.5
+// LUMINA — REAL PROFILE SCREEN v5.6
 // src/screens/Profile/RealProfileScreen.tsx
+//
+// v5.6 (13/10/2026, web lote 4) — BLOQUEAR.
+// Uma confirmação só, igual no Android e na web (o desvio
+// window.confirm saiu: o navegador ganhou o Alert no lote 1).
+// Falha ao bloquear agora avisa a pessoa e a tela fica onde está;
+// antes o erro escapava sem aviso e o toque parecia não fazer nada.
 //
 // v5.5 — CONTEÚDOS DO CRIADOR NO PERFIL.
 // Logo depois da galeria, a faixa com os produtos à venda de quem
@@ -32,7 +38,6 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -258,36 +263,32 @@ export default function RealProfileScreen() {
     }
   }
 
-  async function handleBlock() {
+  function handleBlock() {
     if (!user || !targetProfile || isSelf) return;
 
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm(`Deseja bloquear ${targetProfile.name}?`);
-      if (confirmed) {
-        await bloquearUsuario(user.uid, targetUserId, targetProfile.name, targetProfile.photoURL);
-        invalidateBlockedUids(); // some da Home/Sintonize na próxima busca
-        setBlocked(true);
-        navigation.goBack();
-      }
-    } else {
-      Alert.alert(
-        '⚠️ Bloquear usuário',
-        `Deseja bloquear ${targetProfile.name}?`,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Bloquear',
-            style: 'destructive',
-            onPress: async () => {
+    Alert.alert(
+      '⚠️ Bloquear usuário',
+      `Deseja bloquear ${targetProfile.name}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Bloquear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
               await bloquearUsuario(user.uid, targetUserId, targetProfile.name, targetProfile.photoURL);
-              invalidateBlockedUids(); // some da Home/Sintonize na próxima busca
-              setBlocked(true);
-              navigation.goBack();
-            },
+            } catch (error) {
+              console.error('[RealProfileScreen] bloquear falhou:', error);
+              Alert.alert('Não foi possível bloquear', 'Verifique a conexão e tente de novo.');
+              return;
+            }
+            invalidateBlockedUids(); // some da Home/Sintonize na próxima busca
+            setBlocked(true);
+            navigation.goBack();
           },
-        ]
-      );
-    }
+        },
+      ]
+    );
   }
 
   async function checkAlreadyLiked(uid: string, targetUid: string): Promise<boolean> {

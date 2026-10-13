@@ -1,6 +1,11 @@
 // ============================================
-// LUMINA — PROFILE SCREEN v5.6
+// LUMINA — PROFILE SCREEN v5.7
 // src/modules/profile/screens/ProfileScreen.tsx
+//
+// v5.7 (13/10/2026, web lote 4) — "Sair da conta" usa o mesmo
+// Alert.alert no Android e na web (o navegador ganhou o Alert no
+// lote 1). Saiu o desvio window.confirm, que mostrava uma caixa
+// diferente e sem o botão Cancelar com o texto do app.
 //
 // v5.6 (11/10/2026) — "Conquistas" mostra o balão e o texto
 // "N para coletar" quando há coleção completa com fragmentos; o
@@ -31,7 +36,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, Platform, LayoutChangeEvent,
+  ActivityIndicator, Alert, LayoutChangeEvent,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -444,18 +449,13 @@ export default function ProfileScreen() {
         {/* Logout */}
         <TouchableOpacity
           style={styles.logoutButton}
-          onPress={async () => {
-            if (Platform.OS === 'web') {
-              const confirmed = (window as any).confirm('Tem certeza que deseja sair?');
-              if (confirmed) { try { await logout(); } catch (e) { console.error(e); } }
-            } else {
-              Alert.alert('Sair', 'Tem certeza que deseja sair?', [
-                { text: 'Cancelar', style: 'cancel' },
-                { text: 'Sair', style: 'destructive', onPress: async () => {
-                  try { await logout(); } catch (e) { console.error(e); }
-                }},
-              ]);
-            }
+          onPress={() => {
+            Alert.alert('Sair', 'Tem certeza que deseja sair?', [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Sair', style: 'destructive', onPress: async () => {
+                try { await logout(); } catch (e) { console.error('[ProfileScreen] logout falhou:', e); }
+              }},
+            ]);
           }}
         >
           <Text style={styles.logoutText}>Sair da conta</Text>
