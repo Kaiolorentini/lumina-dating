@@ -19,21 +19,24 @@
 // Android encerra primeiro o app mais pesado. A foto é reduzida
 // para 1600 px no lado maior (a data de nascimento continua
 // legível) e o original é apagado.
+//
+// 13/10/2026 (web): a CÂMERA foi para verificationCapture.ts (app)
+// e verificationCapture.web.ts (navegador: só no celular), e o
+// preparo da foto para verificationImage.ts. Este arquivo
+// re-exporta as duas funções e o tipo, então quem importava daqui
+// continua igual. Envio e confirmação não mudaram.
 // ============================================
 
-import { Platform } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ref, uploadBytesResumable } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app, { storage } from '../../../core/firebase';
 import { resolveImageBlob } from '../../../shared/utils/imageBlob';
 import { VerificationStep, MAX_IMAGE_MB } from '../../../config/verification';
-import { deleteLocalFile } from './verificationDraft';
+import type { CapturedImage } from './verificationImage';
 
-const MAX_SIDE     = 1600;
-const JPEG_QUALITY = 0.8;
+export type { CapturedImage } from './verificationImage';
+export { captureVerificationImage, recoverPendingCapture } from './verificationCapture';
 
 // Genéricos extraídos para tipos nomeados: httpsCallable
 // em fim de linha é corrompido ao colar.
@@ -54,88 +57,12 @@ interface SubmitResult {
   attempt: number;
 }
 
-export interface CapturedImage {
-  /** Arquivo local já reduzido. */
-  uri: string;
-}
-
 function functionsInstance() {
   return getFunctions(app, 'us-central1');
 }
 
 function storagePathFor(uid: string, step: VerificationStep): string {
   return `age_verification/${uid}/${step}.jpg`;
-}
-
-/**
- * Reduz a foto da câmera e apaga o original, que é foto de
- * documento em tamanho cheio e não deve ficar no aparelho.
- */
-async function prepareCapture(asset: ImagePicker.ImagePickerAsset): Promise<CapturedImage> {
-  const context = ImageManipulator.manipulate(asset.uri);
-  const { width, height } = asset;
-
-  if (width >= height && width > MAX_SIDE) context.resize({ width: MAX_SIDE });
-  else if (height > width && height > MAX_SIDE) context.resize({ height: MAX_SIDE });
-
-  const image = await context.renderAsync();
-  const saved = await image.saveAsync({ compress: JPEG_QUALITY, format: SaveFormat.JPEG });
-
-  if (saved.uri !== asset.uri) void deleteLocalFile(asset.uri);
-  return { uri: saved.uri };
-}
-
-/**
- * Abre a câmera para uma etapa. Devolve null se o usuário
- * cancelar; lança se a permissão for negada, para a tela
- * poder oferecer abrir as configurações.
- */
-export async function captureVerificationImage(): Promise<CapturedImage | null> {
-  const perm = await ImagePicker.requestCameraPermissionsAsync();
-  if (!perm.granted) {
-    throw new Error('CAMERA_DENIED');
-  }
-
-  const result = await ImagePicker.launchCameraAsync({
-    mediaTypes: ['images'],
-    allowsEditing: false,
-    // Alta de propósito: a foto ainda é reduzida e recomprimida
-    // em prepareCapture. Comprimir forte duas vezes borra a data
-    // de nascimento que o admin precisa ler.
-    quality: 0.9,
-    base64: false,
-    exif: false,
-  });
-
-  if (result.canceled || !result.assets[0]) return null;
-  return prepareCapture(result.assets[0]);
-}
-
-/**
- * Android: quando o sistema encerra o app com a câmera aberta, a
- * foto fica guardada com o sistema e chega por aqui na reabertura.
- * Só é chamada se a tela tinha aberto a câmera (pendingStep).
- */
-export async function recoverPendingCapture(): Promise<CapturedImage | null> {
-  if (Platform.OS !== 'android') return null;
-
-  // O formato do retorno mudou entre versões do expo-image-picker
-  // (lista ou item único): normaliza os dois.
-  const raw: unknown = await ImagePicker.getPendingResultAsync();
-  const pending: unknown = Array.isArray(raw) ? raw[0] : raw;
-  if (!pending || typeof pending !== 'object') return null;
-
-  if (!('canceled' in pending)) {
-    throw new Error('A câmera não devolveu a foto. Tire novamente.');
-  }
-
-  const result = pending as ImagePicker.ImagePickerResult;
-  if (result.canceled || !result.assets?.[0]) return null;
-
-  const asset = result.assets[0];
-  if (asset.type && asset.type !== 'image') return null;
-
-  return prepareCapture(asset);
 }
 
 /**
