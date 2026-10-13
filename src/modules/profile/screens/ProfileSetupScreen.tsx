@@ -1,3 +1,13 @@
+// ============================================
+// LUMINA — CADASTRO / EDIÇÃO DO PERFIL
+// src/modules/profile/screens/ProfileSetupScreen.tsx
+//
+// 12/10/2026 — Sintonia v2: dicas curtas embaixo de cada campo que
+// entra na Sintonia (cidade, gênero, interesse) e a etapa opcional de
+// INTERESSES, com o mesmo InterestsPicker da tela "Meus interesses"
+// (explicação, contador, dica e prévia). Sem interesses também salva.
+// ============================================
+
 import React, { useState } from 'react';
 import {
   View,
@@ -18,6 +28,7 @@ import { Gender, Preference } from '../../../shared/types';
 import { useProfileSetup } from '../hooks/useProfileSetup';
 import ScreenContainer from '../../../components/ScreenContainer';
 import LocationSelector from '../../../components/LocationSelector';
+import InterestsPicker from '../components/InterestsPicker';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -51,6 +62,7 @@ export default function ProfileSetupScreen() {
     bio, setBio,
     gender, setGender,
     preferences, togglePreference,
+    interests, setInterests,
     photoURI, pickPhoto,
     loading, error, isEditing,
     save,
@@ -163,6 +175,9 @@ export default function ProfileSetupScreen() {
           onSelectEstado={selectEstado}
           onSelectMunicipio={selectMunicipio}
         />
+        <Text style={styles.hint}>
+          📍 Pessoas da mesma cidade ganham mais Sintonia com você.
+        </Text>
 
         <Text style={styles.label}>Bio</Text>
         <TextInput
@@ -196,6 +211,10 @@ export default function ProfileSetupScreen() {
           ))}
         </View>
 
+        <Text style={styles.hint}>
+          Junto com o campo abaixo, define quem aparece primeiro para você.
+        </Text>
+
         <Text style={styles.label}>Tenho interesse em *</Text>
         <View style={styles.optionsRow}>
           {PREFERENCE_OPTIONS.map(option => (
@@ -216,6 +235,23 @@ export default function ProfileSetupScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        <Text style={styles.hint}>
+          💞 Primeiro aparecem pessoas que também têm interesse em você. Quem não combina continua
+          aparecendo depois, com Sintonia baixa.
+        </Text>
+
+        <Text style={styles.label}>Interesses (opcional)</Text>
+        <Text style={styles.hint}>
+          Escolha o que você curte para a Sintonia achar pessoas parecidas. Dá para fazer depois, pelo seu perfil.
+        </Text>
+        <InterestsPicker
+          selected={interests}
+          onChange={setInterests}
+          disabled={loading}
+          explainOpen={!isEditing}
+        />
+        <View style={{ height: spacing.lg }} />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -342,6 +378,13 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.sm,
     marginBottom: spacing.xs,
     letterSpacing: 1,
+  },
+  hint: {
+    color: colors.gray,
+    fontSize: fonts.sizes.xs,
+    lineHeight: 17,
+    marginTop: -spacing.xs,
+    marginBottom: spacing.md,
   },
   input: {
     backgroundColor: colors.surface,

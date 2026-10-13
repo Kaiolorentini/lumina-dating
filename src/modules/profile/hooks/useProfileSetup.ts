@@ -7,6 +7,9 @@
 // última edição, e o próprio app controlava o campo. Agora quem
 // grava é o servidor (acceptAppTerms) ou o saveProfile, só na
 // criação do documento.
+//
+// 12/10/2026 — Sintonia v2: interesses no cadastro e na edição
+// (opcionais; 0 ou de 3 a 10, ids do catálogo fechado).
 // ============================================
 
 import { useState, useEffect } from 'react';
@@ -17,6 +20,8 @@ import { saveProfile, getProfile } from '../services/profileService';
 import { uploadProfilePhoto } from '../services/photoService';
 import { Gender, Preference } from '../../../shared/types';
 import { isRegiaoIdValida } from '../../../services/ibgeService';
+import { sanitizeInterests } from '../../../config/sintonia/interestsCatalog';
+import { MIN_INTERESTS, isValidInterestCount } from '../components/InterestsPicker';
 
 interface UseProfileSetupProps {
   editMode?: boolean;
@@ -40,6 +45,9 @@ interface UseProfileSetupReturn {
   gender: Gender | null;
   setGender: (v: Gender) => void;
   preferences: Preference[];
+  /** Interesses da Sintonia (ids do catálogo). */
+  interests: string[];
+  setInterests: (next: string[]) => void;
   photoURI: string | null;
   loading: boolean;
   error: string;
@@ -64,6 +72,7 @@ export function useProfileSetup(
   const [bio,         setBio]         = useState('');
   const [gender,      setGender]      = useState<Gender | null>(null);
   const [preferences, setPreferences] = useState<Preference[]>([]);
+  const [interests,   setInterests]   = useState<string[]>([]);
   const [photoURI,    setPhotoURI]    = useState<string | null>(null);
   // O base64 vive separado do photoURI: o photoURI serve para
   // exibir a prévia, e o upload precisa do base64 cru. Embutir
@@ -90,6 +99,7 @@ export function useProfileSetup(
           setBio(existing.bio || '');
           setGender(existing.gender || null);
           setPreferences(existing.preferences || []);
+          setInterests(sanitizeInterests(existing.interests));
           if (existing.photoURL) setPhotoURI(existing.photoURL);
         }
       }
@@ -153,6 +163,9 @@ export function useProfileSetup(
     if (isNaN(Number(age)) || Number(age) < 18 || Number(age) > 100) {
       return 'Digite uma idade válida (mínimo 18 anos)';
     }
+    if (!isValidInterestCount(interests.length)) {
+      return `Interesses: escolha pelo menos ${MIN_INTERESTS} ou deixe sem nenhum.`;
+    }
     return null;
   }
 
@@ -187,6 +200,7 @@ export function useProfileSetup(
         gender:    gender!,
         preferences,
         bio,
+        interests: sanitizeInterests(interests),
         ...seedField,
       });
 
@@ -226,6 +240,7 @@ export function useProfileSetup(
     bio, setBio,
     gender, setGender,
     preferences,
+    interests, setInterests,
     photoURI,
     loading, error, isEditing,
     togglePreference,
