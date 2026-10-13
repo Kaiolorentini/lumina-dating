@@ -1,19 +1,20 @@
+// ============================================
+// LUMINA — FIREBASE (APP ANDROID/iOS)
+// src/core/firebase/index.ts
+//
+// Na web o Metro usa index.web.ts no lugar deste arquivo:
+// getReactNativePersistence não existe no pacote web do Firebase.
+// ============================================
+
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
-// @ts-ignore
+// @ts-ignore — getReactNativePersistence só existe na tipagem React Native do Firebase
 import { initializeAuth, getReactNativePersistence, getAuth } from 'firebase/auth';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyD7khZ_Y3WlE2OkTeaICVPHhP0f6wAggZ8",
-  authDomain: "lumina-ff667.firebaseapp.com",
-  projectId: "lumina-ff667",
-  storageBucket: "lumina-ff667.firebasestorage.app",
-  messagingSenderId: "469492960060",
-  appId: "1:469492960060:web:fd9aca942988641afaac39",
-};
+import { firebaseConfig } from './config';
 
 // ✅ Checar ANTES de initializeApp — evita double init
 const alreadyInitialized = getApps().length > 0;
