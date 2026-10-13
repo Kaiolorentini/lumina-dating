@@ -21,6 +21,7 @@
 // • `seeks` = gêneros pelos quais a pessoa se interessa (derivado
 //   das preferências). É o que deixa o feed buscar primeiro quem tem
 //   interesse MÚTUO direto na consulta.
+// • 13/10/2026: randomSeed nunca falta no público (feedSeed).
 //
 // Preenchimento inicial: crie no Console do Firestore o documento
 // adminJobs/{qualquer id} com { type: "rebuildPublicProfiles" }.
@@ -43,6 +44,22 @@ function str(value: unknown, max: number): string | null {
 
 function num(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Posição no feed sorteado. Conta sem randomSeed (antiga, ou reduzida
+ * pela limpeza) ficava invisível: a busca é por faixa de randomSeed.
+ * Sem o campo, usamos um número FIXO tirado do uid (hash FNV-1a) —
+ * estável, sem gravar no users e sem a pessoa poder escolher.
+ */
+function feedSeed(uid: string, value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 1) return value;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < uid.length; i++) {
+    hash ^= uid.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash / 0x100000000;
 }
 
 function ts(value: unknown): Timestamp | null {
@@ -93,7 +110,7 @@ export function buildPublicProfile(uid: string, data: Data | undefined): Data | 
     photoURL:    str(d.photoURL, 1024) ?? '',
     gallery:     Array.isArray(d.gallery) ? d.gallery : [],
     interests:   sanitizeInterests(d.interests),
-    randomSeed:  num(d.randomSeed),
+    randomSeed:  feedSeed(uid, d.randomSeed),
     role:        str(d.role, 20) ?? 'user',
     isBlocked:   d.isBlocked === true,
     // isListableProfile do app confere estes três; só listáveis

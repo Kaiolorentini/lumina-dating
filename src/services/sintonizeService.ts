@@ -32,6 +32,7 @@ import { UserProfile } from '../types';
 import { calcularSintonia } from '../utils/sintoniaEngine';
 import { FeedCursor, RealProfile, fetchFeedDocs, isMutual } from './usersService';
 import { PUBLIC_PROFILES } from './publicProfileService';
+import { getBlockedUidsSafe } from './blockedUsersService';
 import { isListableProfile } from '../shared/utils/profileVisibility';
 
 const FETCH_SIZE = 20;
@@ -160,10 +161,14 @@ export async function fetchSintonizePage(
     const startSeed = seed ?? Math.random();
     const isFirst   = cursor === null;
 
+    // Passados nas últimas 24h + bloqueios nos dois sentidos (13/10/2026).
+    const blocked = await getBlockedUidsSafe(currentUser.uid);
+    const hidden  = new Set<string>([...dismissedUids, ...blocked]);
+
     const [feed, turbo] = await Promise.all([
       fetchFeedDocs(currentUser, cursor, FETCH_SIZE, startSeed),
       isFirst
-        ? fetchTurboProfiles(currentUser, dismissedUids).catch((error): RealProfile[] => {
+        ? fetchTurboProfiles(currentUser, hidden).catch((error): RealProfile[] => {
             console.error('[sintonizeService] Turbo:', error);
             return [];
           })
@@ -174,7 +179,7 @@ export async function fetchSintonizePage(
     const profiles: RealProfile[] = [...turbo];
 
     feed.docs.forEach((docSnap: QueryDocumentSnapshot<DocumentData>) => {
-      if (dismissedUids.has(docSnap.id)) return;
+      if (hidden.has(docSnap.id)) return;
       if (turboIds.has(docSnap.id)) return;
       const profile = buildProfile(docSnap, currentUser);
       if (profile) profiles.push(profile);

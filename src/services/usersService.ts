@@ -15,6 +15,7 @@
 //     2. 'rest' — esgotados os compatíveis, o resto da base, com
 //        nota baixa (no máximo 35%), pulando quem já apareceu.
 //   O cursor (FeedCursor) carrega a fase.
+// • 13/10/2026: quem você bloqueou e quem te bloqueou não aparece.
 // • Boost fixado no topo só para quem é compatível com você; o
 //   boost de quem não é segue no fluxo normal.
 //
@@ -76,6 +77,7 @@ import { calcularSintonia } from '../utils/sintoniaEngine';
 import { isListableProfile } from '../shared/utils/profileVisibility';
 import { computeSintonia, seeksFromPreferences } from '../config/sintonia/sintoniaFormula';
 import { PUBLIC_PROFILES, getPublicProfile } from './publicProfileService';
+import { getBlockedUidsSafe } from './blockedUsersService';
 
 // ============================================
 // CONFIGURAÇÃO
@@ -538,9 +540,13 @@ export async function getCompatibleProfilesPage(
     // onde parar e a listagem repetiria em círculo.
     const startSeed = seed ?? Math.random();
 
+    // Bloqueios nos dois sentidos (13/10/2026): nem fixado no topo,
+    // nem no fluxo. Lista em cache curto — não custa por página.
+    const blocked = await getBlockedUidsSafe(currentUser.uid);
+
     // Trilha A — só na primeira página
     const boosted = isFirstPage
-      ? await fetchBoostedProfiles(currentUser, viewerRegiaoId, now)
+      ? (await fetchBoostedProfiles(currentUser, viewerRegiaoId, now)).filter(p => !blocked.has(p.uid))
       : [];
     const boostedIds = new Set(boosted.map(p => p.uid));
 
@@ -553,6 +559,7 @@ export async function getCompatibleProfilesPage(
       if (!profile) return;
       // Deduplica: já veio fixado no topo pela trilha A
       if (boostedIds.has(profile.uid)) return;
+      if (blocked.has(profile.uid)) return;
       regular.push(profile);
     });
 

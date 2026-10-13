@@ -4,6 +4,7 @@
 //
 // v6.2 (12/10/2026): lê publicProfiles — o documento users de outras
 // pessoas fechou nas regras. Sintonia v2 (mesma do feed).
+// 13/10/2026: bloqueios nos dois sentidos saem do Em Alta.
 //
 // v6.1:
 // - O card leva também o FIM do boost (boostUntil), para a Home
@@ -25,6 +26,7 @@ import {
 import { db }                      from './firebase';
 import { getMostVisitedProfiles }  from './visitsService';
 import { PUBLIC_PROFILES, getPublicProfile } from './publicProfileService';
+import { getBlockedUidsSafe } from './blockedUsersService';
 import { calcularSintonia }        from '../utils/sintoniaEngine';
 import { isListableProfile } from '../shared/utils/profileVisibility';
 import { UserProfile, ProfileCardData, BoostType } from '../shared/types';
@@ -110,9 +112,10 @@ export async function getMostVisitedProfileCards(
     const visitCounts = await getMostVisitedProfiles(limitCount);
     if (visitCounts.length === 0) return [];
 
-    const profiles = await Promise.all(
-      visitCounts.map(v => getPublicProfile(v.profileId).catch(() => null)),
-    );
+    const [profiles, blocked] = await Promise.all([
+      Promise.all(visitCounts.map(v => getPublicProfile(v.profileId).catch(() => null))),
+      currentUser ? getBlockedUidsSafe(currentUser.uid) : Promise.resolve(new Set<string>()),
+    ]);
 
     const region = viewerRegion(currentUser);
     const cards: ProfileCardData[] = [];
@@ -121,6 +124,7 @@ export async function getMostVisitedProfileCards(
       if (!profile || !profile.name || !profile.age) return;
       if (!isListableProfile(profile)) return;
       if (currentUser && profile.uid === currentUser.uid) return;
+      if (blocked.has(profile.uid)) return;
       cards.push(toCard(profile, currentUser, activeBoost(profile as Record<string, any>, region)));
     });
 
@@ -137,13 +141,16 @@ export async function getTurboProfileCards(
   limitCount: number = 4,
 ): Promise<ProfileCardData[]> {
   try {
-    const snap = await getDocs(query(
-      collection(db, PUBLIC_PROFILES),
-      where('boostType', '==', 'turbo'),
-      where('boostActiveUntil', '>', Timestamp.now()),
-      orderBy('boostActiveUntil', 'desc'),
-      limit(limitCount + 1),
-    ));
+    const [snap, blocked] = await Promise.all([
+      getDocs(query(
+        collection(db, PUBLIC_PROFILES),
+        where('boostType', '==', 'turbo'),
+        where('boostActiveUntil', '>', Timestamp.now()),
+        orderBy('boostActiveUntil', 'desc'),
+        limit(limitCount + 1),
+      )),
+      currentUser ? getBlockedUidsSafe(currentUser.uid) : Promise.resolve(new Set<string>()),
+    ]);
 
     const cards: ProfileCardData[] = [];
     snap.docs.forEach(docSnap => {
@@ -153,6 +160,7 @@ export async function getTurboProfileCards(
       if (!isListableProfile(raw)) return;
       if ((profile as { isBlocked?: boolean }).isBlocked === true) return;
       if (currentUser && docSnap.id === currentUser.uid) return;
+      if (blocked.has(docSnap.id)) return;
       cards.push(toCard(
         { ...profile, uid: docSnap.id },
         currentUser,

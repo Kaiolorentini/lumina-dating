@@ -41,6 +41,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getProfile } from '../../services/profileService';
 // Perfil de OUTRA pessoa: sempre o público (12/10/2026).
 import { getPublicProfile } from '../../services/publicProfileService';
+import { invalidateBlockedUids } from '../../services/blockedUsersService';
 import { EMPTY_SINTONIA_BREAKDOWN, SintoniaBreakdown } from '../../modules/ai/services/sintoniaCalculator';
 import { interestLabel } from '../../config/sintonia/interestsCatalog';
 import { RootStackParamList } from '../../navigation/types';
@@ -264,6 +265,7 @@ export default function RealProfileScreen() {
       const confirmed = window.confirm(`Deseja bloquear ${targetProfile.name}?`);
       if (confirmed) {
         await bloquearUsuario(user.uid, targetUserId, targetProfile.name, targetProfile.photoURL);
+        invalidateBlockedUids(); // some da Home/Sintonize na próxima busca
         setBlocked(true);
         navigation.goBack();
       }
@@ -278,6 +280,7 @@ export default function RealProfileScreen() {
             style: 'destructive',
             onPress: async () => {
               await bloquearUsuario(user.uid, targetUserId, targetProfile.name, targetProfile.photoURL);
+              invalidateBlockedUids(); // some da Home/Sintonize na próxima busca
               setBlocked(true);
               navigation.goBack();
             },
