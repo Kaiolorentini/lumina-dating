@@ -11,12 +11,18 @@
 //   3 = vaultBanner
 //   4 = visitsBanner
 //   5 = tabsWrapper ← sticky
+//
+// 13/10/2026 (web, responsivo R1): no tablet e no computador o
+// conteúdo fica numa coluna central de até 1200 px e a grade de
+// perfis ganha colunas (3, 4 ou 5) conforme a largura. No celular
+// e no app, tudo como antes (duas colunas). A largura máxima vai no
+// contentContainerStyle para não quebrar o stickyHeaderIndices.
 // ============================================
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Image, ActivityIndicator,
+  TouchableOpacity, Image, ActivityIndicator, LayoutChangeEvent,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
@@ -38,6 +44,9 @@ import { getDoc, doc }        from 'firebase/firestore';
 import { db }                 from '../../../services/firebase';
 import { PUBLIC_PROFILES }    from '../../../services/publicProfileService';
 import { COLLECTIONS }        from '../../../core/constants';
+import { useBreakpoint }      from '../../../hooks/useBreakpoint';
+import PageContainer, { pageContentStyle } from '../../../components/layout/PageContainer';
+import { CONTENT_MAX_WIDTH, gridColumns } from '../../../utils/breakpoints';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
@@ -165,6 +174,20 @@ export default function HomeScreen({ navigation }: Props) {
   const coinsGratuitos = wallet?.coinsGratuitos ?? 0;
   const coinsPremium   = wallet?.coinsPremium   ?? 0;
 
+  // Grade responsiva (só web, tablet/computador). No celular o card
+  // usa a largura padrão dele — idêntico ao app.
+  const { isPhone } = useBreakpoint();
+  const [containerWidth, setContainerWidth] = useState(0);
+  function handleContainerLayout(event: LayoutChangeEvent) {
+    const w = event.nativeEvent.layout.width;
+    if (Math.abs(w - containerWidth) > 1) setContainerWidth(w);
+  }
+  const feedWidth = Math.min(containerWidth, CONTENT_MAX_WIDTH.feed);
+  const columns   = gridColumns(feedWidth);
+  const gridCardWidth = !isPhone && containerWidth > 0
+    ? Math.floor((feedWidth - spacing.lg * 2 - spacing.sm * (columns - 1)) / columns)
+    : undefined;
+
   useEffect(() => {
     if (activeTab === 'visitados' && mostVisited.length === 0) {
       loadMostVisited();
@@ -191,9 +214,10 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={handleContainerLayout}>
 
       {/* Header */}
+      <PageContainer variant="feed">
       <View style={styles.header}>
         <Text style={styles.logo}>✦ Lumina</Text>
         <View style={styles.headerRight}>
@@ -220,6 +244,7 @@ export default function HomeScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       </View>
+      </PageContainer>
 
       {/* Só enquanto o impulso de quem comprou estiver ativo. */}
       <ActiveBoostChip onPress={() => navigation.navigate('Boosts')} />
@@ -228,6 +253,7 @@ export default function HomeScreen({ navigation }: Props) {
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[5]}
+        contentContainerStyle={pageContentStyle('feed', isPhone)}
       >
 
         {/* 0 — Faísca do Destino */}
@@ -327,6 +353,7 @@ export default function HomeScreen({ navigation }: Props) {
                         data={profile}
                         onPress={() => handleCardPress(profile)}
                         viewerUid={user?.uid}
+                        width={gridCardWidth}
                       />
                     ))}
                   </View>
@@ -386,6 +413,7 @@ export default function HomeScreen({ navigation }: Props) {
                     data={profile}
                     onPress={() => handleCardPress(profile)}
                     viewerUid={user?.uid}
+                    width={gridCardWidth}
                   />
                 ))}
               </View>

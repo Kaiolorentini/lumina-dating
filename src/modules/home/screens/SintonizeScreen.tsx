@@ -18,13 +18,19 @@
 // Busca 20 e mostra os que sobram depois de tirar descartados
 // e incompletos. Quando restam 3, busca mais em segundo plano
 // — a pessoa nunca vê carregamento entre um card e outro.
+//
+// 13/10/2026 (web, responsivo R1): a largura da página do carrossel
+// é medida na tela (onLayout), não na janela — com o menu lateral do
+// computador as duas são diferentes e a rolagem ficaria desalinhada.
+// No computador o card fica maior (SINTONIZE_DESKTOP_CARD). No app a
+// largura medida é a da tela: nada muda.
 // ============================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Dimensions,
   TouchableOpacity, ActivityIndicator, Alert,
-  NativeSyntheticEvent, NativeScrollEvent,
+  NativeSyntheticEvent, NativeScrollEvent, LayoutChangeEvent,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -51,8 +57,12 @@ import { HeartBurst } from '../../../components/profile/HeartBurst';
 import { useLike } from '../../../hooks/useLike';
 import { useBoostExpiryTicker } from '../../../hooks/useBoostExpiryTicker';
 import { hasTimedBoost, clearExpiredBoosts } from '../../../shared/utils/boostExpiry';
+import { useBreakpoint } from '../../../hooks/useBreakpoint';
 
-const { width } = Dimensions.get('window');
+/** Largura inicial, até a medida real da tela chegar. */
+const INITIAL_PAGE_WIDTH = Dimensions.get('window').width;
+/** Largura do card no computador (antes da escala de 1.45). */
+const SINTONIZE_DESKTOP_CARD = 240;
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -107,6 +117,15 @@ export default function SintonizeScreen() {
 
   const { like } = useLike(user?.uid);
   const insets   = useSafeAreaInsets();
+
+  // Largura real da página do carrossel (com o menu lateral do
+  // computador ela é menor que a janela).
+  const { isDesktop } = useBreakpoint();
+  const [pageWidth, setPageWidth] = useState(INITIAL_PAGE_WIDTH);
+  function handlePageLayout(event: LayoutChangeEvent) {
+    const w = event.nativeEvent.layout.width;
+    if (w > 0 && Math.abs(w - pageWidth) > 1) setPageWidth(w);
+  }
   const { refreshWallet } = useCoins();
 
   // Segunda Chance: quando cada um foi passado (uid → ms).
@@ -274,7 +293,7 @@ export default function SintonizeScreen() {
   }
 
   function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
-    const current = Math.round(e.nativeEvent.contentOffset.x / width);
+    const current = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
     if (current !== index) setIndex(current);
 
     // Reabastece antes de acabar: a pessoa nunca deve ver
@@ -312,7 +331,7 @@ export default function SintonizeScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={handlePageLayout}>
       <SintonizeBackground />
 
       {dismissedCount > 0 && (
@@ -343,7 +362,7 @@ export default function SintonizeScreen() {
         // Sem isto a FlatList não re-renderiza quando o index
         // muda, e o `animatedAura={i === index}` fica congelado
         // no valor da primeira montagem — a aura nunca anima.
-        extraData={index}
+        extraData={`${index}:${pageWidth}`}
         keyExtractor={item => item.id}
         horizontal
         pagingEnabled
@@ -356,9 +375,9 @@ export default function SintonizeScreen() {
         initialNumToRender={1}
         maxToRenderPerBatch={2}
         removeClippedSubviews
-        getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+        getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
         renderItem={({ item, index: i }) => (
-          <View style={styles.page}>
+          <View style={[styles.page, { width: pageWidth }]}>
             <View style={[styles.cardWrap, styles.cardScale]}>
               <ProfileCard
                 data={item}
@@ -369,6 +388,7 @@ export default function SintonizeScreen() {
                 // animar três auras ao mesmo tempo desperdiça.
                 animatedAura={i === index}
                 onLiked={() => handleLiked(item.id)}
+                width={isDesktop ? SINTONIZE_DESKTOP_CARD : undefined}
               />
             </View>
 
@@ -378,7 +398,7 @@ export default function SintonizeScreen() {
                 base da tela. */}
             <HeartBurst
               active={celebrating === item.id}
-              width={width}
+              width={pageWidth}
               height={600}
             />
 
@@ -413,7 +433,6 @@ const styles = StyleSheet.create({
   // embaixo: com tudo centralizado junto, o conjunto flutuava
   // no meio e o polegar tinha que subir para agir.
   page: {
-    width,
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',

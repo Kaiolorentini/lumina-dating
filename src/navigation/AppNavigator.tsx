@@ -36,6 +36,10 @@ import { COLLECTIONS } from '../core/constants';
 //   (ChatScreen, Platform) e o case duplicado de
 //   age_verification_rejected (era código morto: quem foi recusado
 //   está na árvore do gate, onde a tela Suporte não existe).
+//
+// 13/10/2026 — WEB (responsivo R1): no computador as abas viram um
+// MENU LATERAL (tabBarPosition 'left'). useBreakpoint no app sempre
+// responde "celular", então o Android continua com as abas de baixo.
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { auth } from '../services/firebase';
 import { CoinsProvider } from '../context/CoinsContext';
@@ -131,6 +135,8 @@ import AdminSupportScreen from '../screens/admin/AdminSupportScreen';
 import AdminProductChecklistScreen from '../screens/admin/AdminProductChecklistScreen';
 import DeleteAccountScreen from '../modules/profile/screens/DeleteAccountScreen';
 import { useProfileBadges } from '../modules/profile/hooks/useProfileBadges';
+import { useBreakpoint } from '../hooks/useBreakpoint';
+import { SIDEBAR_WIDTH } from '../utils/breakpoints';
 import {
   AdminProductsModerationScreen,
   AdminProductReviewScreen,
@@ -170,6 +176,8 @@ function TabNavigator() {
   const { isBlocked, isSuperAdmin, marketplaceEnabled } = React.useContext(NavigationPermissionsContext);
   const canAccessAdminPanel = isSuperAdmin;
   const adminPending        = useAdminPendingTotal(canAccessAdminPanel);
+  // Computador (só web): menu lateral. Celular e app: abas embaixo.
+  const { isDesktop } = useBreakpoint();
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -224,21 +232,31 @@ function TabNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor:  colors.gold,
-          borderTopWidth:  0.5,
-          height:          60 + insets.bottom,
-          paddingBottom:   insets.bottom > 0 ? insets.bottom : 8,
-          paddingTop:      4,
-        },
+        tabBarPosition: isDesktop ? 'left' : 'bottom',
+        tabBarVariant:  isDesktop ? 'material' : 'uikit',
+        tabBarLabelPosition: isDesktop ? 'beside-icon' : 'below-icon',
+        tabBarStyle: isDesktop
+          ? {
+              backgroundColor: colors.surface,
+              borderRightColor: colors.gold,
+              borderRightWidth: 0.5,
+              width:            SIDEBAR_WIDTH,
+              paddingTop:       24,
+            }
+          : {
+              backgroundColor: colors.surface,
+              borderTopColor:  colors.gold,
+              borderTopWidth:  0.5,
+              height:          60 + insets.bottom,
+              paddingBottom:   insets.bottom > 0 ? insets.bottom : 8,
+              paddingTop:      4,
+            },
         tabBarActiveTintColor:   colors.gold,
         tabBarInactiveTintColor: colors.gray,
-        tabBarLabelStyle: {
-          fontSize:     10,
-          fontWeight:   'bold',
-          letterSpacing: 0.5,
-        },
+        tabBarActiveBackgroundColor: isDesktop ? colors.gold + '18' : undefined,
+        tabBarLabelStyle: isDesktop
+          ? { fontSize: 14, fontWeight: 'bold', letterSpacing: 0.5 }
+          : { fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5 },
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen}

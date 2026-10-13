@@ -1,6 +1,11 @@
 // ============================================
-// LUMINA — PROFILE SCREEN v5.7
+// LUMINA — PROFILE SCREEN v5.8
 // src/modules/profile/screens/ProfileScreen.tsx
+//
+// v5.8 (13/10/2026, web responsivo R1) — no tablet e no computador
+// o conteúdo fica numa coluna central de leitura (até 820 px): sem
+// isso as listas e a galeria esticavam por toda a largura do monitor.
+// No celular e no app, igual.
 //
 // v5.7 (13/10/2026, web lote 4) — "Sair da conta" usa o mesmo
 // Alert.alert no Android e na web (o navegador ganhou o Alert no
@@ -58,6 +63,8 @@ import { buildOwnProfileCard } from '../../../services/usersService';
 import { useProfileBadges } from '../hooks/useProfileBadges';
 import { useMissionsSummary } from '../../engagement/hooks/useMissionsSummary';
 import GalleryEditor from '../components/GalleryEditor';
+import { useBreakpoint } from '../../../hooks/useBreakpoint';
+import { pageContentStyle } from '../../../components/layout/PageContainer';
 
 /** Balão de contagem, ou ponto quando n === true. */
 function MenuBadge({ n }: { n: number | boolean }) {
@@ -96,6 +103,7 @@ export default function ProfileScreen() {
   const { data: prestigeData }     = usePrestige(user?.uid); // ← FIX: era 'data', agora 'prestigeData'
   const badges                     = useProfileBadges(user?.uid);
   const missions                   = useMissionsSummary(user?.uid);
+  const { isPhone }                = useBreakpoint();
 
   const [profile, setProfile]               = useState<UserProfile | null>(null);
   const [loading, setLoading]               = useState(true);
@@ -199,7 +207,7 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <Header title="Meu Perfil" showBack={false} />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, pageContentStyle('reading', isPhone)]}>
 
         {/* Card da Home — é aqui que o usuário confere como
             aparece para os outros e o que comprou (moldura,

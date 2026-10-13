@@ -1,6 +1,13 @@
 // ============================================
-// LUMINA — PROFILE CARD v3.2
+// LUMINA — PROFILE CARD v3.3
 // src/components/ProfileCard.tsx
+//
+// v3.3 (13/10/2026) — RESPONSIVO NA WEB.
+// Prop nova `width` (opcional): a grade da Home no tablet/computador
+// passa a largura de cada coluna. Sem ela, a largura é a de sempre
+// (meia tela de celular). Na web a "tela" usada nessa conta é no
+// máximo PHONE_LAYOUT_WIDTH: antes o card media meio monitor (o card
+// gigante do Meu Perfil e do Sintonize no PC). No app nada muda.
 //
 // v3.2 — PRÉVIA DO PRÓPRIO CARD.
 //
@@ -51,6 +58,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Platform,
   ActivityIndicator,
   Alert,
   GestureResponderEvent,
@@ -70,9 +78,14 @@ import {
   frameAppearanceById, badgeAppearanceById, badgeMeaningById,
   BADGES, RARITY_COLOR, Rarity,
 } from '../config/cosmeticsCatalog';
+import { PHONE_LAYOUT_WIDTH } from '../utils/breakpoints';
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - spacing.lg * 2 - spacing.sm) / 2;
+const { width: windowWidth } = Dimensions.get('window');
+// Web: no máximo a largura de um celular (ver v3.3). App: a tela.
+const BASE_WIDTH = Platform.OS === 'web'
+  ? Math.min(windowWidth, PHONE_LAYOUT_WIDTH)
+  : windowWidth;
+const CARD_WIDTH = (BASE_WIDTH - spacing.lg * 2 - spacing.sm) / 2;
 const PHOTO_RATIO = 1.15;
 
 /** Nome da ação de acessibilidade que curte pelo leitor de tela. */
@@ -89,7 +102,7 @@ const A11Y_ACTION_LIKE = 'sintonizar';
  * foto (CARD_WIDTH * 1.15) + faixa do badge (~52) + botão
  * (~40) + nome e local (~52).
  */
-const CARD_HEIGHT_ESTIMATE = CARD_WIDTH * PHOTO_RATIO + 150;
+const CARD_EXTRA_HEIGHT = 150;
 
 interface Props {
   data: ProfileCardData;
@@ -113,12 +126,18 @@ interface Props {
   /** Esconde o selo de % Sintonia. Usado na prévia do próprio
    *  card, no Meu Perfil. Padrão false. */
   hideSintonia?: boolean;
+  /** Largura do card em pixels. Sem ela, a largura padrão de grade
+   *  (duas por linha no celular). Usado pela grade responsiva. */
+  width?: number;
 }
 
 function ProfileCard({
   data, onPress, viewerUid, animatedAura = false, onLiked,
-  hideSintonia = false,
+  hideSintonia = false, width,
 }: Props) {
+  const cardWidth  = width ?? CARD_WIDTH;
+  const photoHeight = cardWidth * PHOTO_RATIO;
+
   const frame = frameAppearanceById(data.equippedFrame);
   const badge = data.equippedBadge
     ? badgeAppearanceById(data.equippedBadge, (data.equippedBadgeRarity as Rarity) ?? 'COMMON')
@@ -195,6 +214,7 @@ function ProfileCard({
     <TouchableOpacity
       style={[
         styles.card,
+        { width: cardWidth },
         aura && {
           borderColor: aura.color,
           // shadowOpacity cresce com o estágio: o Guardião é
@@ -235,22 +255,22 @@ function ProfileCard({
           // precisa ser alto. Na grade nunca anima; no Sintonize,
           // só Constelação e Lenda.
           animated={animatedAura && aura.stage >= 3}
-          width={CARD_WIDTH}
-          height={CARD_HEIGHT_ESTIMATE}
+          width={cardWidth}
+          height={photoHeight + CARD_EXTRA_HEIGHT}
         />
       )}
 
       {frame ? (
         <ProfileFrame
           photoURL={data.photoURL}
-          size={CARD_WIDTH}
+          size={cardWidth}
           ratio={PHOTO_RATIO}
           frame={frame}
         />
       ) : data.photoURL ? (
-        <Image source={{ uri: data.photoURL }} style={styles.photo} />
+        <Image source={{ uri: data.photoURL }} style={[styles.photo, { height: photoHeight }]} />
       ) : (
-        <View style={[styles.photo, styles.photoPlaceholder]}>
+        <View style={[styles.photo, { height: photoHeight }, styles.photoPlaceholder]}>
           <Text style={styles.photoInitial}>{initial}</Text>
         </View>
       )}
@@ -262,7 +282,7 @@ function ProfileCard({
       {data.boostType && (
         <BoostBadge
           type={data.boostType}
-          top={CARD_WIDTH * PHOTO_RATIO - BOOST_BADGE_HEIGHT - spacing.sm}
+          top={photoHeight - BOOST_BADGE_HEIGHT - spacing.sm}
           left={spacing.sm}
         />
       )}
@@ -355,6 +375,7 @@ function areEqual(prev: Props, next: Props): boolean {
   if (prev.onPress      !== next.onPress)      return false;
   if (prev.onLiked      !== next.onLiked)      return false;
   if (prev.hideSintonia !== next.hideSintonia) return false;
+  if (prev.width        !== next.width)        return false;
 
   const a = prev.data;
   const b = next.data;
