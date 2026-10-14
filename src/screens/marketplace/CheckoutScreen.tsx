@@ -12,6 +12,8 @@
 // 1 leitura do produto (título e capa). Só exibição: o valor cobrado
 // é o do Pix gerado pelo servidor — nada é recalculado aqui.
 // No computador: QR e Copia e Cola à esquerda, resumo à direita.
+// T4: contagem regressiva dos 15 minutos ("Expira em 14:32"), a mesma
+// janela em que a tela acompanha o pagamento (MAX_POLL_TIME).
 // ============================================
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -61,6 +63,10 @@ export default function CheckoutScreen() {
   const [sale, setSale]             = useState<SaleSummary | null>(null);
   const [product, setProduct]       = useState<{ title: string; cover: string } | null>(null);
   const { isDesktop } = useBreakpoint();
+  // Contagem regressiva: começa quando a tela abre (mesmo relógio do
+  // MAX_POLL_TIME). Atualiza a cada segundo só enquanto aguarda.
+  const deadlineRef = useRef(Date.now() + MAX_POLL_TIME);
+  const [remainingMs, setRemainingMs] = useState(MAX_POLL_TIME);
 
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const timeoutRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -161,6 +167,16 @@ export default function CheckoutScreen() {
     };
   }, [startListening, stopListening, navigation, saleId]);
 
+  useEffect(() => {
+    if (saleStatus !== 'pending' && saleStatus !== 'loading') return;
+    const id = setInterval(() => {
+      setRemainingMs(Math.max(0, deadlineRef.current - Date.now()));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [saleStatus]);
+
+  const remainingLabel = `${String(Math.floor(remainingMs / 60000)).padStart(2, '0')}:${String(Math.floor((remainingMs % 60000) / 1000)).padStart(2, '0')}`;
+
   // Título e capa do produto, uma vez por venda.
   const productId = sale?.productId ?? null;
   useEffect(() => {
@@ -251,6 +267,9 @@ export default function CheckoutScreen() {
           <View style={styles.statusRow}>
             <ActivityIndicator color={colors.gold} size="small" />
             <Text style={styles.statusText}>Aguardando pagamento...</Text>
+          <Text style={[styles.countdown, remainingMs < 120000 && styles.countdownUrgent]} accessibilityLabel={`O código expira em ${remainingLabel}`}>
+            ⏱ {remainingLabel}
+          </Text>
           </View>
           <View style={styles.dRow}>
             <View style={styles.dPay}>
@@ -338,6 +357,9 @@ export default function CheckoutScreen() {
         <View style={styles.statusRow}>
           <ActivityIndicator color={colors.gold} size="small" />
           <Text style={styles.statusText}>Aguardando pagamento...</Text>
+          <Text style={[styles.countdown, remainingMs < 120000 && styles.countdownUrgent]} accessibilityLabel={`O código expira em ${remainingLabel}`}>
+            ⏱ {remainingLabel}
+          </Text>
         </View>
 
         {(product || sale?.amount != null) && (
@@ -457,6 +479,8 @@ const styles = StyleSheet.create({
   primaryBtn:    { backgroundColor: colors.gold, borderRadius: borderRadius.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
   primaryBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
 
+  countdown:       { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', marginLeft: spacing.sm, fontVariant: ['tabular-nums'] },
+  countdownUrgent: { color: colors.error },
   // ── Resumo do pedido (v5.2) ──
   summary:       { backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.gold + '44', padding: spacing.md, gap: spacing.sm, marginBottom: spacing.lg },
   summaryKicker: { color: colors.gray, fontSize: fonts.sizes.xs, fontWeight: 'bold', letterSpacing: 1 },

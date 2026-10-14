@@ -16,6 +16,9 @@
 // - FlatList virtualizada (a lista pode chegar a 50 visitantes)
 // - Contagem regressiva local, sem polling
 // - Sem imagem em cache remoto: usa a photoURL já baixada
+//
+// 14/10/2026 (web T4): no computador a lista mostra os itens lado a
+// lado (useDesktopGrid). Celular e app: igual.
 // ============================================
 
 import React, { useCallback } from 'react';
@@ -30,6 +33,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { useDesktopGrid } from '../../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
@@ -106,6 +110,8 @@ function VisitorRow({
 }
 
 export default function VisitorsScreen() {
+  // Computador: itens lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid(380);
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
 
@@ -247,6 +253,8 @@ export default function VisitorsScreen() {
           </View>
 
           <FlatList
+            key={grid.listKey}
+            {...grid.listProps}
             data={data?.visitors ?? []}
             keyExtractor={item => item.uid}
             initialNumToRender={10}
@@ -256,12 +264,12 @@ export default function VisitorsScreen() {
             refreshControl={
               <RefreshControl refreshing={false} onRefresh={refresh} tintColor={colors.gold} />
             }
-            renderItem={({ item }) => (
+            renderItem={grid.wrap(({ item }) => (
               <VisitorRow
                 visitor={item}
                 onPress={() => navigation.navigate('RealProfile', { userId: item.uid })}
               />
-            )}
+            ))}
             ListEmptyComponent={
               <View style={styles.centered}>
                 <Text style={styles.stateIcon}>🕵️</Text>

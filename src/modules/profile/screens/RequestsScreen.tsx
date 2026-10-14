@@ -1,3 +1,5 @@
+// 14/10/2026 (web T4): no computador a lista mostra os itens lado a lado
+// (useDesktopGrid). Celular e app: igual.
 import React from 'react';
 import {
   View,
@@ -8,6 +10,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { useDesktopGrid } from '../../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
@@ -25,6 +28,8 @@ import { ConnectionRequest } from '../services/requestsService';
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function RequestsScreen() {
+  // Computador: itens lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid(380);
   const navigation = useNavigation<NavProp>();
   const { requests, loading, processingId, accept, reject } = useRequests();
 
@@ -97,9 +102,11 @@ export default function RequestsScreen() {
         </View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={requests}
           keyExtractor={item => item.id}
-          renderItem={renderRequest}
+          renderItem={grid.wrap(renderRequest)}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => (
             <View style={styles.separator} />

@@ -9,6 +9,9 @@
 //   a pessoa volta a aparecer na Home/Sintonize na hora
 //   (invalidateBlockedUids limpa o cache de 2 min dos bloqueios).
 // - O Alert com botões funciona também na web (WebAlertHost).
+//
+// 14/10/2026 (web T4): no computador a lista mostra os itens lado a
+// lado (useDesktopGrid). Celular e app: igual.
 // ============================================
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -22,6 +25,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { Block, getBloqueados, desbloquearUsuario } from '../../services/blockService';
@@ -29,6 +33,8 @@ import { invalidateBlockedUids } from '../../services/blockedUsersService';
 import Header from '../../components/Header';
 
 export default function BlockedScreen() {
+  // Computador: itens lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid(380);
   const { user } = useAuth();
   const [blocked, setBlocked]       = useState<Block[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -139,9 +145,11 @@ export default function BlockedScreen() {
         </View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={blocked}
           keyExtractor={item => item.id}
-          renderItem={renderBlock}
+          renderItem={grid.wrap(renderBlock)}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
@@ -237,3 +245,4 @@ const styles = StyleSheet.create({
   },
   retryText: { color: colors.background, fontWeight: 'bold' },
 });
+

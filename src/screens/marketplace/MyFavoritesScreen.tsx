@@ -8,6 +8,9 @@
 // home.
 //
 // Hook, paginação e remoção otimista inalterados.
+//
+// 14/10/2026 (web T4): no computador a lista mostra os itens lado a
+// lado (useDesktopGrid). Celular e app: igual.
 // ============================================
 
 import React, { useCallback } from 'react';
@@ -15,6 +18,7 @@ import {
   View, Text, StyleSheet, FlatList,
   TouchableOpacity, ActivityIndicator, RefreshControl, Image,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,6 +34,8 @@ import ScreenContainer from '../../components/ScreenContainer';
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function MyFavoritesScreen() {
+  // Computador: itens lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid(380);
   const navigation = useNavigation<NavProp>();
   const { user } = useAuth();
   const { items, loading, loadMore, hasMore, loadingMore, refresh, remove, error } =
@@ -129,6 +135,8 @@ export default function MyFavoritesScreen() {
         </View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={items}
           keyExtractor={item => item.productId}
           contentContainerStyle={styles.listContent}
@@ -152,7 +160,7 @@ export default function MyFavoritesScreen() {
               ? <ActivityIndicator color={MP.gold} style={{ margin: spacing.md }} />
               : <View style={{ height: spacing.lg }} />
           }
-          renderItem={renderItem}
+          renderItem={grid.wrap(renderItem)}
         />
       )}
     </ScreenContainer>

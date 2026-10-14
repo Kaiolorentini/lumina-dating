@@ -55,8 +55,23 @@ const ADMIN_WIDE_ROUTES = new Set<string>([
   'AdminRefundRequests', 'AdminSales', 'AdminSupport', 'AdminUserSearch', 'AdminWithdrawals',
 ]);
 
+/** T4: formulários de uma coluna — campos em 640 px leem melhor. */
+const FORM_ROUTES = new Set<string>([
+  'EditProduct', 'PaymentSetup', 'Withdrawal', 'CreatorRequest', 'SupportNew',
+  'DeleteAccount', 'ProfileSetup', 'Interests',
+]);
+
+/** T4: telas de leitura e progresso (texto, listas verticais) — 820 px. */
+const READING_ROUTES = new Set<string>([
+  'CreatorAgreement', 'Support', 'SupportTicket', 'Notifications', 'Faisca', 'Fragments',
+  'Prestige', 'GalaxiaPlus', 'PremiumTools', 'XP', 'Missions', 'Vault', 'Titles',
+  'MyEarnings', 'DestinyCard',
+]);
+
 export function columnWidthFor(routeName: string): number {
   if (GATE_ROUTES.has(routeName)) return CONTENT_MAX_WIDTH.form;
+  if (FORM_ROUTES.has(routeName)) return CONTENT_MAX_WIDTH.form;
+  if (READING_ROUTES.has(routeName)) return CONTENT_MAX_WIDTH.reading;
   return ADMIN_WIDE_ROUTES.has(routeName) ? CONTENT_MAX_WIDTH.wide : DEFAULT_COLUMN;
 }
 
