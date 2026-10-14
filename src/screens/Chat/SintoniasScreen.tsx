@@ -1,3 +1,13 @@
+// ============================================
+// LUMINA — SINTONIAS
+// src/screens/Chat/SintoniasScreen.tsx
+//
+// 13/10/2026 (web D6): no COMPUTADOR esta aba mostra o
+// SintoniasDesktop (lista + conversa ao lado, sugestões de resposta).
+// A escolha fica num componente de fora (SintoniasRouter) para os
+// hooks desta tela continuarem os mesmos. Celular e app: iguais.
+// ============================================
+
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
@@ -16,6 +26,8 @@ import { getBloqueados } from '../../modules/profile/services/blockService';
 import { RootStackParamList } from '../../navigation/types';
 import Header from '../../components/Header';
 import ScreenContainer from '../../components/ScreenContainer';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+import SintoniasDesktop from './SintoniasDesktop';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -25,7 +37,12 @@ interface Connection {
   userPhoto: string;
 }
 
-export default function SintoniasScreen() {
+export default function SintoniasRouter() {
+  const { isDesktop } = useBreakpoint();
+  return isDesktop ? <SintoniasDesktop /> : <SintoniasScreen />;
+}
+
+function SintoniasScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<NavProp>();
   const insets = useSafeAreaInsets();
@@ -214,3 +231,4 @@ const styles = StyleSheet.create({
   },
   chatBtnText: { color: colors.background, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
 });
+
