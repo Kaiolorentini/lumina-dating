@@ -140,6 +140,7 @@ import { useProfileBadges } from '../modules/profile/hooks/useProfileBadges';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { SIDEBAR_WIDTH } from '../utils/breakpoints';
 import DesktopSidebar from '../components/web/DesktopSidebar';
+import DesktopScreenFrame from '../components/web/DesktopScreenFrame';
 import {
   AdminProductsModerationScreen,
   AdminProductReviewScreen,
@@ -400,8 +401,25 @@ function TabNavigator() {
 // STACKS
 // ============================================
 function MainStack() {
+  // T0 (14/10/2026): no computador cada tela da pilha abre numa coluna
+  // central (DesktopScreenFrame) em vez de esticar no monitor inteiro.
+  // As abas (MainTabs) e telas com layout próprio ficam de fora.
+  // Celular, tablet e app: screenLayout fica indefinido — nada muda.
+  const { isDesktop } = useBreakpoint();
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{ headerShown: false }}
+      screenLayout={isDesktop
+        ? ({ children, route, navigation }) => (
+            <DesktopScreenFrame
+              routeName={route.name}
+              onHome={() => navigation.navigate('MainTabs', { screen: 'Home' } as never)}
+            >
+              {children}
+            </DesktopScreenFrame>
+          )
+        : undefined}
+    >
       <Stack.Screen name="MainTabs"              component={TabNavigator} />
       <Stack.Screen name="RealProfile"           component={RealProfileScreen} />
       <Stack.Screen name="UserChat"              component={UserChatScreen} />
