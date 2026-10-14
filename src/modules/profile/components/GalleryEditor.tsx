@@ -11,6 +11,9 @@
 // sem a margem lateral do celular, vagas com largura fixa (antes
 // esticavam até ~250 px cada) e a foto principal como primeira vaga,
 // marcada "Principal". Sem a prop, igual ao app.
+// Correção (14/10/2026, web T5): as vagas do layout "wide" sumiam
+// (viravam pontinhos) — o `flex: 0` herdado virava flex-basis 0% na
+// web. Agora a vaga larga tem estilo próprio com largura e altura fixas.
 // ============================================
 
 import React, { useEffect, useState } from 'react';
@@ -156,7 +159,7 @@ export default function GalleryEditor({ userId, profile, onChanged, layout = 'de
 
       <View style={styles.row}>
         {wide && (
-          <View style={[styles.slot, styles.slotWide, styles.slotMain]} accessibilityLabel="Foto principal do perfil">
+          <View style={[styles.slotWideBox, styles.slotMain]} accessibilityLabel="Foto principal do perfil">
             {mainPhotoURL ? <Image source={{ uri: mainPhotoURL }} style={styles.image} /> : <Text style={styles.plus}>👤</Text>}
             <View style={styles.mainTag}><Text style={styles.mainTagText}>Principal</Text></View>
           </View>
@@ -167,7 +170,7 @@ export default function GalleryEditor({ userId, profile, onChanged, layout = 'de
           return (
             <TouchableOpacity
               key={slot}
-              style={[styles.slot, wide && styles.slotWide]}
+              style={wide ? styles.slotWideBox : styles.slot}
               onPress={() => onSlotPress(slot)}
               activeOpacity={0.85}
               accessibilityRole="button"
@@ -218,7 +221,16 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background,
   },
   sectionWide: { marginHorizontal: 0, marginTop: 0, padding: 20, borderRadius: 18, borderColor: '#2E2E2E' },
-  slotWide:  { flex: 0, width: WIDE_SLOT_WIDTH },
+  // Vaga do layout 'wide' com estilo PRÓPRIO, sem herdar o `flex: 1`
+  // da vaga do celular. Antes ela era [slot, { flex: 0, width }]: na web
+  // o `flex: 0` vira flex-basis 0%, que vence o width — as vagas
+  // encolhiam até virar pontinhos e não dava para clicar (14/10/2026).
+  slotWideBox: {
+    width: WIDE_SLOT_WIDTH, height: Math.round(WIDE_SLOT_WIDTH * 1.25),
+    borderRadius: borderRadius.md, overflow: 'hidden',
+    borderWidth: 1, borderStyle: 'dashed', borderColor: colors.gold + '66',
+    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background,
+  },
   slotMain:  { borderStyle: 'solid', borderColor: colors.gold + '88' },
   mainTag:   { position: 'absolute', left: 8, bottom: 8, paddingHorizontal: 8, paddingVertical: 2, borderRadius: borderRadius.full, backgroundColor: 'rgba(0,0,0,0.7)' },
   mainTagText: { color: colors.gold, fontSize: 11, fontWeight: 'bold' },

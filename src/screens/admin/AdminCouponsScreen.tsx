@@ -5,6 +5,7 @@ import {
   ScrollView, Switch,
 } from 'react-native';
 import { useDesktopGrid } from '../../hooks/useDesktopGrid';
+import AdminListToolbar, { useAdminListSearch } from '../../components/web/AdminListToolbar';
 import { useNavigation } from '@react-navigation/native';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -93,6 +94,8 @@ function usesLabel(coupon: Coupon): string {
 export default function AdminCouponsScreen() {
   // Computador: cartões lado a lado (useDesktopGrid). App: igual.
   const grid = useDesktopGrid();
+  // Computador: busca e ordem na lista carregada (AdminListToolbar).
+  const search = useAdminListSearch();
   const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useAdminGuard();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -334,74 +337,77 @@ export default function AdminCouponsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          key={grid.listKey}
-          {...grid.listProps}
-          data={filtered}
-          keyExtractor={item => item.id ?? item.code}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl refreshing={false} onRefresh={loadCoupons} tintColor={colors.gold} />
-          }
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>🎟️</Text>
-              <Text style={styles.emptyText}>Nenhum cupom {FILTER_LABEL[filter].toLowerCase()}</Text>
-            </View>
-          }
-          renderItem={grid.wrap(({ item }) => {
-            const expired = isExpired(item);
-            const statusLabel = expired ? 'EXPIRADO' : item.isActive ? 'ATIVO' : 'INATIVO';
-            const statusColor = expired ? colors.gray : item.isActive ? colors.success : colors.error;
-            return (
-              <View style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.code}>{item.code}</Text>
-                  <View style={[styles.statusBadge, { borderColor: statusColor }]}>
-                    <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.cardRow}>
-                  <Text style={styles.discount}>{discountLabel(item)} de desconto</Text>
-                  <Text style={styles.uses}>Usos: {usesLabel(item)}</Text>
-                </View>
-
-                <Text style={styles.validity}>
-                  Válido: {formatDateBR(item.startDate)} até {formatDateBR(item.expiresAt)}
-                </Text>
-
-                {item.minimumPurchaseAmount ? (
-                  <Text style={styles.minPurchase}>
-                    Mínimo: R$ {item.minimumPurchaseAmount.toFixed(2).replace('.', ',')}
-                  </Text>
-                ) : null}
-
-                {/* Ações: editar + toggle */}
-                <View style={styles.toggleRow}>
-                  <TouchableOpacity onPress={() => openEdit(item)}>
-                    <Text style={styles.editBtn}>✏️ Editar</Text>
-                  </TouchableOpacity>
-                  <View style={styles.toggleRight}>
-                    <Text style={styles.toggleLabel}>
-                      {item.isActive ? 'Ativo' : 'Desativado'}
-                    </Text>
-                    {processing === item.id ? (
-                      <ActivityIndicator color={colors.gold} size="small" />
-                    ) : (
-                      <Switch
-                        value={item.isActive}
-                        onValueChange={() => handleToggle(item)}
-                        trackColor={{ false: colors.grayDark, true: colors.success + '88' }}
-                        thumbColor={item.isActive ? colors.success : colors.gray}
-                      />
-                    )}
-                  </View>
-                </View>
+        <>
+          <AdminListToolbar search={search} total={(filtered)?.length ?? 0} shown={search.apply(filtered).length} />
+          <FlatList
+            key={grid.listKey}
+            {...grid.listProps}
+            data={search.apply(filtered)}
+            keyExtractor={item => item.id ?? item.code}
+            contentContainerStyle={styles.list}
+            refreshControl={
+              <RefreshControl refreshing={false} onRefresh={loadCoupons} tintColor={colors.gold} />
+            }
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyIcon}>🎟️</Text>
+                <Text style={styles.emptyText}>Nenhum cupom {FILTER_LABEL[filter].toLowerCase()}</Text>
               </View>
-            );
-          })}
-        />
+            }
+            renderItem={grid.wrap(({ item }) => {
+              const expired = isExpired(item);
+              const statusLabel = expired ? 'EXPIRADO' : item.isActive ? 'ATIVO' : 'INATIVO';
+              const statusColor = expired ? colors.gray : item.isActive ? colors.success : colors.error;
+              return (
+                <View style={styles.card}>
+                  <View style={styles.cardTop}>
+                    <Text style={styles.code}>{item.code}</Text>
+                    <View style={[styles.statusBadge, { borderColor: statusColor }]}>
+                      <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardRow}>
+                    <Text style={styles.discount}>{discountLabel(item)} de desconto</Text>
+                    <Text style={styles.uses}>Usos: {usesLabel(item)}</Text>
+                  </View>
+
+                  <Text style={styles.validity}>
+                    Válido: {formatDateBR(item.startDate)} até {formatDateBR(item.expiresAt)}
+                  </Text>
+
+                  {item.minimumPurchaseAmount ? (
+                    <Text style={styles.minPurchase}>
+                      Mínimo: R$ {item.minimumPurchaseAmount.toFixed(2).replace('.', ',')}
+                    </Text>
+                  ) : null}
+
+                  {/* Ações: editar + toggle */}
+                  <View style={styles.toggleRow}>
+                    <TouchableOpacity onPress={() => openEdit(item)}>
+                      <Text style={styles.editBtn}>✏️ Editar</Text>
+                    </TouchableOpacity>
+                    <View style={styles.toggleRight}>
+                      <Text style={styles.toggleLabel}>
+                        {item.isActive ? 'Ativo' : 'Desativado'}
+                      </Text>
+                      {processing === item.id ? (
+                        <ActivityIndicator color={colors.gold} size="small" />
+                      ) : (
+                        <Switch
+                          value={item.isActive}
+                          onValueChange={() => handleToggle(item)}
+                          trackColor={{ false: colors.grayDark, true: colors.success + '88' }}
+                          thumbColor={item.isActive ? colors.success : colors.gray}
+                        />
+                      )}
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          />
+        </>
       )}
 
       {/* Modal de formulário (criar OU editar) */}

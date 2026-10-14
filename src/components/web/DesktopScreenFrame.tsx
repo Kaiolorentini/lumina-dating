@@ -57,14 +57,16 @@ const ADMIN_WIDE_ROUTES = new Set<string>([
 
 /** T4: formulários de uma coluna — campos em 640 px leem melhor. */
 const FORM_ROUTES = new Set<string>([
-  'EditProduct', 'PaymentSetup', 'Withdrawal', 'CreatorRequest', 'SupportNew',
+  'PaymentSetup', 'Withdrawal', 'CreatorRequest', 'SupportNew',
   'DeleteAccount', 'ProfileSetup', 'Interests',
 ]);
 
-/** T4: telas de leitura e progresso (texto, listas verticais) — 820 px. */
+/** T4: telas de leitura e progresso (texto, listas verticais) — 820 px.
+ *  T5: Missões, Cofre e XP saíram daqui (viraram painel de 2 colunas),
+ *  e Editar produto saiu dos formulários (tem a prévia ao lado). */
 const READING_ROUTES = new Set<string>([
   'CreatorAgreement', 'Support', 'SupportTicket', 'Notifications', 'Faisca', 'Fragments',
-  'Prestige', 'GalaxiaPlus', 'PremiumTools', 'XP', 'Missions', 'Vault', 'Titles',
+  'Prestige', 'GalaxiaPlus', 'PremiumTools', 'Titles',
   'MyEarnings', 'DestinyCard',
 ]);
 

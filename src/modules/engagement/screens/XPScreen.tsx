@@ -12,6 +12,10 @@
 //
 // Estado de erro próprio: antes, uma falha mostrava valores
 // padrão como se fossem reais.
+//
+// 14/10/2026 (web T5): no computador vira painel — Árvore, nível e
+// Fertilizante à esquerda; recompensas, estágios e como ganhar XP à
+// direita. Celular: igual.
 // ============================================
 
 import React, { useRef, useEffect } from 'react';
@@ -19,6 +23,7 @@ import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator, Animated,
 } from 'react-native';
+import { useBreakpoint } from '../../../hooks/useBreakpoint';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { useAuth }         from '../../../context/AuthContext';
 import { useXP }           from '../hooks/useXP';
@@ -41,6 +46,7 @@ function formatNumber(value: number): string {
 }
 
 export default function XPScreen() {
+  const { isDesktop } = useBreakpoint();
   const { user } = useAuth();
   const { status, loading, error, refresh } = useXP(user?.uid);
 
@@ -107,179 +113,204 @@ export default function XPScreen() {
   const levelRewards = status.levelRewards ?? [];
   const nextReward   = levelRewards.find(r => !r.received) ?? null;
 
+  // Blocos da tela: no celular, um embaixo do outro (ordem de
+  // sempre); no computador, em duas colunas (web T5).
+  const section1 = (
+    <>
+            {/* Árvore da Sintonia */}
+            <LinearGradient colors={gradient} style={styles.treeCard}>
+              <Text style={styles.treeCardLabel}>Árvore da Sintonia</Text>
+
+              <Animated.Text style={[styles.treeIcon, { transform: [{ scale: treeAnim }] }]}>
+                {status.treeIcon ?? '🌱'}
+              </Animated.Text>
+
+              <Text style={styles.treeName}>{status.treeName ?? 'Broto'}</Text>
+              <Text style={styles.treeXP}>
+                {formatNumber(status.treeXP ?? 0)} XP da Árvore
+              </Text>
+
+              {nextStage && (
+                <View style={styles.treeProgressSection}>
+                  <View style={styles.treeProgressHeader}>
+                    <Text style={styles.treeProgressLabel}>Próximo: {nextStage.icon} {nextStage.name}</Text>
+                    <Text style={styles.treeProgressValue}>
+                      {formatNumber(status.treeXP ?? 0)}/{formatNumber(nextStage.treeXPMin)}
+                    </Text>
+                  </View>
+                  <View style={styles.treeProgressBar}>
+                    <View style={[styles.treeProgressFill, { width: `${treeProgress * 100}%` as any }]} />
+                  </View>
+                </View>
+              )}
+
+              {status.fertilizanteAtivo && (
+                <View style={styles.fertBadge}>
+                  <Text style={styles.fertText}>🌱 Fertilizante ativo — +50% XP</Text>
+                </View>
+              )}
+            </LinearGradient>
+
+            {/* Nível e XP global */}
+            <View style={styles.levelCard}>
+              <Text style={styles.sectionTitle}>Seu Nível</Text>
+              <XPBar
+                level={status.level ?? 1}
+                tier={status.tier ?? '🌱 Comum'}
+                totalXP={status.totalXP ?? 0}
+                nextLevelXP={status.nextLevelXP ?? 100}
+                progress={status.levelProgress ?? 0}
+              />
+              <View style={styles.xpTodayRow}>
+                <Text style={styles.xpTodayText}>
+                  XP hoje: {formatNumber(status.xpToday ?? 0)}
+                  {status.dailyMax ? `/${formatNumber(status.dailyMax)}` : ''}
+                </Text>
+              </View>
+            </View>
+    </>
+  );
+  const section2 = (
+    <>
+            {/* Recompensas de nível — o que cada marco entrega e o
+                que já foi recebido. Vem do servidor. */}
+            {levelRewards.length > 0 && (
+              <>
+                <Text style={styles.sectionTitle}>Recompensas de nível</Text>
+                <View style={styles.rewardsContainer}>
+                  {levelRewards.map(r => {
+                    const isNext  = nextReward?.level === r.level;
+                    const missing = Math.max(0, r.xpRequired - (status.totalXP ?? 0));
+                    return (
+                      <View
+                        key={r.level}
+                        style={[
+                          styles.rewardRow,
+                          r.received && styles.rewardRowReceived,
+                          isNext     && styles.rewardRowNext,
+                        ]}
+                      >
+                        <Text style={styles.rewardStatus}>
+                          {r.received ? '✅' : isNext ? '🎁' : '🔒'}
+                        </Text>
+                        <View style={styles.rewardInfo}>
+                          <Text style={[styles.rewardLevel, r.received && styles.rewardLevelReceived]}>
+                            Nível {r.level}
+                          </Text>
+                          <Text style={styles.rewardDetail}>
+                            {r.received
+                              ? 'Recebido'
+                              : isNext
+                                ? `Faltam ${formatNumber(missing)} XP`
+                                : `${formatNumber(r.xpRequired)} XP`}
+                          </Text>
+                        </View>
+                        <View style={styles.rewardValues}>
+                          {r.fragments > 0 && (
+                            <Text style={styles.rewardFragments}>🔮 {formatNumber(r.fragments)}</Text>
+                          )}
+                          {r.crystalsPremium > 0 && (
+                            <Text style={styles.rewardPremium}>💎 {formatNumber(r.crystalsPremium)}</Text>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+                <Text style={styles.rewardsNote}>
+                  Fragmentos vão para o seu Cofre. Cristais premium caem direto na carteira.
+                </Text>
+              </>
+            )}
+
+            {/* Estágios da Árvore */}
+            {treeStages.length > 0 && (
+              <>
+                <Text style={styles.sectionTitle}>Estágios da Árvore</Text>
+                <View style={styles.stagesContainer}>
+                  {treeStages.map(stage => {
+                    const isCompleted = treeStage >= stage.stage;
+                    const isCurrent   = treeStage === stage.stage;
+                    return (
+                      <View key={stage.stage} style={[
+                        styles.stageRow,
+                        isCompleted && styles.stageRowCompleted,
+                        isCurrent   && styles.stageRowCurrent,
+                      ]}>
+                        <Text style={styles.stageIcon}>{stage.icon}</Text>
+                        <View style={styles.stageInfo}>
+                          <Text style={[styles.stageName, isCompleted && styles.stageNameCompleted]}>
+                            {stage.name}
+                          </Text>
+                          <Text style={styles.stageReward}>🎁 {stage.rewardLabel}</Text>
+                        </View>
+                        <View style={styles.stageXP}>
+                          <Text style={styles.stageXPText}>{formatNumber(stage.treeXPMin)} XP</Text>
+                          {isCompleted && <Text style={styles.stageDone}>✅</Text>}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {/* Como ganhar XP */}
+            {xpActions.length > 0 && (
+              <>
+                <Text style={styles.sectionTitle}>Como ganhar XP</Text>
+                <View style={styles.actionsContainer}>
+                  {xpActions.map(item => (
+                    <View key={item.action} style={styles.actionRow}>
+                      <Text style={styles.actionIcon}>{item.icon}</Text>
+                      <View style={styles.actionInfo}>
+                        <Text style={styles.actionLabel}>{item.label}</Text>
+                        {item.note ? <Text style={styles.actionNote}>{item.note}</Text> : null}
+                      </View>
+                      <View style={styles.actionRewards}>
+                        <Text style={styles.actionXP}>+{item.xp} XP</Text>
+                        {item.treeXP > 0 && (
+                          <Text style={styles.actionTreeXP}>+{item.treeXP} 🌳</Text>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+    </>
+  );
+  const section3 = (
+    <>
+            {/* Info Fertilizante */}
+            <View style={styles.fertCard}>
+              <Text style={styles.fertTitle}>🌱 Fertilizante da Sintonia</Text>
+              <Text style={styles.fertDesc}>
+                Disponível com Cristais Premium. Ativa +50% de XP (global e da árvore) por 24h.
+                Não afeta Fragmentos, Cristais ou Cofre.
+              </Text>
+            </View>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <Header title={SCREEN_TITLE} showBack={true} showHome={true} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* Árvore da Sintonia */}
-        <LinearGradient colors={gradient} style={styles.treeCard}>
-          <Text style={styles.treeCardLabel}>Árvore da Sintonia</Text>
-
-          <Animated.Text style={[styles.treeIcon, { transform: [{ scale: treeAnim }] }]}>
-            {status.treeIcon ?? '🌱'}
-          </Animated.Text>
-
-          <Text style={styles.treeName}>{status.treeName ?? 'Broto'}</Text>
-          <Text style={styles.treeXP}>
-            {formatNumber(status.treeXP ?? 0)} XP da Árvore
-          </Text>
-
-          {nextStage && (
-            <View style={styles.treeProgressSection}>
-              <View style={styles.treeProgressHeader}>
-                <Text style={styles.treeProgressLabel}>Próximo: {nextStage.icon} {nextStage.name}</Text>
-                <Text style={styles.treeProgressValue}>
-                  {formatNumber(status.treeXP ?? 0)}/{formatNumber(nextStage.treeXPMin)}
-                </Text>
-              </View>
-              <View style={styles.treeProgressBar}>
-                <View style={[styles.treeProgressFill, { width: `${treeProgress * 100}%` as any }]} />
-              </View>
-            </View>
-          )}
-
-          {status.fertilizanteAtivo && (
-            <View style={styles.fertBadge}>
-              <Text style={styles.fertText}>🌱 Fertilizante ativo — +50% XP</Text>
-            </View>
-          )}
-        </LinearGradient>
-
-        {/* Nível e XP global */}
-        <View style={styles.levelCard}>
-          <Text style={styles.sectionTitle}>Seu Nível</Text>
-          <XPBar
-            level={status.level ?? 1}
-            tier={status.tier ?? '🌱 Comum'}
-            totalXP={status.totalXP ?? 0}
-            nextLevelXP={status.nextLevelXP ?? 100}
-            progress={status.levelProgress ?? 0}
-          />
-          <View style={styles.xpTodayRow}>
-            <Text style={styles.xpTodayText}>
-              XP hoje: {formatNumber(status.xpToday ?? 0)}
-              {status.dailyMax ? `/${formatNumber(status.dailyMax)}` : ''}
-            </Text>
+        {isDesktop ? (
+          <View style={styles.dRow}>
+            <View style={styles.dLeft}>{section1} {section3}</View>
+            <View style={styles.dRight}>{section2}</View>
           </View>
-        </View>
-
-        {/* Recompensas de nível — o que cada marco entrega e o
-            que já foi recebido. Vem do servidor. */}
-        {levelRewards.length > 0 && (
+        ) : (
           <>
-            <Text style={styles.sectionTitle}>Recompensas de nível</Text>
-            <View style={styles.rewardsContainer}>
-              {levelRewards.map(r => {
-                const isNext  = nextReward?.level === r.level;
-                const missing = Math.max(0, r.xpRequired - (status.totalXP ?? 0));
-                return (
-                  <View
-                    key={r.level}
-                    style={[
-                      styles.rewardRow,
-                      r.received && styles.rewardRowReceived,
-                      isNext     && styles.rewardRowNext,
-                    ]}
-                  >
-                    <Text style={styles.rewardStatus}>
-                      {r.received ? '✅' : isNext ? '🎁' : '🔒'}
-                    </Text>
-                    <View style={styles.rewardInfo}>
-                      <Text style={[styles.rewardLevel, r.received && styles.rewardLevelReceived]}>
-                        Nível {r.level}
-                      </Text>
-                      <Text style={styles.rewardDetail}>
-                        {r.received
-                          ? 'Recebido'
-                          : isNext
-                            ? `Faltam ${formatNumber(missing)} XP`
-                            : `${formatNumber(r.xpRequired)} XP`}
-                      </Text>
-                    </View>
-                    <View style={styles.rewardValues}>
-                      {r.fragments > 0 && (
-                        <Text style={styles.rewardFragments}>🔮 {formatNumber(r.fragments)}</Text>
-                      )}
-                      {r.crystalsPremium > 0 && (
-                        <Text style={styles.rewardPremium}>💎 {formatNumber(r.crystalsPremium)}</Text>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-            <Text style={styles.rewardsNote}>
-              Fragmentos vão para o seu Cofre. Cristais premium caem direto na carteira.
-            </Text>
+        {section1}
+        {section2}
+        {section3}
           </>
         )}
-
-        {/* Estágios da Árvore */}
-        {treeStages.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Estágios da Árvore</Text>
-            <View style={styles.stagesContainer}>
-              {treeStages.map(stage => {
-                const isCompleted = treeStage >= stage.stage;
-                const isCurrent   = treeStage === stage.stage;
-                return (
-                  <View key={stage.stage} style={[
-                    styles.stageRow,
-                    isCompleted && styles.stageRowCompleted,
-                    isCurrent   && styles.stageRowCurrent,
-                  ]}>
-                    <Text style={styles.stageIcon}>{stage.icon}</Text>
-                    <View style={styles.stageInfo}>
-                      <Text style={[styles.stageName, isCompleted && styles.stageNameCompleted]}>
-                        {stage.name}
-                      </Text>
-                      <Text style={styles.stageReward}>🎁 {stage.rewardLabel}</Text>
-                    </View>
-                    <View style={styles.stageXP}>
-                      <Text style={styles.stageXPText}>{formatNumber(stage.treeXPMin)} XP</Text>
-                      {isCompleted && <Text style={styles.stageDone}>✅</Text>}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </>
-        )}
-
-        {/* Como ganhar XP */}
-        {xpActions.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Como ganhar XP</Text>
-            <View style={styles.actionsContainer}>
-              {xpActions.map(item => (
-                <View key={item.action} style={styles.actionRow}>
-                  <Text style={styles.actionIcon}>{item.icon}</Text>
-                  <View style={styles.actionInfo}>
-                    <Text style={styles.actionLabel}>{item.label}</Text>
-                    {item.note ? <Text style={styles.actionNote}>{item.note}</Text> : null}
-                  </View>
-                  <View style={styles.actionRewards}>
-                    <Text style={styles.actionXP}>+{item.xp} XP</Text>
-                    {item.treeXP > 0 && (
-                      <Text style={styles.actionTreeXP}>+{item.treeXP} 🌳</Text>
-                    )}
-                  </View>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Info Fertilizante */}
-        <View style={styles.fertCard}>
-          <Text style={styles.fertTitle}>🌱 Fertilizante da Sintonia</Text>
-          <Text style={styles.fertDesc}>
-            Disponível com Cristais Premium. Ativa +50% de XP (global e da árvore) por 24h.
-            Não afeta Fragmentos, Cristais ou Cofre.
-          </Text>
-        </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -291,6 +322,10 @@ const S = SPACING;
 const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
+  // ── Computador (web T5): painel em duas colunas ──
+  dRow:   { flexDirection: 'row', alignItems: 'flex-start', gap: 20, paddingTop: 8 },
+  dLeft:  { flex: 5, minWidth: 0 },
+  dRight: { flex: 6, minWidth: 0 },
   container:   { flex: 1, backgroundColor: COLORS.background },
   center:      { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl, gap: S.sm },
 

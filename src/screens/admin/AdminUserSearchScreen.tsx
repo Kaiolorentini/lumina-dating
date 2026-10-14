@@ -4,6 +4,7 @@ import {
   TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { useDesktopGrid } from '../../hooks/useDesktopGrid';
+import AdminListToolbar, { useAdminListSearch } from '../../components/web/AdminListToolbar';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -18,6 +19,8 @@ type NavProp = NativeStackNavigationProp<RootStackParamList>;
 export default function AdminUserSearchScreen() {
   // Computador: cartões lado a lado (useDesktopGrid). App: igual.
   const grid = useDesktopGrid();
+  // Computador: busca e ordem na lista carregada (AdminListToolbar).
+  const search = useAdminListSearch();
   const navigation = useNavigation<NavProp>();
   const { blocked, loading: guardLoading } = useSuperAdminGuard();
   const [search, setSearch] = useState('');
@@ -71,40 +74,43 @@ export default function AdminUserSearchScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        key={grid.listKey}
-        {...grid.listProps}
-        data={results}
-        keyExtractor={item => item.uid}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          !loading ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>Digite para buscar usuários</Text>
-            </View>
-          ) : null
-        }
-        renderItem={grid.wrap(({ item }) => (
-          <TouchableOpacity
-            style={styles.userCard}
-            onPress={() => navigation.navigate('AdminUserDetail', { userId: item.uid })}
-          >
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>{item.name}</Text>
-              <Text style={styles.userEmail}>{item.email}</Text>
-              <Text style={styles.userUid}>UID: {item.uid.slice(0, 16)}...</Text>
-            </View>
-            <View style={styles.userMeta}>
-              {(item as any).isBlocked && (
-                <View style={styles.blockedBadge}>
-                  <Text style={styles.blockedText}>Bloqueado</Text>
-                </View>
-              )}
-              <Text style={styles.arrow}>›</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      />
+      <>
+        <AdminListToolbar search={search} total={(results)?.length ?? 0} shown={search.apply(results).length} />
+        <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
+          data={search.apply(results)}
+          keyExtractor={item => item.uid}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            !loading ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>Digite para buscar usuários</Text>
+              </View>
+            ) : null
+          }
+          renderItem={grid.wrap(({ item }) => (
+            <TouchableOpacity
+              style={styles.userCard}
+              onPress={() => navigation.navigate('AdminUserDetail', { userId: item.uid })}
+            >
+              <View style={styles.userInfo}>
+                <Text style={styles.userName}>{item.name}</Text>
+                <Text style={styles.userEmail}>{item.email}</Text>
+                <Text style={styles.userUid}>UID: {item.uid.slice(0, 16)}...</Text>
+              </View>
+              <View style={styles.userMeta}>
+                {(item as any).isBlocked && (
+                  <View style={styles.blockedBadge}>
+                    <Text style={styles.blockedText}>Bloqueado</Text>
+                  </View>
+                )}
+                <Text style={styles.arrow}>›</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        />
+      </>
     </ScreenContainer>
   );
 }

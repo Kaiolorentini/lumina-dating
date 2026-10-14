@@ -8,6 +8,7 @@
 //
 // 14/10/2026 (web T3): no computador a lista mostra os cartões lado a
 // lado (useDesktopGrid). Celular e app: igual.
+// T5: no computador, busca e ordem na lista (AdminListToolbar).
 // ============================================
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -16,6 +17,7 @@ import {
   ActivityIndicator, Alert, RefreshControl, TextInput, Modal,
 } from 'react-native';
 import { useDesktopGrid } from '../../hooks/useDesktopGrid';
+import AdminListToolbar, { useAdminListSearch } from '../../components/web/AdminListToolbar';
 import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -44,6 +46,8 @@ function formatDate(value: unknown): string {
 export default function AdminRefundRequestsScreen() {
   // Computador: cartões lado a lado (useDesktopGrid). App: igual.
   const grid = useDesktopGrid();
+  // Computador: busca e ordem na lista carregada (AdminListToolbar).
+  const search = useAdminListSearch();
   const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useAdminGuard();
 
@@ -164,86 +168,89 @@ export default function AdminRefundRequestsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          key={grid.listKey}
-          {...grid.listProps}
-          data={requests}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={colors.gold} />}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>↩️</Text>
-              <Text style={styles.emptyText}>Nenhum reembolso em "{TAB_LABEL[tab]}"</Text>
-            </View>
-          }
-          renderItem={grid.wrap(({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.product} numberOfLines={2}>📦 {titles[item.productId] ?? 'Produto'}</Text>
-
-              <View style={styles.valuesRow}>
-                <View style={styles.valueBox}>
-                  <Text style={styles.valueLabel}>Devolver ao comprador</Text>
-                  <Text style={styles.valueMain}>{formatBRL(item.amount)}</Text>
-                </View>
-                <View style={styles.valueBox}>
-                  <Text style={styles.valueLabel}>Sai do criador</Text>
-                  <Text style={styles.valueLoss}>{formatBRL(item.sellerAmount)}</Text>
-                </View>
+        <>
+          <AdminListToolbar search={search} total={(requests)?.length ?? 0} shown={search.apply(requests).length} />
+          <FlatList
+            key={grid.listKey}
+            {...grid.listProps}
+            data={search.apply(requests)}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.list}
+            refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={colors.gold} />}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyIcon}>↩️</Text>
+                <Text style={styles.emptyText}>Nenhum reembolso em "{TAB_LABEL[tab]}"</Text>
               </View>
+            }
+            renderItem={grid.wrap(({ item }) => (
+              <View style={styles.card}>
+                <Text style={styles.product} numberOfLines={2}>📦 {titles[item.productId] ?? 'Produto'}</Text>
 
-              <View style={styles.reasonBox}>
-                <Text style={styles.reasonLabel}>Motivo do comprador</Text>
-                <Text style={styles.reasonText}>{item.reason || '—'}</Text>
-              </View>
-
-              <Text style={styles.party}>🛒 Comprador: <Text style={styles.partyValue}>{names[item.buyerId] ?? '…'}</Text></Text>
-              <Text style={styles.party}>🎨 Criador: <Text style={styles.partyValue}>{names[item.sellerId] ?? '…'}</Text></Text>
-              <Text style={styles.date}>Pedido em {formatDate(item.createdAt)}</Text>
-
-              {(tab === 'pending' || tab === 'approved') && item.buyerPixKey ? (
-                <View style={styles.pixBox}>
-                  <Text style={styles.pixLabel}>Chave Pix do comprador · {PIX_TYPE_LABEL[item.buyerPixKeyType ?? ''] ?? ''}</Text>
-                  <View style={styles.pixRow}>
-                    <Text style={styles.pixKey} selectable>{item.buyerPixKey}</Text>
-                    <TouchableOpacity
-                      style={styles.copyBtn}
-                      onPress={async () => {
-                        await Clipboard.setStringAsync(item.buyerPixKey ?? '');
-                        Alert.alert('Copiado', 'Chave Pix copiada.');
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Copiar chave Pix do comprador"
-                    >
-                      <Text style={styles.copyText}>Copiar</Text>
-                    </TouchableOpacity>
+                <View style={styles.valuesRow}>
+                  <View style={styles.valueBox}>
+                    <Text style={styles.valueLabel}>Devolver ao comprador</Text>
+                    <Text style={styles.valueMain}>{formatBRL(item.amount)}</Text>
+                  </View>
+                  <View style={styles.valueBox}>
+                    <Text style={styles.valueLabel}>Sai do criador</Text>
+                    <Text style={styles.valueLoss}>{formatBRL(item.sellerAmount)}</Text>
                   </View>
                 </View>
-              ) : null}
 
-              {tab === 'rejected' && item.rejectionReason ? (
-                <Text style={styles.rejection}>Motivo da rejeição: {item.rejectionReason}</Text>
-              ) : null}
-
-              {processing === item.id ? (
-                <ActivityIndicator color={colors.gold} style={{ marginTop: spacing.sm }} />
-              ) : tab === 'pending' ? (
-                <View style={styles.actions}>
-                  <TouchableOpacity style={styles.approveBtn} onPress={() => approve(item)}>
-                    <Text style={styles.approveText}>✅ Aprovar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.rejectBtn} onPress={() => { setRejectId(item.id); setRejectReason(''); }}>
-                    <Text style={styles.rejectText}>❌ Rejeitar</Text>
-                  </TouchableOpacity>
+                <View style={styles.reasonBox}>
+                  <Text style={styles.reasonLabel}>Motivo do comprador</Text>
+                  <Text style={styles.reasonText}>{item.reason || '—'}</Text>
                 </View>
-              ) : tab === 'approved' ? (
-                <TouchableOpacity style={styles.paidBtn} onPress={() => markPaid(item)}>
-                  <Text style={styles.paidText}>💸 Marcar reembolso como pago</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ))}
-        />
+
+                <Text style={styles.party}>🛒 Comprador: <Text style={styles.partyValue}>{names[item.buyerId] ?? '…'}</Text></Text>
+                <Text style={styles.party}>🎨 Criador: <Text style={styles.partyValue}>{names[item.sellerId] ?? '…'}</Text></Text>
+                <Text style={styles.date}>Pedido em {formatDate(item.createdAt)}</Text>
+
+                {(tab === 'pending' || tab === 'approved') && item.buyerPixKey ? (
+                  <View style={styles.pixBox}>
+                    <Text style={styles.pixLabel}>Chave Pix do comprador · {PIX_TYPE_LABEL[item.buyerPixKeyType ?? ''] ?? ''}</Text>
+                    <View style={styles.pixRow}>
+                      <Text style={styles.pixKey} selectable>{item.buyerPixKey}</Text>
+                      <TouchableOpacity
+                        style={styles.copyBtn}
+                        onPress={async () => {
+                          await Clipboard.setStringAsync(item.buyerPixKey ?? '');
+                          Alert.alert('Copiado', 'Chave Pix copiada.');
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Copiar chave Pix do comprador"
+                      >
+                        <Text style={styles.copyText}>Copiar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
+
+                {tab === 'rejected' && item.rejectionReason ? (
+                  <Text style={styles.rejection}>Motivo da rejeição: {item.rejectionReason}</Text>
+                ) : null}
+
+                {processing === item.id ? (
+                  <ActivityIndicator color={colors.gold} style={{ marginTop: spacing.sm }} />
+                ) : tab === 'pending' ? (
+                  <View style={styles.actions}>
+                    <TouchableOpacity style={styles.approveBtn} onPress={() => approve(item)}>
+                      <Text style={styles.approveText}>✅ Aprovar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.rejectBtn} onPress={() => { setRejectId(item.id); setRejectReason(''); }}>
+                      <Text style={styles.rejectText}>❌ Rejeitar</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : tab === 'approved' ? (
+                  <TouchableOpacity style={styles.paidBtn} onPress={() => markPaid(item)}>
+                    <Text style={styles.paidText}>💸 Marcar reembolso como pago</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ))}
+          />
+        </>
       )}
 
       <Modal visible={rejectId !== null} transparent animationType="fade" onRequestClose={() => setRejectId(null)}>

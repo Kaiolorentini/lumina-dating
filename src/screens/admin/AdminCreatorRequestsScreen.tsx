@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Alert, RefreshControl, TextInput, Modal,
 } from 'react-native';
 import { useDesktopGrid } from '../../hooks/useDesktopGrid';
+import AdminListToolbar, { useAdminListSearch } from '../../components/web/AdminListToolbar';
 import { useNavigation } from '@react-navigation/native';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -21,6 +22,8 @@ type StatusTab = typeof STATUS_TABS[number];
 export default function AdminCreatorRequestsScreen() {
   // Computador: cartões lado a lado (useDesktopGrid). App: igual.
   const grid = useDesktopGrid();
+  // Computador: busca e ordem na lista carregada (AdminListToolbar).
+  const search = useAdminListSearch();
   const navigation = useNavigation();
   const { user } = useAuth();
   const { blocked, loading: guardLoading } = useAdminGuard();
@@ -161,81 +164,84 @@ export default function AdminCreatorRequestsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          key={grid.listKey}
-          {...grid.listProps}
-          data={requests}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl
-              refreshing={false}
-              onRefresh={loadRequests}
-              tintColor={colors.gold}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>📭</Text>
-              <Text style={styles.emptyText}>
-                Nenhuma solicitação {
-                  activeTab === 'pending' ? 'pendente' :
-                  activeTab === 'approved' ? 'aprovada' : 'rejeitada'
-                }
-              </Text>
-            </View>
-          }
-          renderItem={grid.wrap(({ item }) => (
-            <View style={styles.card}>
-              {/* Nome do usuário */}
-              <Text style={styles.cardName}>
-                👤 {userNames[item.userId] || item.userId.slice(0, 16) + '...'}
-              </Text>
-              <Text style={styles.cardId}>
-                UID: {item.userId.slice(0, 20)}...
-              </Text>
-              <Text style={styles.cardDate}>
-                📅 {item.createdAt.toLocaleDateString('pt-BR')} às{' '}
-                {item.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-
-              {activeTab === 'pending' && (
-                <View style={styles.cardActions}>
-                  <TouchableOpacity
-                    style={styles.approveBtn}
-                    onPress={() => handleApprove(item)}
-                    disabled={processing === item.id}
-                  >
-                    {processing === item.id ? (
-                      <ActivityIndicator color={colors.background} size="small" />
-                    ) : (
-                      <Text style={styles.approveBtnText}>✅ Aprovar</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.rejectBtn}
-                    onPress={() => openRejectModal(item)}
-                    disabled={processing === item.id}
-                  >
-                    <Text style={styles.rejectBtnText}>❌ Rejeitar</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {item.rejectionReason && (
-                <Text style={styles.reason}>
-                  💬 Motivo: {item.rejectionReason}
+        <>
+          <AdminListToolbar search={search} total={(requests)?.length ?? 0} shown={search.apply(requests).length} />
+          <FlatList
+            key={grid.listKey}
+            {...grid.listProps}
+            data={search.apply(requests)}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.list}
+            refreshControl={
+              <RefreshControl
+                refreshing={false}
+                onRefresh={loadRequests}
+                tintColor={colors.gold}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyIcon}>📭</Text>
+                <Text style={styles.emptyText}>
+                  Nenhuma solicitação {
+                    activeTab === 'pending' ? 'pendente' :
+                    activeTab === 'approved' ? 'aprovada' : 'rejeitada'
+                  }
                 </Text>
-              )}
-
-              {item.reviewedAt && (
-                <Text style={styles.reviewedAt}>
-                  Revisado em: {item.reviewedAt.toLocaleDateString('pt-BR')}
+              </View>
+            }
+            renderItem={grid.wrap(({ item }) => (
+              <View style={styles.card}>
+                {/* Nome do usuário */}
+                <Text style={styles.cardName}>
+                  👤 {userNames[item.userId] || item.userId.slice(0, 16) + '...'}
                 </Text>
-              )}
-            </View>
-          ))}
-        />
+                <Text style={styles.cardId}>
+                  UID: {item.userId.slice(0, 20)}...
+                </Text>
+                <Text style={styles.cardDate}>
+                  📅 {item.createdAt.toLocaleDateString('pt-BR')} às{' '}
+                  {item.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+
+                {activeTab === 'pending' && (
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity
+                      style={styles.approveBtn}
+                      onPress={() => handleApprove(item)}
+                      disabled={processing === item.id}
+                    >
+                      {processing === item.id ? (
+                        <ActivityIndicator color={colors.background} size="small" />
+                      ) : (
+                        <Text style={styles.approveBtnText}>✅ Aprovar</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.rejectBtn}
+                      onPress={() => openRejectModal(item)}
+                      disabled={processing === item.id}
+                    >
+                      <Text style={styles.rejectBtnText}>❌ Rejeitar</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {item.rejectionReason && (
+                  <Text style={styles.reason}>
+                    💬 Motivo: {item.rejectionReason}
+                  </Text>
+                )}
+
+                {item.reviewedAt && (
+                  <Text style={styles.reviewedAt}>
+                    Revisado em: {item.reviewedAt.toLocaleDateString('pt-BR')}
+                  </Text>
+                )}
+              </View>
+            ))}
+          />
+        </>
       )}
 
       {/* ✅ Modal de rejeição — funciona no Android e iOS */}

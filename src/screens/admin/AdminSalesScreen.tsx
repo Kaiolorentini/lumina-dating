@@ -11,6 +11,7 @@
 //
 // 14/10/2026 (web T3): no computador a lista mostra os cartões lado a
 // lado (useDesktopGrid). Celular e app: igual.
+// T5: no computador, busca e ordem na lista (AdminListToolbar).
 // ============================================
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -19,6 +20,7 @@ import {
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useDesktopGrid } from '../../hooks/useDesktopGrid';
+import AdminListToolbar, { useAdminListSearch } from '../../components/web/AdminListToolbar';
 import { useNavigation } from '@react-navigation/native';
 import { DocumentSnapshot } from 'firebase/firestore';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -56,6 +58,8 @@ function statusInfo(sale: SaleRow): { label: string; color: string } {
 export default function AdminSalesScreen() {
   // Computador: cartões lado a lado (useDesktopGrid). App: igual.
   const grid = useDesktopGrid();
+  // Computador: busca e ordem na lista carregada (AdminListToolbar).
+  const search = useAdminListSearch();
   const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useAdminGuard();
   const { data: dashboard } = useAdminDashboard(!blocked && !guardLoading);
@@ -175,69 +179,72 @@ export default function AdminSalesScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          key={grid.listKey}
-          {...grid.listProps}
-          data={sales}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={colors.gold} />}
-          onEndReachedThreshold={0.4}
-          onEndReached={loadMore}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>💳</Text>
-              <Text style={styles.emptyText}>Nenhuma venda nesta aba</Text>
-            </View>
-          }
-          ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.gold} style={{ margin: spacing.md }} /> : null}
-          renderItem={grid.wrap(({ item }) => {
-            const st = statusInfo(item);
-            return (
-              <View style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>
-                    {tab === 'coins'
-                      ? (item.isSubscription ? '🌌 Galáxia Plus' : `💎 ${item.packageLabel ?? 'Pacote de cristais'}`)
-                      : `Venda #${item.id.slice(0, 8)}`}
-                  </Text>
-                  <View style={[styles.statusBadge, { borderColor: st.color }]}>
-                    <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.valuesRow}>
-                  <View style={styles.valueBox}>
-                    <Text style={styles.valueLabel}>Valor</Text>
-                    <Text style={styles.valueMain}>{formatBRL(item.amount)}</Text>
-                  </View>
-                  {tab === 'marketplace' && (
-                    <>
-                      <View style={styles.valueBox}>
-                        <Text style={styles.valueLabel}>Comissão</Text>
-                        <Text style={styles.valueSecondary}>{formatBRL(item.platformCommission)}</Text>
-                      </View>
-                      <View style={styles.valueBox}>
-                        <Text style={styles.valueLabel}>Criador</Text>
-                        <Text style={styles.valueSecondary}>{formatBRL(item.sellerAmount)}</Text>
-                      </View>
-                    </>
-                  )}
-                </View>
-
-                {item.couponCode ? (
-                  <Text style={styles.coupon}>🎟️ Cupom {item.couponCode}{item.discountAmount ? ` (−${formatBRL(item.discountAmount)})` : ''}</Text>
-                ) : null}
-
-                <Text style={styles.party}>🛒 Comprador: <Text style={styles.partyValue}>{names[item.buyerId] ?? '…'}</Text></Text>
-                {tab === 'marketplace' && (
-                  <Text style={styles.party}>🎨 Criador: <Text style={styles.partyValue}>{names[item.sellerId] ?? '…'}</Text></Text>
-                )}
-                <Text style={styles.date}>{formatDate(item.createdAt)}{item.paidAt ? ` · pago ${formatDate(item.paidAt)}` : ''}</Text>
+        <>
+          <AdminListToolbar search={search} total={(sales)?.length ?? 0} shown={search.apply(sales).length} />
+          <FlatList
+            key={grid.listKey}
+            {...grid.listProps}
+            data={search.apply(sales)}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.list}
+            refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={colors.gold} />}
+            onEndReachedThreshold={0.4}
+            onEndReached={loadMore}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyIcon}>💳</Text>
+                <Text style={styles.emptyText}>Nenhuma venda nesta aba</Text>
               </View>
-            );
-          })}
-        />
+            }
+            ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.gold} style={{ margin: spacing.md }} /> : null}
+            renderItem={grid.wrap(({ item }) => {
+              const st = statusInfo(item);
+              return (
+                <View style={styles.card}>
+                  <View style={styles.cardTop}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {tab === 'coins'
+                        ? (item.isSubscription ? '🌌 Galáxia Plus' : `💎 ${item.packageLabel ?? 'Pacote de cristais'}`)
+                        : `Venda #${item.id.slice(0, 8)}`}
+                    </Text>
+                    <View style={[styles.statusBadge, { borderColor: st.color }]}>
+                      <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.valuesRow}>
+                    <View style={styles.valueBox}>
+                      <Text style={styles.valueLabel}>Valor</Text>
+                      <Text style={styles.valueMain}>{formatBRL(item.amount)}</Text>
+                    </View>
+                    {tab === 'marketplace' && (
+                      <>
+                        <View style={styles.valueBox}>
+                          <Text style={styles.valueLabel}>Comissão</Text>
+                          <Text style={styles.valueSecondary}>{formatBRL(item.platformCommission)}</Text>
+                        </View>
+                        <View style={styles.valueBox}>
+                          <Text style={styles.valueLabel}>Criador</Text>
+                          <Text style={styles.valueSecondary}>{formatBRL(item.sellerAmount)}</Text>
+                        </View>
+                      </>
+                    )}
+                  </View>
+
+                  {item.couponCode ? (
+                    <Text style={styles.coupon}>🎟️ Cupom {item.couponCode}{item.discountAmount ? ` (−${formatBRL(item.discountAmount)})` : ''}</Text>
+                  ) : null}
+
+                  <Text style={styles.party}>🛒 Comprador: <Text style={styles.partyValue}>{names[item.buyerId] ?? '…'}</Text></Text>
+                  {tab === 'marketplace' && (
+                    <Text style={styles.party}>🎨 Criador: <Text style={styles.partyValue}>{names[item.sellerId] ?? '…'}</Text></Text>
+                  )}
+                  <Text style={styles.date}>{formatDate(item.createdAt)}{item.paidAt ? ` · pago ${formatDate(item.paidAt)}` : ''}</Text>
+                </View>
+              );
+            })}
+          />
+        </>
       )}
     </ScreenContainer>
   );
