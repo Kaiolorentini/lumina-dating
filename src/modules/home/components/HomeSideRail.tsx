@@ -19,6 +19,7 @@ import { colors, fonts, spacing } from '../../../theme';
 import { ProfileCardData } from '../../../shared/types';
 import HoverPressable from '../../../components/web/HoverPressable';
 import { useXP } from '../../engagement/hooks/useXP';
+import { treeStageProgress } from '../../engagement/utils/treeProgress';
 
 interface Props {
   uid:            string | undefined;
@@ -55,17 +56,9 @@ export default function HomeSideRail({
   const blurCount = Math.min(4, Math.max(visitasHoje, hasVisits ? 1 : 0));
 
   // Progresso dentro do estágio atual da Árvore.
-  let treeFraction = 0;
-  let missing: number | null = null;
-  if (xp?.nextTreeStage) {
-    const currentMin = xp.treeStages?.find(s => s.stage === xp.treeStage)?.treeXPMin ?? 0;
-    const span = xp.nextTreeStage.treeXPMin - currentMin;
-    treeFraction = span > 0 ? (xp.treeXP - currentMin) / span : 0;
-    missing = Math.max(0, xp.nextTreeStage.treeXPMin - xp.treeXP);
-  } else if (xp) {
-    treeFraction = 1;
-  }
-  treeFraction = Math.min(1, Math.max(0, treeFraction));
+  const tree = xp ? treeStageProgress(xp) : { fraction: 0, missing: null };
+  const treeFraction = tree.fraction;
+  const missing = tree.missing;
 
   return (
     <View style={[styles.rail, isRow && styles.railRow]} accessibilityLabel="Seu dia no Lumina">

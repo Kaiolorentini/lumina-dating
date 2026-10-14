@@ -30,12 +30,16 @@
 // não muda o layout e o carrossel media a janela inteira. A curtida
 // no computador sai pelo botão grande (handleDesktopLike), com o
 // mesmo useLike e as mesmas mensagens do card. Celular e app: iguais.
+//
+// D4: no computador as fotos dos 2 próximos perfis são baixadas
+// antes (Image.prefetch) — a troca de card fica instantânea. As
+// mesmas fotos seriam baixadas na troca: não aumenta o consumo.
 // ============================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Dimensions,
-  TouchableOpacity, ActivityIndicator, Alert,
+  TouchableOpacity, ActivityIndicator, Alert, Image,
   NativeSyntheticEvent, NativeScrollEvent, LayoutChangeEvent,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -353,6 +357,15 @@ export default function SintonizeScreen() {
     if (current !== index) setIndex(current);
     refillIfNeeded(current);
   }
+
+  // Pré-carrega as próximas fotos (só computador; no celular o
+  // carrossel já monta os vizinhos).
+  useEffect(() => {
+    if (!isDesktop) return;
+    queue.slice(index + 1, index + 3).forEach(p => {
+      if (p.photoURL) Image.prefetch(p.photoURL).catch(() => { /* só otimização */ });
+    });
+  }, [isDesktop, index, queue]);
 
   // Atalhos do computador. Fica ANTES dos returns abaixo (regra dos
   // hooks). Desligados com a Segunda Chance aberta, durante a

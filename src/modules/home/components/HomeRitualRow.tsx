@@ -7,6 +7,7 @@
 // quatro cartões lado a lado — o "ritual" que a pessoa fecha todo dia.
 // Missões mostra o progresso real (useMissionsSummary, que a Home já
 // usa). Nada é lido aqui: só recebe números e ações.
+// D4: o Cofre mostra os fragmentos guardados (carteira já carregada).
 // ============================================
 
 import React from 'react';
@@ -17,6 +18,8 @@ import HoverPressable from '../../../components/web/HoverPressable';
 interface Props {
   missionsCompleted: number;
   missionsTotal:     number;
+  /** Fragmentos no Cofre (wallet.vaultFragments). */
+  vaultFragments:    number;
   onFaisca:   () => void;
   onDestiny:  () => void;
   onMissions: () => void;
@@ -70,7 +73,7 @@ function Tile({ icon, title, subtitle, counter, progress, tone, onPress, a11y }:
 }
 
 export default function HomeRitualRow({
-  missionsCompleted, missionsTotal, onFaisca, onDestiny, onMissions, onVault,
+  missionsCompleted, missionsTotal, vaultFragments, onFaisca, onDestiny, onMissions, onVault,
 }: Props) {
   const hasMissions = missionsTotal > 0;
   const done = hasMissions && missionsCompleted >= missionsTotal;
@@ -99,8 +102,12 @@ export default function HomeRitualRow({
       />
       <Tile
         icon="🗝️" tone="gold" title="Cofre de Sintonia"
-        subtitle="Recompensas por atividade social"
-        onPress={onVault} a11y="Cofre de Sintonia: recompensas por atividade social"
+        counter={vaultFragments > 0 ? `${vaultFragments} ✦` : undefined}
+        subtitle={vaultFragments > 0
+          ? `${vaultFragments} ${vaultFragments === 1 ? 'fragmento guardado' : 'fragmentos guardados'}. Veja o que já dá para resgatar.`
+          : 'Converse e sintonize para encher o cofre.'}
+        onPress={onVault}
+        a11y={`Cofre de Sintonia: ${vaultFragments} fragmentos`}
       />
     </View>
   );

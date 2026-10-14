@@ -1,6 +1,18 @@
 // ============================================
-// LUMINA — PROFILE SCREEN v5.8
+// LUMINA — PROFILE SCREEN v5.9
 // src/modules/profile/screens/ProfileScreen.tsx
+//
+// v5.9 (13/10/2026, web D4 — tela aprovada no protótipo): no
+// COMPUTADOR o perfil vira duas colunas:
+//   • esquerda: o seu card (sem a escala de 1.45, tamanho fixo),
+//     Trocar foto / Moldura, a Árvore com quanto falta e os cristais
+//     com "Comprar";
+//   • direita: galeria larga (com a foto principal), "Sua jornada"
+//     em cartões (Conquistas, Cofre, Missões, XP, Ranking, Prestígio,
+//     Molduras, Badges, Títulos + Ferramentas Premium em destaque),
+//     "Sobre você" e a lista de configurações lado a lado.
+// Mesmos dados e mesmas telas de destino do celular — nenhuma
+// leitura nova. Celular, tablet e app: iguais à v5.8.
 //
 // v5.8 (13/10/2026, web responsivo R1) — no tablet e no computador
 // o conteúdo fica numa coluna central de leitura (até 820 px): sem
@@ -65,6 +77,13 @@ import { useMissionsSummary } from '../../engagement/hooks/useMissionsSummary';
 import GalleryEditor from '../components/GalleryEditor';
 import { useBreakpoint } from '../../../hooks/useBreakpoint';
 import { pageContentStyle } from '../../../components/layout/PageContainer';
+import HoverPressable from '../../../components/web/HoverPressable';
+import { treeStageProgress } from '../../engagement/utils/treeProgress';
+import { CONTENT_MAX_WIDTH } from '../../../utils/breakpoints';
+
+/** Largura do card na coluna esquerda do computador. */
+const DESKTOP_CARD_WIDTH = 300;
+const JOURNEY_GAP = 12;
 
 /** Balão de contagem, ou ponto quando n === true. */
 function MenuBadge({ n }: { n: number | boolean }) {
@@ -103,7 +122,9 @@ export default function ProfileScreen() {
   const { data: prestigeData }     = usePrestige(user?.uid); // ← FIX: era 'data', agora 'prestigeData'
   const badges                     = useProfileBadges(user?.uid);
   const missions                   = useMissionsSummary(user?.uid);
-  const { isPhone }                = useBreakpoint();
+  const { isPhone, isDesktop }     = useBreakpoint();
+  // Largura da grade "Sua jornada" (computador).
+  const [journeyWidth, setJourneyWidth] = useState(0);
 
   const [profile, setProfile]               = useState<UserProfile | null>(null);
   const [loading, setLoading]               = useState(true);
@@ -198,11 +219,308 @@ export default function ProfileScreen() {
     if (h > 0 && Math.abs(h - cardHeight) > 1) setCardHeight(h);
   }
 
+  function handleJourneyLayout(event: LayoutChangeEvent) {
+    const w = event.nativeEvent.layout.width;
+    if (w > 0 && Math.abs(w - journeyWidth) > 1) setJourneyWidth(w);
+  }
+
+  function confirmLogout() {
+    Alert.alert('Sair', 'Tem certeza que deseja sair?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Sair', style: 'destructive', onPress: async () => {
+        try { await logout(); } catch (e) { console.error('[ProfileScreen] logout falhou:', e); }
+      }},
+    ]);
+  }
+
   if (loading) return (
     <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
       <ActivityIndicator color={colors.gold} />
     </View>
   );
+
+  if (isDesktop) {
+    const tree = xpStatus ? treeStageProgress(xpStatus) : null;
+    const tileWidth = journeyWidth > 0 ? Math.floor((journeyWidth - JOURNEY_GAP * 2) / 3) : undefined;
+    const interestsCount = profile?.interests?.length ?? 0;
+    const journey: Array<{
+      key: string; icon: string; label: string; meta: string;
+      badge?: number | boolean; highlight?: boolean; onPress: () => void;
+    }> = [
+      {
+        key: 'achievements', icon: '🏆', label: 'Conquistas',
+        meta: badges.collectionsToClaim > 0
+          ? (badges.collectionsToClaim === 1 ? '1 coleção para coletar' : `${badges.collectionsToClaim} coleções para coletar`)
+          : 'Coleções e medalhas',
+        badge: badges.collectionsToClaim, highlight: badges.collectionsToClaim > 0,
+        onPress: () => navigation.navigate('Achievements', badges.collectionsToClaim > 0 ? { initialTab: 'colecoes' } : undefined),
+      },
+      {
+        key: 'vault', icon: '🗝️', label: 'Cofre de Sintonia',
+        meta: badges.vaultReady ? 'Pronto para sacar' : `${wallet?.vaultFragments ?? 0} fragmentos`,
+        badge: badges.vaultReady, highlight: badges.vaultReady,
+        onPress: () => navigation.navigate('Vault'),
+      },
+      { key: 'missions', icon: '📋', label: 'Missões do Dia', meta: `${missions.completed} de ${missions.total}`, onPress: () => navigation.navigate('Missions') },
+      { key: 'xp',       icon: '⬆️', label: 'XP e Níveis',     meta: `Nível ${xpStatus?.level ?? 1}`,          onPress: () => navigation.navigate('XP') },
+      { key: 'ranking',  icon: '🏅', label: 'Ranking Semanal', meta: 'Sua posição esta semana',               onPress: () => navigation.navigate('Ranking') },
+      { key: 'prestige', icon: '💜', label: 'Prestígio',       meta: prestigeData?.prestigeName ?? 'Desperto', onPress: () => navigation.navigate('Prestige') },
+      { key: 'frames',   icon: '🖼️', label: 'Molduras',        meta: 'Escolher moldura',                      onPress: () => navigation.navigate('Frames') },
+      { key: 'badges',   icon: '✦',  label: 'Badges',          meta: 'Escolher badge',                        onPress: () => navigation.navigate('Badges') },
+      { key: 'titles',   icon: '🎖️', label: 'Títulos',         meta: 'Escolher título',                       onPress: () => navigation.navigate('Titles') },
+    ];
+    const settings: Array<{ key: string; icon: string; label: string; meta?: string; badge?: number | boolean; gold?: boolean; onPress: () => void }> = [
+      {
+        key: 'interests', icon: '✨', label: 'Meus interesses',
+        meta: interestsCount === 0 ? 'Escolher' : interestsCount === 1 ? '1 escolhido' : `${interestsCount} escolhidos`,
+        onPress: () => (navigation as any).navigate('Interests', { editMode: true }),
+      },
+      { key: 'requests', icon: '✦',  label: 'Solicitações recebidas',    badge: badges.requests,      onPress: () => navigation.navigate('Requests') },
+      { key: 'notif',    icon: '🔔', label: 'Notificações',              badge: badges.notifications, onPress: () => navigation.navigate('Notifications') },
+      { key: 'blocked',  icon: '🚫', label: 'Perfis e chats bloqueados',                              onPress: () => navigation.navigate('Blocked') },
+      { key: 'support',  icon: '🆘', label: 'Suporte',                   badge: badges.support,       onPress: () => navigation.navigate('Support') },
+      { key: 'plus',     icon: '💜', label: 'Galáxia Plus', meta: 'Conhecer',                          onPress: () => navigation.navigate('GalaxiaPlus') },
+      ...(isAdminUser
+        ? [{ key: 'admin', icon: '👑', label: 'Painel Admin', gold: true, onPress: () => navigation.navigate('AdminDashboard') }]
+        : []),
+    ];
+
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.dScroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.dPage}>
+
+            <View style={styles.dHeader}>
+              <View style={styles.dHeaderText}>
+                <Text style={styles.dTitle} accessibilityRole="header">Meu Perfil</Text>
+                <Text style={styles.dSubtitle}>Seu card, suas fotos e sua jornada no Lumina.</Text>
+              </View>
+              <View style={styles.dHeaderActions}>
+                <HoverPressable
+                  onPress={openOwnProfile}
+                  accessibilityRole="button"
+                  style={styles.dOutlineBtn}
+                  hoverStyle={styles.dOutlineBtnHover}
+                >
+                  <Text style={styles.dOutlineBtnText}>Ver como os outros veem</Text>
+                </HoverPressable>
+                <HoverPressable
+                  onPress={() => navigation.navigate('ProfileSetup')}
+                  accessibilityRole="button"
+                  style={styles.dGoldBtn}
+                  hoverStyle={styles.dGoldBtnHover}
+                >
+                  <Text style={styles.dGoldBtnText}>Editar perfil</Text>
+                </HoverPressable>
+              </View>
+            </View>
+
+            <View style={styles.dBody}>
+              {/* ── Esquerda: card, Árvore, cristais ── */}
+              <View style={styles.dAside}>
+                <View style={styles.dCardBox}>
+                  {ownCard ? (
+                    <ProfileCard
+                      data={ownCard}
+                      onPress={openOwnProfile}
+                      hideSintonia
+                      animatedAura
+                      width={DESKTOP_CARD_WIDTH}
+                    />
+                  ) : (
+                    <View style={styles.cardFallback}>
+                      <Text style={styles.cardFallbackText}>Não foi possível montar o seu card agora.</Text>
+                      <TouchableOpacity onPress={loadProfile} accessibilityRole="button">
+                        <Text style={styles.cardFallbackRetry}>Tentar de novo</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  <View style={styles.dCardActions}>
+                    <HoverPressable
+                      onPress={handleChangePhoto}
+                      disabled={uploadingPhoto}
+                      accessibilityRole="button"
+                      accessibilityLabel="Trocar foto de perfil"
+                      accessibilityState={{ disabled: uploadingPhoto, busy: uploadingPhoto }}
+                      style={[styles.dCardBtn, styles.dCardBtnGold, uploadingPhoto && styles.changePhotoBtnBusy]}
+                      hoverStyle={styles.dCardBtnGoldHover}
+                    >
+                      {uploadingPhoto
+                        ? <ActivityIndicator color={colors.gold} size="small" />
+                        : <Text style={styles.dCardBtnGoldText}>📷 Trocar foto</Text>}
+                    </HoverPressable>
+                    <HoverPressable
+                      onPress={() => navigation.navigate('Frames')}
+                      accessibilityRole="button"
+                      style={styles.dCardBtn}
+                      hoverStyle={styles.dOutlineBtnHover}
+                    >
+                      <Text style={styles.dCardBtnText}>🖼️ Moldura</Text>
+                    </HoverPressable>
+                  </View>
+                </View>
+
+                <HoverPressable
+                  onPress={() => navigation.navigate('XP')}
+                  accessibilityRole="button"
+                  accessibilityLabel={xpStatus ? `Árvore da Sintonia: nível ${xpStatus.level}, ${xpStatus.treeName}` : 'Árvore da Sintonia'}
+                  style={styles.dTree}
+                  hoverStyle={styles.dTreeHover}
+                >
+                  <View style={styles.dRowBetween}>
+                    <Text style={styles.dCardTitle}>{xpStatus?.treeIcon ?? '🌱'} Árvore da Sintonia</Text>
+                    {xpStatus && <Text style={styles.dTreeMeta}>Nível {xpStatus.level} · {xpStatus.treeName}</Text>}
+                  </View>
+                  {xpStatus && tree ? (
+                    <>
+                      <View style={styles.dTreeTrack}>
+                        <View style={[styles.dTreeBar, { width: `${Math.round(tree.fraction * 100)}%` }]} />
+                      </View>
+                      <Text style={styles.dMuted}>
+                        {xpStatus.nextTreeStage && tree.missing !== null
+                          ? `Próximo estágio: ${xpStatus.nextTreeStage.icon} ${xpStatus.nextTreeStage.name} · faltam ${tree.missing} XP`
+                          : 'Estágio máximo da Árvore. ✦'}
+                      </Text>
+                    </>
+                  ) : (
+                    <ActivityIndicator color="#B57BEE" size="small" />
+                  )}
+                </HoverPressable>
+
+                <View style={styles.dCrystals}>
+                  <View style={styles.dCrystalsInfo}>
+                    <Text style={styles.dMuted}>Cristais de Sintonia</Text>
+                    <Text style={styles.dCrystalsLine}>
+                      <Text style={styles.crystalsText}>✨ {wallet?.coinsGratuitos ?? 0}</Text>
+                      <Text style={styles.dMuted}> grátis  ·  </Text>
+                      <Text style={styles.crystalsPremium}>💎 {wallet?.coinsPremium ?? 0}</Text>
+                      <Text style={styles.dMuted}> premium</Text>
+                    </Text>
+                  </View>
+                  <HoverPressable
+                    onPress={() => (navigation as any).navigate('Store')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Comprar cristais"
+                    style={styles.dGoldBtnSmall}
+                    hoverStyle={styles.dGoldBtnHover}
+                  >
+                    <Text style={styles.dGoldBtnText}>Comprar</Text>
+                  </HoverPressable>
+                </View>
+              </View>
+
+              {/* ── Direita: galeria, jornada, sobre, configurações ── */}
+              <View style={styles.dMain}>
+                {user?.uid && (
+                  <GalleryEditor
+                    userId={user.uid}
+                    profile={profile}
+                    onChanged={loadProfile}
+                    layout="wide"
+                    mainPhotoURL={profile?.photoURL}
+                  />
+                )}
+
+                <View style={styles.dSection}>
+                  <Text style={styles.dKicker}>Sua jornada</Text>
+                  <View style={styles.dJourney} onLayout={handleJourneyLayout}>
+                    {journey.map(t => (
+                      <HoverPressable
+                        key={t.key}
+                        onPress={t.onPress}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${t.label}: ${t.meta}`}
+                        style={[styles.dTile, tileWidth ? { width: tileWidth } : styles.dTileFallback, t.highlight && styles.dTileHighlight]}
+                        hoverStyle={styles.dTileHover}
+                      >
+                        <View style={styles.dRowBetween}>
+                          <Text style={styles.dTileLabel} numberOfLines={1}>{t.icon} {t.label}</Text>
+                          <MenuBadge n={t.badge ?? 0} />
+                        </View>
+                        <Text style={[styles.dTileMeta, t.highlight && styles.dTileMetaGold]} numberOfLines={1}>{t.meta}</Text>
+                      </HoverPressable>
+                    ))}
+                    <HoverPressable
+                      onPress={() => navigation.navigate('PremiumTools')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Ferramentas Premium"
+                      style={styles.dPremium}
+                      hoverStyle={styles.dTileHover}
+                    >
+                      <Text style={styles.dPremiumIcon}>💎</Text>
+                      <View style={styles.dPremiumInfo}>
+                        <Text style={styles.dPremiumTitle}>Ferramentas Premium</Text>
+                        <Text style={styles.dMuted}>Recursos para ser visto por mais gente.</Text>
+                      </View>
+                      <Text style={styles.dPremiumArrow}>›</Text>
+                    </HoverPressable>
+                  </View>
+                </View>
+
+                <View style={styles.dTwoCols}>
+                  <View style={[styles.dPanel, styles.dCol]}>
+                    <Text style={styles.dCardTitle}>Sobre você</Text>
+                    <View style={styles.dFacts}>
+                      <View style={styles.dFact}>
+                        <Text style={styles.dMuted}>Idade</Text>
+                        <Text style={styles.dFactValue}>{profile?.age ? `${profile.age} anos` : 'Não informada'}</Text>
+                      </View>
+                      <View style={styles.dFact}>
+                        <Text style={styles.dMuted}>Cidade</Text>
+                        <Text style={styles.dFactValue}>{profile?.city ? `${profile.city}, ${profile.state}` : 'Não informada'}</Text>
+                      </View>
+                      <View style={styles.dFact}>
+                        <Text style={styles.dMuted}>Gênero</Text>
+                        <Text style={styles.dFactValue}>{profile?.gender || 'Não informado'}</Text>
+                      </View>
+                      <View style={styles.dFact}>
+                        <Text style={styles.dMuted}>Interesse em</Text>
+                        <Text style={styles.dFactValue}>{profile?.preferences?.join(', ') || 'Não informado'}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.dBio}>{profile?.bio || 'Sem bio. Uma bio curta faz mais gente puxar conversa.'}</Text>
+                  </View>
+
+                  <View style={[styles.dPanel, styles.dSettings, styles.dCol]}>
+                    {settings.map(item => (
+                      <HoverPressable
+                        key={item.key}
+                        onPress={item.onPress}
+                        accessibilityRole="button"
+                        accessibilityLabel={item.label}
+                        style={styles.dSettingRow}
+                        hoverStyle={styles.dSettingRowHover}
+                      >
+                        <Text style={styles.menuItemIcon}>{item.icon}</Text>
+                        <Text style={[styles.dSettingLabel, item.gold && styles.menuItemTextAdmin]} numberOfLines={1}>{item.label}</Text>
+                        {item.meta ? <Text style={styles.menuItemSubtext}>{item.meta}</Text> : null}
+                        <MenuBadge n={item.badge ?? 0} />
+                        <Text style={styles.menuItemArrow}>›</Text>
+                      </HoverPressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.dFooter}>
+                  <HoverPressable
+                    onPress={confirmLogout}
+                    accessibilityRole="button"
+                    style={styles.dLogout}
+                    hoverStyle={styles.dLogoutHover}
+                  >
+                    <Text style={styles.logoutText}>Sair da conta</Text>
+                  </HoverPressable>
+                  <TouchableOpacity onPress={() => navigation.navigate('DeleteAccount')} accessibilityRole="button">
+                    <Text style={styles.deleteAccountText}>Excluir conta</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -457,14 +775,7 @@ export default function ProfileScreen() {
         {/* Logout */}
         <TouchableOpacity
           style={styles.logoutButton}
-          onPress={() => {
-            Alert.alert('Sair', 'Tem certeza que deseja sair?', [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Sair', style: 'destructive', onPress: async () => {
-                try { await logout(); } catch (e) { console.error('[ProfileScreen] logout falhou:', e); }
-              }},
-            ]);
-          }}
+          onPress={confirmLogout}
         >
           <Text style={styles.logoutText}>Sair da conta</Text>
         </TouchableOpacity>
@@ -541,4 +852,71 @@ const styles = StyleSheet.create({
   logoutText:    { color: colors.error, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   deleteAccountLink: { alignSelf: 'center', padding: spacing.sm, marginBottom: spacing.md },
   deleteAccountText: { color: colors.gray, fontSize: fonts.sizes.sm, textDecorationLine: 'underline' },
+
+  // ── Computador (v5.9) ──
+  dScroll:     { flexGrow: 1 },
+  dPage:       { width: '100%', maxWidth: CONTENT_MAX_WIDTH.wide, alignSelf: 'center', paddingHorizontal: 32, paddingTop: 28, paddingBottom: 48, gap: 24 },
+  dHeader:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, flexWrap: 'wrap' },
+  dHeaderText: { gap: 4, flexShrink: 1 },
+  dTitle:      { color: colors.white, fontSize: 28, fontWeight: 'bold' },
+  dSubtitle:   { color: colors.textSecondary, fontSize: fonts.sizes.md },
+  dHeaderActions: { flexDirection: 'row', gap: 10 },
+  dOutlineBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark },
+  dOutlineBtnHover: { borderColor: colors.gold },
+  dOutlineBtnText: { color: colors.grayLight, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  dGoldBtn:    { paddingHorizontal: 18, paddingVertical: 10, borderRadius: borderRadius.full, backgroundColor: colors.gold },
+  dGoldBtnSmall: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.gold },
+  dGoldBtnHover: { backgroundColor: colors.goldLight },
+  dGoldBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
+  dBody:       { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
+  dAside:      { width: 340, gap: 16 },
+  dMain:       { flex: 1, minWidth: 0, gap: 22 },
+  dCardBox:    { alignItems: 'center', padding: 16, gap: 14, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.goldBorder },
+  dCardActions: { flexDirection: 'row', gap: 10, alignSelf: 'stretch' },
+  dCardBtn:    { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.grayDark, backgroundColor: colors.surface },
+  dCardBtnText: { color: colors.grayLight, fontWeight: 'bold', fontSize: 13 },
+  dCardBtnGold: { borderColor: colors.goldBorder, backgroundColor: colors.goldSubtle },
+  dCardBtnGoldHover: { borderColor: colors.gold },
+  dCardBtnGoldText: { color: colors.gold, fontWeight: 'bold', fontSize: 13 },
+  dTree:       { padding: 18, gap: 10, borderRadius: 18, backgroundColor: '#1A0F2A', borderWidth: 1, borderColor: '#4A2A7A' },
+  dTreeHover:  { borderColor: '#B57BEE' },
+  dTreeMeta:   { color: '#C9A0F5', fontWeight: 'bold', fontSize: 13 },
+  dTreeTrack:  { height: 8, borderRadius: 4, backgroundColor: '#2D1B4E', overflow: 'hidden' },
+  dTreeBar:    { height: 8, borderRadius: 4, backgroundColor: '#B57BEE' },
+  dRowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  dCardTitle:  { color: colors.white, fontWeight: 'bold', fontSize: 15 },
+  dMuted:      { color: colors.textSecondary, fontSize: fonts.sizes.sm },
+  dCrystals:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#2E2E2E', gap: spacing.sm },
+  dCrystalsInfo: { gap: 4, flexShrink: 1 },
+  dCrystalsLine: { fontSize: 18 },
+  dSection:    { gap: 12 },
+  dKicker:     { color: colors.gray, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
+  dJourney:    { flexDirection: 'row', flexWrap: 'wrap', gap: JOURNEY_GAP },
+  dTile:       { padding: 16, gap: 6, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#2E2E2E' },
+  dTileFallback: { width: '31%' },
+  dTileHighlight: { borderColor: colors.goldBorder },
+  dTileHover:  { borderColor: colors.gold, backgroundColor: colors.surfaceRaised },
+  dTileLabel:  { color: colors.white, fontWeight: 'bold', fontSize: 15, flexShrink: 1 },
+  dTileMeta:   { color: colors.textSecondary, fontSize: 13 },
+  dTileMetaGold: { color: colors.gold },
+  dPremium:    { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 16, backgroundColor: '#1E150A', borderWidth: 1, borderColor: '#6B5212' },
+  dPremiumIcon: { fontSize: 26 },
+  dPremiumInfo: { flex: 1, gap: 2 },
+  dPremiumTitle: { color: colors.goldLight, fontWeight: 'bold', fontSize: 15 },
+  dPremiumArrow: { color: colors.goldLight, fontSize: 24, fontWeight: 'bold' },
+  dTwoCols:    { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
+  dCol:        { flex: 1, minWidth: 0 },
+  dPanel:      { padding: 20, gap: 12, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#2E2E2E' },
+  dFacts:      { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12 },
+  dFact:       { width: '50%', gap: 2, paddingRight: spacing.sm },
+  dFactValue:  { color: colors.white, fontSize: 13 },
+  dBio:        { color: colors.grayLight, fontSize: 13, lineHeight: 19 },
+  dSettings:   { padding: 8, gap: 0 },
+  dSettingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12 },
+  dSettingRowHover: { backgroundColor: colors.surfaceRaised },
+  dSettingLabel: { flex: 1, color: colors.white, fontSize: fonts.sizes.md },
+  dFooter:     { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  dLogout:     { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.error, backgroundColor: colors.error + '18' },
+  dLogoutHover: { backgroundColor: colors.error + '30' },
 });
+

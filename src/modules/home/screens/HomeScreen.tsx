@@ -31,6 +31,13 @@
 //     fileira acima da grade.
 // O conteúdo das abas é o MESMO do celular (renderTabContent): só a
 // moldura muda. Celular, tablet e app: idênticos à v5.5.
+//
+// v5.7 (13/10/2026, web D4 — melhorias da D3):
+//   • filtros rápidos acima da grade: Todos / ✦ Em comum / 📍 Minha
+//     cidade. Filtram o lote JÁ carregado (zero leitura); lote sem
+//     ninguém no filtro explica e oferece "Ver mais perfis";
+//   • esqueleto da grade no carregamento (no lugar do spinner);
+//   • Cofre do Ritual mostra os fragmentos guardados.
 // ============================================
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -80,6 +87,15 @@ const TABS: { key: HomeTab; label: string; icon: string }[] = [
 const RAIL_BESIDE_MIN_WIDTH = 1180;
 /** Largura da coluna "Seu dia" + o espaço entre ela e a grade. */
 const RAIL_SPACE = 320 + 28;
+type QuickFilter = 'todos' | 'comum' | 'cidade';
+const QUICK_FILTERS: { key: QuickFilter; label: string; a11y: string }[] = [
+  { key: 'todos',  label: 'Todos',          a11y: 'Mostrar todos os perfis do lote' },
+  { key: 'comum',  label: '✦ Em comum',     a11y: 'Só perfis com interesses em comum' },
+  { key: 'cidade', label: '📍 Minha cidade', a11y: 'Só perfis da minha cidade' },
+];
+/** Cards do esqueleto enquanto a grade carrega. */
+const SKELETON_COUNT = 8;
+
 /** Interesses mostrados embaixo de cada card no computador. */
 const MAX_CARD_INTERESTS = 3;
 
@@ -268,6 +284,19 @@ export default function HomeScreen({ navigation }: Props) {
     : undefined;
   const myInterests = new Set<string>(userProfile?.interests ?? []);
 
+  // Filtro rápido (computador): só sobre o lote carregado.
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('todos');
+  const myLocation = userProfile?.city ? `${userProfile.city}, ${userProfile.state || ''}` : null;
+  function passesFilter(profile: ProfileCardData): boolean {
+    if (quickFilter === 'comum') {
+      return (interestsById[profile.id] ?? []).some(id => myInterests.has(id));
+    }
+    if (quickFilter === 'cidade') {
+      return myLocation !== null && profile.location === myLocation;
+    }
+    return true;
+  }
+
   function handleCardPress(profile: ProfileCardData) {
     navigation.navigate('RealProfile', { userId: profile.id });
   }
@@ -353,10 +382,22 @@ export default function HomeScreen({ navigation }: Props) {
           {/* Perfis */}
           {activeTab === 'perfis' && (
             loadingProfiles ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color={colors.gold} size="large" />
-                <Text style={styles.loadingText}>Carregando perfis...</Text>
-              </View>
+              showInterests && cardWidth ? (
+                <View style={styles.grid} accessibilityLabel="Carregando perfis">
+                  {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+                    <View key={i} style={[styles.skeletonCard, { width: cardWidth }]}>
+                      <View style={[styles.skeletonPhoto, { height: Math.round(cardWidth * 1.15) }]} />
+                      <View style={styles.skeletonLineWide} />
+                      <View style={styles.skeletonLine} />
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator color={colors.gold} size="large" />
+                  <Text style={styles.loadingText}>Carregando perfis...</Text>
+                </View>
+              )
             ) : errorProfiles ? (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyIcon}>⚠️</Text>
@@ -378,8 +419,20 @@ export default function HomeScreen({ navigation }: Props) {
               </View>
             ) : (
               <>
+                {showInterests && quickFilter !== 'todos' && !realProfiles.some(passesFilter) && (
+                  <View style={styles.filterEmpty}>
+                    <Text style={styles.filterEmptyTitle}>
+                      {quickFilter === 'comum'
+                        ? 'Ninguém deste lote tem interesses em comum com você.'
+                        : myLocation ? 'Ninguém deste lote é da sua cidade.' : 'Sua cidade não está no seu perfil.'}
+                    </Text>
+                    <Text style={styles.filterEmptyText}>
+                      O filtro olha só os perfis já carregados. Veja mais perfis ou volte para "Todos".
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.grid}>
-                  {realProfiles.map(profile => showInterests ? (
+                  {realProfiles.filter(p => !showInterests || passesFilter(p)).map(profile => showInterests ? (
                     <View key={profile.id} style={{ width: cardWidth }}>
                       <ProfileCard
                         data={profile}
@@ -500,6 +553,7 @@ export default function HomeScreen({ navigation }: Props) {
             <HomeRitualRow
               missionsCompleted={missionsSummary.completed}
               missionsTotal={missionsSummary.total}
+              vaultFragments={wallet?.vaultFragments ?? 0}
               onFaisca={() => navigation.navigate('Faisca' as any)}
               onDestiny={() => navigation.navigate('DestinyCard' as any)}
               onMissions={() => navigation.navigate('Missions' as any)}
@@ -529,8 +583,25 @@ export default function HomeScreen({ navigation }: Props) {
                       );
                     })}
                   </View>
-                  {activeTab === 'perfis' && realProfiles.length > 0 && (
-                    <Text style={styles.dCaption}>Compatíveis primeiro · ✦ = interesse em comum</Text>
+                  {activeTab === 'perfis' && (
+                    <View style={styles.dFilters} accessibilityRole="radiogroup" accessibilityLabel="Filtrar este lote">
+                      {QUICK_FILTERS.map(f => {
+                        const active = quickFilter === f.key;
+                        return (
+                          <HoverPressable
+                            key={f.key}
+                            onPress={() => setQuickFilter(f.key)}
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: active }}
+                            accessibilityLabel={f.a11y}
+                            style={[styles.dFilter, active && styles.dFilterActive]}
+                            hoverStyle={!active ? styles.dTabHover : undefined}
+                          >
+                            <Text style={[styles.dFilterText, active && styles.dFilterTextActive]}>{f.label}</Text>
+                          </HoverPressable>
+                        );
+                      })}
+                    </View>
                   )}
                 </View>
 
@@ -744,7 +815,18 @@ const styles = StyleSheet.create({
   dTab:      { paddingHorizontal: 18, paddingVertical: 10 },
   dTabHover: { borderColor: colors.goldBorder },
   dTabLabel: { fontSize: fonts.sizes.md },
-  dCaption:  { color: colors.gray, fontSize: 13 },
+  dFilters:  { flexDirection: 'row', gap: 6 },
+  dFilter:   { paddingHorizontal: 12, paddingVertical: 7, borderRadius: borderRadius.full, borderWidth: 1, borderColor: '#333333', backgroundColor: colors.surfaceSunken },
+  dFilterActive: { borderColor: colors.gold, backgroundColor: colors.goldSubtle },
+  dFilterText:   { color: colors.textSecondary, fontSize: fonts.sizes.sm, fontWeight: '600' },
+  dFilterTextActive: { color: colors.gold },
+  filterEmpty:      { marginHorizontal: spacing.lg, marginTop: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.grayDark, gap: 4 },
+  filterEmptyTitle: { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  filterEmptyText:  { color: colors.gray, fontSize: fonts.sizes.sm },
+  skeletonCard:  { marginBottom: spacing.md, borderRadius: borderRadius.md, overflow: 'hidden', backgroundColor: colors.surface, borderWidth: 1, borderColor: '#262626', paddingBottom: spacing.md, gap: 10 },
+  skeletonPhoto: { width: '100%', backgroundColor: colors.surfaceRaised },
+  skeletonLineWide: { height: 12, width: '70%', marginHorizontal: 12, borderRadius: 6, backgroundColor: colors.surfaceOverlay },
+  skeletonLine:  { height: 10, width: '45%', marginHorizontal: 12, borderRadius: 5, backgroundColor: colors.surfaceRaised },
   dTabContent: { marginHorizontal: -spacing.lg },
   // Interesses embaixo do card: sobe sobre a margem inferior do
   // ProfileCard (spacing.md) para ficarem colados nele.
