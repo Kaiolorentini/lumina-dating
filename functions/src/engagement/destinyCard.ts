@@ -1,6 +1,13 @@
 // ============================================
-// LUMINA — CARTA DO DESTINO v6.2
+// LUMINA — CARTA DO DESTINO v6.3
 // functions/src/engagement/destinyCard.ts
+//
+// v6.3 (13/10/2026, web D5) — "ninguém para mostrar" deixa de ser
+// erro para quem pede `{ emptyOk: true }` (app novo): a resposta
+// vem normal, com profiles: [] e empty: true + a mensagem. Antes era
+// HttpsError 'not-found', que o navegador registra como falha 404
+// no console. A troca continua estornada do mesmo jeito. Quem não
+// manda emptyOk (app antigo) recebe o erro de sempre: compatível.
 //
 // v6.2 — ATOMICIDADE E POOL ALEATÓRIO.
 //
@@ -221,10 +228,22 @@ export const drawDestinyCard = functions.onCall(
 
     if (profiles.length === 0) {
       await releaseDraw(uid, reservation, 'Nenhum perfil compatível disponível');
-      throw new functions.HttpsError(
-        'not-found',
-        'Não há novas pessoas para mostrar agora. Isso acontece quando você já viu ou já se conectou com quem estava disponível — volte amanhã.',
-      );
+      const emptyMessage =
+        'Não há novas pessoas para mostrar agora. Isso acontece quando você já viu ou já se conectou com quem estava disponível — volte amanhã.';
+      const emptyOk = (request.data as { emptyOk?: unknown } | null)?.emptyOk === true;
+      if (emptyOk) {
+        return {
+          profiles:  [] as DestinyProfile[],
+          empty:     true,
+          message:   emptyMessage,
+          drawsUsed: Math.max(0, reservation.drawsUsed - 1),
+          maxDraws:  MAX_DRAWS,
+          nextPrice: priceFor(Math.max(0, reservation.drawsUsed - 1)),
+          wasPaid:   false,
+          isGalaxiaPlus: isPlus,
+        };
+      }
+      throw new functions.HttpsError('not-found', emptyMessage);
     }
 
     try {

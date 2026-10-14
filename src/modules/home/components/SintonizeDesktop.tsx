@@ -28,6 +28,7 @@ import { HeartBurst } from '../../../components/profile/HeartBurst';
 import { calcularSintonia } from '../../ai/services/sintoniaCalculator';
 import { interestLabel } from '../../../config/sintonia/interestsCatalog';
 import { galleryPhotos } from '../../profile/services/photoService';
+import { LikeQuota } from '../../../services/likeQuota';
 
 /** Largura do card no centro. */
 const CARD_WIDTH = 380;
@@ -49,11 +50,14 @@ interface Props {
   onLike:          () => void;
   onOpenProfile:   () => void;
   onOpenDismissed: () => void;
+  /** Curtidas de hoje (D5). null: servidor ainda não respondeu. */
+  likeQuota?:      LikeQuota | null;
 }
 
 export default function SintonizeDesktop({
   current, detail, viewer, upcoming, refilling, finished, liking, celebrating,
   dismissedCount, secondChanceCost, onPass, onLike, onOpenProfile, onOpenDismissed,
+  likeQuota = null,
 }: Props) {
   const breakdown = useMemo(
     () => (viewer && detail ? calcularSintonia(viewer, detail).breakdown : null),
@@ -151,6 +155,16 @@ export default function SintonizeDesktop({
               <Text style={styles.shortcuts}>
                 Atalhos: ← passa · → sintoniza · espaço abre o perfil
               </Text>
+              {likeQuota && (
+                <Text
+                  style={[styles.quota, likeQuota.used >= likeQuota.limit && styles.quotaFull]}
+                  accessibilityLabel={`Curtidas hoje: ${likeQuota.used} de ${likeQuota.limit}`}
+                >
+                  {likeQuota.used >= likeQuota.limit
+                    ? `♥ Você usou as ${likeQuota.limit} curtidas de hoje. Amanhã tem mais!`
+                    : `♥ ${likeQuota.used} de ${likeQuota.limit} curtidas hoje · restam ${likeQuota.limit - likeQuota.used}`}
+                </Text>
+              )}
             </>
           ) : refilling && !finished ? (
             <View style={styles.state}>
@@ -266,6 +280,8 @@ const styles = StyleSheet.create({
   likeText: { color: colors.background, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   disabled: { opacity: 0.5 },
   shortcuts: { color: colors.gray, fontSize: fonts.sizes.sm, textAlign: 'center' },
+  quota:     { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold', textAlign: 'center' },
+  quotaFull: { color: colors.error },
   state: { minHeight: 420, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   stateIcon: { color: colors.gold, fontSize: 48 },
   stateTitle: { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold' },

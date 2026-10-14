@@ -11,6 +11,9 @@
 // e o seu mini-perfil (nível e estágio da Árvore).
 // Custo: 1 leitura do próprio perfil por sessão (nome e foto); o XP
 // vem da mesma função que o Perfil já usa.
+//
+// D5: "Curtidas hoje x/150" acima dos cristais (likeQuota: 1 chamada
+// ao abrir o site; depois o número vem das próprias curtidas).
 // ============================================
 
 import React, { useEffect, useState } from 'react';
@@ -22,6 +25,7 @@ import { useCoins } from '../../context/CoinsContext';
 import { useXP } from '../../modules/engagement/hooks/useXP';
 import { getProfile } from '../../modules/profile/services/profileService';
 import { SIDEBAR_WIDTH } from '../../utils/breakpoints';
+import { useLikeQuota } from '../../services/likeQuota';
 
 interface ItemProps {
   label:   string;
@@ -53,6 +57,7 @@ export default function DesktopSidebar({ state, descriptors, navigation }: Botto
   const { wallet }     = useCoins();
   const { status: xp } = useXP(user?.uid);
   const [me, setMe]    = useState<{ name: string; photoURL: string } | null>(null);
+  const likeQuota      = useLikeQuota(user?.uid, true);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -114,6 +119,23 @@ export default function DesktopSidebar({ state, descriptors, navigation }: Botto
             <Text style={styles.plusText}>Veja quem visitou você e ganhe Turbos todo mês.</Text>
             <View style={styles.plusBtn}><Text style={styles.plusBtnText}>Conhecer</Text></View>
           </Pressable>
+
+          {likeQuota && (
+            <View
+              style={styles.quota}
+              accessibilityLabel={`Curtidas hoje: ${likeQuota.used} de ${likeQuota.limit}`}
+            >
+              <View style={styles.quotaHead}>
+                <Text style={styles.quotaLabel}>♥ Curtidas hoje</Text>
+                <Text style={[styles.quotaValue, likeQuota.used >= likeQuota.limit && styles.quotaFull]}>
+                  {likeQuota.used}/{likeQuota.limit}
+                </Text>
+              </View>
+              <View style={styles.quotaTrack}>
+                <View style={[styles.quotaBar, { width: `${Math.min(100, Math.round((likeQuota.used / likeQuota.limit) * 100))}%` }]} />
+              </View>
+            </View>
+          )}
 
           <Pressable
             style={styles.crystals}
@@ -188,6 +210,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10, borderRadius: 12, backgroundColor: colors.surface,
     borderWidth: 1, borderColor: colors.goldBorder,
   },
+  quota:      { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.surface, gap: 6 },
+  quotaHead:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  quotaLabel: { color: colors.grayLight, fontSize: fonts.sizes.sm },
+  quotaValue: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  quotaFull:  { color: colors.error },
+  quotaTrack: { height: 4, borderRadius: 2, backgroundColor: colors.surfaceOverlay, overflow: 'hidden' },
+  quotaBar:   { height: 4, borderRadius: 2, backgroundColor: colors.gold },
   crystalsFree:    { color: '#C9A0F5', fontSize: fonts.sizes.md, fontWeight: 'bold' },
   crystalsSep:     { color: colors.gray },
   crystalsPremium: { color: '#F0D060', fontSize: fonts.sizes.md, fontWeight: 'bold' },

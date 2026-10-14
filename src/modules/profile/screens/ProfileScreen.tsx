@@ -14,6 +14,11 @@
 // Mesmos dados e mesmas telas de destino do celular — nenhuma
 // leitura nova. Celular, tablet e app: iguais à v5.8.
 //
+// v5.10 (13/10/2026, web D5): "Seu perfil está X% completo" no topo
+// da coluna direita (computador), com o que falta como botões: foto,
+// fotos da galeria, bio, 3+ interesses, cidade e "interesse em".
+// Some quando chega a 100%. Usa o perfil já carregado.
+//
 // v5.8 (13/10/2026, web responsivo R1) — no tablet e no computador
 // o conteúdo fica numa coluna central de leitura (até 820 px): sem
 // isso as listas e a galeria esticavam por toda a largura do monitor.
@@ -50,7 +55,7 @@
 // v5.3: data → prestigeData (fix erro linha 226)
 // ============================================
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Alert, LayoutChangeEvent,
@@ -65,7 +70,7 @@ import { useUserPermissions } from '../../../hooks/useUserPermissions';
 import { useXP }             from '../../engagement/hooks/useXP';
 import { usePrestige }       from '../../engagement/hooks/usePrestige';
 import { getProfile, saveProfile } from '../services/profileService';
-import { uploadProfilePhoto } from '../services/photoService';
+import { uploadProfilePhoto, galleryPhotos } from '../services/photoService';
 import { UserProfile }       from '../../../shared/types';
 import { RootStackParamList } from '../../../navigation/types';
 import Header                from '../../../components/Header';
@@ -80,6 +85,9 @@ import { pageContentStyle } from '../../../components/layout/PageContainer';
 import HoverPressable from '../../../components/web/HoverPressable';
 import { treeStageProgress } from '../../engagement/utils/treeProgress';
 import { CONTENT_MAX_WIDTH } from '../../../utils/breakpoints';
+
+/** Mínimo de interesses para a sintonia ficar boa. */
+const MIN_INTERESTS = 3;
 
 /** Largura do card na coluna esquerda do computador. */
 const DESKTOP_CARD_WIDTH = 300;
@@ -125,6 +133,9 @@ export default function ProfileScreen() {
   const { isPhone, isDesktop }     = useBreakpoint();
   // Largura da grade "Sua jornada" (computador).
   const [journeyWidth, setJourneyWidth] = useState(0);
+  // Rolagem até a galeria pelo "+ Fotos na galeria" (computador).
+  const desktopScrollRef = useRef<ScrollView>(null);
+  const galleryYRef      = useRef(0);
 
   const [profile, setProfile]               = useState<UserProfile | null>(null);
   const [loading, setLoading]               = useState(true);
@@ -241,6 +252,17 @@ export default function ProfileScreen() {
 
   if (isDesktop) {
     const tree = xpStatus ? treeStageProgress(xpStatus) : null;
+    const goEditProfile = () => navigation.navigate('ProfileSetup');
+    const completeness: Array<{ key: string; label: string; done: boolean; onPress: () => void }> = [
+      { key: 'photo',     label: 'Foto de perfil',            done: !!profile?.photoURL,                        onPress: handleChangePhoto },
+      { key: 'gallery',   label: 'Fotos na galeria ↓',          done: galleryPhotos(profile).length > 0,          onPress: () => desktopScrollRef.current?.scrollTo({ y: galleryYRef.current, animated: true }) },
+      { key: 'bio',       label: 'Bio',                       done: !!profile?.bio?.trim(),                     onPress: goEditProfile },
+      { key: 'interests', label: `${MIN_INTERESTS}+ interesses`, done: (profile?.interests?.length ?? 0) >= MIN_INTERESTS, onPress: () => (navigation as any).navigate('Interests', { editMode: true }) },
+      { key: 'city',      label: 'Cidade',                    done: !!profile?.city,                            onPress: goEditProfile },
+      { key: 'prefs',     label: 'Interesse em',              done: (profile?.preferences?.length ?? 0) > 0,     onPress: goEditProfile },
+    ];
+    const doneCount = completeness.filter(c => c.done).length;
+    const percent = Math.round((doneCount / completeness.length) * 100);
     const tileWidth = journeyWidth > 0 ? Math.floor((journeyWidth - JOURNEY_GAP * 2) / 3) : undefined;
     const interestsCount = profile?.interests?.length ?? 0;
     const journey: Array<{
@@ -287,7 +309,7 @@ export default function ProfileScreen() {
 
     return (
       <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.dScroll} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={desktopScrollRef} contentContainerStyle={styles.dScroll} showsVerticalScrollIndicator={false}>
           <View style={styles.dPage}>
 
             <View style={styles.dHeader}>
@@ -411,14 +433,43 @@ export default function ProfileScreen() {
 
               {/* ── Direita: galeria, jornada, sobre, configurações ── */}
               <View style={styles.dMain}>
+                {percent < 100 && (
+                  <View style={styles.dComplete} accessibilityLabel={`Seu perfil está ${percent}% completo`}>
+                    <View style={styles.dRowBetween}>
+                      <Text style={styles.dCardTitle}>Seu perfil está {percent}% completo</Text>
+                      <Text style={styles.dCompletePct}>{doneCount}/{completeness.length}</Text>
+                    </View>
+                    <View style={styles.dTreeTrack}>
+                      <View style={[styles.dCompleteBar, { width: `${percent}%` }]} />
+                    </View>
+                    <Text style={styles.dMuted}>Perfis completos recebem mais visitas e curtidas. Falta:</Text>
+                    <View style={styles.dMissingRow}>
+                      {completeness.filter(c => !c.done).map(c => (
+                        <HoverPressable
+                          key={c.key}
+                          onPress={c.onPress}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Completar: ${c.label}`}
+                          style={styles.dMissing}
+                          hoverStyle={styles.dOutlineBtnHover}
+                        >
+                          <Text style={styles.dMissingText}>+ {c.label}</Text>
+                        </HoverPressable>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
                 {user?.uid && (
-                  <GalleryEditor
-                    userId={user.uid}
-                    profile={profile}
-                    onChanged={loadProfile}
-                    layout="wide"
-                    mainPhotoURL={profile?.photoURL}
-                  />
+                  <View onLayout={e => { galleryYRef.current = Math.max(0, e.nativeEvent.layout.y); }}>
+                    <GalleryEditor
+                      userId={user.uid}
+                      profile={profile}
+                      onChanged={loadProfile}
+                      layout="wide"
+                      mainPhotoURL={profile?.photoURL}
+                    />
+                  </View>
                 )}
 
                 <View style={styles.dSection}>
@@ -918,5 +969,11 @@ const styles = StyleSheet.create({
   dFooter:     { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   dLogout:     { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.error, backgroundColor: colors.error + '18' },
   dLogoutHover: { backgroundColor: colors.error + '30' },
+  dComplete:    { padding: 18, gap: 10, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.goldBorder },
+  dCompletePct: { color: colors.gold, fontWeight: 'bold', fontSize: 13 },
+  dCompleteBar: { height: 8, borderRadius: 4, backgroundColor: colors.gold },
+  dMissingRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  dMissing:     { paddingHorizontal: 12, paddingVertical: 7, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.goldBorder, backgroundColor: colors.goldSubtle },
+  dMissingText: { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
 });
 

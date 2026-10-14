@@ -1,6 +1,14 @@
 // ============================================
-// LUMINA — ON MATCH CREATED v2.1
+// LUMINA — ON MATCH CREATED v2.2
 // functions/src/engagement/matchCreated.ts
+//
+// v2.2 (13/10/2026, web D5) — "Curtidas hoje x/150":
+//   - a resposta traz likesToday e likeLimit. O número sai do MESMO
+//     contador que a transação já lê: nenhuma leitura a mais.
+//   - getLikeQuota (nova, só leitura): quantas curtidas novas a
+//     pessoa já usou hoje. 1 leitura do próprio contador, chamada
+//     uma vez ao abrir o site; depois o número vem das curtidas.
+//   Clientes antigos ignoram os campos novos: compatível.
 //
 // v2.1 (12/10/2026) — análise da Sintonia:
 //   - targetUid validado (texto, sem '/', não vazio).
@@ -93,11 +101,11 @@ export const onCreateMatch = functions.onCall(
     // antes), e a curtida nova só entra se ainda houver cota.
     // A transação também fecha a janela de duas chamadas simultâneas
     // (antes resolvida pelo create()).
-    const alreadyLiked = await db.runTransaction(async (t) => {
+    const { alreadyLiked, likesToday } = await db.runTransaction(async (t) => {
       const [likeSnap, counterSnap] = await Promise.all([t.get(likeRef), t.get(counterRef)]);
-      if (likeSnap.exists) return true;
-
       const used = (counterSnap.data()?.count as number | undefined) ?? 0;
+      if (likeSnap.exists) return { alreadyLiked: true, likesToday: used };
+
       if (used >= DAILY_LIKE_LIMIT) {
         throw new functions.HttpsError(
           'resource-exhausted',
@@ -119,7 +127,7 @@ export const onCreateMatch = functions.onCall(
         expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + LIKE_COUNTER_TTL_DAYS * 86_400_000),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      return false;
+      return { alreadyLiked: false, likesToday: used + 1 };
     });
 
     // MatchService decide se é match mútuo e emite MATCH_CREATED
@@ -219,6 +227,27 @@ export const onCreateMatch = functions.onCall(
       isNew:    result.isNew,
       isMutual: result.isNew,
       alreadyLiked,
+      likesToday,
+      likeLimit: DAILY_LIKE_LIMIT,
     };
   }
 );
+
+/**
+ * Curtidas novas usadas hoje (horário de Brasília) por quem chama.
+ * Só leitura do próprio contador — nada de outra pessoa.
+ */
+export const getLikeQuota = functions.onCall(
+  { region: 'us-central1' },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new functions.HttpsError('unauthenticated', 'Não autenticado.');
+
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const snap = await db.collection('dailyLikeCounts').doc(`${uid}_${todayStr}`).get();
+    const used = (snap.data()?.count as number | undefined) ?? 0;
+
+    return { used, limit: DAILY_LIKE_LIMIT, date: todayStr };
+  }
+);
+

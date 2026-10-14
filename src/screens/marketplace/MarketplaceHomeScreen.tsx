@@ -10,6 +10,12 @@
 // e Chat. Aqui o escopo é só o marketplace.
 //
 // Nenhuma regra de negócio mudou desde a v1.
+//
+// v3.1 (13/10/2026, web D5): no COMPUTADOR a tela usa o
+// MarketplaceDesktop (destaques grandes, filtros na lateral, grade
+// com capas 4:5, ordenar, estado de erro com "Tentar de novo"). Os
+// dados são os mesmos hooks desta tela — nenhuma leitura nova.
+// Celular, tablet e app: iguais à v3.0.
 // ============================================
 
 import React, { useState, useCallback, useMemo } from 'react';
@@ -34,6 +40,8 @@ import { FeaturedCarousel } from '../../components/marketplace/FeaturedCarousel'
 import { MarketplaceEmptyState } from '../../components/marketplace/MarketplaceEmptyState';
 import ScreenContainer from '../../components/ScreenContainer';
 import { ProductCategory } from '../../shared/types/marketplace';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+import MarketplaceDesktop from '../../components/marketplace/MarketplaceDesktop';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type CategoryFilter = ProductCategory | 'all';
@@ -57,7 +65,8 @@ export default function MarketplaceHomeScreen() {
     pageSize: 8,
   }), []);
 
-  const { products, loading, loadingMore, hasMore, loadMore, refresh } = useProducts(filters);
+  const { products, loading, loadingMore, hasMore, loadMore, refresh, error } = useProducts(filters);
+  const { isDesktop } = useBreakpoint();
   const { products: featured, refresh: refreshFeatured } = useProducts(featuredFilters);
   const { favoriteIds, toggleFavorite } = useFavorites(user?.uid);
   // isCreator já cobre creator, admin e superadmin, e é falso para
@@ -116,6 +125,33 @@ export default function MarketplaceHomeScreen() {
           </View>
         )}
       </View>
+    );
+  }
+
+  if (isDesktop) {
+    return (
+      <MarketplaceDesktop
+        featured={featured}
+        products={filteredProducts}
+        loading={loading}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
+        error={error}
+        search={search}
+        onSearch={setSearch}
+        category={category}
+        onCategory={setCategory}
+        favoriteIds={favoriteIds}
+        isCreator={isCreator}
+        onOpenProduct={id => navigation.navigate('ProductDetail', { productId: id })}
+        onToggleFavorite={id => toggleFavorite(id)}
+        onLoadMore={handleLoadMore}
+        onRetry={refresh}
+        onPublish={() => navigation.navigate('CreateProduct')}
+        onFavorites={() => navigation.navigate('MyFavorites')}
+        onBecomeCreator={() => navigation.navigate('CreatorRequest')}
+        onMyProducts={() => navigation.navigate('MyProducts')}
+      />
     );
   }
 

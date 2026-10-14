@@ -70,6 +70,7 @@ import { hasTimedBoost, clearExpiredBoosts } from '../../../shared/utils/boostEx
 import { useBreakpoint } from '../../../hooks/useBreakpoint';
 import { useKeyboardShortcuts } from '../../../hooks/useKeyboardShortcuts';
 import SintonizeDesktop from '../components/SintonizeDesktop';
+import { useLikeQuota } from '../../../services/likeQuota';
 
 /** Largura inicial, até a medida real da tela chegar. */
 const INITIAL_PAGE_WIDTH = Dimensions.get('window').width;
@@ -136,6 +137,8 @@ export default function SintonizeScreen() {
   // Largura real da página do carrossel (com o menu lateral do
   // computador ela é menor que a janela).
   const { isDesktop } = useBreakpoint();
+  // "Curtidas hoje x/150" — só no computador (sem chamada no celular).
+  const likeQuota = useLikeQuota(user?.uid, isDesktop);
   const [pageWidth, setPageWidth] = useState(INITIAL_PAGE_WIDTH);
   function handlePageLayout(event: LayoutChangeEvent) {
     const w = event.nativeEvent.layout.width;
@@ -434,6 +437,7 @@ export default function SintonizeScreen() {
           onLike={handleDesktopLike}
           onOpenProfile={() => { if (currentCard) navigation.navigate('RealProfile', { userId: currentCard.id }); }}
           onOpenDismissed={openDismissed}
+          likeQuota={likeQuota}
         />
       </View>
     );

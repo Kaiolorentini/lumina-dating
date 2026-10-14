@@ -23,6 +23,11 @@
 // plataformas — o navegador ganhou o Alert no lote 1. Na web a
 // confirmação agora tem título e botões, como no Android, em vez
 // da caixa do navegador.
+//
+// 13/10/2026 (web D5): o sorteio pede { emptyOk: true }. Sem pessoas
+// novas, o servidor (v6.3) responde normal com empty: true e a
+// mensagem — antes era um erro 404 no console do navegador. A pessoa
+// vê o mesmo aviso de antes, e a carta atual não muda.
 // ============================================
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -63,7 +68,15 @@ interface CardState {
   chosenUid: string | null;
 }
 
+interface DrawRequest {
+  /** Servidor v6.3+: "ninguém para mostrar" vem como resposta, não erro. */
+  emptyOk: boolean;
+}
+
 interface DrawResult {
+  /** Sem pessoas novas agora (só com emptyOk). */
+  empty?:    boolean;
+  message?:  string;
   profiles:  DestinyProfile[];
   drawsUsed: number;
   maxDraws:  number;
@@ -153,8 +166,16 @@ export default function DestinyCardScreen() {
 
     setDrawing(true);
     try {
-      const fn = httpsCallable<void, DrawResult>(getFunctions(), 'drawDestinyCard');
-      const res = await fn();
+      const fn = httpsCallable<DrawRequest, DrawResult>(getFunctions(), 'drawDestinyCard');
+      const res = await fn({ emptyOk: true });
+
+      if (res.data.empty) {
+        Alert.alert(
+          'Carta do Destino',
+          res.data.message ?? 'Não há novas pessoas para mostrar agora. Volte amanhã.',
+        );
+        return;
+      }
 
       setState(prev => prev ? {
         ...prev,
