@@ -8,6 +8,9 @@
 //   histórico de vendas e saques). Alerta ANTES de aprovar.
 // - Aviso se a chave do saque divergir da cadastrada hoje.
 // - Um modal de rejeição só (antes havia um dentro de cada card).
+//
+// 14/10/2026 (web T3): no computador a lista mostra os cartões lado a
+// lado (useDesktopGrid). Celular e app: igual.
 // ============================================
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -15,6 +18,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Alert, RefreshControl, Modal, TextInput,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -39,6 +43,8 @@ async function copy(value: string, what: string) {
 }
 
 export default function AdminWithdrawalsScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
   const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useSuperAdminGuard();
 
@@ -245,6 +251,8 @@ export default function AdminWithdrawalsScreen() {
         </View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={withdrawals}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
@@ -254,7 +262,7 @@ export default function AdminWithdrawalsScreen() {
               <Text style={styles.emptyText}>Nenhum saque {STATUS_LABELS[activeTab].toLowerCase()}</Text>
             </View>
           }
-          renderItem={({ item }) => {
+          renderItem={grid.wrap(({ item }) => {
             const actionable = activeTab === 'pending' || activeTab === 'approved';
             return (
               <View style={styles.card}>
@@ -297,7 +305,7 @@ export default function AdminWithdrawalsScreen() {
                 {item.rejectionReason ? <Text style={styles.reason}>Motivo: {item.rejectionReason}</Text> : null}
               </View>
             );
-          }}
+          })}
         />
       )}
 

@@ -10,6 +10,7 @@
 // guards e avaliações: nada mudou.
 // T2: o quadro de compra acompanha a rolagem (sticky, só na web) e,
 // no computador, "conteúdos de quem vende" (CreatorProductsRow).
+// T3: ← → trocam a imagem no computador.
 //
 // v3.1 — AVALIAÇÕES.
 // Nota média e quantidade no topo ("Novo" sem avaliações), lista
@@ -54,6 +55,7 @@ import app from '../../core/firebase';
 import ScreenContainer from '../../components/ScreenContainer';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import CreatorProductsRow from '../../components/marketplace/CreatorProductsRow';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import CpfPromptModal from '../../components/CpfPromptModal';
 import { StarRating } from '../../components/marketplace/StarRating';
 import ReviewFormModal from '../../components/marketplace/ReviewFormModal';
@@ -88,6 +90,13 @@ export default function ProductDetailScreen() {
   const [showCoupon, setShowCoupon] = useState(false);
   const [awaitingCpf, setAwaitingCpf] = useState(false);
   const { isDesktop } = useBreakpoint();
+  // T3: no computador, ← → trocam a imagem da galeria. Desligado
+  // com o modal de CPF ou de avaliação abertos.
+  const imageCount = product ? [product.coverImage, ...(product.previewImages ?? [])].filter(Boolean).length : 0;
+  useKeyboardShortcuts({
+    ArrowLeft:  () => setCurrentImage(i => (imageCount ? (i - 1 + imageCount) % imageCount : 0)),
+    ArrowRight: () => setCurrentImage(i => (imageCount ? (i + 1) % imageCount : 0)),
+  }, isDesktop && imageCount > 1 && !awaitingCpf);
 
   const { favoriteIds, toggleFavorite } = useFavorites(user?.uid);
   const {

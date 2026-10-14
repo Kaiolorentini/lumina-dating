@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Alert, RefreshControl, TextInput, Modal,
   ScrollView, Switch,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -90,6 +91,8 @@ function usesLabel(coupon: Coupon): string {
 }
 
 export default function AdminCouponsScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
   const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useAdminGuard();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -332,6 +335,8 @@ export default function AdminCouponsScreen() {
         </View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={filtered}
           keyExtractor={item => item.id ?? item.code}
           contentContainerStyle={styles.list}
@@ -344,7 +349,7 @@ export default function AdminCouponsScreen() {
               <Text style={styles.emptyText}>Nenhum cupom {FILTER_LABEL[filter].toLowerCase()}</Text>
             </View>
           }
-          renderItem={({ item }) => {
+          renderItem={grid.wrap(({ item }) => {
             const expired = isExpired(item);
             const statusLabel = expired ? 'EXPIRADO' : item.isActive ? 'ATIVO' : 'INATIVO';
             const statusColor = expired ? colors.gray : item.isActive ? colors.success : colors.error;
@@ -395,7 +400,7 @@ export default function AdminCouponsScreen() {
                 </View>
               </View>
             );
-          }}
+          })}
         />
       )}
 

@@ -5,12 +5,16 @@
 // Aguardando você (open) · Respondidos (answered) · Resolvidos.
 // Urgentes sempre no topo; depois, a última mensagem mais recente.
 // O toque abre a conversa (SupportTicket) em modo admin.
+//
+// 14/10/2026 (web T3): no computador a lista mostra os cartões lado a
+// lado (useDesktopGrid). Celular e app: igual.
 // ============================================
 
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -43,6 +47,8 @@ function timeAgo(d: Date | null): string {
 }
 
 export default function AdminSupportScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
   const navigation = useNavigation<NavProp>();
   const { blocked, loading: guardLoading } = useAdminGuard();
 
@@ -94,6 +100,8 @@ export default function AdminSupportScreen() {
         <View style={styles.empty}><Text style={styles.errorText}>⚠️ {error}</Text></View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={tickets}
           keyExtractor={t => t.id}
           contentContainerStyle={styles.list}
@@ -103,7 +111,7 @@ export default function AdminSupportScreen() {
               <Text style={styles.emptyText}>Nenhum chamado nesta aba.</Text>
             </View>
           }
-          renderItem={({ item }) => {
+          renderItem={grid.wrap(({ item }) => {
             const cat = categoryById(item.category);
             return (
               <TouchableOpacity
@@ -124,7 +132,7 @@ export default function AdminSupportScreen() {
                 </View>
               </TouchableOpacity>
             );
-          }}
+          })}
         />
       )}
     </ScreenContainer>

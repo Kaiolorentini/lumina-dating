@@ -6,7 +6,7 @@
 // - "new-password": o sistema pode sugerir e salvar uma senha forte.
 // - Teclado: e-mail → senha → confirmação → criar conta.
 //
-// 14/10/2026 (web T2): o campo de e-mail tem nativeID (vira o id no
+// 14/10/2026 (web T2/T3): e-mail e senhas têm nativeID (vira o id no
 // navegador) — o Chrome avisava "campo sem id ou name", o que atrapalha
 // o preenchimento automático. App: igual.
 // ============================================
@@ -88,6 +88,7 @@ export default function RegisterScreen({ navigation }: Props) {
             <Text style={styles.label}>Senha</Text>
             <PasswordInput
               ref={passwordRef}
+              nativeID="register-password"
               placeholder="Mínimo 6 caracteres"
               value={password}
               onChangeText={setPassword}
@@ -100,6 +101,7 @@ export default function RegisterScreen({ navigation }: Props) {
             <Text style={styles.label}>Confirmar senha</Text>
             <PasswordInput
               ref={confirmRef}
+              nativeID="register-password-confirm"
               placeholder="Repita sua senha"
               value={confirmPassword}
               onChangeText={setConfirmPassword}

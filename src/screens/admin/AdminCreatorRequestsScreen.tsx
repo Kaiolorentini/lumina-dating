@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Alert, RefreshControl, TextInput, Modal,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -18,6 +19,8 @@ const STATUS_TABS = ['pending', 'approved', 'rejected'] as const;
 type StatusTab = typeof STATUS_TABS[number];
 
 export default function AdminCreatorRequestsScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
   const navigation = useNavigation();
   const { user } = useAuth();
   const { blocked, loading: guardLoading } = useAdminGuard();
@@ -159,6 +162,8 @@ export default function AdminCreatorRequestsScreen() {
         </View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={requests}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
@@ -180,7 +185,7 @@ export default function AdminCreatorRequestsScreen() {
               </Text>
             </View>
           }
-          renderItem={({ item }) => (
+          renderItem={grid.wrap(({ item }) => (
             <View style={styles.card}>
               {/* Nome do usuário */}
               <Text style={styles.cardName}>
@@ -229,7 +234,7 @@ export default function AdminCreatorRequestsScreen() {
                 </Text>
               )}
             </View>
-          )}
+          ))}
         />
       )}
 

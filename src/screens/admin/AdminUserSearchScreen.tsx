@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TextInput, FlatList,
   TouchableOpacity, ActivityIndicator,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -15,6 +16,8 @@ import ScreenContainer from '../../components/ScreenContainer';
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function AdminUserSearchScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
   const navigation = useNavigation<NavProp>();
   const { blocked, loading: guardLoading } = useSuperAdminGuard();
   const [search, setSearch] = useState('');
@@ -69,6 +72,8 @@ export default function AdminUserSearchScreen() {
       </View>
 
       <FlatList
+        key={grid.listKey}
+        {...grid.listProps}
         data={results}
         keyExtractor={item => item.uid}
         contentContainerStyle={styles.list}
@@ -79,7 +84,7 @@ export default function AdminUserSearchScreen() {
             </View>
           ) : null
         }
-        renderItem={({ item }) => (
+        renderItem={grid.wrap(({ item }) => (
           <TouchableOpacity
             style={styles.userCard}
             onPress={() => navigation.navigate('AdminUserDetail', { userId: item.uid })}
@@ -98,7 +103,7 @@ export default function AdminUserSearchScreen() {
               <Text style={styles.arrow}>›</Text>
             </View>
           </TouchableOpacity>
-        )}
+        ))}
       />
     </ScreenContainer>
   );

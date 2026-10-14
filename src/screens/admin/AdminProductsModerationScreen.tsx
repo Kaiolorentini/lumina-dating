@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -43,6 +44,8 @@ function formatPrice(product: Product): string {
 }
 
 export default function AdminProductsModerationScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
   const navigation = useNavigation<NavProp>();
   const { blocked, loading: guardLoading } = useAdminGuard();
   const [activeTab, setActiveTab] = useState<StatusTab>('pending');
@@ -124,6 +127,8 @@ export default function AdminProductsModerationScreen() {
         </View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={products}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
@@ -140,7 +145,7 @@ export default function AdminProductsModerationScreen() {
               <Text style={styles.emptyText}>{EMPTY_LABEL[activeTab]}</Text>
             </View>
           }
-          renderItem={({ item }) => (
+          renderItem={grid.wrap(({ item }) => (
             <TouchableOpacity
               style={styles.card}
               activeOpacity={0.8}
@@ -165,7 +170,7 @@ export default function AdminProductsModerationScreen() {
 
               <Text style={styles.tapHint}>Toque para revisar →</Text>
             </TouchableOpacity>
-          )}
+          ))}
         />
       )}
     </ScreenContainer>

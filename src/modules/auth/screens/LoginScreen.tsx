@@ -9,7 +9,7 @@
 // - Teclado: "Próximo" leva à senha; "Entrar" envia.
 // - Só o e-mail é lembrado no aparelho — nunca a senha.
 //
-// 14/10/2026 (web T2): o campo de e-mail tem nativeID (vira o id no
+// 14/10/2026 (web T2/T3): e-mail e senha têm nativeID (vira o id no
 // navegador) — o Chrome avisava "campo sem id ou name", o que atrapalha
 // o preenchimento automático. App: igual.
 // ============================================
@@ -108,6 +108,7 @@ export default function LoginScreen({ navigation }: Props) {
             <Text style={styles.label}>Senha</Text>
             <PasswordInput
               ref={passwordRef}
+              nativeID="login-password"
               placeholder="Sua senha"
               value={password}
               onChangeText={setPassword}

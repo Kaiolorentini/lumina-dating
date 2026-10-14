@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Alert, RefreshControl, TextInput, Modal,
   ScrollView,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -74,6 +75,8 @@ function formatDate(value: any): string {
 }
 
 export default function AdminFraudFlagsScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
   const navigation = useNavigation<NavProp>();
   const { blocked, loading: guardLoading } = useAdminGuard();
   const [activeTab, setActiveTab] = useState<FraudStatus>('open');
@@ -316,6 +319,8 @@ export default function AdminFraudFlagsScreen() {
         </View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={flags}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
@@ -330,7 +335,7 @@ export default function AdminFraudFlagsScreen() {
               </Text>
             </View>
           }
-          renderItem={({ item }) => (
+          renderItem={grid.wrap(({ item }) => (
             <View style={styles.card}>
               <View style={styles.cardTop}>
                 <View style={styles.reasonBadge}>
@@ -354,7 +359,7 @@ export default function AdminFraudFlagsScreen() {
 
               {renderActions(item)}
             </View>
-          )}
+          ))}
         />
       )}
 

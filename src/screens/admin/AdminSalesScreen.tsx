@@ -8,6 +8,9 @@
 // Marketplace: as vendas de produto não têm campo `type`, então a lista
 // pagina todas as vendas e deixa só as que não são de cristais.
 // Cristais: consulta direta por type == 'coins_purchase'.
+//
+// 14/10/2026 (web T3): no computador a lista mostra os cartões lado a
+// lado (useDesktopGrid). Celular e app: igual.
 // ============================================
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -15,6 +18,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import { DocumentSnapshot } from 'firebase/firestore';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -50,6 +54,8 @@ function statusInfo(sale: SaleRow): { label: string; color: string } {
 }
 
 export default function AdminSalesScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
   const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useAdminGuard();
   const { data: dashboard } = useAdminDashboard(!blocked && !guardLoading);
@@ -170,6 +176,8 @@ export default function AdminSalesScreen() {
         </View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={sales}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
@@ -183,7 +191,7 @@ export default function AdminSalesScreen() {
             </View>
           }
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.gold} style={{ margin: spacing.md }} /> : null}
-          renderItem={({ item }) => {
+          renderItem={grid.wrap(({ item }) => {
             const st = statusInfo(item);
             return (
               <View style={styles.card}>
@@ -228,7 +236,7 @@ export default function AdminSalesScreen() {
                 <Text style={styles.date}>{formatDate(item.createdAt)}{item.paidAt ? ` · pago ${formatDate(item.paidAt)}` : ''}</Text>
               </View>
             );
-          }}
+          })}
         />
       )}
     </ScreenContainer>

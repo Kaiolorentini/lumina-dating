@@ -5,6 +5,9 @@
 // Fluxo: Pendente → (Aprovar: revoga a compra e desconta o criador)
 // → Aguardando Pix → (você transfere e toca "Marcar como pago") → Pago.
 // A chave Pix do comprador aparece com Copiar.
+//
+// 14/10/2026 (web T3): no computador a lista mostra os cartões lado a
+// lado (useDesktopGrid). Celular e app: igual.
 // ============================================
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -12,6 +15,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Alert, RefreshControl, TextInput, Modal,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -38,6 +42,8 @@ function formatDate(value: unknown): string {
 }
 
 export default function AdminRefundRequestsScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
   const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useAdminGuard();
 
@@ -159,6 +165,8 @@ export default function AdminRefundRequestsScreen() {
         </View>
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={requests}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.list}
@@ -169,7 +177,7 @@ export default function AdminRefundRequestsScreen() {
               <Text style={styles.emptyText}>Nenhum reembolso em "{TAB_LABEL[tab]}"</Text>
             </View>
           }
-          renderItem={({ item }) => (
+          renderItem={grid.wrap(({ item }) => (
             <View style={styles.card}>
               <Text style={styles.product} numberOfLines={2}>📦 {titles[item.productId] ?? 'Produto'}</Text>
 
@@ -234,7 +242,7 @@ export default function AdminRefundRequestsScreen() {
                 </TouchableOpacity>
               ) : null}
             </View>
-          )}
+          ))}
         />
       )}
 

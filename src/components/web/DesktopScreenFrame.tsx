@@ -46,9 +46,18 @@ const GATE_ROUTES = new Set<string>([
   'VerificationPendingGate', 'AccountBannedGate', 'GateError',
 ]);
 
+/** Admin com listas em grade (T3): coluna larga. Telas de detalhe
+ *  do admin (usuário, produto, verificação, relatórios) ficam na
+ *  coluna normal — texto em 1.300 px cansa a leitura. */
+const ADMIN_WIDE_ROUTES = new Set<string>([
+  'Admin', 'AdminPanel', 'AdminDashboard',
+  'AdminCoupons', 'AdminCreatorRequests', 'AdminFraudFlags', 'AdminProductsModeration',
+  'AdminRefundRequests', 'AdminSales', 'AdminSupport', 'AdminUserSearch', 'AdminWithdrawals',
+]);
+
 export function columnWidthFor(routeName: string): number {
   if (GATE_ROUTES.has(routeName)) return CONTENT_MAX_WIDTH.form;
-  return routeName.startsWith('Admin') ? CONTENT_MAX_WIDTH.wide : DEFAULT_COLUMN;
+  return ADMIN_WIDE_ROUTES.has(routeName) ? CONTENT_MAX_WIDTH.wide : DEFAULT_COLUMN;
 }
 
 interface Props {
