@@ -61,3 +61,7 @@ functions/lib/
 *.log
 scripts/reset-relatorios/
 auth-backup.json
+
+# saídas de export (geradas, não versionar)
+dist-web/
+dist-android-teste/
