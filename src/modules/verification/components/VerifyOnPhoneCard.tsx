@@ -16,6 +16,8 @@
 // SÓ o endereço, nunca um passe de login — a pessoa entra no celular
 // com e-mail e senha (seguro mesmo se o QR aparecer num print).
 // O endereço também aparece escrito, com botão de copiar.
+// 13/10/2026 (unificação): o endereço é o do APP (…/app), não o da
+// landing na raiz — utils/webBase.appAddress().
 // ============================================
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -23,16 +25,13 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import QrCode from '../../../components/QrCode';
 import { colors, fonts, spacing, borderRadius } from '../../../theme';
-
-interface LocationLike { origin?: string; host?: string }
+import { appAddress } from '../../../utils/webBase';
 
 const COPIED_MS = 2500;
 const QR_SIZE   = 184;
 
 function siteAddress(): { full: string; short: string } {
-  const loc = (globalThis as unknown as { location?: LocationLike }).location;
-  const full = loc?.origin ?? '';
-  return { full, short: loc?.host ?? full };
+  return appAddress();
 }
 
 const STEPS = [

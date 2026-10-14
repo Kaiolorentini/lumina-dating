@@ -15,6 +15,11 @@
 // arquivo e aplicada quando a pilha principal monta (restoreWebRoute),
 // o mesmo padrão do toque no push. Abrir /cofre sem login → entrar →
 // cai no Cofre. URLs das telas do gate não são restauradas.
+//
+// 13/10/2026 (unificação com a landing): o app mora em /app. Toda URL
+// lida do navegador perde o prefixo antes de virar tela, e toda URL
+// gerada ganha o prefixo de volta (utils/webBase) — /app/sintonize,
+// /app/entrar etc. Os caminhos de cada tela continuam os mesmos.
 // ============================================
 
 import {
@@ -23,6 +28,7 @@ import {
 } from '@react-navigation/native';
 import type { LinkingOptions, NavigationContainerRef } from '@react-navigation/native';
 import type { RootStackParamList } from './types';
+import { stripWebBase, withWebBase } from '../utils/webBase';
 
 type LinkingConfig = NonNullable<LinkingOptions<RootStackParamList>['config']>;
 type ParseOptions  = Parameters<typeof defaultGetStateFromPath>[1];
@@ -157,16 +163,16 @@ function parsePath(path: string, options?: ParseOptions) {
 export const appLinking: LinkingOptions<RootStackParamList> = {
   prefixes: [],
   config,
-  getStateFromPath: (path, options) => parsePath(path, options),
-  getPathFromState: (state, options) => withoutQuery(defaultGetPathFromState(state, options)),
+  getStateFromPath: (path, options) => parsePath(stripWebBase(withoutQuery(path)), options),
+  getPathFromState: (state, options) => withWebBase(withoutQuery(defaultGetPathFromState(state, options))),
 };
 
 // ── URL de abertura (F5 / link direto) ──────────────────────
 interface LocationLike { pathname?: string }
 
-const initialPath = withoutQuery(
+const initialPath = stripWebBase(withoutQuery(
   (globalThis as unknown as { location?: LocationLike }).location?.pathname ?? '/',
-);
+));
 
 function isRestorable(path: string): boolean {
   const clean = trimSlashes(path);

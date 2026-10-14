@@ -45,6 +45,9 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
+    "experiments": {
+      "baseUrl": "/app"
+    },
     "plugins": [
       "@config-plugins/react-native-blob-util",
       "@config-plugins/react-native-pdf",
