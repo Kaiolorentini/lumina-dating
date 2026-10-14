@@ -11,6 +11,7 @@
 // e conquistas. O JSX de cada parte virou um bloco nomeado usado
 // pelos dois layouts — o celular monta exatamente a mesma ordem de
 // antes. Nenhuma regra (visita, curtida, conexão, bloqueio) mudou.
+// T2: a coluna da esquerda acompanha a rolagem (sticky, só na web).
 //
 // v5.6 (13/10/2026, web lote 4) — BLOQUEAR.
 // Uma confirmação só, igual no Android e na web (o desvio
@@ -48,6 +49,8 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Platform,
+  ViewStyle,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -91,6 +94,11 @@ import { useBreakpoint } from '../../hooks/useBreakpoint';
 /** Foto principal no computador (4:5). */
 const DESKTOP_PHOTO_W = 380;
 const DESKTOP_PHOTO_RATIO = 1.25;
+
+/** Web: a coluna acompanha a rolagem (fica à vista). App: sem efeito. */
+const STICKY: ViewStyle | null = Platform.OS === 'web'
+  ? ({ position: 'sticky', top: 0, alignSelf: 'flex-start' } as unknown as ViewStyle)
+  : null;
 
 const { width, height } = Dimensions.get('window');
 const functions         = getFunctions();
@@ -760,7 +768,7 @@ export default function RealProfileScreen() {
         {headerBlock}
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.dScroll}>
           <View style={styles.dRow}>
-            <View style={styles.dAside}>
+            <View style={[styles.dAside, STICKY]}>
               <View style={styles.dPhotoBox}>
                 {targetFrame && (
                   <View style={StyleSheet.absoluteFill}>

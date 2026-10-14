@@ -8,6 +8,10 @@
 // - Campos identificados para o preenchimento automático do sistema.
 // - Teclado: "Próximo" leva à senha; "Entrar" envia.
 // - Só o e-mail é lembrado no aparelho — nunca a senha.
+//
+// 14/10/2026 (web T2): o campo de e-mail tem nativeID (vira o id no
+// navegador) — o Chrome avisava "campo sem id ou name", o que atrapalha
+// o preenchimento automático. App: igual.
 // ============================================
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -85,6 +89,7 @@ export default function LoginScreen({ navigation }: Props) {
           <View style={styles.form}>
             <Text style={styles.label}>E-mail</Text>
             <TextInput
+              nativeID="login-email"
               style={styles.input}
               placeholder="seu@email.com"
               placeholderTextColor={colors.gray}

@@ -12,6 +12,9 @@
 // Conteúdos e Cristais continuam separados: uma é a biblioteca
 // que o usuário acessa, outra é histórico financeiro que ele
 // consulta. Hook, deduplicação e fluxo de reembolso inalterados.
+//
+// v2.2 (14/10/2026, web T2): no computador as compras ficam em grade
+// de 2 colunas, com a capa maior (4:5). Celular e app: lista igual.
 // ============================================
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
@@ -20,6 +23,7 @@ import {
   TouchableOpacity, ActivityIndicator, Alert, RefreshControl,
   Modal, TextInput,
 } from 'react-native';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -162,16 +166,18 @@ export default function MyPurchasesScreen() {
     }
   }
 
+  const { isDesktop } = useBreakpoint();
+
   const renderItem = useCallback(({ item }: { item: Purchase }) => {
     const purchaseId = `${user?.uid}_${item.productId}`;
     const isActive = item.status === 'active';
     const product = productMap.get(item.productId);
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, isDesktop && styles.dCard]}>
         <View style={styles.cardMain}>
           <Image
             source={{ uri: product?.coverImage || 'https://via.placeholder.com/80' }}
-            style={styles.cover}
+            style={[styles.cover, isDesktop && styles.dCover]}
             resizeMode="cover"
           />
           <View style={styles.cardInfo}>
@@ -250,7 +256,7 @@ export default function MyPurchasesScreen() {
         </View>
       </View>
     );
-  }, [user?.uid, requestingRefund, navigation, productMap, openReview, openingReview]);
+  }, [user?.uid, requestingRefund, navigation, productMap, openReview, openingReview, isDesktop]);
 
   return (
     <ScreenContainer>
@@ -300,6 +306,10 @@ export default function MyPurchasesScreen() {
         <ActivityIndicator color={MP.gold} style={{ flex: 1 }} />
       ) : (
         <FlatList
+          // Trocar numColumns exige remontar a lista (key).
+          key={isDesktop ? 'grade-2' : 'lista'}
+          numColumns={isDesktop ? 2 : 1}
+          columnWrapperStyle={isDesktop ? styles.dColumns : undefined}
           data={uniquePurchases}
           keyExtractor={item => `${item.buyerId}_${item.productId}`}
           contentContainerStyle={styles.listContent}
@@ -436,6 +446,10 @@ const styles = StyleSheet.create({
   tabTextActive: { color: MP.purpleLight, fontWeight: MP_FONT.weight.bold },
 
   listContent: { padding: spacing.md },
+  // ── Computador (v2.2) ──
+  dColumns: { gap: spacing.md },
+  dCard:    { flex: 1, marginBottom: spacing.md },
+  dCover:   { width: 96, height: 120 },
   emptyWrap: { minHeight: 380, justifyContent: 'center' },
 
   card: {
@@ -610,3 +624,4 @@ const styles = StyleSheet.create({
   },
   modalConfirmBtnText: { color: MP.text, fontWeight: MP_FONT.weight.bold },
 });
+

@@ -12,13 +12,18 @@
 // dá para equipar um de cada ao mesmo tempo.
 //
 // RESPONSIVO: grid de 3 colunas, 4 a partir de 560px.
+//
+// 14/10/2026 (web T2): colunas e cards pela largura que a tela tem
+// (useAvailableWidth), não pela janela — no computador a tela fica numa
+// coluna e os cards saíam cortados. Celular e app: mesma largura de antes.
 // ============================================
 
 import React from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, useWindowDimensions,
+  ActivityIndicator, Alert,
 } from 'react-native';
+import { useAvailableWidth } from '../../../hooks/useAvailableWidth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth }  from '../../../context/AuthContext';
@@ -102,7 +107,7 @@ function BadgeTile({
 export default function BadgesScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
-  const { width }  = useWindowDimensions();
+  const width  = useAvailableWidth();
   const { data, loading, error, equipping, equip, refresh } = useBadges(user?.uid);
 
   const columns   = width >= 560 ? 4 : 3;

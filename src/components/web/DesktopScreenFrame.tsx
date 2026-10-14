@@ -28,6 +28,7 @@ import { colors, fonts } from '../../theme';
 import { CONTENT_MAX_WIDTH } from '../../utils/breakpoints';
 import HoverPressable from './HoverPressable';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { FrameWidthContext } from '../../hooks/useAvailableWidth';
 
 /** Largura da coluna das telas comuns. */
 const DEFAULT_COLUMN = 980;
@@ -86,7 +87,10 @@ export default function DesktopScreenFrame({ routeName, onHome, children }: Prop
       )}
 
       <View style={[styles.column, { maxWidth: column }]}>
-        {children}
+        {/* Telas que medem a largura (useAvailableWidth) usam a da coluna. */}
+        <FrameWidthContext.Provider value={Math.min(column, width - 48)}>
+          {children}
+        </FrameWidthContext.Provider>
       </View>
     </View>
   );

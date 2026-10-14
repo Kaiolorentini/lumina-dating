@@ -11,13 +11,18 @@
 // Duas moedas, dois regimes:
 //   fragmentos → PERMANENTES, porta de entrada
 //   cristais   → aluguel de 30 dias, recompra soma os dias
+//
+// 14/10/2026 (web T2): colunas e cards pela largura que a tela tem
+// (useAvailableWidth), não pela janela — no computador a tela fica numa
+// coluna e os cards saíam cortados. Celular e app: mesma largura de antes.
 // ============================================
 
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Alert, useWindowDimensions,
+  TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
+import { useAvailableWidth } from '../../../hooks/useAvailableWidth';
 import { useNavigation }    from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth }          from '../../../context/AuthContext';
@@ -40,7 +45,7 @@ export default function BadgesShopScreen() {
   const { user }          = useAuth();
   const { wallet, spend, refreshWallet } = useCoins();
   const { buyWithFragments, buying: buyingFrag, refresh } = useBadges(user?.uid);
-  const { width }         = useWindowDimensions();
+  const width         = useAvailableWidth();
 
   const coinsPremium = wallet?.coinsPremium ?? 0;
   const fragments    = wallet?.fragments    ?? 0;

@@ -5,6 +5,10 @@
 // - Senha e confirmação com "mostrar senha", cada uma independente.
 // - "new-password": o sistema pode sugerir e salvar uma senha forte.
 // - Teclado: e-mail → senha → confirmação → criar conta.
+//
+// 14/10/2026 (web T2): o campo de e-mail tem nativeID (vira o id no
+// navegador) — o Chrome avisava "campo sem id ou name", o que atrapalha
+// o preenchimento automático. App: igual.
 // ============================================
 
 import React, { useRef } from 'react';
@@ -65,6 +69,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
             <Text style={styles.label}>E-mail</Text>
             <TextInput
+              nativeID="register-email"
               style={styles.input}
               placeholder="seu@email.com"
               placeholderTextColor={colors.gray}

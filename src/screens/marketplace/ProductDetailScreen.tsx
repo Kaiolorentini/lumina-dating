@@ -8,6 +8,8 @@
 // e avaliações embaixo. O JSX virou blocos nomeados, usados pelos dois
 // layouts — no celular a ordem é a mesma de antes. Compra, cupom, CPF,
 // guards e avaliações: nada mudou.
+// T2: o quadro de compra acompanha a rolagem (sticky, só na web) e,
+// no computador, "conteúdos de quem vende" (CreatorProductsRow).
 //
 // v3.1 — AVALIAÇÕES.
 // Nota média e quantidade no topo ("Novo" sem avaliações), lista
@@ -29,7 +31,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image,
-  TouchableOpacity, ActivityIndicator, Alert, Dimensions, TextInput,
+  TouchableOpacity, ActivityIndicator, Alert, Dimensions, TextInput, Platform, ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -51,6 +53,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../core/firebase';
 import ScreenContainer from '../../components/ScreenContainer';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import CreatorProductsRow from '../../components/marketplace/CreatorProductsRow';
 import CpfPromptModal from '../../components/CpfPromptModal';
 import { StarRating } from '../../components/marketplace/StarRating';
 import ReviewFormModal from '../../components/marketplace/ReviewFormModal';
@@ -66,6 +69,11 @@ type RouteProps = RouteProp<RootStackParamList, 'ProductDetail'>;
 const { width } = Dimensions.get('window');
 /** Capa no computador (4:5). */
 const DESKTOP_COVER_W = 440;
+
+/** Web: a coluna acompanha a rolagem (fica à vista). App: sem efeito. */
+const STICKY: ViewStyle | null = Platform.OS === 'web'
+  ? ({ position: 'sticky', top: 0, alignSelf: 'flex-start' } as unknown as ViewStyle)
+  : null;
 
 export default function ProductDetailScreen() {
   const navigation = useNavigation<NavProp>();
@@ -619,7 +627,7 @@ export default function ProductDetailScreen() {
                 </View>
               )}
             </View>
-            <View style={styles.dInfo}>
+            <View style={[styles.dInfo, STICKY]}>
               {headBlock}
               <View style={styles.dBuyBox}>
                 {purchaseBlock}
@@ -628,6 +636,15 @@ export default function ProductDetailScreen() {
           </View>
           <View style={styles.dBody}>
             {aboutBlock}
+            {/* T2: mais conteúdos de quem vende (o mesmo componente do
+                perfil do criador). Leitura só no computador. */}
+            {!isOwner && (
+              <CreatorProductsRow
+                ownerId={product.ownerId}
+                enabled={marketplaceEnabled === true}
+                onOpenProduct={id => { if (id !== productId) navigation.push('ProductDetail', { productId: id }); }}
+              />
+            )}
             {reviewsBlock}
           </View>
         </ScrollView>
