@@ -17,6 +17,20 @@
 // perfis ganha colunas (3, 4 ou 5) conforme a largura. No celular
 // e no app, tudo como antes (duas colunas). A largura máxima vai no
 // contentContainerStyle para não quebrar o stickyHeaderIndices.
+//
+// v5.6 (13/10/2026, web D3 — tela aprovada no protótipo): no
+// COMPUTADOR a Home vira um painel:
+//   • saudação pelo horário + quantas missões faltam;
+//   • "Ritual do dia": Faísca, Carta, Missões (com progresso) e
+//     Cofre em 4 cartões lado a lado (HomeRitualRow);
+//   • grade de perfis com os interesses de cada um embaixo do card
+//     (os em comum com você em dourado) — mesmos documentos já
+//     lidos, sem leitura extra;
+//   • coluna "Seu dia" (HomeSideRail): quem viu você, em alta agora
+//     e a Árvore. Em telas de computador mais estreitas ela vira uma
+//     fileira acima da grade.
+// O conteúdo das abas é o MESMO do celular (renderTabContent): só a
+// moldura muda. Celular, tablet e app: idênticos à v5.5.
 // ============================================
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -47,6 +61,10 @@ import { COLLECTIONS }        from '../../../core/constants';
 import { useBreakpoint }      from '../../../hooks/useBreakpoint';
 import PageContainer, { pageContentStyle } from '../../../components/layout/PageContainer';
 import { CONTENT_MAX_WIDTH, gridColumns } from '../../../utils/breakpoints';
+import HomeRitualRow          from '../components/HomeRitualRow';
+import HomeSideRail           from '../components/HomeSideRail';
+import { interestLabel }      from '../../../config/sintonia/interestsCatalog';
+import HoverPressable         from '../../../components/web/HoverPressable';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
@@ -57,6 +75,40 @@ const TABS: { key: HomeTab; label: string; icon: string }[] = [
   { key: 'visitados', label: 'Em Alta',   icon: '🔥' },
   { key: 'conversas', label: 'Conversas', icon: '💬' },
 ];
+
+/** Abaixo disto a coluna "Seu dia" vai para cima da grade (computador). */
+const RAIL_BESIDE_MIN_WIDTH = 1180;
+/** Largura da coluna "Seu dia" + o espaço entre ela e a grade. */
+const RAIL_SPACE = 320 + 28;
+/** Interesses mostrados embaixo de cada card no computador. */
+const MAX_CARD_INTERESTS = 3;
+
+function greetingFor(date: Date): string {
+  const h = date.getHours();
+  if (h >= 5 && h < 12)  return 'Bom dia';
+  if (h >= 12 && h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
+/** Interesses do card: os em comum primeiro. */
+function CardInterests({ ids, mine }: { ids: string[]; mine: Set<string> }) {
+  const ordered = [...ids].sort((a, b) => Number(mine.has(b)) - Number(mine.has(a)));
+  const shown = ordered.slice(0, MAX_CARD_INTERESTS);
+  return (
+    <View style={styles.cardChips}>
+      {shown.map(id => {
+        const common = mine.has(id);
+        return (
+          <View key={id} style={[styles.cardChip, common && styles.cardChipCommon]}>
+            <Text style={[styles.cardChipText, common && styles.cardChipTextCommon]} numberOfLines={1}>
+              {common ? '✦ ' : ''}{interestLabel(id)}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 interface ChatPreview {
   userId:      string;
@@ -162,7 +214,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [activeTab, setActiveTab] = useState<HomeTab>('perfis');
 
   const {
-    realProfiles, mostVisited, promotedVisited, visitCounts,
+    realProfiles, interestsById, userProfile, mostVisited, promotedVisited, visitCounts,
     loadingVisited, visitasHoje, totalVisitas, unreadCount,
     coins, loadMostVisited,
     loadingProfiles, loadingMore, hasMoreProfiles,
@@ -176,7 +228,7 @@ export default function HomeScreen({ navigation }: Props) {
 
   // Grade responsiva (só web, tablet/computador). No celular o card
   // usa a largura padrão dele — idêntico ao app.
-  const { isPhone } = useBreakpoint();
+  const { isPhone, isDesktop } = useBreakpoint();
   const [containerWidth, setContainerWidth] = useState(0);
   function handleContainerLayout(event: LayoutChangeEvent) {
     const w = event.nativeEvent.layout.width;
@@ -193,6 +245,28 @@ export default function HomeScreen({ navigation }: Props) {
       loadMostVisited();
     }
   }, [activeTab]);
+
+  // ── Computador ──
+  // A coluna "Em alta agora" usa o mesmo ranking da aba Em Alta:
+  // busca uma vez quando o seu perfil chega (só no computador).
+  useEffect(() => {
+    if (isDesktop && userProfile && mostVisited.length === 0) {
+      loadMostVisited();
+    }
+  }, [isDesktop, userProfile]);
+
+  // Largura da coluna principal (grade) no computador.
+  const [mainWidth, setMainWidth] = useState(0);
+  function handleMainLayout(event: LayoutChangeEvent) {
+    const w = event.nativeEvent.layout.width;
+    if (Math.abs(w - mainWidth) > 1) setMainWidth(w);
+  }
+  const railBeside = containerWidth >= RAIL_BESIDE_MIN_WIDTH;
+  const desktopColumns = gridColumns(Math.max(0, mainWidth - spacing.lg * 2));
+  const desktopCardWidth = mainWidth > 0
+    ? Math.floor((mainWidth - spacing.lg * 2 - spacing.sm * (desktopColumns - 1)) / desktopColumns)
+    : undefined;
+  const myInterests = new Set<string>(userProfile?.interests ?? []);
 
   function handleCardPress(profile: ProfileCardData) {
     navigation.navigate('RealProfile', { userId: profile.id });
@@ -211,6 +285,268 @@ export default function HomeScreen({ navigation }: Props) {
     // Os cards mudaram: continuar no meio da lista antiga
     // desorienta. Volta ao topo com animação.
     scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }
+
+  /**
+   * Conteúdo da aba ativa — o mesmo no celular e no computador.
+   * `cardWidth`: largura dos cards na grade (undefined = padrão do app).
+   * `showInterests`: interesses embaixo do card (só computador).
+   */
+  function renderTabContent(cardWidth: number | undefined, showInterests: boolean) {
+    return (
+      <>
+          {/* Conversas */}
+          {activeTab === 'conversas' && <ConversasTab navigation={navigation} />}
+
+          {/* Em Alta */}
+          {activeTab === 'visitados' && (
+            loadingVisited ? (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Carregando perfis em alta...</Text>
+              </View>
+            ) : mostVisited.length === 0 && promotedVisited.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>🔥</Text>
+                <Text style={styles.emptyTitle}>Nenhum perfil ainda</Text>
+                <Text style={styles.emptySubtitle}>Visite perfis para que apareçam aqui!</Text>
+              </View>
+            ) : (
+              <View>
+                {/* Posição PAGA, separada do ranking: a medalha fica só
+                    com quem teve mais visitas de fato. */}
+                {promotedVisited.length > 0 && (
+                  <>
+                    <Text style={styles.promotedTitle}>⚡ Impulsionados agora</Text>
+                    <View style={styles.grid}>
+                      {promotedVisited.map(profile => (
+                        <ProfileCard
+                          key={`turbo_${profile.id}`}
+                          data={profile}
+                          onPress={() => handleCardPress(profile)}
+                          viewerUid={user?.uid}
+                          width={cardWidth}
+                        />
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                <View style={styles.mostVisitedBanner}>
+                  <Text style={styles.mostVisitedBannerText}>Perfis mais visitados agora</Text>
+                </View>
+                <View style={styles.grid}>
+                  {mostVisited.map((profile, index) => (
+                    <VisitedProfileCard
+                      key={profile.id}
+                      data={profile}
+                      visitCount={visitCounts[profile.id] || 0}
+                      rank={index + 1}
+                      onPress={() => handleCardPress(profile)}
+                      width={cardWidth}
+                    />
+                  ))}
+                </View>
+              </View>
+            )
+          )}
+
+          {/* Perfis */}
+          {activeTab === 'perfis' && (
+            loadingProfiles ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color={colors.gold} size="large" />
+                <Text style={styles.loadingText}>Carregando perfis...</Text>
+              </View>
+            ) : errorProfiles ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>⚠️</Text>
+                <Text style={styles.emptyTitle}>Algo deu errado</Text>
+                <Text style={styles.emptySubtitle}>{errorProfiles}</Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => refreshProfiles()}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.retryText}>Tentar novamente</Text>
+                </TouchableOpacity>
+              </View>
+            ) : realProfiles.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>👤</Text>
+                <Text style={styles.emptyTitle}>Nenhum perfil encontrado</Text>
+                <Text style={styles.emptySubtitle}>Seja o primeiro a se cadastrar na sua região!</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.grid}>
+                  {realProfiles.map(profile => showInterests ? (
+                    <View key={profile.id} style={{ width: cardWidth }}>
+                      <ProfileCard
+                        data={profile}
+                        onPress={() => handleCardPress(profile)}
+                        viewerUid={user?.uid}
+                        width={cardWidth}
+                      />
+                      <CardInterests ids={interestsById[profile.id] ?? []} mine={myInterests} />
+                    </View>
+                  ) : (
+                    <ProfileCard
+                      key={profile.id}
+                      data={profile}
+                      onPress={() => handleCardPress(profile)}
+                      viewerUid={user?.uid}
+                      width={cardWidth}
+                    />
+                  ))}
+                </View>
+
+                {hasMoreProfiles ? (
+                  <TouchableOpacity
+                    style={styles.moreButton}
+                    onPress={handleNextBatch}
+                    disabled={loadingMore}
+                    activeOpacity={0.85}
+                  >
+                    {loadingMore ? (
+                      <ActivityIndicator color={colors.gold} size="small" />
+                    ) : (
+                      <Text style={styles.moreButtonText}>Ver mais perfis ›</Text>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.moreButton}
+                    onPress={() => { refreshProfiles(); scrollRef.current?.scrollTo({ y: 0, animated: true }); }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.moreButtonText}>Começar de novo ↻</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )
+          )}
+      </>
+    );
+  }
+
+  if (isDesktop) {
+    const firstName = (userProfile?.name ?? '').trim().split(/\s+/)[0] || '';
+    const missing = Math.max(0, missionsSummary.total - missionsSummary.completed);
+    const subtitle = missionsSummary.total === 0
+      ? 'Sua Sintonia de hoje está pronta.'
+      : missing === 0
+        ? 'Missões de hoje concluídas. Amanhã tem mais.'
+        : `Sua Sintonia de hoje está pronta. ${missing === 1 ? 'Falta 1 missão' : `Faltam ${missing} missões`} para fechar o dia.`;
+    const trending = mostVisited.slice(0, 5);
+    const rail = (layout: 'column' | 'row') => (
+      <HomeSideRail
+        uid={user?.uid}
+        layout={layout}
+        visitasHoje={visitasHoje}
+        totalVisitas={totalVisitas}
+        trending={trending}
+        visitCounts={visitCounts}
+        loadingTrending={loadingVisited}
+        onRevealVisitors={() => navigation.navigate('Visitors' as any)}
+        onOpenProfile={uid => navigation.navigate('RealProfile', { userId: uid })}
+        onSeeTrending={() => setActiveTab('visitados')}
+        onOpenTree={() => navigation.navigate('XP' as any)}
+      />
+    );
+
+    return (
+      <View style={styles.container} onLayout={handleContainerLayout}>
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.dScroll}>
+          <View style={styles.dPage}>
+
+            <View style={styles.dHeader}>
+              <View style={styles.dHello}>
+                <Text style={styles.dTitle} accessibilityRole="header">
+                  {greetingFor(new Date())}{firstName ? `, ${firstName}` : ''}
+                </Text>
+                <Text style={styles.dSubtitle}>{subtitle}</Text>
+              </View>
+              <View style={styles.headerRight}>
+                <HoverPressable
+                  style={styles.coinsButton}
+                  hoverStyle={styles.dHoverGold}
+                  onPress={() => (navigation as any).jumpTo('Store')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Cristais: ${coinsGratuitos} grátis e ${coinsPremium} premium`}
+                >
+                  <Text style={styles.coinsIcon}>✨</Text>
+                  <Text style={styles.coinsText}>{coinsGratuitos}</Text>
+                  {coinsPremium > 0 && <Text style={styles.coinsPremiumText}>+{coinsPremium}💎</Text>}
+                </HoverPressable>
+                <HoverPressable
+                  style={styles.bellButton}
+                  hoverStyle={styles.dHoverGold}
+                  onPress={() => navigation.navigate('Notifications')}
+                  accessibilityRole="button"
+                  accessibilityLabel={unreadCount > 0 ? `Notificações, ${unreadCount} novas` : 'Notificações'}
+                >
+                  <Text style={styles.bellIcon}>🔔</Text>
+                  {unreadCount > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                    </View>
+                  )}
+                </HoverPressable>
+              </View>
+            </View>
+
+            <ActiveBoostChip onPress={() => navigation.navigate('Boosts')} />
+
+            <HomeRitualRow
+              missionsCompleted={missionsSummary.completed}
+              missionsTotal={missionsSummary.total}
+              onFaisca={() => navigation.navigate('Faisca' as any)}
+              onDestiny={() => navigation.navigate('DestinyCard' as any)}
+              onMissions={() => navigation.navigate('Missions' as any)}
+              onVault={() => navigation.navigate('Vault' as any)}
+            />
+
+            {!railBeside && rail('row')}
+
+            <View style={styles.dBody}>
+              <View style={styles.dMain}>
+                <View style={styles.dTabsRow}>
+                  <View style={styles.dTabs} accessibilityRole="tablist">
+                    {TABS.map(tab => {
+                      const active = activeTab === tab.key;
+                      return (
+                        <HoverPressable
+                          key={tab.key}
+                          style={[styles.tab, styles.dTab, active && styles.tabActive]}
+                          hoverStyle={!active ? styles.dTabHover : undefined}
+                          onPress={() => setActiveTab(tab.key)}
+                          accessibilityRole="tab"
+                          accessibilityState={{ selected: active }}
+                        >
+                          <Text style={styles.tabIcon}>{tab.icon}</Text>
+                          <Text style={[styles.tabLabel, styles.dTabLabel, active && styles.tabLabelActive]}>{tab.label}</Text>
+                        </HoverPressable>
+                      );
+                    })}
+                  </View>
+                  {activeTab === 'perfis' && realProfiles.length > 0 && (
+                    <Text style={styles.dCaption}>Compatíveis primeiro · ✦ = interesse em comum</Text>
+                  )}
+                </View>
+
+                {/* Margem negativa: o conteúdo das abas usa o recuo do
+                    celular (spacing.lg); aqui ele encosta na borda da coluna. */}
+                <View style={styles.dTabContent} onLayout={handleMainLayout}>
+                  {renderTabContent(desktopCardWidth, true)}
+                </View>
+              </View>
+
+              {railBeside && rail('column')}
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
   }
 
   return (
@@ -324,125 +660,7 @@ export default function HomeScreen({ navigation }: Props) {
           </ScrollView>
         </View>
 
-        {/* Conversas */}
-        {activeTab === 'conversas' && <ConversasTab navigation={navigation} />}
-
-        {/* Em Alta */}
-        {activeTab === 'visitados' && (
-          loadingVisited ? (
-            <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Carregando perfis em alta...</Text>
-            </View>
-          ) : mostVisited.length === 0 && promotedVisited.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>🔥</Text>
-              <Text style={styles.emptyTitle}>Nenhum perfil ainda</Text>
-              <Text style={styles.emptySubtitle}>Visite perfis para que apareçam aqui!</Text>
-            </View>
-          ) : (
-            <View>
-              {/* Posição PAGA, separada do ranking: a medalha fica só
-                  com quem teve mais visitas de fato. */}
-              {promotedVisited.length > 0 && (
-                <>
-                  <Text style={styles.promotedTitle}>⚡ Impulsionados agora</Text>
-                  <View style={styles.grid}>
-                    {promotedVisited.map(profile => (
-                      <ProfileCard
-                        key={`turbo_${profile.id}`}
-                        data={profile}
-                        onPress={() => handleCardPress(profile)}
-                        viewerUid={user?.uid}
-                        width={gridCardWidth}
-                      />
-                    ))}
-                  </View>
-                </>
-              )}
-
-              <View style={styles.mostVisitedBanner}>
-                <Text style={styles.mostVisitedBannerText}>Perfis mais visitados agora</Text>
-              </View>
-              <View style={styles.grid}>
-                {mostVisited.map((profile, index) => (
-                  <VisitedProfileCard
-                    key={profile.id}
-                    data={profile}
-                    visitCount={visitCounts[profile.id] || 0}
-                    rank={index + 1}
-                    onPress={() => handleCardPress(profile)}
-                  />
-                ))}
-              </View>
-            </View>
-          )
-        )}
-
-        {/* Perfis */}
-        {activeTab === 'perfis' && (
-          loadingProfiles ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator color={colors.gold} size="large" />
-              <Text style={styles.loadingText}>Carregando perfis...</Text>
-            </View>
-          ) : errorProfiles ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>⚠️</Text>
-              <Text style={styles.emptyTitle}>Algo deu errado</Text>
-              <Text style={styles.emptySubtitle}>{errorProfiles}</Text>
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={() => refreshProfiles()}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.retryText}>Tentar novamente</Text>
-              </TouchableOpacity>
-            </View>
-          ) : realProfiles.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>👤</Text>
-              <Text style={styles.emptyTitle}>Nenhum perfil encontrado</Text>
-              <Text style={styles.emptySubtitle}>Seja o primeiro a se cadastrar na sua região!</Text>
-            </View>
-          ) : (
-            <>
-              <View style={styles.grid}>
-                {realProfiles.map(profile => (
-                  <ProfileCard
-                    key={profile.id}
-                    data={profile}
-                    onPress={() => handleCardPress(profile)}
-                    viewerUid={user?.uid}
-                    width={gridCardWidth}
-                  />
-                ))}
-              </View>
-
-              {hasMoreProfiles ? (
-                <TouchableOpacity
-                  style={styles.moreButton}
-                  onPress={handleNextBatch}
-                  disabled={loadingMore}
-                  activeOpacity={0.85}
-                >
-                  {loadingMore ? (
-                    <ActivityIndicator color={colors.gold} size="small" />
-                  ) : (
-                    <Text style={styles.moreButtonText}>Ver mais perfis ›</Text>
-                  )}
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.moreButton}
-                  onPress={() => { refreshProfiles(); scrollRef.current?.scrollTo({ y: 0, animated: true }); }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.moreButtonText}>Começar de novo ↻</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )
-        )}
+        {renderTabContent(gridCardWidth, false)}
 
         <View style={{ height: 20 }} />
       </ScrollView>
@@ -510,4 +728,30 @@ const styles = StyleSheet.create({
   chatName:     { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   chatLastMessage: { color: colors.gray, fontSize: fonts.sizes.sm, marginTop: 2 },
   chatArrow:    { color: colors.gray, fontSize: fonts.sizes.xl },
+
+  // ── Computador (v5.6) ──
+  dScroll:   { flexGrow: 1 },
+  dPage:     { width: '100%', maxWidth: CONTENT_MAX_WIDTH.wide, alignSelf: 'center', paddingHorizontal: 32, paddingTop: 28, paddingBottom: 40, gap: 24 },
+  dHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  dHello:    { flex: 1, minWidth: 0, gap: 4 },
+  dTitle:    { color: colors.white, fontSize: 28, fontWeight: 'bold' },
+  dSubtitle: { color: colors.textSecondary, fontSize: fonts.sizes.md },
+  dHoverGold: { borderColor: colors.gold },
+  dBody:     { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
+  dMain:     { flex: 1, minWidth: 0 },
+  dTabsRow:  { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  dTabs:     { flexDirection: 'row', gap: spacing.sm },
+  dTab:      { paddingHorizontal: 18, paddingVertical: 10 },
+  dTabHover: { borderColor: colors.goldBorder },
+  dTabLabel: { fontSize: fonts.sizes.md },
+  dCaption:  { color: colors.gray, fontSize: 13 },
+  dTabContent: { marginHorizontal: -spacing.lg },
+  // Interesses embaixo do card: sobe sobre a margem inferior do
+  // ProfileCard (spacing.md) para ficarem colados nele.
+  cardChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, height: 24, overflow: 'hidden', marginTop: -(spacing.md - 6), marginBottom: spacing.md },
+  cardChip:  { paddingHorizontal: 9, paddingVertical: 3, borderRadius: borderRadius.full, backgroundColor: colors.surfaceOverlay, maxWidth: '100%' },
+  cardChipCommon: { backgroundColor: colors.goldGlow, borderWidth: 1, borderColor: colors.goldBorder, paddingVertical: 2 },
+  cardChipText: { color: colors.textSecondary, fontSize: 11 },
+  cardChipTextCommon: { color: colors.gold, fontWeight: 'bold' },
 });
+

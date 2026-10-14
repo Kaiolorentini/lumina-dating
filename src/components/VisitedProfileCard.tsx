@@ -7,6 +7,11 @@
 //
 // v1 tinha a moldura num box centralizado, sobrando cinza em
 // volta, e o badge como ícone de 26px na linha do nome.
+//
+// v2.1 (13/10/2026, web D3): prop opcional `width`. A largura vinha
+// da janela inteira — no computador o card do Em Alta ficava com
+// metade do monitor. Sem `width` (app e celular) o tamanho é o de
+// sempre; na web a referência é no máximo a largura de um celular.
 // ============================================
 
 import React from 'react';
@@ -17,6 +22,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { colors, fonts, spacing, borderRadius } from '../theme';
 import { ProfileCardData } from '../shared/types';
@@ -28,8 +34,13 @@ import {
   BADGES, RARITY_COLOR, Rarity,
 } from '../config/cosmeticsCatalog';
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - spacing.lg * 2 - spacing.sm) / 2;
+import { PHONE_LAYOUT_WIDTH } from '../utils/breakpoints';
+
+const WINDOW_WIDTH = Dimensions.get('window').width;
+const BASE_WIDTH = Platform.OS === 'web'
+  ? Math.min(WINDOW_WIDTH, PHONE_LAYOUT_WIDTH)
+  : WINDOW_WIDTH;
+const CARD_WIDTH = (BASE_WIDTH - spacing.lg * 2 - spacing.sm) / 2;
 const PHOTO_RATIO = 1.15;
 
 interface Props {
@@ -37,9 +48,13 @@ interface Props {
   visitCount: number;
   rank: number;
   onPress: () => void;
+  /** Largura do card (grade da web). Sem ela: meia tela, como no app. */
+  width?: number;
 }
 
-export default function VisitedProfileCard({ data, visitCount, rank, onPress }: Props) {
+export default function VisitedProfileCard({ data, visitCount, rank, onPress, width }: Props) {
+  const cardWidth   = width ?? CARD_WIDTH;
+  const photoHeight = cardWidth * PHOTO_RATIO;
   const frame = frameAppearanceById(data.equippedFrame);
   const badge = data.equippedBadge
     ? badgeAppearanceById(data.equippedBadge, (data.equippedBadgeRarity as Rarity) ?? 'COMMON')
@@ -67,20 +82,22 @@ export default function VisitedProfileCard({ data, visitCount, rank, onPress }: 
 
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, { width: cardWidth }]}
       onPress={onPress}
       activeOpacity={0.9}
+      accessibilityRole="button"
+      accessibilityLabel={`${data.name}, ${data.age}. Posição ${rank} em alta, ${visitCount} visitas`}
     >
       {/* Cena preenchendo a área da foto, como no feed. */}
       {frame ? (
         <ProfileFrame
           photoURL={data.photoURL}
-          size={CARD_WIDTH}
+          size={cardWidth}
           ratio={PHOTO_RATIO}
           frame={frame}
         />
       ) : (
-        <Image source={{ uri: data.photoURL }} style={styles.photo} />
+        <Image source={{ uri: data.photoURL }} style={[styles.photo, { height: photoHeight }]} />
       )}
 
 
@@ -88,7 +105,7 @@ export default function VisitedProfileCard({ data, visitCount, rank, onPress }: 
       {data.boostType && (
         <BoostBadge
           type={data.boostType}
-          top={CARD_WIDTH * PHOTO_RATIO - BOOST_BADGE_HEIGHT - spacing.sm}
+          top={photoHeight - BOOST_BADGE_HEIGHT - spacing.sm}
           left={spacing.sm}
         />
       )}
@@ -105,7 +122,7 @@ export default function VisitedProfileCard({ data, visitCount, rank, onPress }: 
 
       {/* Sintonia — reposicionada: com a faixa do badge, a
           posição antiga caía em cima dela. */}
-      <View style={styles.sintoniaBadge}>
+      <View style={[styles.sintoniaBadge, { top: photoHeight - 26 }]}>
         <Text style={styles.sintoniaText}>{data.sintonia}%</Text>
       </View>
 
@@ -138,7 +155,6 @@ export default function VisitedProfileCard({ data, visitCount, rank, onPress }: 
 
 const styles = StyleSheet.create({
   card: {
-    width: CARD_WIDTH,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
@@ -148,7 +164,6 @@ const styles = StyleSheet.create({
   },
   photo: {
     width: '100%',
-    height: CARD_WIDTH * PHOTO_RATIO,
     backgroundColor: colors.grayDark,
   },
   rankBadge: {
@@ -180,7 +195,6 @@ const styles = StyleSheet.create({
   },
   sintoniaBadge: {
     position: 'absolute',
-    top: CARD_WIDTH * PHOTO_RATIO - 26,
     right: spacing.sm,
     backgroundColor: colors.gold + 'CC',
     borderRadius: borderRadius.full,

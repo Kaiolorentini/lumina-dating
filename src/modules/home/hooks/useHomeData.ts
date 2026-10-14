@@ -2,6 +2,14 @@
 // LUMINA — USE HOME DATA v5.5
 // src/modules/home/hooks/useHomeData.ts
 //
+// v5.6 (13/10/2026, web D3):
+// - interestsById: interesses de cada perfil do lote atual (uid →
+//   ids). A Home do computador mostra os interesses em comum em
+//   cada card. Vem dos MESMOS documentos já lidos: zero leitura a
+//   mais. O card (ProfileCardData) não muda — o app fica igual.
+// - loadMostVisited ignora chamada repetida enquanto carrega (a aba
+//   Em Alta e a coluna da direita do computador podem pedir juntas).
+//
 // v5.5:
 // - Vencimento de boost também no Em Alta: no ranking orgânico o
 //   card só perde o selo; em "Impulsionados agora" ele sai, porque
@@ -52,6 +60,8 @@ export type HomeTab = 'perfis' | 'visitados' | 'conversas';
 
 interface UseHomeDataReturn {
   realProfiles:    ProfileCardData[];
+  /** Interesses (ids) dos perfis do lote atual: uid → ids. */
+  interestsById:   Record<string, string[]>;
   mostVisited:     ProfileCardData[];
   /** Turbo ativo, fora do ranking orgânico — seção própria no Em Alta. */
   promotedVisited: ProfileCardData[];
@@ -69,6 +79,12 @@ interface UseHomeDataReturn {
   loadMostVisited:    () => Promise<void>;
   loadMoreProfiles:   () => Promise<void>;
   refreshProfiles:    () => Promise<void>;
+}
+
+function toInterestsMap(profiles: RealProfile[]): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  profiles.forEach(p => { map[p.uid] = Array.isArray(p.interests) ? p.interests : []; });
+  return map;
 }
 
 function toCardData(p: RealProfile): ProfileCardData {
@@ -99,6 +115,7 @@ export function useHomeData(): UseHomeDataReturn {
 
   const [userProfile,     setUserProfile]     = useState<UserProfile | null>(null);
   const [realProfiles,    setRealProfiles]    = useState<ProfileCardData[]>([]);
+  const [interestsById,   setInterestsById]   = useState<Record<string, string[]>>({});
   const [mostVisited,     setMostVisited]     = useState<ProfileCardData[]>([]);
   const [promotedVisited, setPromotedVisited] = useState<ProfileCardData[]>([]);
   const [visitCounts,     setVisitCounts]     = useState<Record<string, number>>({});
@@ -165,6 +182,7 @@ export function useHomeData(): UseHomeDataReturn {
       seedRef.current    = page.seed;
       wrappedRef.current = page.wrapped;
       setRealProfiles(page.profiles.map(toCardData));
+      setInterestsById(toInterestsMap(page.profiles));
       setHasMoreProfiles(page.hasMore);
 
       await refreshVisits();
@@ -207,6 +225,7 @@ export function useHomeData(): UseHomeDataReturn {
       // perfis ficava com 200 cards montados — cada um com
       // moldura, badge e aura. Agora a memória é constante.
       setRealProfiles(page.profiles.map(toCardData));
+      setInterestsById(toInterestsMap(page.profiles));
     } catch (error) {
       console.error('[useHomeData] loadMoreProfiles:', error);
       // Não sobrescreve a lista já carregada — encerra a
@@ -226,13 +245,17 @@ export function useHomeData(): UseHomeDataReturn {
     wrappedRef.current = false;
     setHasMoreProfiles(true);
     setRealProfiles([]);
+    setInterestsById({});
     await loadInitialData();
   }, [user]);
 
+  const loadingVisitedRef = useRef(false);
+
   async function loadMostVisited() {
     const profile = profileRef.current ?? userProfile;
-    if (!profile) return;
+    if (!profile || loadingVisitedRef.current) return;
 
+    loadingVisitedRef.current = true;
     setLoadingVisited(true);
     try {
       const [cards, turbo] = await Promise.all([
@@ -252,6 +275,7 @@ export function useHomeData(): UseHomeDataReturn {
     } catch (error) {
       console.error('[useHomeData] loadMostVisited:', error);
     } finally {
+      loadingVisitedRef.current = false;
       setLoadingVisited(false);
     }
   }
@@ -259,10 +283,11 @@ export function useHomeData(): UseHomeDataReturn {
   const totalCoins = (wallet?.coinsGratuitos ?? 0) + (wallet?.coinsPremium ?? 0);
 
   return {
-    realProfiles, mostVisited, promotedVisited, visitCounts, userProfile,
+    realProfiles, interestsById, mostVisited, promotedVisited, visitCounts, userProfile,
     loadingProfiles, loadingMore, hasMoreProfiles, errorProfiles,
     loadingVisited, visitasHoje, totalVisitas, unreadCount,
     coins: totalCoins,
     loadMostVisited, loadMoreProfiles, refreshProfiles,
   };
 }
+
