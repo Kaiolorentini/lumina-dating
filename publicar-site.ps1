@@ -4,7 +4,9 @@
 #
 # 13/10/2026. A landing continua na raiz do site; o app web vai para
 # /app. Este script:
-#   1. exporta o app para web (pasta dist-web, com baseUrl /app);
+#   1. exporta o app para web (pasta dist-web, com baseUrl /app —
+#      ligado pela variável LUMINA_WEB_BASE, lida no app.config.js;
+#      só o export web usa o /app, o Android/OTA não);
 #   2. confere se o export saiu certo;
 #   3. troca a pasta landing-page\public\app pelo export novo
 #      (a landing em si não é tocada);
@@ -44,15 +46,22 @@ if (-not (Test-Path (Join-Path $LandingRoot 'firebase.json'))) { Falhar "Pasta d
 Write-Host "1/4  Exportando o app para web..." -ForegroundColor Cyan
 Set-Location $AppRoot
 if (Test-Path $Export) { Remove-Item $Export -Recurse -Force }
-npx expo export --platform web --output-dir dist-web
-if ($LASTEXITCODE -ne 0) { Falhar "o export do app falhou (veja a mensagem acima)." }
+if (-not (Test-Path (Join-Path $AppRoot 'app.config.js'))) { Falhar "app.config.js não encontrado (ele aplica o /app no export web)." }
+$env:LUMINA_WEB_BASE = '/app'
+try {
+  npx expo export --platform web --output-dir dist-web
+  $exportCode = $LASTEXITCODE
+} finally {
+  Remove-Item Env:\LUMINA_WEB_BASE -ErrorAction SilentlyContinue
+}
+if ($exportCode -ne 0) { Falhar "o export do app falhou (veja a mensagem acima)." }
 
 # 2. Conferência
 Write-Host "2/4  Conferindo o export..." -ForegroundColor Cyan
 $indexHtml = Join-Path $Export 'index.html'
 if (-not (Test-Path $indexHtml)) { Falhar "dist-web\index.html não foi gerado." }
 $html = Get-Content $indexHtml -Raw -Encoding UTF8
-if ($html -notmatch '/app/_expo/') { Falhar "o index.html não aponta para /app/_expo. Confira o experiments.baseUrl no app.json." }
+if ($html -notmatch '/app/_expo/') { Falhar "o index.html não aponta para /app/_expo. Confira o app.config.js (variável LUMINA_WEB_BASE)." }
 if ($html -notmatch 'notranslate')  { Falhar "o index.html não é o public\index.html do Lumina (falta o notranslate)." }
 
 # 3. Copia para a landing (só a pasta app)
