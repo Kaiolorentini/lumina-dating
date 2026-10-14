@@ -22,8 +22,14 @@
 // 13/10/2026 (web, responsivo R1): a largura da página do carrossel
 // é medida na tela (onLayout), não na janela — com o menu lateral do
 // computador as duas são diferentes e a rolagem ficaria desalinhada.
-// No computador o card fica maior (SINTONIZE_DESKTOP_CARD). No app a
-// largura medida é a da tela: nada muda.
+// No app a largura medida é a da tela: nada muda.
+//
+// 13/10/2026 (desktop D2): no computador a tela troca o carrossel
+// pelo SintonizeDesktop (3 colunas, card inteiro sem escala, atalhos
+// de teclado ← → Espaço). O card era cortado porque a escala de 1.45
+// não muda o layout e o carrossel media a janela inteira. A curtida
+// no computador sai pelo botão grande (handleDesktopLike), com o
+// mesmo useLike e as mesmas mensagens do card. Celular e app: iguais.
 // ============================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -58,11 +64,11 @@ import { useLike } from '../../../hooks/useLike';
 import { useBoostExpiryTicker } from '../../../hooks/useBoostExpiryTicker';
 import { hasTimedBoost, clearExpiredBoosts } from '../../../shared/utils/boostExpiry';
 import { useBreakpoint } from '../../../hooks/useBreakpoint';
+import { useKeyboardShortcuts } from '../../../hooks/useKeyboardShortcuts';
+import SintonizeDesktop from '../components/SintonizeDesktop';
 
 /** Largura inicial, até a medida real da tela chegar. */
 const INITIAL_PAGE_WIDTH = Dimensions.get('window').width;
-/** Largura do card no computador (antes da escala de 1.45). */
-const SINTONIZE_DESKTOP_CARD = 240;
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -114,6 +120,11 @@ export default function SintonizeScreen() {
   // Trava reentrante: sem ela o onScroll pede a mesma página
   // várias vezes durante o gesto.
   const fetchingRef  = useRef(false);
+  // Perfil completo de cada card da fila (uid → perfil). O painel
+  // "Por que vocês combinam" do computador usa sem ler de novo.
+  const detailsRef   = useRef<Record<string, RealProfile>>({});
+  const [fetching, setFetching] = useState(false);
+  const [likingDesktop, setLikingDesktop] = useState(false);
 
   const { like } = useLike(user?.uid);
   const insets   = useSafeAreaInsets();
@@ -147,6 +158,7 @@ export default function SintonizeScreen() {
     if (!profile || fetchingRef.current) return;
 
     fetchingRef.current = true;
+    setFetching(true);
     try {
       const page = await fetchSintonizePage(
         profile,
@@ -160,6 +172,8 @@ export default function SintonizeScreen() {
       seedRef.current    = page.seed;
       wrappedRef.current = page.wrapped;
 
+      if (replace) detailsRef.current = {};
+      page.profiles.forEach(p => { detailsRef.current[p.uid] = p; });
       const cards = page.profiles.map(toCardData);
 
       setQueue(prev => {
@@ -171,8 +185,12 @@ export default function SintonizeScreen() {
       });
 
       if (!page.hasMore && cards.length === 0) setFinished(true);
+    } catch (error) {
+      // Antes a falha subia sem tratamento; a fila atual continua.
+      console.warn('[Sintonize] Falha ao buscar perfis:', error);
     } finally {
       fetchingRef.current = false;
+      setFetching(false);
     }
   }, []);
 
@@ -201,11 +219,48 @@ export default function SintonizeScreen() {
     start();
   }, [user?.uid]);
 
+  /** Reabastece antes de acabar: nunca mostrar carregamento entre cards. */
+  function refillIfNeeded(position: number) {
+    if (queue.length - position <= REFILL_THRESHOLD && !finished) {
+      loadMore(false);
+    }
+  }
+
   /** Remove da fila e avança. Usado pela curtida e pelo descarte. */
   function advance() {
     const next = index + 1;
+    if (isDesktop) {
+      // Sem carrossel: troca o card direto. Pode passar do último —
+      // o centro mostra "buscando" ou "por hoje é isso".
+      if (next <= queue.length) setIndex(next);
+      refillIfNeeded(next);
+      return;
+    }
     if (next < queue.length) {
       listRef.current?.scrollToIndex({ index: next, animated: true });
+    }
+  }
+
+  /** Curtida pelo botão grande do computador (mesmas regras do card). */
+  async function handleDesktopLike() {
+    const current = queue[index];
+    if (!current || likingDesktop || celebrating) return;
+    setLikingDesktop(true);
+    try {
+      const result = await like(current.id);
+      if (!result.ok) {
+        Alert.alert('Não foi possível curtir', result.message ?? 'Não foi possível registrar a sintonia.');
+        return;
+      }
+      if (result.isMutual) {
+        Alert.alert('✦ Sintonia!', 'Vocês se curtiram. Que tal iniciar uma conversa?');
+      }
+      handleLiked(current.id);
+    } catch (error) {
+      console.warn('[Sintonize] Falha na curtida:', error);
+      Alert.alert('Não foi possível curtir', 'Verifique sua conexão e tente de novo.');
+    } finally {
+      setLikingDesktop(false);
     }
   }
 
@@ -259,6 +314,7 @@ export default function SintonizeScreen() {
       setDismissedList(prev => prev.filter(x => x.uid !== p.uid));
 
       // Entra como o card ATUAL: é quem a pessoa quis rever.
+      detailsRef.current[p.uid] = p;
       const card = toCardData(p);
       setQueue(prev => [
         ...prev.slice(0, index).filter(c => c.id !== card.id),
@@ -295,13 +351,20 @@ export default function SintonizeScreen() {
   function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const current = Math.round(e.nativeEvent.contentOffset.x / pageWidth);
     if (current !== index) setIndex(current);
-
-    // Reabastece antes de acabar: a pessoa nunca deve ver
-    // carregamento entre um card e outro.
-    if (queue.length - current <= REFILL_THRESHOLD && !finished) {
-      loadMore(false);
-    }
+    refillIfNeeded(current);
   }
+
+  // Atalhos do computador. Fica ANTES dos returns abaixo (regra dos
+  // hooks). Desligados com a Segunda Chance aberta, durante a
+  // comemoração ou com a curtida em andamento. No app é um no-op.
+  const currentCard = queue[index] ?? null;
+  const shortcutsOn = isDesktop && !loading && !sheetVisible && !celebrating && !likingDesktop && currentCard !== null;
+  useKeyboardShortcuts({
+    ArrowLeft:  () => { if (currentCard) handleDismiss(currentCard.id); },
+    ArrowRight: () => { handleDesktopLike(); },
+    ' ':        () => { if (currentCard) navigation.navigate('RealProfile', { userId: currentCard.id }); },
+    Enter:      () => { if (currentCard) navigation.navigate('RealProfile', { userId: currentCard.id }); },
+  }, shortcutsOn);
 
   if (loading) {
     return (
@@ -326,6 +389,39 @@ export default function SintonizeScreen() {
             passou reaparece em 24 horas.
           </Text>
         </View>
+      </View>
+    );
+  }
+
+  if (isDesktop) {
+    return (
+      <View style={styles.container}>
+        <SintonizeBackground />
+        <DismissedSheet
+          visible={sheetVisible}
+          loading={loadingDismissed}
+          profiles={dismissedList}
+          bringingId={bringingId}
+          cost={SECOND_CHANCE_COST}
+          onClose={() => setSheetVisible(false)}
+          onBringBack={confirmBringBack}
+        />
+        <SintonizeDesktop
+          current={currentCard}
+          detail={currentCard ? detailsRef.current[currentCard.id] ?? null : null}
+          viewer={profileRef.current}
+          upcoming={queue.slice(index + 1, index + 4)}
+          refilling={fetching}
+          finished={finished}
+          liking={likingDesktop}
+          celebrating={currentCard !== null && celebrating === currentCard.id}
+          dismissedCount={dismissedCount}
+          secondChanceCost={SECOND_CHANCE_COST}
+          onPass={() => { if (currentCard && !celebrating && !likingDesktop) handleDismiss(currentCard.id); }}
+          onLike={handleDesktopLike}
+          onOpenProfile={() => { if (currentCard) navigation.navigate('RealProfile', { userId: currentCard.id }); }}
+          onOpenDismissed={openDismissed}
+        />
       </View>
     );
   }
@@ -388,7 +484,6 @@ export default function SintonizeScreen() {
                 // animar três auras ao mesmo tempo desperdiça.
                 animatedAura={i === index}
                 onLiked={() => handleLiked(item.id)}
-                width={isDesktop ? SINTONIZE_DESKTOP_CARD : undefined}
               />
             </View>
 

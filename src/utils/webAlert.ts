@@ -11,7 +11,10 @@
 // Alert.alert do react-native-web por showWebAlert UMA vez, na
 // abertura do site: as chamadas continuam iguais (mesma API).
 //
-// Só é importado por arquivos .web.tsx — não entra no Android.
+// 13/10/2026 (desktop D2): hasOpenWebAlert() — os atalhos de teclado
+// não disparam com um aviso aberto.
+//
+// Só é importado por arquivos .web.ts/.web.tsx — não entra no Android.
 // ============================================
 
 import { Alert } from 'react-native';
@@ -76,6 +79,11 @@ export function resolveWebAlert(id: number, button?: AlertButton): void {
   } catch (error) {
     console.error('[webAlert] Erro na ação do botão:', error);
   }
+}
+
+/** true enquanto houver um aviso na tela (ou na fila). */
+export function hasOpenWebAlert(): boolean {
+  return queue.length > 0;
 }
 
 export function subscribeWebAlert(listener: Listener): () => void {

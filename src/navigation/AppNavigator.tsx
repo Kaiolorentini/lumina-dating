@@ -40,6 +40,8 @@ import { COLLECTIONS } from '../core/constants';
 // 13/10/2026 — WEB (responsivo R1): no computador as abas viram um
 // MENU LATERAL (tabBarPosition 'left'). useBreakpoint no app sempre
 // responde "celular", então o Android continua com as abas de baixo.
+// Desktop D1: o menu lateral é o DesktopSidebar (logo, abas com os
+// mesmos ícones e balões, Galáxia Plus, cristais e mini-perfil).
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { auth } from '../services/firebase';
 import { CoinsProvider } from '../context/CoinsContext';
@@ -137,6 +139,7 @@ import DeleteAccountScreen from '../modules/profile/screens/DeleteAccountScreen'
 import { useProfileBadges } from '../modules/profile/hooks/useProfileBadges';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { SIDEBAR_WIDTH } from '../utils/breakpoints';
+import DesktopSidebar from '../components/web/DesktopSidebar';
 import {
   AdminProductsModerationScreen,
   AdminProductReviewScreen,
@@ -230,6 +233,7 @@ function TabNavigator() {
 
   return (
     <Tab.Navigator
+      tabBar={isDesktop ? props => <DesktopSidebar {...props} /> : undefined}
       screenOptions={{
         headerShown: false,
         tabBarPosition: isDesktop ? 'left' : 'bottom',
