@@ -18,6 +18,9 @@
 // não aparece — gravar/enviar áudio pelo navegador ainda não é
 // suportado (W13). Ouvir áudios recebidos continua funcionando.
 //
+// D7: só as últimas 50 mensagens são carregadas; "Carregar mensagens
+// anteriores" no topo busca mais 50 (useUserChat).
+//
 // Histórico do UserChatScreen:
 // v5.2: progressMission send_message ao enviar (fire-and-forget)
 // ============================================
@@ -124,6 +127,7 @@ export default function ChatConversation({
   const {
     messages, inputText, setInputText,
     loading, flatListRef, sendUserMessage, sendAudioMessage,
+    hasOlder, loadingOlder, loadOlder,
   } = useUserChat(targetUserId);
 
   const { blocked, block } = useBlock(
@@ -480,9 +484,26 @@ export default function ChatConversation({
               flatListRef.current?.scrollToEnd({ animated: true });
             }
           }}
-          ListHeaderComponent={banner ? (
-            <View style={styles.banner}>
-              <Text style={styles.bannerText}>{banner}</Text>
+          ListHeaderComponent={(hasOlder || banner) ? (
+            <View>
+              {hasOlder && (
+                <TouchableOpacity
+                  style={styles.olderBtn}
+                  onPress={loadOlder}
+                  disabled={loadingOlder}
+                  accessibilityRole="button"
+                  accessibilityLabel="Carregar mensagens anteriores"
+                >
+                  {loadingOlder
+                    ? <ActivityIndicator color={colors.gold} size="small" />
+                    : <Text style={styles.olderText}>↑ Carregar mensagens anteriores</Text>}
+                </TouchableOpacity>
+              )}
+              {banner ? (
+                <View style={styles.banner}>
+                  <Text style={styles.bannerText}>{banner}</Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
           ListEmptyComponent={
@@ -657,6 +678,8 @@ const styles = StyleSheet.create({
   paneProfileText:   { color: colors.gold, fontWeight: 'bold', fontSize: fonts.sizes.sm },
   paneBlockBtn:      { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.grayDark },
   banner:            { alignSelf: 'center', maxWidth: '90%', marginBottom: spacing.md, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: borderRadius.full, backgroundColor: colors.gold + '18', borderWidth: 1, borderColor: colors.gold + '55' },
+  olderBtn:          { alignSelf: 'center', minHeight: 34, justifyContent: 'center', paddingHorizontal: spacing.md, marginBottom: spacing.md, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark },
+  olderText:         { color: colors.grayLight, fontSize: fonts.sizes.sm },
   bannerText:        { color: colors.gold, fontSize: fonts.sizes.sm, textAlign: 'center' },
   suggestions:       { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.grayDark },
   suggestion:        { maxWidth: '100%', paddingHorizontal: 14, paddingVertical: 8, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.gold + '66', backgroundColor: colors.gold + '11' },

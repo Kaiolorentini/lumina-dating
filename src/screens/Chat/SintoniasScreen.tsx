@@ -6,6 +6,8 @@
 // SintoniasDesktop (lista + conversa ao lado, sugestões de resposta).
 // A escolha fica num componente de fora (SintoniasRouter) para os
 // hooks desta tela continuarem os mesmos. Celular e app: iguais.
+// D7: o parâmetro `chatWith` (uid) abre direto aquela conversa no
+// computador — usado quando o chat é aberto de um perfil/notificação.
 // ============================================
 
 import React, { useState, useEffect } from 'react';
@@ -13,7 +15,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Image, ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { doc, getDoc } from 'firebase/firestore';
@@ -39,7 +41,15 @@ interface Connection {
 
 export default function SintoniasRouter() {
   const { isDesktop } = useBreakpoint();
-  return isDesktop ? <SintoniasDesktop /> : <SintoniasScreen />;
+  const route = useRoute<any>();
+  const navigation = useNavigation<any>();
+  const chatWith: string | undefined = typeof route.params?.chatWith === 'string' ? route.params.chatWith : undefined;
+  const clearChatWith = React.useCallback(() => {
+    if (chatWith) navigation.setParams({ chatWith: undefined });
+  }, [chatWith, navigation]);
+  return isDesktop
+    ? <SintoniasDesktop openWith={chatWith} onOpenedWith={clearChatWith} />
+    : <SintoniasScreen />;
 }
 
 function SintoniasScreen() {

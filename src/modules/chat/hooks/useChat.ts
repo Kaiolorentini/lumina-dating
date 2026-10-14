@@ -1,3 +1,14 @@
+// ============================================
+// LUMINA — USE USER CHAT
+// src/modules/chat/hooks/useChat.ts
+//
+// 13/10/2026 (web D7):
+// • Só as últimas 50 mensagens (MESSAGES_PAGE). "Carregar anteriores"
+//   (loadOlder) amplia de 50 em 50. hasOlder: a página veio cheia.
+// • Erro ao abrir a conversa mostra uma frase para a pessoa, não o
+//   código técnico do Firebase (que continua no console).
+// ============================================
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Alert, FlatList } from 'react-native';
 import { useAuth } from '../../../context/AuthContext';
@@ -16,7 +27,14 @@ interface UseUserChatReturn {
   flatListRef: React.MutableRefObject<FlatList<ChatMessage> | null>;
   sendUserMessage: () => Promise<void>;
   sendAudioMessage: (audioUrl: string, duration: number) => Promise<void>;
+  /** Há mensagens mais antigas que as carregadas. */
+  hasOlder: boolean;
+  loadingOlder: boolean;
+  loadOlder: () => void;
 }
+
+/** Mensagens por página (a mais nova primeiro). */
+export const MESSAGES_PAGE = 50;
 
 export function useUserChat(targetUserId: string): UseUserChatReturn {
   const { user } = useAuth();
@@ -24,6 +42,8 @@ export function useUserChat(targetUserId: string): UseUserChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [messageLimit, setMessageLimit] = useState(MESSAGES_PAGE);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const flatListRef = useRef<FlatList<ChatMessage> | null>(null);
 
   useEffect(() => {
@@ -37,16 +57,30 @@ export function useUserChat(targetUserId: string): UseUserChatReturn {
       msgs => {
         setMessages(msgs);
         setLoading(false);
+        setLoadingOlder(false);
       },
       (error: { code: string; message: string }) => {
         console.error('[CHAT_ERROR]', error.code, error.message);
-        Alert.alert('Erro no chat', `${error.code}: ${error.message}`);
+        Alert.alert(
+          'Não foi possível abrir a conversa',
+          'Verifique sua conexão e tente de novo. Se continuar, fale com o Suporte.',
+        );
         setLoading(false);
-      }
+        setLoadingOlder(false);
+      },
+      messageLimit,
     );
 
     return unsubscribe;
-  }, [chatId]);
+  }, [chatId, messageLimit]);
+
+  const hasOlder = !loading && messages.length >= messageLimit;
+
+  function loadOlder() {
+    if (!hasOlder || loadingOlder) return;
+    setLoadingOlder(true);
+    setMessageLimit(n => n + MESSAGES_PAGE);
+  }
 
   async function sendUserMessage() {
     if (!inputText.trim() || !user || !chatId) return;
@@ -74,5 +108,8 @@ export function useUserChat(targetUserId: string): UseUserChatReturn {
     );
   }
 
-  return { messages, inputText, setInputText, loading, flatListRef, sendUserMessage, sendAudioMessage };
+  return {
+    messages, inputText, setInputText, loading, flatListRef, sendUserMessage, sendAudioMessage,
+    hasOlder, loadingOlder, loadOlder,
+  };
 }

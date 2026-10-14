@@ -11,6 +11,7 @@
 //
 // Nenhuma regra de negócio mudou desde a v1.
 //
+// v3.2 (13/10/2026, web D7): o layout largo vale também para o tablet.
 // v3.1 (13/10/2026, web D5): no COMPUTADOR a tela usa o
 // MarketplaceDesktop (destaques grandes, filtros na lateral, grade
 // com capas 4:5, ordenar, estado de erro com "Tentar de novo"). Os
@@ -66,7 +67,7 @@ export default function MarketplaceHomeScreen() {
   }), []);
 
   const { products, loading, loadingMore, hasMore, loadMore, refresh, error } = useProducts(filters);
-  const { isDesktop } = useBreakpoint();
+  const { isPhone } = useBreakpoint();
   const { products: featured, refresh: refreshFeatured } = useProducts(featuredFilters);
   const { favoriteIds, toggleFavorite } = useFavorites(user?.uid);
   // isCreator já cobre creator, admin e superadmin, e é falso para
@@ -128,7 +129,9 @@ export default function MarketplaceHomeScreen() {
     );
   }
 
-  if (isDesktop) {
+  // Tablet também: o carrossel do celular mede a JANELA e, com 768 px
+  // ou mais, os cartões ficavam enormes e esticados (D7).
+  if (!isPhone) {
     return (
       <MarketplaceDesktop
         featured={featured}

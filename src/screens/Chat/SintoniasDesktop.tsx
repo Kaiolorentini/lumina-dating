@@ -14,6 +14,17 @@
 // perfil público e o documento do chat (em paralelo, não em série) —
 // mais o seu próprio perfil (1), para a sintonia e os interesses.
 // Bloqueados e contas bloqueadas ficam de fora, como no celular.
+//
+// D7 — tempo real e não lidas:
+//   • um ouvinte nos SEUS chats (participants contém você) atualiza a
+//     última mensagem e o horário sozinho, e reordena a lista;
+//   • balão de não lidas: contagem no servidor (getCountFromServer,
+//     a mesma consulta do "marcar como lido") só para o chat que
+//     mudou — 1 leitura por mudança, não por mensagem;
+//   • `openWith`: abre direto a conversa com essa pessoa (vindo de
+//     um perfil ou de uma notificação no computador).
+// Se o ouvinte for recusado (regras), a lista continua estática com
+// o botão ↻, como antes.
 // ============================================
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -22,7 +33,9 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { doc, getDoc } from 'firebase/firestore';
+import {
+  doc, getDoc, collection, query, where, onSnapshot, getCountFromServer,
+} from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { PUBLIC_PROFILES } from '../../services/publicProfileService';
 import { COLLECTIONS } from '../../core/constants';
@@ -49,6 +62,15 @@ interface SintoniaItem {
   profile:     UserProfile;
   lastMessage: string | null;
   lastTime:    Date | null;
+  /** Mensagens dela ainda não lidas por você. */
+  unread:      number;
+}
+
+interface Props {
+  /** Abrir direto a conversa com esta pessoa (uid). */
+  openWith?: string;
+  /** Avisa que o pedido de abrir foi atendido (limpa o parâmetro). */
+  onOpenedWith?: () => void;
 }
 
 const LIST_WIDTH = 340;
@@ -75,7 +97,22 @@ function formatWhen(date: Date | null): string {
   return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export default function SintoniasDesktop() {
+async function countUnread(chatId: string, uid: string): Promise<number> {
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES),
+      where('read', '==', false),
+      where('senderId', '!=', uid),
+    );
+    const snap = await getCountFromServer(q);
+    return snap.data().count;
+  } catch (error) {
+    console.warn('[SintoniasDesktop] contagem de não lidas falhou:', error);
+    return 0;
+  }
+}
+
+export default function SintoniasDesktop({ openWith, onOpenedWith }: Props) {
   const { user }   = useAuth();
   const navigation = useNavigation<NavProp>();
 
@@ -117,6 +154,7 @@ export default function SintoniasDesktop() {
           profile:     { ...(other as UserProfile), uid: otherId },
           lastMessage: (chat?.lastMessage as string | undefined) || null,
           lastTime:    toDate(chat?.lastMessageTime),
+          unread:      0,
         } as SintoniaItem;
       }));
 
@@ -138,6 +176,72 @@ export default function SintoniasDesktop() {
   }, [user?.uid]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Conversa pedida de fora (perfil, notificação): abre quando a
+  // lista tiver a pessoa; sintonia nova aparece na aba certa.
+  useEffect(() => {
+    if (!openWith || loading) return;
+    const target = items.find(i => i.userId === openWith);
+    if (target) {
+      setSelected(target.userId);
+      setTab(target.lastMessage ? 'conversas' : 'novas');
+    }
+    onOpenedWith?.();
+  }, [openWith, loading, items, onOpenedWith]);
+
+  // ── Tempo real: últimas mensagens e não lidas ──
+  const selectedRef = React.useRef<string | null>(null);
+  selectedRef.current = selected;
+  const seenTimesRef = React.useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!user?.uid || loading) return;
+    const uid = user.uid;
+    const q = query(collection(db, COLLECTIONS.CHATS), where('participants', 'array-contains', uid));
+    const unsubscribe = onSnapshot(
+      q,
+      snap => {
+        const updates: Record<string, { lastMessage: string | null; lastTime: Date | null }> = {};
+        snap.docs.forEach(d => {
+          const data = d.data();
+          const participants = (data.participants as string[] | undefined) ?? [];
+          const other = participants.find(p => p !== uid);
+          if (!other) return;
+          updates[other] = {
+            lastMessage: (data.lastMessage as string | undefined) || null,
+            lastTime:    toDate(data.lastMessageTime),
+          };
+        });
+
+        setItems(prev => {
+          const next = prev.map(item => {
+            const u = updates[item.userId];
+            return u ? { ...item, lastMessage: u.lastMessage ?? item.lastMessage, lastTime: u.lastTime ?? item.lastTime } : item;
+          });
+          return next.sort((a, b) => (b.lastTime?.getTime() ?? 0) - (a.lastTime?.getTime() ?? 0));
+        });
+
+        // Não lidas: só onde a última mensagem mudou e o chat não está aberto.
+        Object.entries(updates).forEach(([other, u]) => {
+          const t = u.lastTime?.getTime() ?? 0;
+          if (seenTimesRef.current[other] === t) return;
+          seenTimesRef.current[other] = t;
+          if (other === selectedRef.current) return;
+          countUnread(generateChatId(uid, other), uid).then(n => {
+            setItems(prev => prev.map(i => (i.userId === other ? { ...i, unread: n } : i)));
+          });
+        });
+      },
+      error => console.warn('[SintoniasDesktop] tempo real indisponível:', error.code ?? error),
+    );
+    return unsubscribe;
+  }, [user?.uid, loading]);
+
+  // Abrir a conversa marca como lida (o chat faz o markAsRead).
+  useEffect(() => {
+    if (!selected) return;
+    setItems(prev => prev.map(i => (i.userId === selected && i.unread > 0 ? { ...i, unread: 0 } : i)));
+  }, [selected]);
 
   const conversations = items.filter(i => i.lastMessage);
   const fresh         = items.filter(i => !i.lastMessage);
@@ -258,11 +362,21 @@ export default function SintoniasDesktop() {
                   <View style={styles.rowInfo}>
                     <View style={styles.rowTop}>
                       <Text style={styles.rowName} numberOfLines={1}>{item.userName}</Text>
-                      <Text style={styles.rowTime}>{formatWhen(item.lastTime)}</Text>
+                      <Text style={[styles.rowTime, item.unread > 0 && styles.rowTimeUnread]}>{formatWhen(item.lastTime)}</Text>
                     </View>
-                    <Text style={[styles.rowMsg, !item.lastMessage && styles.rowMsgNew]} numberOfLines={1}>
-                      {item.lastMessage ?? 'Nova sintonia — diga oi!'}
-                    </Text>
+                    <View style={styles.rowBottom}>
+                      <Text
+                        style={[styles.rowMsg, !item.lastMessage && styles.rowMsgNew, item.unread > 0 && styles.rowMsgUnread]}
+                        numberOfLines={1}
+                      >
+                        {item.lastMessage ?? 'Nova sintonia — diga oi!'}
+                      </Text>
+                      {item.unread > 0 && (
+                        <View style={styles.unread} accessibilityLabel={`${item.unread} não lidas`}>
+                          <Text style={styles.unreadText}>{item.unread > 99 ? '99+' : item.unread}</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </HoverPressable>
               );
@@ -346,8 +460,13 @@ const styles = StyleSheet.create({
   rowTop:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   rowName:   { flex: 1, color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
   rowTime:   { color: colors.gray, fontSize: 12 },
-  rowMsg:    { color: colors.grayLight, fontSize: 13 },
+  rowMsg:    { flex: 1, color: colors.grayLight, fontSize: 13 },
   rowMsgNew: { color: colors.gold },
+  rowBottom: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rowMsgUnread:  { color: colors.white, fontWeight: 'bold' },
+  rowTimeUnread: { color: colors.gold, fontWeight: 'bold' },
+  unread:    { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center' },
+  unreadText: { color: colors.background, fontSize: 11, fontWeight: 'bold' },
 
   pane:      { flex: 1, minWidth: 0 },
   paneEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32 },

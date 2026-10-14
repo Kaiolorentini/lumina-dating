@@ -1,5 +1,17 @@
+// ============================================
+// LUMINA — MENSAGENS DO CHAT
+// src/modules/chat/services/messageService.ts
+//
+// 13/10/2026 (web D7): listenToMessages aceita `max` — escuta só as
+// ÚLTIMAS N mensagens (orderBy desc + limit, devolvidas em ordem
+// cronológica). Antes o chat lia o histórico inteiro a cada abertura:
+// uma conversa de 2.000 mensagens custava 2.000 leituras. Sem `max`,
+// o comportamento é o de antes. Índice: o automático de timestamp.
+// ============================================
+
 import {
   collection,
+  limit,
   addDoc,
   query,
   orderBy,
@@ -111,10 +123,14 @@ export async function markAsRead(
 export function listenToMessages(
   chatId: string,
   onMessages: (messages: ChatMessage[]) => void,
-  onError?: (error: { code: string; message: string }) => void
+  onError?: (error: { code: string; message: string }) => void,
+  max?: number,
 ): () => void {
   const messagesRef = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
-  const q = query(messagesRef, orderBy('timestamp', 'asc'));
+  const newestFirst = typeof max === 'number' && max > 0;
+  const q = newestFirst
+    ? query(messagesRef, orderBy('timestamp', 'desc'), limit(max))
+    : query(messagesRef, orderBy('timestamp', 'asc'));
 
   return onSnapshot(
     q,
@@ -134,7 +150,9 @@ export function listenToMessages(
           reactions: data.reactions,
         };
       });
-      onMessages(messages);
+      // Com limite a consulta vem da mais nova para a mais antiga;
+      // a tela sempre recebe em ordem cronológica.
+      onMessages(newestFirst ? messages.reverse() : messages);
     },
     (error: { code: string; message: string }) => {
       console.error('[CHAT_ERROR] onSnapshot:', error.code, error.message);

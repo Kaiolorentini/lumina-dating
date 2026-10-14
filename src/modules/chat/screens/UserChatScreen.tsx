@@ -9,11 +9,15 @@
 // computador a conversa fica numa coluna de leitura (até 820 px) em
 // vez de esticar até as bordas do monitor. Celular e app: iguais.
 //
+// D7: no COMPUTADOR esta tela não abre sozinha — ela fecha e leva às
+// Sintonias com a conversa aberta ao lado (chatWith), o mesmo lugar
+// de sempre. Celular, tablet e app: a tela de chat de sempre.
+//
 // v5.2: progressMission send_message ao enviar (fire-and-forget)
 // ============================================
 
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../../theme';
@@ -27,11 +31,25 @@ type NavProp = NativeStackNavigationProp<RootStackParamList>;
 export default function UserChatScreen() {
   const navigation = useNavigation<NavProp>();
   const route      = useRoute<any>();
-  const { isPhone } = useBreakpoint();
+  const { isPhone, isDesktop } = useBreakpoint();
 
   const targetUserId:    string = route.params?.userId;
   const targetUserName:  string = route.params?.userName;
   const targetUserPhoto: string = route.params?.userPhoto;
+
+  useEffect(() => {
+    if (!isDesktop || !targetUserId) return;
+    if (navigation.canGoBack()) navigation.goBack();
+    (navigation as any).navigate('MainTabs', { screen: 'Sintonias', params: { chatWith: targetUserId } });
+  }, [isDesktop, targetUserId, navigation]);
+
+  if (isDesktop && targetUserId) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator color={colors.gold} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -51,4 +69,5 @@ export default function UserChatScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   column:    { flex: 1 },
+  center:    { alignItems: 'center', justifyContent: 'center' },
 });

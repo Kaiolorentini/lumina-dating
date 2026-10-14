@@ -5,7 +5,7 @@
 // Só no computador (MarketplaceHomeScreen escolhe pela useBreakpoint;
 // no app nunca aparece). Layout aprovado no protótipo:
 //   • topo: título, busca larga, Favoritos e "+ Publicar" (criador);
-//   • 2 destaques grandes com capa, preço e categoria;
+//   • carrossel de destaques (FeaturedHeroDesktop, desde o D7);
 //   • coluna de filtros: categorias, ordenar, "Seja criador";
 //   • grade de 2 a 4 colunas com capas em 4:5 (sem esticar).
 // Não lê nada: recebe os mesmos produtos que a tela já busca. Ordenar
@@ -14,7 +14,7 @@
 
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TextInput, Image, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, TextInput, ActivityIndicator,
   LayoutChangeEvent,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +25,7 @@ import { Product, ProductCategory } from '../../shared/types/marketplace';
 import { ProductCard } from './ProductCard';
 import { MarketplaceEmptyState } from './MarketplaceEmptyState';
 import HoverPressable from '../web/HoverPressable';
+import FeaturedHeroDesktop from './FeaturedHeroDesktop';
 
 type CategoryFilter = ProductCategory | 'all';
 type SortKey = 'recent' | 'priceAsc' | 'priceDesc';
@@ -65,10 +66,6 @@ function priceOf(p: Product): number {
   return p.isFree ? 0 : p.price ?? 0;
 }
 
-function priceLabel(p: Product): string {
-  return priceOf(p) === 0 ? 'Grátis' : `R$ ${p.price.toFixed(2).replace('.', ',')}`;
-}
-
 function columnsFor(width: number): number {
   if (width >= 1000) return 4;
   if (width >= 720)  return 3;
@@ -102,7 +99,6 @@ export default function MarketplaceDesktop(props: Props) {
   }, [products, sort]);
 
   const isSearching = search.trim().length > 0;
-  const heroes = isSearching ? [] : featured.slice(0, 2);
   const title = isSearching
     ? `Resultados para "${search.trim()}"`
     : category === 'all' ? 'Todos os produtos' : MP_CATEGORY[category]?.label ?? 'Produtos';
@@ -153,37 +149,9 @@ export default function MarketplaceDesktop(props: Props) {
             )}
           </View>
 
-          {/* ── Destaques ── */}
-          {heroes.length > 0 && (
-            <View style={styles.heroes} accessibilityLabel="Destaques">
-              {heroes.map((p, i) => (
-                <HoverPressable
-                  key={p.id}
-                  onPress={() => onOpenProduct(p.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Destaque: ${p.title}, ${priceLabel(p)}`}
-                  style={styles.hero}
-                  hoverStyle={styles.heroHover}
-                >
-                  {p.coverImage ? <Image source={{ uri: p.coverImage }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
-                  <LinearGradient
-                    colors={['transparent', 'rgba(10,5,18,0.92)']}
-                    style={styles.heroFade}
-                    pointerEvents="none"
-                  />
-                  <View style={styles.heroInfo}>
-                    <View style={styles.heroText}>
-                      <Text style={styles.heroKicker}>{i === 0 ? 'DESTAQUE DA SEMANA' : 'EM DESTAQUE'}</Text>
-                      <Text style={styles.heroTitle} numberOfLines={1}>{p.title}</Text>
-                      <Text style={styles.heroMeta} numberOfLines={1}>
-                        {MP_CATEGORY[p.category as ProductCategory]?.icon} {MP_CATEGORY[p.category as ProductCategory]?.label ?? p.category}
-                      </Text>
-                    </View>
-                    <Text style={styles.heroPrice}>{priceLabel(p)}</Text>
-                  </View>
-                </HoverPressable>
-              ))}
-            </View>
+          {/* ── Destaques (carrossel; D7 corrige os 2 cartões esticados) ── */}
+          {!isSearching && featured.length > 0 && (
+            <FeaturedHeroDesktop products={featured} onOpen={onOpenProduct} />
           )}
 
           <View style={styles.body}>
@@ -348,19 +316,6 @@ const styles = StyleSheet.create({
   goldBtnHover: { backgroundColor: MP.goldLight },
   goldBtnText: { color: MP.textOnGold, fontWeight: MP_FONT.weight.heavy, fontSize: MP_FONT.size.md },
 
-  heroes: { flexDirection: 'row', gap: 16 },
-  hero: {
-    flex: 1, height: 230, borderRadius: 22, overflow: 'hidden',
-    backgroundColor: MP.bgElevated, borderWidth: 1, borderColor: MP.border,
-  },
-  heroHover: { borderColor: MP.gold },
-  heroFade:  { position: 'absolute', left: 0, right: 0, bottom: 0, height: 150 },
-  heroInfo:  { position: 'absolute', left: 22, right: 22, bottom: 20, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
-  heroText:  { flex: 1, gap: 4 },
-  heroKicker: { color: MP.goldLight, fontSize: 11, fontWeight: MP_FONT.weight.bold, letterSpacing: 1 },
-  heroTitle: { color: MP.text, fontSize: 22, fontWeight: MP_FONT.weight.heavy },
-  heroMeta:  { color: MP.textSoft, fontSize: 13 },
-  heroPrice: { color: MP.goldLight, fontSize: 22, fontWeight: MP_FONT.weight.heavy },
 
   body:    { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
   filters: { width: 220, gap: 4 },
