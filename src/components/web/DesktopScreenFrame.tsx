@@ -16,6 +16,10 @@
 //
 // Telas que ganharem layout próprio de computador entram em
 // FULL_BLEED_ROUTES e deixam de usar a coluna.
+//
+// T1 (14/10/2026): também nas telas de entrada (login, cadastro,
+// termos, verificação…), numa coluna de formulário (640 px). Sem
+// `onHome` (antes do login não há Home), a marca aparece sem link.
 // ============================================
 
 import React from 'react';
@@ -32,15 +36,24 @@ const DEFAULT_COLUMN = 980;
 export const FULL_BLEED_ROUTES = new Set<string>([
   'MainTabs',
   'UserChat',
+  'Splash',
+]);
+
+/** Telas de entrada: coluna de formulário. */
+const GATE_ROUTES = new Set<string>([
+  'Login', 'Register', 'TermsGate', 'ProfileOnboarding', 'AgeVerificationGate',
+  'VerificationPendingGate', 'AccountBannedGate', 'GateError',
 ]);
 
 export function columnWidthFor(routeName: string): number {
+  if (GATE_ROUTES.has(routeName)) return CONTENT_MAX_WIDTH.form;
   return routeName.startsWith('Admin') ? CONTENT_MAX_WIDTH.wide : DEFAULT_COLUMN;
 }
 
 interface Props {
   routeName: string;
-  onHome:    () => void;
+  /** Sem onHome (telas de entrada), a marca não é link. */
+  onHome?:   () => void;
   children:  React.ReactNode;
 }
 
@@ -53,7 +66,7 @@ export default function DesktopScreenFrame({ routeName, onHome, children }: Prop
 
   return (
     <View style={styles.backdrop}>
-      {showBrand && (
+      {showBrand && onHome && (
       <HoverPressable
         onPress={onHome}
         accessibilityRole="link"
@@ -64,6 +77,12 @@ export default function DesktopScreenFrame({ routeName, onHome, children }: Prop
         <Text style={styles.brandMark}>✦</Text>
         <Text style={styles.brandText}>Lumina</Text>
       </HoverPressable>
+      )}
+      {showBrand && !onHome && (
+        <View style={styles.brand} accessibilityRole="header">
+          <Text style={styles.brandMark}>✦</Text>
+          <Text style={styles.brandText}>Lumina</Text>
+        </View>
       )}
 
       <View style={[styles.column, { maxWidth: column }]}>

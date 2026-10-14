@@ -1,6 +1,16 @@
 // ============================================
-// LUMINA — REAL PROFILE SCREEN v5.6
+// LUMINA — REAL PROFILE SCREEN v5.7
 // src/screens/Profile/RealProfileScreen.tsx
+//
+// v5.7 (14/10/2026, web T1) — COMPUTADOR.
+// A foto media a JANELA (Dimensions) e, no computador, ficava com
+// 1.900 px de largura dentro da coluna — cortada e estourada. Agora,
+// no computador, a tela tem duas colunas: à esquerda a foto em 4:5
+// (380 px, moldura de fundo), nome, botões e galeria; à direita
+// Sintonia, interesses, bio, conteúdos à venda, informações, títulos
+// e conquistas. O JSX de cada parte virou um bloco nomeado usado
+// pelos dois layouts — o celular monta exatamente a mesma ordem de
+// antes. Nenhuma regra (visita, curtida, conexão, bloqueio) mudou.
 //
 // v5.6 (13/10/2026, web lote 4) — BLOQUEAR.
 // Uma confirmação só, igual no Android e na web (o desvio
@@ -76,6 +86,11 @@ import { galleryPhotos } from '../../modules/profile/services/photoService';
 import GalleryViewer from '../../modules/profile/components/GalleryViewer';
 import CreatorProductsRow from '../../components/marketplace/CreatorProductsRow';
 import { useAppSettings } from '../../hooks/useAppSettings';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+
+/** Foto principal no computador (4:5). */
+const DESKTOP_PHOTO_W = 380;
+const DESKTOP_PHOTO_RATIO = 1.25;
 
 const { width, height } = Dimensions.get('window');
 const functions         = getFunctions();
@@ -113,6 +128,7 @@ export default function RealProfileScreen() {
   const targetUserId: string = route.params?.userId;
   /** O próprio usuário vendo o perfil como os outros veem. */
   const isSelf = Boolean(user?.uid) && targetUserId === user?.uid;
+  const { isDesktop } = useBreakpoint();
 
   const [targetProfile,  setTargetProfile]  = useState<UserProfile | null>(null);
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
@@ -429,8 +445,268 @@ export default function RealProfileScreen() {
     );
   }
 
-  return (
-    <View style={styles.container}>
+  const galleryBlock = (
+    <>
+      {/* Galeria: até 3 fotos além da principal. */}
+      {galleryPhotos(targetProfile).length > 0 && (
+        <View style={styles.galleryRow}>
+          {galleryPhotos(targetProfile).map((p, i) => (
+            <TouchableOpacity
+              key={p.slot}
+              style={styles.galleryItem}
+              onPress={() => setViewerIndex(i)}
+              activeOpacity={0.85}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={`Foto ${i + 1} de ${targetProfile?.name ?? 'perfil'}`}
+            >
+              <Image source={{ uri: p.uri }} style={styles.galleryImage} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </>
+  );
+  const productsBlock = (
+    <>
+      {/* Conteúdos à venda — só criador com produto aprovado. */}
+      <CreatorProductsRow
+        ownerId={targetUserId}
+        ownerName={targetProfile?.name}
+        enabled={canSell && marketplaceEnabled === true}
+        onOpenProduct={openProduct}
+      />
+    </>
+  );
+  const meaningBlock = (
+    <>
+      {/* O que a pessoa está dizendo sobre si. Vem antes da
+          Sintonia de propósito: é o que ela escolheu declarar,
+          e pesa mais numa decisão de mandar mensagem do que
+          um número calculado. */}
+      {targetMeaning && targetBadge && (
+        <View style={styles.meaningCard}>
+          <Badge appearance={targetBadge} size={44} />
+          <Text style={styles.meaningText}>{targetMeaning}</Text>
+        </View>
+      )}
+    </>
+  );
+  const titlesBlock = (
+    <>
+      {/* Títulos conquistados. O equipado vem primeiro e
+          destacado — é o símbolo que aparece no card dela. */}
+      {targetTitles.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Títulos</Text>
+          <View style={styles.titlesRow}>
+            {targetTitles.map(t => (
+              <View
+                key={t.id}
+                style={[
+                  styles.titleChip,
+                  t.id === equippedTitleId && styles.titleChipActive,
+                ]}
+              >
+                <TitleSeal title={t} size={26} />
+                <Text style={styles.titleChipLabel}>{t.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </>
+  );
+  const achievementsBlock = (
+    <>
+      {/* Conquistas — só as desbloqueadas, com descrição.
+          O que falta para ELA conquistar não interessa a
+          quem está visitando. */}
+      {achievements.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>
+            Conquistas · {achievements.length}
+            {totalAch > 0 ? ` de ${totalAch}` : ''}
+          </Text>
+          {achievements.map(ach => (
+            <View key={ach.id} style={styles.achRow}>
+              <Text style={styles.achIcon}>{ach.icon}</Text>
+              <View style={styles.achInfo}>
+                <Text style={styles.achTitle}>{ach.title}</Text>
+                <Text style={styles.achDesc}>{ach.description}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+    </>
+  );
+  const sintoniaBlock = (
+    <>
+      {/* Sintonia — compara QUEM VÊ com o perfil. Não existe
+          Sintonia consigo mesmo. */}
+      {!isSelf && (
+        <View style={styles.card}>
+          <Text style={styles.milestoneText}>{getSintoniaLabel()}</Text>
+          <SintoniaBar
+            score={sintonia}
+            showLabel={true}
+            showBreakdown={true}
+            breakdown={sintoniaBreakdown}
+          />
+        </View>
+      )}
+
+      {!isSelf && sintonia >= 60 && (
+        <View style={styles.connectionCard}>
+          <Text style={styles.connectionText}>💫 Vocês têm uma conexão forte!</Text>
+        </View>
+      )}
+    </>
+  );
+  const interestsBlock = (
+    <>
+      {/* Interesses (Sintonia v2, 12/10/2026). Os que vocês dois
+          marcaram ficam em dourado — é por onde a conversa começa. */}
+      {(() => {
+        const list = targetProfile?.interests ?? [];
+        const common = new Set(isSelf ? [] : sintoniaBreakdown.commonInterests);
+        if (list.length === 0 && !isSelf) return null;
+        return (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Interesses</Text>
+            {list.length > 0 ? (
+              <View style={styles.tagsRow}>
+                {list.map(id => (
+                  <View key={id} style={[styles.tag, common.has(id) && styles.tagCommon]}>
+                    <Text style={[styles.tagText, common.has(id) && styles.tagCommonText]}>
+                      {common.has(id) ? '✦ ' : ''}{interestLabel(id)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.bio}>
+                Você ainda não escolheu seus interesses. Eles ajudam a Sintonia a encontrar
+                pessoas parecidas com você e aparecem aqui no seu perfil.
+              </Text>
+            )}
+            {!isSelf && common.size > 0 && (
+              <Text style={styles.commonHint}>✦ Em dourado: o que vocês têm em comum</Text>
+            )}
+            {isSelf && (
+              <TouchableOpacity
+                style={styles.editInterestsBtn}
+                onPress={() => navigation.navigate('Interests')}
+                accessibilityRole="button"
+              >
+                <Text style={styles.editInterestsText}>
+                  {list.length > 0 ? '✏️ Editar interesses' : '✨ Escolher meus interesses'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        );
+      })()}
+    </>
+  );
+  const bioBlock = (
+    <>
+      {/* Bio */}
+      {targetProfile?.bio ? (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Sobre mim</Text>
+          <Text style={styles.bio}>{targetProfile.bio}</Text>
+        </View>
+      ) : null}
+    </>
+  );
+  const infoBlock = (
+    <>
+      {/* Informações */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Informações</Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>🎂</Text>
+          <Text style={styles.infoText}>{targetProfile?.age} anos</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>📍</Text>
+          <Text style={styles.infoText}>{targetProfile?.city}, {targetProfile?.state}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>💫</Text>
+          <Text style={styles.infoText}>{targetProfile?.gender || 'Não informado'}</Text>
+        </View>
+      </View>
+    </>
+  );
+  const prefsBlock = (
+    <>
+      {/* Preferências */}
+      {targetProfile?.preferences && targetProfile.preferences.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Interesse em</Text>
+          <View style={styles.tagsRow}>
+            {targetProfile.preferences.map((pref, index) => (
+              <View key={index} style={styles.tag}>
+                <Text style={styles.tagText}>{pref}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </>
+  );
+  const actionsBlock = (
+    <>
+      {/* Botões de ação — não existem no próprio perfil. */}
+      {!isSelf && (
+      <View style={styles.actions}>
+        {connected ? (
+          <TouchableOpacity
+            style={styles.chatButton}
+            onPress={() => navigation.navigate('UserChat', {
+              userId:    targetUserId,
+              userName:  targetProfile?.name   || '',
+              userPhoto: targetProfile?.photoURL || '',
+            })}
+          >
+            <Text style={styles.chatButtonText}>💬 Conversar</Text>
+          </TouchableOpacity>
+        ) : requestSent ? (
+          <View style={styles.pendingButton}>
+            <Text style={styles.pendingButtonText}>⏳ Solicitação enviada</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.connectButton}
+            onPress={handleSendRequest}
+            disabled={sending}
+          >
+            {sending
+              ? <ActivityIndicator color={colors.background} />
+              : <Text style={styles.connectButtonText}>✦ Conectar</Text>
+            }
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={[styles.likeButton, liked && styles.likeButtonActive]}
+          onPress={handleLike}
+          disabled={liked || liking}
+          activeOpacity={0.8}
+        >
+          {liking
+            ? <ActivityIndicator color={liked ? '#fff' : colors.gray} size="small" />
+            : <Text style={styles.likeButtonText}>{liked ? '❤️' : '🤍'}</Text>
+          }
+        </TouchableOpacity>
+      </View>
+      )}
+    </>
+  );
+  const headerBlock = (
+    <>
       <Header
         title={isSelf ? 'Seu perfil' : (targetProfile?.name || 'Perfil')}
         showBack={true}
@@ -455,6 +731,99 @@ export default function RealProfileScreen() {
           </Text>
         </View>
       )}
+    </>
+  );
+  const viewerBlock = (
+    <>
+      <GalleryViewer
+        photos={galleryPhotos(targetProfile).map(p => p.uri)}
+        initialIndex={viewerIndex ?? 0}
+        visible={viewerIndex !== null}
+        onClose={() => setViewerIndex(null)}
+        // Sem denúncia da própria foto: o botão some no isSelf.
+        onReport={isSelf ? undefined : () => navigation.navigate('SupportNew', {
+          reportUid:  targetUserId,
+          reportName: targetProfile?.name ?? '',
+        })}
+      />
+    </>
+  );
+
+  // ── Computador (T1, 14/10/2026): duas colunas ──
+  // Esquerda: foto em 4:5 (com a moldura de fundo), nome,
+  // galeria e os botões Conectar/Conversar/Curtir — a decisão fica
+  // sempre à vista. Direita: o que ajuda a decidir (Sintonia,
+  // interesses, bio...). Os blocos são os MESMOS do celular.
+  if (isDesktop) {
+    return (
+      <View style={styles.container}>
+        {headerBlock}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.dScroll}>
+          <View style={styles.dRow}>
+            <View style={styles.dAside}>
+              <View style={styles.dPhotoBox}>
+                {targetFrame && (
+                  <View style={StyleSheet.absoluteFill}>
+                    <ProfileFrame
+                      photoURL=""
+                      size={DESKTOP_PHOTO_W}
+                      ratio={DESKTOP_PHOTO_RATIO}
+                      frame={targetFrame}
+                      showPhoto={false}
+                    />
+                  </View>
+                )}
+                {targetProfile?.photoURL ? (
+                  <Image
+                    source={{ uri: targetProfile.photoURL }}
+                    style={targetFrame ? styles.dPhotoFramed : styles.dPhoto}
+                  />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <Text style={styles.photoPlaceholderIcon}>👤</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.dIdentity}>
+                <View style={styles.nameRow}>
+                  <Text style={styles.dName} numberOfLines={2}>{targetProfile?.name}, {targetProfile?.age}</Text>
+                  <View style={styles.realBadge}>
+                    <Text style={styles.realBadgeText}>👤 Real</Text>
+                  </View>
+                </View>
+                <Text style={styles.dLocation}>📍 {targetProfile?.city}, {targetProfile?.state}</Text>
+                <View style={styles.dOnline}>
+                  <View style={styles.onlineDot} />
+                  <Text style={styles.onlineText}>Ativo recentemente</Text>
+                </View>
+              </View>
+              {actionsBlock}
+              {galleryBlock}
+            </View>
+
+            <View style={styles.dMain}>
+              {meaningBlock}
+              {sintoniaBlock}
+              {interestsBlock}
+              {bioBlock}
+              {productsBlock}
+              <View style={styles.dTwo}>
+                <View style={styles.dCol}>{infoBlock}</View>
+                <View style={styles.dCol}>{prefsBlock}</View>
+              </View>
+              {titlesBlock}
+              {achievementsBlock}
+            </View>
+          </View>
+        </ScrollView>
+        {viewerBlock}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {headerBlock}
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Foto principal.
@@ -503,248 +872,23 @@ export default function RealProfileScreen() {
         </View>
 
         <View style={styles.content}>
-          {/* Galeria: até 3 fotos além da principal. */}
-          {galleryPhotos(targetProfile).length > 0 && (
-            <View style={styles.galleryRow}>
-              {galleryPhotos(targetProfile).map((p, i) => (
-                <TouchableOpacity
-                  key={p.slot}
-                  style={styles.galleryItem}
-                  onPress={() => setViewerIndex(i)}
-                  activeOpacity={0.85}
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel={`Foto ${i + 1} de ${targetProfile?.name ?? 'perfil'}`}
-                >
-                  <Image source={{ uri: p.uri }} style={styles.galleryImage} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Conteúdos à venda — só criador com produto aprovado. */}
-          <CreatorProductsRow
-            ownerId={targetUserId}
-            ownerName={targetProfile?.name}
-            enabled={canSell && marketplaceEnabled === true}
-            onOpenProduct={openProduct}
-          />
-
-          {/* O que a pessoa está dizendo sobre si. Vem antes da
-              Sintonia de propósito: é o que ela escolheu declarar,
-              e pesa mais numa decisão de mandar mensagem do que
-              um número calculado. */}
-          {targetMeaning && targetBadge && (
-            <View style={styles.meaningCard}>
-              <Badge appearance={targetBadge} size={44} />
-              <Text style={styles.meaningText}>{targetMeaning}</Text>
-            </View>
-          )}
-
-          {/* Títulos conquistados. O equipado vem primeiro e
-              destacado — é o símbolo que aparece no card dela. */}
-          {targetTitles.length > 0 && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Títulos</Text>
-              <View style={styles.titlesRow}>
-                {targetTitles.map(t => (
-                  <View
-                    key={t.id}
-                    style={[
-                      styles.titleChip,
-                      t.id === equippedTitleId && styles.titleChipActive,
-                    ]}
-                  >
-                    <TitleSeal title={t} size={26} />
-                    <Text style={styles.titleChipLabel}>{t.label}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Conquistas — só as desbloqueadas, com descrição.
-              O que falta para ELA conquistar não interessa a
-              quem está visitando. */}
-          {achievements.length > 0 && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>
-                Conquistas · {achievements.length}
-                {totalAch > 0 ? ` de ${totalAch}` : ''}
-              </Text>
-              {achievements.map(ach => (
-                <View key={ach.id} style={styles.achRow}>
-                  <Text style={styles.achIcon}>{ach.icon}</Text>
-                  <View style={styles.achInfo}>
-                    <Text style={styles.achTitle}>{ach.title}</Text>
-                    <Text style={styles.achDesc}>{ach.description}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Sintonia — compara QUEM VÊ com o perfil. Não existe
-              Sintonia consigo mesmo. */}
-          {!isSelf && (
-            <View style={styles.card}>
-              <Text style={styles.milestoneText}>{getSintoniaLabel()}</Text>
-              <SintoniaBar
-                score={sintonia}
-                showLabel={true}
-                showBreakdown={true}
-                breakdown={sintoniaBreakdown}
-              />
-            </View>
-          )}
-
-          {!isSelf && sintonia >= 60 && (
-            <View style={styles.connectionCard}>
-              <Text style={styles.connectionText}>💫 Vocês têm uma conexão forte!</Text>
-            </View>
-          )}
-
-          {/* Interesses (Sintonia v2, 12/10/2026). Os que vocês dois
-              marcaram ficam em dourado — é por onde a conversa começa. */}
-          {(() => {
-            const list = targetProfile?.interests ?? [];
-            const common = new Set(isSelf ? [] : sintoniaBreakdown.commonInterests);
-            if (list.length === 0 && !isSelf) return null;
-            return (
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Interesses</Text>
-                {list.length > 0 ? (
-                  <View style={styles.tagsRow}>
-                    {list.map(id => (
-                      <View key={id} style={[styles.tag, common.has(id) && styles.tagCommon]}>
-                        <Text style={[styles.tagText, common.has(id) && styles.tagCommonText]}>
-                          {common.has(id) ? '✦ ' : ''}{interestLabel(id)}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <Text style={styles.bio}>
-                    Você ainda não escolheu seus interesses. Eles ajudam a Sintonia a encontrar
-                    pessoas parecidas com você e aparecem aqui no seu perfil.
-                  </Text>
-                )}
-                {!isSelf && common.size > 0 && (
-                  <Text style={styles.commonHint}>✦ Em dourado: o que vocês têm em comum</Text>
-                )}
-                {isSelf && (
-                  <TouchableOpacity
-                    style={styles.editInterestsBtn}
-                    onPress={() => navigation.navigate('Interests')}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.editInterestsText}>
-                      {list.length > 0 ? '✏️ Editar interesses' : '✨ Escolher meus interesses'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          })()}
-
-          {/* Bio */}
-          {targetProfile?.bio ? (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Sobre mim</Text>
-              <Text style={styles.bio}>{targetProfile.bio}</Text>
-            </View>
-          ) : null}
-
-          {/* Informações */}
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Informações</Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>🎂</Text>
-              <Text style={styles.infoText}>{targetProfile?.age} anos</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>📍</Text>
-              <Text style={styles.infoText}>{targetProfile?.city}, {targetProfile?.state}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>💫</Text>
-              <Text style={styles.infoText}>{targetProfile?.gender || 'Não informado'}</Text>
-            </View>
-          </View>
-
-          {/* Preferências */}
-          {targetProfile?.preferences && targetProfile.preferences.length > 0 && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Interesse em</Text>
-              <View style={styles.tagsRow}>
-                {targetProfile.preferences.map((pref, index) => (
-                  <View key={index} style={styles.tag}>
-                    <Text style={styles.tagText}>{pref}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Botões de ação — não existem no próprio perfil. */}
-          {!isSelf && (
-          <View style={styles.actions}>
-            {connected ? (
-              <TouchableOpacity
-                style={styles.chatButton}
-                onPress={() => navigation.navigate('UserChat', {
-                  userId:    targetUserId,
-                  userName:  targetProfile?.name   || '',
-                  userPhoto: targetProfile?.photoURL || '',
-                })}
-              >
-                <Text style={styles.chatButtonText}>💬 Conversar</Text>
-              </TouchableOpacity>
-            ) : requestSent ? (
-              <View style={styles.pendingButton}>
-                <Text style={styles.pendingButtonText}>⏳ Solicitação enviada</Text>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.connectButton}
-                onPress={handleSendRequest}
-                disabled={sending}
-              >
-                {sending
-                  ? <ActivityIndicator color={colors.background} />
-                  : <Text style={styles.connectButtonText}>✦ Conectar</Text>
-                }
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[styles.likeButton, liked && styles.likeButtonActive]}
-              onPress={handleLike}
-              disabled={liked || liking}
-              activeOpacity={0.8}
-            >
-              {liking
-                ? <ActivityIndicator color={liked ? '#fff' : colors.gray} size="small" />
-                : <Text style={styles.likeButtonText}>{liked ? '❤️' : '🤍'}</Text>
-              }
-            </TouchableOpacity>
-          </View>
-          )}
+          {galleryBlock}
+          {productsBlock}
+          {meaningBlock}
+          {titlesBlock}
+          {achievementsBlock}
+          {sintoniaBlock}
+          {interestsBlock}
+          {bioBlock}
+          {infoBlock}
+          {prefsBlock}
+          {actionsBlock}
 
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
 
-      <GalleryViewer
-        photos={galleryPhotos(targetProfile).map(p => p.uri)}
-        initialIndex={viewerIndex ?? 0}
-        visible={viewerIndex !== null}
-        onClose={() => setViewerIndex(null)}
-        // Sem denúncia da própria foto: o botão some no isSelf.
-        onReport={isSelf ? undefined : () => navigation.navigate('SupportNew', {
-          reportUid:  targetUserId,
-          reportName: targetProfile?.name ?? '',
-        })}
-      />
+      {viewerBlock}
     </View>
   );
 }
@@ -821,5 +965,20 @@ const styles = StyleSheet.create({
   likeButtonActive:     { backgroundColor: '#E91E63', borderColor: '#E91E63' },
   likeButtonText:       { fontSize: 24 },
   selfBanner:           { backgroundColor: colors.gold + '18', borderBottomWidth: 1, borderBottomColor: colors.gold + '44', paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
+  // ── Computador (v5.7) ──
+  dScroll:      { padding: 28, paddingBottom: 48 },
+  dRow:         { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
+  dAside:       { width: DESKTOP_PHOTO_W, gap: spacing.md },
+  dMain:        { flex: 1, minWidth: 0, gap: spacing.md },
+  dPhotoBox:    { width: DESKTOP_PHOTO_W, height: Math.round(DESKTOP_PHOTO_W * DESKTOP_PHOTO_RATIO), borderRadius: 20, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.gold + '44' },
+  dPhoto:       { width: '100%', height: '100%' },
+  dPhotoFramed: { width: '80%', height: '86%', borderRadius: 14 },
+  dIdentity:    { gap: 6 },
+  dName:        { flexShrink: 1, color: colors.white, fontSize: 28, fontWeight: 'bold' },
+  dLocation:    { color: colors.grayLight, fontSize: fonts.sizes.md },
+  dOnline:      { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dTwo:         { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
+  dCol:         { flex: 1, minWidth: 0 },
   selfBannerText:       { color: colors.gold, fontSize: fonts.sizes.sm, fontWeight: 'bold', textAlign: 'center' },
 });
+

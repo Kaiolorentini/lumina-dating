@@ -37,6 +37,11 @@
 // escutado só por quem vende. O pedido de criador só é escutado
 // por quem ainda não vende. Os balões reaproveitam a escuta de
 // notificações de useProfileBadges.
+//
+// 14/10/2026 (web T1) — COMPUTADOR. A aba esticava os cartões de 2
+// em 2 pela tela inteira. No computador: conteúdo numa coluna de até
+// 1200 px, cartões lado a lado (até 4 por linha) e os números do
+// criador numa coluna à direita, sempre à vista. Celular e app: iguais.
 // ============================================
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -55,6 +60,7 @@ import { useCreatorRequests } from '../../hooks/useCreatorRequests';
 import { useCreatorStats } from '../../hooks/useCreatorStats';
 import { useProfileBadges } from '../../modules/profile/hooks/useProfileBadges';
 import { formatBRL } from '../../services/marketplace/adminDashboardService';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import {
   CreatorMonth, CreatorStats, CreatorStatsBucket, FIRST_GOAL,
   currentDayOfMonth, currentMonthKey,
@@ -137,9 +143,10 @@ interface OptionCardProps {
 function OptionCard({
   icon, title, description, value, valueNote, count = 0, disabled, disabledReason, onPress,
 }: OptionCardProps) {
+  const { isDesktop } = useBreakpoint();
   return (
     <TouchableOpacity
-      style={[styles.optionCard, count > 0 && styles.optionCardAlert, disabled && styles.optionCardDisabled]}
+      style={[styles.optionCard, isDesktop && styles.optionCardDesktop, count > 0 && styles.optionCardAlert, disabled && styles.optionCardDisabled]}
       onPress={onPress}
       disabled={disabled}
       activeOpacity={0.85}
@@ -645,6 +652,7 @@ export default function CreatorPanelScreen() {
   // piscar o aviso de manutenção e travar botões por um instante.
   const marketplaceEnabled = settingsLoading || marketplaceOn;
   const badges = useProfileBadges(user?.uid);
+  const { isDesktop } = useBreakpoint();
 
   // Mesma regra do canSell do perfil público: criador, admin e
   // superadmin vendem. Pelo papel gravado — o ban de marketplace
@@ -730,7 +738,9 @@ export default function CreatorPanelScreen() {
       {permLoading ? (
         <ActivityIndicator color={MP.gold} style={styles.screenLoader} />
       ) : (
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.content, isDesktop && styles.dContent]} showsVerticalScrollIndicator={false}>
+          <View style={isDesktop ? styles.dRow : styles.mobileFlow}>
+          <View style={isDesktop ? styles.dMain : styles.mobileFlow}>
           {/* Boas-vindas */}
           <LinearGradient
             colors={MP_GRADIENT.featured}
@@ -817,7 +827,7 @@ export default function CreatorPanelScreen() {
                 </LinearGradient>
               </TouchableOpacity>
 
-              <View style={styles.grid}>
+              <View style={[styles.grid, isDesktop && styles.dGrid]}>
                 <OptionCard
                   icon="📁"
                   title="Meus Produtos"
@@ -868,7 +878,7 @@ export default function CreatorPanelScreen() {
             title="Suas compras"
             subtitle="O que você comprou ou salvou no marketplace."
           />
-          <View style={styles.grid}>
+          <View style={[styles.grid, isDesktop && styles.dGrid]}>
             <OptionCard
               icon="📦"
               title="Minhas Compras"
@@ -892,15 +902,20 @@ export default function CreatorPanelScreen() {
             )}
           </View>
 
-          {/* Rodapé — números do criador */}
+          </View>
+
+          {/* Rodapé — números do criador (no computador: coluna à direita) */}
           {canSell && (
-            <CreatorNumbers
-              stats={creatorStats.stats}
-              loading={creatorStats.loading}
-              error={creatorStats.error}
-              retry={creatorStats.retry}
-            />
+            <View style={isDesktop ? styles.dAside : styles.mobileFlow}>
+              <CreatorNumbers
+                stats={creatorStats.stats}
+                loading={creatorStats.loading}
+                error={creatorStats.error}
+                retry={creatorStats.retry}
+              />
+            </View>
           )}
+          </View>
         </ScrollView>
       )}
     </ScreenContainer>
@@ -971,6 +986,16 @@ const styles = StyleSheet.create({
   createText: { color: MP.textOnGold, fontSize: MP_FONT.size.sm, marginTop: 2, opacity: 0.85 },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.sm },
+  // ── Computador (14/10/2026) ──
+  // gap em vez de space-between: com 3 cartões na linha, o
+  // space-between deixava um buraco no meio.
+  optionCardDesktop: { width: 'auto', flexGrow: 1, flexBasis: 210, maxWidth: '49%', marginRight: 0 },
+  dGrid:      { justifyContent: 'flex-start', columnGap: 12, rowGap: 12 },
+  dContent:   { width: '100%', maxWidth: 1200, alignSelf: 'center', padding: 28 },
+  dRow:       { flexDirection: 'row', alignItems: 'flex-start', gap: 24 },
+  dMain:      { flex: 1, minWidth: 0, gap: spacing.md },
+  dAside:     { width: 380 },
+  mobileFlow: { gap: spacing.md },
   optionCard: {
     width: '48.5%', backgroundColor: MP.surface, borderRadius: borderRadius.md,
     borderWidth: 1, borderColor: MP.border, padding: spacing.md, minHeight: 140,
@@ -1131,3 +1156,4 @@ const styles = StyleSheet.create({
 
   emptyNumbers: { color: MP.textMuted, fontSize: MP_FONT.size.xs, marginTop: spacing.md, textAlign: 'center' },
 });
+

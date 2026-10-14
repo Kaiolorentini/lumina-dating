@@ -1,6 +1,13 @@
 // ============================================
-// LUMINA — PRODUCT DETAIL v3.1
+// LUMINA — PRODUCT DETAIL v3.2
 // src/screens/marketplace/ProductDetailScreen.tsx
+//
+// v3.2 (14/10/2026, web T1) — COMPUTADOR. A galeria media a janela
+// e esticava a capa por todo o monitor. No computador: capa 4:5 com
+// miniaturas à esquerda; título, preço e a compra à direita; descrição
+// e avaliações embaixo. O JSX virou blocos nomeados, usados pelos dois
+// layouts — no celular a ordem é a mesma de antes. Compra, cupom, CPF,
+// guards e avaliações: nada mudou.
 //
 // v3.1 — AVALIAÇÕES.
 // Nota média e quantidade no topo ("Novo" sem avaliações), lista
@@ -43,6 +50,7 @@ import { Product } from '../../shared/types/marketplace';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../core/firebase';
 import ScreenContainer from '../../components/ScreenContainer';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import CpfPromptModal from '../../components/CpfPromptModal';
 import { StarRating } from '../../components/marketplace/StarRating';
 import ReviewFormModal from '../../components/marketplace/ReviewFormModal';
@@ -56,6 +64,8 @@ import {
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProductDetail'>;
 const { width } = Dimensions.get('window');
+/** Capa no computador (4:5). */
+const DESKTOP_COVER_W = 440;
 
 export default function ProductDetailScreen() {
   const navigation = useNavigation<NavProp>();
@@ -69,6 +79,7 @@ export default function ProductDetailScreen() {
   const [couponCode, setCouponCode] = useState('');
   const [showCoupon, setShowCoupon] = useState(false);
   const [awaitingCpf, setAwaitingCpf] = useState(false);
+  const { isDesktop } = useBreakpoint();
 
   const { favoriteIds, toggleFavorite } = useFavorites(user?.uid);
   const {
@@ -282,16 +293,273 @@ export default function ProductDetailScreen() {
   const reviewsTotal = ratingCount(product);
   const canRate = hasAccess && !isOwner && !!user;
 
-  return (
-    <ScreenContainer>
-      <LinearGradient
-        colors={MP_GRADIENT.screen}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
+  const headBlock = (
+    <>
+      <View style={styles.catRow}>
+        <Text style={styles.catIcon}>{cat?.icon ?? '✧'}</Text>
+        <Text style={styles.catLabel}>{cat?.label ?? product.category}</Text>
+        <View style={styles.catDot} />
+        <Text
+          style={[styles.rating, reviewsTotal === 0 && styles.ratingNew]}
+          accessibilityLabel={ratingA11y(product)}
+        >
+          {reviewsTotal > 0
+            ? `★ ${formatRating(product.averageRating)} · ${reviewsLabel(reviewsTotal)}`
+            : 'Novo'}
+        </Text>
+      </View>
+
+      <Text style={styles.title}>{product.title}</Text>
+
+      <View style={styles.priceBlock}>
+        {isFree ? (
+          <Text style={styles.priceFree}>Grátis</Text>
+        ) : (
+          <View style={styles.priceGroup}>
+            <Text style={styles.priceCurrency}>R$</Text>
+            <Text style={styles.priceValue}>
+              {product.price.toFixed(2).replace('.', ',')}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {product.tags?.length > 0 && (
+        <View style={styles.chipRow}>
+          {product.tags.map(tag => (
+            <View key={tag} style={styles.chip}>
+              <Text style={styles.chipText}>#{tag}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </>
+  );
+  const aboutBlock = (
+    <>
+      <Text style={styles.sectionTitle}>Sobre este produto</Text>
+      <Text style={styles.description}>{product.description}</Text>
+
+      <Text style={styles.sectionTitle}>O que você recebe</Text>
+      <View style={styles.deliveryBox}>
+        <View style={styles.deliveryRow}>
+          <Text style={styles.deliveryIcon}>📦</Text>
+          <Text style={styles.deliveryText}>
+            {product.files?.length ?? 0} arquivo(s) incluídos
+          </Text>
+        </View>
+        {product.previewFiles?.length > 0 && (
+          <View style={styles.deliveryRow}>
+            <Text style={styles.deliveryIcon}>👁️</Text>
+            <Text style={styles.deliveryText}>
+              {product.previewFiles.length} prévia(s) gratuita(s)
+            </Text>
+          </View>
+        )}
+      </View>
+    </>
+  );
+  const reviewsBlock = (
+    <>
+      <Text style={styles.sectionTitle}>Avaliações</Text>
+
+      {reviewsTotal > 0 ? (
+        <View style={styles.ratingSummary} accessible accessibilityLabel={ratingA11y(product)}>
+          <Text style={styles.ratingBig}>{formatRating(product.averageRating)}</Text>
+          <View style={styles.ratingSummaryRight}>
+            <StarRating value={product.averageRating} size={18} />
+            <Text style={styles.ratingSummaryText}>{reviewsLabel(reviewsTotal)}</Text>
+          </View>
+        </View>
+      ) : (
+        <Text style={styles.reviewsEmpty}>
+          Produto novo, ainda sem avaliações.
+          {canRate ? ' Seja a primeira pessoa a avaliar.' : ''}
+        </Text>
+      )}
+
+      {canRate && (
+        <TouchableOpacity
+          style={styles.rateBtn}
+          onPress={() => composer.open(productId, product.title)}
+          disabled={composer.openingId !== null}
+          accessibilityRole="button"
+          accessibilityState={{ busy: composer.openingId !== null }}
+        >
+          {composer.openingId !== null ? (
+            <ActivityIndicator color={MP.gold} size="small" />
+          ) : (
+            <Text style={styles.rateBtnText}>
+              {myReview ? '✏️ Editar sua avaliação' : '⭐ Avaliar este conteúdo'}
+            </Text>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {myReview?.isHidden && (
+        <Text style={styles.hiddenNote}>
+          Seu comentário foi ocultado pela moderação. Sua nota continua valendo na média.
+        </Text>
+      )}
+
+      {reviewsLoading && reviews.length === 0 ? (
+        <ActivityIndicator color={MP.gold} style={styles.reviewsLoader} />
+      ) : reviewsError && reviews.length === 0 ? (
+        <View style={styles.reviewsErrorBox}>
+          <Text style={styles.reviewsErrorText}>Não foi possível carregar as avaliações.</Text>
+          <TouchableOpacity onPress={refreshReviews} accessibilityRole="button">
+            <Text style={styles.retryText}>Tentar de novo</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        reviews.map(review => (
+          <View key={review.id} style={styles.reviewCard}>
+            <View style={styles.reviewHead}>
+              <StarRating value={review.rating} size={13} />
+              <Text style={styles.reviewMeta} numberOfLines={1}>
+                {review.userName || 'Comprador'} · {review.createdAt.toLocaleDateString('pt-BR')}
+                {review.isEdited ? ' · editada' : ''}
+              </Text>
+            </View>
+            {!!review.comment && (
+              <Text style={styles.reviewComment}>{review.comment}</Text>
+            )}
+            {isSuperAdmin && !!review.comment && (
+              <TouchableOpacity
+                onPress={() => confirmHideReview(review)}
+                disabled={hidingId === review.id}
+                style={styles.hideBtn}
+                accessibilityRole="button"
+              >
+                {hidingId === review.id
+                  ? <ActivityIndicator color={MP.error} size="small" />
+                  : <Text style={styles.hideText}>🚫 Ocultar comentário</Text>}
+              </TouchableOpacity>
+            )}
+          </View>
+        ))
+      )}
+
+      {reviewsHasMore && reviews.length > 0 && (
+        <TouchableOpacity
+          style={styles.moreBtn}
+          onPress={loadMoreReviews}
+          disabled={reviewsLoadingMore}
+          accessibilityRole="button"
+        >
+          {reviewsLoadingMore
+            ? <ActivityIndicator color={MP.gold} size="small" />
+            : <Text style={styles.moreText}>Ver mais avaliações</Text>}
+        </TouchableOpacity>
+      )}
+    </>
+  );
+  const purchaseBlock = (
+    <>
+      {isOwner ? (
+        <TouchableOpacity
+          style={styles.editButton}
+          onPress={() => navigation.navigate('EditProduct', { productId })}
+        >
+          <Text style={styles.editButtonText}>✏️ Editar produto</Text>
+        </TouchableOpacity>
+      ) : hasAccess ? (
+        <TouchableOpacity
+          style={styles.buyButton}
+          onPress={() => navigation.navigate('ContentViewer', {
+            productId,
+            purchaseId: `${user?.uid}_${productId}`,
+          })}
+          activeOpacity={0.88}
+        >
+          <LinearGradient
+            colors={MP_GRADIENT.gold}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.buyButtonInner}
+          >
+            <Text style={styles.buyButtonText}>📂 Abrir conteúdo</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      ) : (
+        <>
+          {!product.isFree && (
+            <View style={styles.couponRow}>
+              {!showCoupon ? (
+                <TouchableOpacity
+                  style={styles.couponToggle}
+                  onPress={() => setShowCoupon(true)}
+                  disabled={buying}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.couponToggleText}>🎟️  Tenho um cupom de desconto</Text>
+                </TouchableOpacity>
+              ) : (
+                <View>
+                  <View style={styles.couponHeader}>
+                    <Text style={styles.couponLabel}>Cupom de desconto</Text>
+                    <TouchableOpacity
+                      onPress={() => { setShowCoupon(false); setCouponCode(''); }}
+                      disabled={buying}
+                    >
+                      <Text style={styles.couponDismiss}>Não tenho</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={styles.couponInput}
+                    placeholder="Digite o código"
+                    placeholderTextColor={MP.textMuted}
+                    value={couponCode}
+                    onChangeText={t => setCouponCode(t.toUpperCase())}
+                    autoCapitalize="characters"
+                    editable={!buying}
+                    autoFocus
+                  />
+                </View>
+              )}
+            </View>
+          )}
+          <TouchableOpacity
+            style={[styles.buyButton, buying && styles.buyButtonDisabled]}
+            onPress={handleBuy}
+            disabled={buying}
+            activeOpacity={0.88}
+          >
+            <LinearGradient
+              colors={MP_GRADIENT.gold}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.buyButtonInner}
+            >
+              {buying ? (
+                <ActivityIndicator color={MP.textOnGold} />
+              ) : (
+                <Text style={styles.buyButtonText}>
+                  {product.isFree
+                    ? '🎁 Obter grátis'
+                    : `Comprar · R$ ${product.price.toFixed(2).replace('.', ',')}`}
+                </Text>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        </>
+      )}
+    </>
+  );
+  const modalsBlock = (
+    <>
+      <CpfPromptModal
+        visible={awaitingCpf}
+        loading={buying}
+        onConfirm={handleCpfConfirm}
+        onCancel={handleCpfCancel}
       />
 
+      <ReviewFormModal {...composer.modalProps} />
+    </>
+  );
+  const topBarBlock = (
+    <>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -307,6 +575,78 @@ export default function ProductDetailScreen() {
           <Text style={styles.favoriteBtn}>{isFavorited ? '❤️' : '🤍'}</Text>
         </TouchableOpacity>
       </View>
+    </>
+  );
+
+  // ── Computador (T1, 14/10/2026) ──
+  // Esquerda: a capa em 4:5 (sem esticar) e as miniaturas das
+  // prévias. Direita: categoria, título, preço e a COMPRA sempre à
+  // vista (os mesmos botões, cupom e CPF do celular). Embaixo, em
+  // largura total: descrição, o que vem no produto e avaliações.
+  if (isDesktop) {
+    const mainImage = images[Math.min(currentImage, images.length - 1)];
+    return (
+      <ScreenContainer>
+        <LinearGradient
+          colors={MP_GRADIENT.screen}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        {topBarBlock}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.dScroll}>
+          <View style={styles.dTop}>
+            <View style={styles.dGallery}>
+              <View style={styles.dCover}>
+                {mainImage ? (
+                  <Image source={{ uri: mainImage }} style={styles.dCoverImg} resizeMode="cover" />
+                ) : null}
+              </View>
+              {images.length > 1 && (
+                <View style={styles.dThumbs}>
+                  {images.map((uri, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => setCurrentImage(i)}
+                      accessibilityRole="imagebutton"
+                      accessibilityLabel={`Imagem ${i + 1} de ${images.length}`}
+                      style={[styles.dThumb, i === currentImage && styles.dThumbActive]}
+                    >
+                      <Image source={{ uri }} style={styles.dThumbImg} resizeMode="cover" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+            <View style={styles.dInfo}>
+              {headBlock}
+              <View style={styles.dBuyBox}>
+                {purchaseBlock}
+              </View>
+            </View>
+          </View>
+          <View style={styles.dBody}>
+            {aboutBlock}
+            {reviewsBlock}
+          </View>
+        </ScrollView>
+        {modalsBlock}
+      </ScreenContainer>
+    );
+  }
+
+  return (
+    <ScreenContainer>
+      <LinearGradient
+        colors={MP_GRADIENT.screen}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+
+      {topBarBlock}
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.galleryWrap}>
@@ -343,266 +683,40 @@ export default function ProductDetailScreen() {
         </View>
 
         <View style={styles.content}>
-          <View style={styles.catRow}>
-            <Text style={styles.catIcon}>{cat?.icon ?? '✧'}</Text>
-            <Text style={styles.catLabel}>{cat?.label ?? product.category}</Text>
-            <View style={styles.catDot} />
-            <Text
-              style={[styles.rating, reviewsTotal === 0 && styles.ratingNew]}
-              accessibilityLabel={ratingA11y(product)}
-            >
-              {reviewsTotal > 0
-                ? `★ ${formatRating(product.averageRating)} · ${reviewsLabel(reviewsTotal)}`
-                : 'Novo'}
-            </Text>
-          </View>
+          {headBlock}
 
-          <Text style={styles.title}>{product.title}</Text>
+          {aboutBlock}
 
-          <View style={styles.priceBlock}>
-            {isFree ? (
-              <Text style={styles.priceFree}>Grátis</Text>
-            ) : (
-              <View style={styles.priceGroup}>
-                <Text style={styles.priceCurrency}>R$</Text>
-                <Text style={styles.priceValue}>
-                  {product.price.toFixed(2).replace('.', ',')}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {product.tags?.length > 0 && (
-            <View style={styles.chipRow}>
-              {product.tags.map(tag => (
-                <View key={tag} style={styles.chip}>
-                  <Text style={styles.chipText}>#{tag}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          <Text style={styles.sectionTitle}>Sobre este produto</Text>
-          <Text style={styles.description}>{product.description}</Text>
-
-          <Text style={styles.sectionTitle}>O que você recebe</Text>
-          <View style={styles.deliveryBox}>
-            <View style={styles.deliveryRow}>
-              <Text style={styles.deliveryIcon}>📦</Text>
-              <Text style={styles.deliveryText}>
-                {product.files?.length ?? 0} arquivo(s) incluídos
-              </Text>
-            </View>
-            {product.previewFiles?.length > 0 && (
-              <View style={styles.deliveryRow}>
-                <Text style={styles.deliveryIcon}>👁️</Text>
-                <Text style={styles.deliveryText}>
-                  {product.previewFiles.length} prévia(s) gratuita(s)
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <Text style={styles.sectionTitle}>Avaliações</Text>
-
-          {reviewsTotal > 0 ? (
-            <View style={styles.ratingSummary} accessible accessibilityLabel={ratingA11y(product)}>
-              <Text style={styles.ratingBig}>{formatRating(product.averageRating)}</Text>
-              <View style={styles.ratingSummaryRight}>
-                <StarRating value={product.averageRating} size={18} />
-                <Text style={styles.ratingSummaryText}>{reviewsLabel(reviewsTotal)}</Text>
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.reviewsEmpty}>
-              Produto novo, ainda sem avaliações.
-              {canRate ? ' Seja a primeira pessoa a avaliar.' : ''}
-            </Text>
-          )}
-
-          {canRate && (
-            <TouchableOpacity
-              style={styles.rateBtn}
-              onPress={() => composer.open(productId, product.title)}
-              disabled={composer.openingId !== null}
-              accessibilityRole="button"
-              accessibilityState={{ busy: composer.openingId !== null }}
-            >
-              {composer.openingId !== null ? (
-                <ActivityIndicator color={MP.gold} size="small" />
-              ) : (
-                <Text style={styles.rateBtnText}>
-                  {myReview ? '✏️ Editar sua avaliação' : '⭐ Avaliar este conteúdo'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          )}
-
-          {myReview?.isHidden && (
-            <Text style={styles.hiddenNote}>
-              Seu comentário foi ocultado pela moderação. Sua nota continua valendo na média.
-            </Text>
-          )}
-
-          {reviewsLoading && reviews.length === 0 ? (
-            <ActivityIndicator color={MP.gold} style={styles.reviewsLoader} />
-          ) : reviewsError && reviews.length === 0 ? (
-            <View style={styles.reviewsErrorBox}>
-              <Text style={styles.reviewsErrorText}>Não foi possível carregar as avaliações.</Text>
-              <TouchableOpacity onPress={refreshReviews} accessibilityRole="button">
-                <Text style={styles.retryText}>Tentar de novo</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            reviews.map(review => (
-              <View key={review.id} style={styles.reviewCard}>
-                <View style={styles.reviewHead}>
-                  <StarRating value={review.rating} size={13} />
-                  <Text style={styles.reviewMeta} numberOfLines={1}>
-                    {review.userName || 'Comprador'} · {review.createdAt.toLocaleDateString('pt-BR')}
-                    {review.isEdited ? ' · editada' : ''}
-                  </Text>
-                </View>
-                {!!review.comment && (
-                  <Text style={styles.reviewComment}>{review.comment}</Text>
-                )}
-                {isSuperAdmin && !!review.comment && (
-                  <TouchableOpacity
-                    onPress={() => confirmHideReview(review)}
-                    disabled={hidingId === review.id}
-                    style={styles.hideBtn}
-                    accessibilityRole="button"
-                  >
-                    {hidingId === review.id
-                      ? <ActivityIndicator color={MP.error} size="small" />
-                      : <Text style={styles.hideText}>🚫 Ocultar comentário</Text>}
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))
-          )}
-
-          {reviewsHasMore && reviews.length > 0 && (
-            <TouchableOpacity
-              style={styles.moreBtn}
-              onPress={loadMoreReviews}
-              disabled={reviewsLoadingMore}
-              accessibilityRole="button"
-            >
-              {reviewsLoadingMore
-                ? <ActivityIndicator color={MP.gold} size="small" />
-                : <Text style={styles.moreText}>Ver mais avaliações</Text>}
-            </TouchableOpacity>
-          )}
+          {reviewsBlock}
 
           <View style={{ height: spacing.xl }} />
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        {isOwner ? (
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => navigation.navigate('EditProduct', { productId })}
-          >
-            <Text style={styles.editButtonText}>✏️ Editar produto</Text>
-          </TouchableOpacity>
-        ) : hasAccess ? (
-          <TouchableOpacity
-            style={styles.buyButton}
-            onPress={() => navigation.navigate('ContentViewer', {
-              productId,
-              purchaseId: `${user?.uid}_${productId}`,
-            })}
-            activeOpacity={0.88}
-          >
-            <LinearGradient
-              colors={MP_GRADIENT.gold}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.buyButtonInner}
-            >
-              <Text style={styles.buyButtonText}>📂 Abrir conteúdo</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        ) : (
-          <>
-            {!product.isFree && (
-              <View style={styles.couponRow}>
-                {!showCoupon ? (
-                  <TouchableOpacity
-                    style={styles.couponToggle}
-                    onPress={() => setShowCoupon(true)}
-                    disabled={buying}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.couponToggleText}>🎟️  Tenho um cupom de desconto</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View>
-                    <View style={styles.couponHeader}>
-                      <Text style={styles.couponLabel}>Cupom de desconto</Text>
-                      <TouchableOpacity
-                        onPress={() => { setShowCoupon(false); setCouponCode(''); }}
-                        disabled={buying}
-                      >
-                        <Text style={styles.couponDismiss}>Não tenho</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <TextInput
-                      style={styles.couponInput}
-                      placeholder="Digite o código"
-                      placeholderTextColor={MP.textMuted}
-                      value={couponCode}
-                      onChangeText={t => setCouponCode(t.toUpperCase())}
-                      autoCapitalize="characters"
-                      editable={!buying}
-                      autoFocus
-                    />
-                  </View>
-                )}
-              </View>
-            )}
-            <TouchableOpacity
-              style={[styles.buyButton, buying && styles.buyButtonDisabled]}
-              onPress={handleBuy}
-              disabled={buying}
-              activeOpacity={0.88}
-            >
-              <LinearGradient
-                colors={MP_GRADIENT.gold}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.buyButtonInner}
-              >
-                {buying ? (
-                  <ActivityIndicator color={MP.textOnGold} />
-                ) : (
-                  <Text style={styles.buyButtonText}>
-                    {product.isFree
-                      ? '🎁 Obter grátis'
-                      : `Comprar · R$ ${product.price.toFixed(2).replace('.', ',')}`}
-                  </Text>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-          </>
-        )}
+        {purchaseBlock}
       </View>
 
-      <CpfPromptModal
-        visible={awaitingCpf}
-        loading={buying}
-        onConfirm={handleCpfConfirm}
-        onCancel={handleCpfCancel}
-      />
-
-      <ReviewFormModal {...composer.modalProps} />
+      {modalsBlock}
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  // ── Computador (v3.2) ──
+  dScroll:   { padding: 28, paddingBottom: 48, gap: 28 },
+  dTop:      { flexDirection: 'row', alignItems: 'flex-start', gap: 32 },
+  dGallery:  { width: DESKTOP_COVER_W, gap: 12 },
+  dCover:    { width: DESKTOP_COVER_W, height: Math.round(DESKTOP_COVER_W * 1.25), borderRadius: 20, overflow: 'hidden', backgroundColor: MP.bgElevated, borderWidth: 1, borderColor: MP.border },
+  dCoverImg: { width: '100%', height: '100%' },
+  dThumbs:   { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  dThumb:    { width: 72, height: 90, borderRadius: 10, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent' },
+  dThumbActive: { borderColor: MP.gold },
+  dThumbImg: { width: '100%', height: '100%' },
+  dInfo:     { flex: 1, minWidth: 0, gap: 16 },
+  dBuyBox:   { padding: 18, gap: 12, borderRadius: 18, backgroundColor: MP.surface, borderWidth: 1, borderColor: MP.borderGold },
+  dBody:     { maxWidth: 820, gap: 4 },
+
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   header: {
@@ -842,3 +956,4 @@ const styles = StyleSheet.create({
     fontSize: MP_FONT.size.md,
   },
 });
+

@@ -518,6 +518,14 @@ function MainStackMountSignal({ onChange }: { onChange: (mounted: boolean) => vo
 
 function AppContent() {
   const { user, loading: authLoading, hasProfile, profileError, refreshProfile } = useAuth();
+  // T1 (14/10/2026): telas de entrada (login, cadastro, termos,
+  // verificação…) numa coluna central no computador, como as da pilha.
+  const { isDesktop: isDesktopGate } = useBreakpoint();
+  const gateLayout = isDesktopGate
+    ? ({ children, route }: { children: React.ReactNode; route: { name: string } }) => (
+        <DesktopScreenFrame routeName={route.name}>{children}</DesktopScreenFrame>
+      )
+    : undefined;
   const {
     isSuperAdmin, isBlocked, loading: permLoading,
     accessGate, loadError, retry,
@@ -830,13 +838,13 @@ function AppContent() {
   }, [user, mainStackMounted]);
 
   if (authLoading) return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       <Stack.Screen name="Splash" component={AppLoadingScreen} />
     </Stack.Navigator>
   );
 
   if (!user) return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       <Stack.Screen name="Login"    component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
     </Stack.Navigator>
@@ -847,7 +855,7 @@ function AppContent() {
   // !hasProfile vinha primeiro — para quem já tem conta a
   // diferença é imperceptível.
   if (permLoading) return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       <Stack.Screen name="Splash" component={AppLoadingScreen} />
     </Stack.Navigator>
   );
@@ -856,7 +864,7 @@ function AppContent() {
   // pessoa caía no cadastro e podia gravar por cima do perfil
   // verdadeiro (erro ou tempo esgotado na primeira abertura).
   if (profileError && !hasProfile) return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       <Stack.Screen name="GateError">
         {() => <GateErrorScreen onRetry={() => { refreshProfile(); }} />}
       </Stack.Screen>
@@ -886,7 +894,7 @@ function AppContent() {
   });
 
   if (gateStep === 'error') return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       <Stack.Screen name="GateError">
         {() => <GateErrorScreen onRetry={retry} />}
       </Stack.Screen>
@@ -894,13 +902,13 @@ function AppContent() {
   );
 
   if (gateStep === 'blocked') return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       <Stack.Screen name="AccountBannedGate" component={AccountBannedScreen} />
     </Stack.Navigator>
   );
 
   if (gateStep === 'terms') return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       <Stack.Screen name="TermsGate">
         {/* Sem onAccepted próprio: a CF grava
             acceptedAppTermsVersion e o onSnapshot do
@@ -915,14 +923,14 @@ function AppContent() {
   // a rota ativa na troca e o app reabria o formulário de perfil —
   // vazio, porque a rota da MainStack tem initialParams editMode: true.
   if (gateStep === 'profile') return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       <Stack.Screen name="ProfileOnboarding" component={ProfileSetupScreen} />
     </Stack.Navigator>
   );
 
   // 'rejected' com forceCapture abre a captura para reenviar.
   if (gateStep === 'verification' || (gateStep === 'rejected' && forceCapture)) return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       <Stack.Screen name="AgeVerificationGate">
         {() => (
           <AgeVerificationScreen
@@ -934,7 +942,7 @@ function AppContent() {
   );
 
   if (gateStep === 'pending' || gateStep === 'rejected') return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       <Stack.Screen name="VerificationPendingGate">
         {() => (
           <VerificationPendingScreen
@@ -949,7 +957,7 @@ function AppContent() {
 
   // Espera a claim de acesso no token (ver useAccessClaims).
   if (!accessClaims.ready) return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} screenLayout={gateLayout}>
       {accessClaims.error ? (
         <Stack.Screen name="GateError">
           {() => <GateErrorScreen onRetry={accessClaims.retry} />}
