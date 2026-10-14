@@ -69,3 +69,4 @@ dist-android-teste/
 # saídas de export (geradas, não versionar)
 dist-web/
 dist-android-teste/
+dist-*/
