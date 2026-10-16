@@ -3,6 +3,8 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
+import AdminListToolbar, { useAdminListSearch } from '../../components/web/AdminListToolbar';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -43,6 +45,10 @@ function formatPrice(product: Product): string {
 }
 
 export default function AdminProductsModerationScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
+  // Computador: busca e ordem na lista carregada (AdminListToolbar).
+  const search = useAdminListSearch();
   const navigation = useNavigation<NavProp>();
   const { blocked, loading: guardLoading } = useAdminGuard();
   const [activeTab, setActiveTab] = useState<StatusTab>('pending');
@@ -123,50 +129,55 @@ export default function AdminProductsModerationScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={products}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl
-              refreshing={false}
-              onRefresh={loadProducts}
-              tintColor={colors.gold}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>📭</Text>
-              <Text style={styles.emptyText}>{EMPTY_LABEL[activeTab]}</Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('AdminProductReview', { productId: item.id })}
-            >
-              <Text style={styles.cardTitle}>📦 {item.title}</Text>
-              <View style={styles.cardMetaRow}>
-                <Text style={styles.cardCategory}>{item.category}</Text>
-                <Text style={styles.cardPrice}>{formatPrice(item)}</Text>
+        <>
+          <AdminListToolbar search={search} total={(products)?.length ?? 0} shown={search.apply(products).length} />
+          <FlatList
+            key={grid.listKey}
+            {...grid.listProps}
+            data={search.apply(products)}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.list}
+            refreshControl={
+              <RefreshControl
+                refreshing={false}
+                onRefresh={loadProducts}
+                tintColor={colors.gold}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyIcon}>📭</Text>
+                <Text style={styles.emptyText}>{EMPTY_LABEL[activeTab]}</Text>
               </View>
-              <Text style={styles.cardOwner}>
-                👤 {userNames[item.ownerId] || item.ownerId.slice(0, 16) + '...'}
-              </Text>
-              <Text style={styles.cardDate}>📅 {formatDate(item.createdAt)}</Text>
-
-              {activeTab === 'rejected' && item.rejectionReason && (
-                <View style={styles.reasonBox}>
-                  <Text style={styles.reasonLabel}>Motivo da rejeição:</Text>
-                  <Text style={styles.reasonText}>{item.rejectionReason}</Text>
+            }
+            renderItem={grid.wrap(({ item }) => (
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate('AdminProductReview', { productId: item.id })}
+              >
+                <Text style={styles.cardTitle}>📦 {item.title}</Text>
+                <View style={styles.cardMetaRow}>
+                  <Text style={styles.cardCategory}>{item.category}</Text>
+                  <Text style={styles.cardPrice}>{formatPrice(item)}</Text>
                 </View>
-              )}
+                <Text style={styles.cardOwner}>
+                  👤 {userNames[item.ownerId] || item.ownerId.slice(0, 16) + '...'}
+                </Text>
+                <Text style={styles.cardDate}>📅 {formatDate(item.createdAt)}</Text>
 
-              <Text style={styles.tapHint}>Toque para revisar →</Text>
-            </TouchableOpacity>
-          )}
-        />
+                {activeTab === 'rejected' && item.rejectionReason && (
+                  <View style={styles.reasonBox}>
+                    <Text style={styles.reasonLabel}>Motivo da rejeição:</Text>
+                    <Text style={styles.reasonText}>{item.rejectionReason}</Text>
+                  </View>
+                )}
+
+                <Text style={styles.tapHint}>Toque para revisar →</Text>
+              </TouchableOpacity>
+            ))}
+          />
+        </>
       )}
     </ScreenContainer>
   );

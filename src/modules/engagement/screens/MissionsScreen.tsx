@@ -9,6 +9,9 @@
 //
 // Recarrega (sem piscar) ao voltar para a tela: o progresso pode
 // ter mudado em segundo plano.
+//
+// 14/10/2026 (web T5): no computador vira painel — resumo do dia e
+// "Como funciona" à esquerda, as missões à direita. Celular: igual.
 // ============================================
 
 import React, { useCallback, useRef, useState } from 'react';
@@ -16,6 +19,7 @@ import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator,
 } from 'react-native';
+import { useBreakpoint } from '../../../hooks/useBreakpoint';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -127,6 +131,7 @@ function SpecialMissionCard({
 
 // ── Tela principal ─────────────────────────────────────────────────
 export default function MissionsScreen() {
+  const { isDesktop } = useBreakpoint();
   const navigation        = useNavigation<NavProp>();
   const { user }          = useAuth();
   const { refreshWallet } = useCoins();
@@ -223,6 +228,80 @@ export default function MissionsScreen() {
   const fragments       = data?.fragments ?? 0;
   const earned          = data?.fragmentsEarnedToday ?? 0;
 
+  // Blocos da tela: no celular, um embaixo do outro (ordem de
+  // sempre); no computador, em duas colunas (web T5).
+  const section1 = (
+    <>
+            <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.hero}>
+              <Text style={styles.heroTitle}>📋 Missões de hoje</Text>
+              <Text style={styles.heroSub}>
+                {completedCommon}/{missions.length} missões comuns concluídas
+              </Text>
+              <View style={styles.heroProgress}>
+                <View style={[styles.heroFill, {
+                  width: missions.length > 0
+                    ? `${(completedCommon / missions.length) * 100}%` as any
+                    : '0%',
+                }]} />
+              </View>
+              <View style={styles.heroStats}>
+                <View style={styles.heroStat}>
+                  <Text style={styles.heroStatValue}>{fragments}</Text>
+                  <Text style={styles.heroStatLabel}>🔮 Fragmentos</Text>
+                </View>
+                <View style={styles.heroStat}>
+                  <Text style={styles.heroStatValue}>{earned}</Text>
+                  <Text style={styles.heroStatLabel}>Ganhos hoje</Text>
+                </View>
+                <View style={styles.heroStat}>
+                  <Text style={styles.heroStatValue}>{Math.floor(fragments / 100)}</Text>
+                  <Text style={styles.heroStatLabel}>✨ Conversíveis</Text>
+                </View>
+              </View>
+            </LinearGradient>
+    </>
+  );
+  const section2 = (
+    <>
+            {special && (
+              <>
+                <Text style={styles.sectionTitle}>Missão Especial do Dia</Text>
+                <View style={styles.section}>
+                  <SpecialMissionCard
+                    mission={special}
+                    loading={progressing === special.missionId}
+                    onPress={() => handleMissionPress(special.missionId, special.type)}
+                  />
+                </View>
+              </>
+            )}
+
+            <Text style={styles.sectionTitle}>Missões Comuns</Text>
+            <View style={styles.section}>
+              {missions.map(mission => (
+                <CommonMissionCard
+                  key={mission.missionId}
+                  mission={mission}
+                  loading={progressing === mission.missionId}
+                  onPress={() => handleMissionPress(mission.missionId, mission.type)}
+                />
+              ))}
+            </View>
+    </>
+  );
+  const section3 = (
+    <>
+            <View style={styles.infoCard}>
+              <Text style={styles.infoTitle}>🔮 Como funciona</Text>
+              <Text style={styles.infoText}>• Toque numa missão para ir até a ação — o progresso conta sozinho</Text>
+              <Text style={styles.infoText}>• Missões comuns pagam Fragmentos de Sintonia</Text>
+              <Text style={styles.infoText}>• A missão especial paga 1 Cristal Gratuito</Text>
+              <Text style={styles.infoText}>• 100 Fragmentos = 1 Cristal Gratuito (converta no Cofre ou em Fragmentos)</Text>
+              <Text style={styles.infoText}>• Limite: 300 fragmentos/dia · 5 cristais/dia via missões</Text>
+            </View>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <Header title="Missões do Dia" showBack={true} showHome={true} />
@@ -235,67 +314,18 @@ export default function MissionsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.hero}>
-          <Text style={styles.heroTitle}>📋 Missões de hoje</Text>
-          <Text style={styles.heroSub}>
-            {completedCommon}/{missions.length} missões comuns concluídas
-          </Text>
-          <View style={styles.heroProgress}>
-            <View style={[styles.heroFill, {
-              width: missions.length > 0
-                ? `${(completedCommon / missions.length) * 100}%` as any
-                : '0%',
-            }]} />
+        {isDesktop ? (
+          <View style={styles.dRow}>
+            <View style={styles.dLeft}>{section1} {section3}</View>
+            <View style={styles.dRight}>{section2}</View>
           </View>
-          <View style={styles.heroStats}>
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatValue}>{fragments}</Text>
-              <Text style={styles.heroStatLabel}>🔮 Fragmentos</Text>
-            </View>
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatValue}>{earned}</Text>
-              <Text style={styles.heroStatLabel}>Ganhos hoje</Text>
-            </View>
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatValue}>{Math.floor(fragments / 100)}</Text>
-              <Text style={styles.heroStatLabel}>✨ Conversíveis</Text>
-            </View>
-          </View>
-        </LinearGradient>
-
-        {special && (
+        ) : (
           <>
-            <Text style={styles.sectionTitle}>Missão Especial do Dia</Text>
-            <View style={styles.section}>
-              <SpecialMissionCard
-                mission={special}
-                loading={progressing === special.missionId}
-                onPress={() => handleMissionPress(special.missionId, special.type)}
-              />
-            </View>
+        {section1}
+        {section2}
+        {section3}
           </>
         )}
-
-        <Text style={styles.sectionTitle}>Missões Comuns</Text>
-        <View style={styles.section}>
-          {missions.map(mission => (
-            <CommonMissionCard
-              key={mission.missionId}
-              mission={mission}
-              loading={progressing === mission.missionId}
-              onPress={() => handleMissionPress(mission.missionId, mission.type)}
-            />
-          ))}
-        </View>
-
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>🔮 Como funciona</Text>
-          <Text style={styles.infoText}>• Toque numa missão para ir até a ação — o progresso conta sozinho</Text>
-          <Text style={styles.infoText}>• Missões comuns pagam Fragmentos de Sintonia</Text>
-          <Text style={styles.infoText}>• A missão especial paga 1 Cristal Gratuito</Text>
-          <Text style={styles.infoText}>• 100 Fragmentos = 1 Cristal Gratuito (converta no Cofre ou em Fragmentos)</Text>
-          <Text style={styles.infoText}>• Limite: 300 fragmentos/dia · 5 cristais/dia via missões</Text>
-        </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -307,6 +337,10 @@ const S = SPACING;
 const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
+  // ── Computador (web T5): painel em duas colunas ──
+  dRow:   { flexDirection: 'row', alignItems: 'flex-start', gap: 20, paddingTop: 8 },
+  dLeft:  { flex: 5, minWidth: 0 },
+  dRight: { flex: 6, minWidth: 0 },
   container:   { flex: 1, backgroundColor: COLORS.background },
   center:      { flex: 1, alignItems: 'center', justifyContent: 'center', gap: S.md, padding: S.xl },
   errorText:   { color: COLORS.textMuted, fontSize: FONT_SIZE.md, textAlign: 'center' },

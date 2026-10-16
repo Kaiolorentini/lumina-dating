@@ -15,11 +15,16 @@
 // 13/10/2026: a falha devolve `message` — o texto do servidor quando
 // ele explica (limite diário de curtidas, perfil indisponível) ou
 // uma frase amigável. O ProfileCard mostra esse texto.
+//
+// 13/10/2026 (web D5): a resposta do servidor traz likesToday/likeLimit
+// e o hook repassa ao contador "Curtidas hoje x/150" (likeQuota).
+// Limite atingido marca a cota cheia. Nada muda no fluxo da curtida.
 // ============================================
 
 import { useState, useCallback } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { friendlyErrorMessage } from '../utils/firebaseErrorMessage';
+import { setLikeQuota, markLikeQuotaFull } from '../services/likeQuota';
 
 
 const functions = getFunctions();
@@ -27,7 +32,14 @@ const functions = getFunctions();
 // Genéricos em tipos nomeados: httpsCallable< em fim de linha
 // é corrompido ao colar.
 type CreateMatchReq = { targetUid: string };
-type CreateMatchRes = { success: boolean; isMutual: boolean; alreadyLiked: boolean };
+type CreateMatchRes = {
+  success: boolean;
+  isMutual: boolean;
+  alreadyLiked: boolean;
+  /** Servidor v2.2+: curtidas novas usadas hoje e o limite. */
+  likesToday?: number;
+  likeLimit?: number;
+};
 
 type ProfileLikeReq = { likerUid: string; targetUid: string };
 
@@ -54,6 +66,7 @@ export function useLike(likerUid: string | undefined) {
         'onCreateMatch',
       );
       const result = await createMatch({ targetUid });
+      setLikeQuota(likerUid, result.data.likesToday, result.data.likeLimit);
 
       // Toda a gamificação derivada fica sob o mesmo guard.
       // Antes, só o earnXP checava `alreadyLiked`: missão, cofre
@@ -74,6 +87,8 @@ export function useLike(likerUid: string | undefined) {
 
       return { ok: true, isMutual: result.data.isMutual };
     } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === 'functions/resource-exhausted') markLikeQuotaFull(likerUid);
       return { ok: false, isMutual: false, message: friendlyErrorMessage(error, 'like') };
     } finally {
       setLiking(false);
@@ -82,3 +97,4 @@ export function useLike(likerUid: string | undefined) {
 
   return { like, liking };
 }
+

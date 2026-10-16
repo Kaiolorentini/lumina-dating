@@ -1,6 +1,12 @@
 // ============================================
-// LUMINA — PAINEL ADMIN v2.3
+// LUMINA — PAINEL ADMIN v2.4
 // src/screens/admin/AdminDashboardScreen.tsx
+//
+// v2.4 (13/10/2026, web D7): no COMPUTADOR a tela usa o
+// AdminDashboardDesktop (pendências em destaque, números do mês,
+// módulos agrupados, totais). O guard de admin, a tela de entrada,
+// os dados (useAdminDashboard) e o "Recalcular painéis" são os
+// MESMOS desta tela. Celular, tablet e app: iguais à v2.3.
 //
 // v2.1 (09/10/2026): card "Meu Painel" (o superadmin não tem a aba
 // Painel) e "Recalcular painéis" (manutenção do resumo dos
@@ -39,6 +45,8 @@ import { useAdminDashboard } from '../../hooks/useAdminDashboard';
 import { formatBRL } from '../../services/marketplace/adminDashboardService';
 import AdminLoadingScreen from './AdminLoadingScreen';
 import ScreenContainer from '../../components/ScreenContainer';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+import AdminDashboardDesktop from './AdminDashboardDesktop';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type Route = keyof RootStackParamList;
@@ -91,6 +99,7 @@ export default function AdminDashboardScreen() {
 
   const { data, loading, refreshing, error, refresh } = useAdminDashboard(!blocked && !guardLoading);
   const [rebuilding, setRebuilding] = useState(false);
+  const { isDesktop } = useBreakpoint();
 
   // Manutenção do Painel do Criador (09/10/2026): refaz o resumo de
   // vendas e notas de todos os criadores a partir dos dados reais.
@@ -140,6 +149,23 @@ export default function AdminDashboardScreen() {
     return (
       <AdminLoadingScreen
         onFinish={() => { _adminSessionReady = true; setAdminReady(true); }}
+      />
+    );
+  }
+
+  if (isDesktop) {
+    return (
+      <AdminDashboardDesktop
+        data={data}
+        loading={loading}
+        refreshing={refreshing}
+        error={error}
+        isSuperAdmin={isSuperAdmin}
+        rebuilding={rebuilding}
+        onRefresh={refresh}
+        onRebuild={handleRebuildCreatorStats}
+        onBack={() => navigation.goBack()}
+        go={route => navigation.navigate(route as never)}
       />
     );
   }
@@ -305,3 +331,4 @@ const styles = StyleSheet.create({
   metricValue: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   metricLabel: { color: colors.gray, fontSize: fonts.sizes.xs, textAlign: 'center' },
 });
+

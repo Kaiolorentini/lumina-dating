@@ -8,6 +8,10 @@
 //   histórico de vendas e saques). Alerta ANTES de aprovar.
 // - Aviso se a chave do saque divergir da cadastrada hoje.
 // - Um modal de rejeição só (antes havia um dentro de cada card).
+//
+// 14/10/2026 (web T3): no computador a lista mostra os cartões lado a
+// lado (useDesktopGrid). Celular e app: igual.
+// T5: no computador, busca e ordem na lista (AdminListToolbar).
 // ============================================
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -15,6 +19,8 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Alert, RefreshControl, Modal, TextInput,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
+import AdminListToolbar, { useAdminListSearch } from '../../components/web/AdminListToolbar';
 import { useNavigation } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -39,6 +45,10 @@ async function copy(value: string, what: string) {
 }
 
 export default function AdminWithdrawalsScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
+  // Computador: busca e ordem na lista carregada (AdminListToolbar).
+  const search = useAdminListSearch();
   const navigation = useNavigation();
   const { blocked, loading: guardLoading } = useSuperAdminGuard();
 
@@ -244,61 +254,66 @@ export default function AdminWithdrawalsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={withdrawals}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={colors.gold} />}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>Nenhum saque {STATUS_LABELS[activeTab].toLowerCase()}</Text>
-            </View>
-          }
-          renderItem={({ item }) => {
-            const actionable = activeTab === 'pending' || activeTab === 'approved';
-            return (
-              <View style={styles.card}>
-                <View style={styles.cardRow}>
-                  <Text style={styles.amount}>{formatBRL(item.amount)}</Text>
-                  <Text style={styles.date}>{item.createdAt.toLocaleDateString('pt-BR')}</Text>
-                </View>
-                <Text style={styles.creator}>🎨 {names[item.userId] ?? `${item.userId.slice(0, 10)}…`}</Text>
-
-                {actionable && (
-                  <TouchableOpacity style={styles.reviewBtn} onPress={() => toggleReview(item)} accessibilityRole="button">
-                    <Text style={styles.reviewBtnText}>{expanded === item.id ? '▲ Fechar conferência' : '🔍 Conferir saque'}</Text>
-                  </TouchableOpacity>
-                )}
-
-                {expanded === item.id && renderReview(item)}
-
-                {processing === item.id ? (
-                  <ActivityIndicator color={colors.gold} style={{ marginTop: spacing.sm }} />
-                ) : activeTab === 'pending' ? (
-                  <View style={styles.actions}>
-                    <TouchableOpacity style={styles.approveBtn} onPress={() => approve(item)}>
-                      <Text style={styles.approveBtnText}>✅ Aprovar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.rejectBtn} onPress={() => { setRejectTarget(item); setRejectReason(''); }}>
-                      <Text style={styles.rejectBtnText}>❌ Rejeitar</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : activeTab === 'approved' ? (
-                  <View style={styles.actions}>
-                    <TouchableOpacity style={styles.paidBtn} onPress={() => markPaid(item)}>
-                      <Text style={styles.paidBtnText}>💸 Marcar como pago</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.rejectBtn} onPress={() => { setRejectTarget(item); setRejectReason(''); }}>
-                      <Text style={styles.rejectBtnText}>❌ Rejeitar</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
-
-                {item.rejectionReason ? <Text style={styles.reason}>Motivo: {item.rejectionReason}</Text> : null}
+        <>
+          <AdminListToolbar search={search} total={(withdrawals)?.length ?? 0} shown={search.apply(withdrawals).length} />
+          <FlatList
+            key={grid.listKey}
+            {...grid.listProps}
+            data={search.apply(withdrawals)}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.list}
+            refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={colors.gold} />}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>Nenhum saque {STATUS_LABELS[activeTab].toLowerCase()}</Text>
               </View>
-            );
-          }}
-        />
+            }
+            renderItem={grid.wrap(({ item }) => {
+              const actionable = activeTab === 'pending' || activeTab === 'approved';
+              return (
+                <View style={styles.card}>
+                  <View style={styles.cardRow}>
+                    <Text style={styles.amount}>{formatBRL(item.amount)}</Text>
+                    <Text style={styles.date}>{item.createdAt.toLocaleDateString('pt-BR')}</Text>
+                  </View>
+                  <Text style={styles.creator}>🎨 {names[item.userId] ?? `${item.userId.slice(0, 10)}…`}</Text>
+
+                  {actionable && (
+                    <TouchableOpacity style={styles.reviewBtn} onPress={() => toggleReview(item)} accessibilityRole="button">
+                      <Text style={styles.reviewBtnText}>{expanded === item.id ? '▲ Fechar conferência' : '🔍 Conferir saque'}</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {expanded === item.id && renderReview(item)}
+
+                  {processing === item.id ? (
+                    <ActivityIndicator color={colors.gold} style={{ marginTop: spacing.sm }} />
+                  ) : activeTab === 'pending' ? (
+                    <View style={styles.actions}>
+                      <TouchableOpacity style={styles.approveBtn} onPress={() => approve(item)}>
+                        <Text style={styles.approveBtnText}>✅ Aprovar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.rejectBtn} onPress={() => { setRejectTarget(item); setRejectReason(''); }}>
+                        <Text style={styles.rejectBtnText}>❌ Rejeitar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : activeTab === 'approved' ? (
+                    <View style={styles.actions}>
+                      <TouchableOpacity style={styles.paidBtn} onPress={() => markPaid(item)}>
+                        <Text style={styles.paidBtnText}>💸 Marcar como pago</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.rejectBtn} onPress={() => { setRejectTarget(item); setRejectReason(''); }}>
+                        <Text style={styles.rejectBtnText}>❌ Rejeitar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+
+                  {item.rejectionReason ? <Text style={styles.reason}>Motivo: {item.rejectionReason}</Text> : null}
+                </View>
+              );
+            })}
+          />
+        </>
       )}
 
       <Modal visible={rejectTarget !== null} transparent animationType="fade" onRequestClose={() => setRejectTarget(null)}>

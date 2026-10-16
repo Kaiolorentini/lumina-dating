@@ -1,12 +1,17 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Animated,
-  Dimensions, StatusBar,
+  Dimensions, Platform, StatusBar,
 } from 'react-native';
 import { colors, fonts, spacing } from '../../theme';
 import ScreenContainer from '../../components/ScreenContainer';
 
-const { width, height } = Dimensions.get('window');
+// Web (14/10/2026, T4): no computador a janela tem 1.900 px e a tela
+// fica ao lado do menu — o brilho de 70% da largura virava um círculo
+// de 1.300 px e a barra de progresso não fechava. Na web a referência é
+// no máximo 520 px; no app, a janela de sempre.
+const { width: WINDOW_W, height } = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(WINDOW_W, 520) : WINDOW_W;
 
 const STATUS_STEPS = [
   { label: 'Autenticando SuperAdmin', icon: '🔐' },
@@ -363,6 +368,7 @@ const styles = StyleSheet.create({
   // Conteúdo
   content: {
     width: '100%',
+    maxWidth: width,
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
   },

@@ -1,3 +1,13 @@
+// ============================================
+// LUMINA — PERMISSÕES DO USUÁRIO
+// src/hooks/useUserPermissions.ts
+//
+// 13/10/2026 (web D5): saíram os 3 console.log "[PERMISSIONS]" que
+// imprimiam o uid e o papel (role) da conta no console do navegador
+// e no logcat — dado pessoal em log, sem uso em produção (LGPD).
+// Os avisos de erro e de timeout continuam.
+// ============================================
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { doc, onSnapshot, DocumentData } from 'firebase/firestore';
 import { db } from '../core/firebase';
@@ -118,7 +128,6 @@ export function useUserPermissions(
       setLoadError(true);
       setLoading(false);
     }, 10000);
-      console.log('[PERMISSIONS] iniciando listener uid:', capturedUid, 'COLLECTIONS.USERS:', COLLECTIONS.USERS);
     const unsubscribe = onSnapshot(
       ref,
       snap => {
@@ -130,7 +139,6 @@ export function useUserPermissions(
         setLoadError(false);
 
         if (!snap.exists()) {
-          console.log('[PERMISSIONS] documento não existe para uid:', capturedUid);
           setPermissions({
             uid: capturedUid,
             role: 'user',
@@ -142,7 +150,6 @@ export function useUserPermissions(
         }
 
         const data = snap.data();
-          console.log('[PERMISSIONS] snapshot recebido, role:', data?.role, 'isBlocked:', data?.isBlocked);
         setPermissions({
           uid: capturedUid,
           role: sanitizeRole(data.role),

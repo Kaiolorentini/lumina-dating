@@ -17,6 +17,9 @@
 // 12/10/2026 — Declaração do Produto: "Enviar para análise" e salvar
 // capa/arquivos novos de produto à venda abrem a declaração antes; o
 // envio só acontece no aceite (o servidor grava a declaração).
+//
+// 14/10/2026 (web T5): no computador, prévia do card da vitrine ao lado
+// (com a capa nova, se trocada). Envio para análise: nada mudou.
 // ============================================
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -37,6 +40,9 @@ import {
 } from '../../services/marketplace/productService';
 import { formatBytes, getFileIcon, validateProductFile } from '../../utils/productFileRules';
 import ScreenContainer from '../../components/ScreenContainer';
+import { ProductCard } from '../../components/marketplace/ProductCard';
+import { Product } from '../../shared/types/marketplace';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import ProductDeclarationModal from '../../components/marketplace/ProductDeclarationModal';
 import { isContractRequiredError } from '../../services/marketplace/creatorAgreementService';
 
@@ -66,6 +72,7 @@ export default function EditProductScreen() {
   const [progress, setProgress]     = useState(0);
   // Qual envio espera a declaração: alterações (à venda) ou análise.
   const [declarationFor, setDeclarationFor] = useState<'changes' | 'review' | null>(null);
+  const { isDesktop } = useBreakpoint();
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -277,6 +284,8 @@ export default function EditProductScreen() {
     <ScreenContainer>
       {header}
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={isDesktop ? styles.dRow : undefined}>
+        <View style={isDesktop ? styles.dForm : undefined}>
         <Text style={styles.title}>{product.title}</Text>
         <Text style={styles.fixedHint}>
           {product.isFree ? 'Grátis' : `R$ ${product.price.toFixed(2).replace('.', ',')}`} · título e preço não podem ser alterados
@@ -421,6 +430,22 @@ export default function EditProductScreen() {
             <Text style={styles.outlineText}>🚀 Enviar para análise</Text>
           </TouchableOpacity>
         )}
+        </View>
+        {isDesktop && product && (
+          <View style={styles.dPreview}>
+            <Text style={styles.dPreviewTitle}>Prévia do card na vitrine</Text>
+            <ProductCard
+              product={{ ...(product as unknown as Product), coverImage: newCoverUri ?? (product as unknown as Product).coverImage }}
+              onPress={() => {}}
+            />
+            <Text style={styles.dPreviewHint}>
+              {newCoverUri
+                ? 'Com a capa nova. Ela entra na vitrine depois da análise.'
+                : 'Assim o produto aparece hoje na vitrine.'}
+            </Text>
+          </View>
+        )}
+        </View>
       </ScrollView>
 
       <ProductDeclarationModal
@@ -444,6 +469,12 @@ const styles = StyleSheet.create({
   backBtn: { color: colors.gold, fontSize: 28 },
   headerTitle: { color: colors.white, fontSize: fonts.sizes.lg, fontWeight: 'bold' },
   content: { padding: spacing.md, paddingBottom: spacing.xl },
+  // ── Computador (web T5) ──
+  dRow:          { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
+  dForm:         { flex: 1, minWidth: 0, maxWidth: 600 },
+  dPreview:      { width: 260, gap: spacing.sm },
+  dPreviewTitle: { color: colors.gray, fontSize: fonts.sizes.xs, fontWeight: 'bold', letterSpacing: 1, textTransform: 'uppercase' },
+  dPreviewHint:  { color: colors.gray, fontSize: fonts.sizes.xs, lineHeight: 17 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.md },
   bigIcon: { fontSize: 48 },
   errorText: { color: colors.error, fontSize: fonts.sizes.md, textAlign: 'center' },
@@ -501,3 +532,4 @@ const styles = StyleSheet.create({
   saveBtnDisabled: { opacity: 0.45 },
   saveText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
 });
+

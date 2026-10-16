@@ -7,6 +7,10 @@
 //   para CreatorAgreement (que volta para cá depois do aceite);
 // • "Enviar para revisão" abre a Declaração do Produto; o envio só
 //   acontece depois do aceite, pela CF submitProductForReview.
+//
+// 14/10/2026 (web T4): no computador, a prévia do card da vitrine fica
+// ao lado do formulário e muda enquanto o criador preenche. Envio,
+// contrato, declaração e uploads: nada mudou. Celular e app: iguais.
 // ============================================
 
 import React, { useEffect, useState } from 'react';
@@ -31,6 +35,9 @@ import {
 } from '../../services/marketplace/productService';
 import { ProductCategory } from '../../shared/types/marketplace';
 import ScreenContainer from '../../components/ScreenContainer';
+import { ProductCard } from '../../components/marketplace/ProductCard';
+import { Product } from '../../shared/types/marketplace';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import CreatorGuidelinesModal from '../../components/marketplace/CreatorGuidelinesModal';
 import ProductDeclarationModal from '../../components/marketplace/ProductDeclarationModal';
 import {
@@ -93,6 +100,7 @@ export default function CreateProductScreen() {
 
   // Arquivos pagos
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
+  const { isDesktop } = useBreakpoint();
 
   // Contrato do Criador: sem o aceite da versão vigente, vai para o
   // contrato antes de qualquer campo. Falha de leitura não trava o
@@ -366,6 +374,23 @@ export default function CreateProductScreen() {
     );
   }
 
+  // Prévia do card (computador, 14/10/2026 — web T4). Só exibição:
+  // monta um produto de mentira com o que já foi preenchido. Nada é
+  // gravado; o envio continua igual.
+  const previewPrice = Number(String(price).replace(',', '.'));
+  const previewProduct = {
+    id:            'preview',
+    title:         title.trim() || 'Título do seu produto',
+    description,
+    price:         isFree || !Number.isFinite(previewPrice) ? 0 : previewPrice,
+    isFree,
+    category:      category ?? 'outros',
+    coverImage:    coverUri ?? '',
+    previewImages: [],
+    isFeatured:    false,
+    tags:          [],
+  } as unknown as Product;
+
   return (
     <ScreenContainer>
       {/* Header */}
@@ -383,6 +408,8 @@ export default function CreateProductScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        <View style={isDesktop ? styles.dRow : undefined}>
+        <View style={isDesktop ? styles.dForm : undefined}>
 
         {/* ETAPA 1 — Informações */}
         {step === 1 && (
@@ -652,6 +679,17 @@ export default function CreateProductScreen() {
           </View>
         )}
 
+        </View>
+        {isDesktop && (
+          <View style={styles.dPreview}>
+            <Text style={styles.dPreviewTitle}>Prévia do card na vitrine</Text>
+            <ProductCard product={previewProduct} onPress={() => {}} />
+            <Text style={styles.dPreviewHint}>
+              É assim que o seu produto aparece no Marketplace. A capa, o título e o preço mudam aqui enquanto você preenche.
+            </Text>
+          </View>
+        )}
+        </View>
       </ScrollView>
 
       <CreatorGuidelinesModal
@@ -684,6 +722,12 @@ const styles = StyleSheet.create({
   progress: { height: 3, backgroundColor: colors.grayDark },
   progressFill: { height: 3, backgroundColor: colors.gold },
   content: { padding: spacing.md },
+  // ── Computador (web T4) ──
+  dRow:          { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
+  dForm:         { flex: 1, minWidth: 0, maxWidth: 600 },
+  dPreview:      { width: 260, gap: spacing.sm },
+  dPreviewTitle: { color: colors.gray, fontSize: fonts.sizes.xs, fontWeight: 'bold', letterSpacing: 1, textTransform: 'uppercase' },
+  dPreviewHint:  { color: colors.gray, fontSize: fonts.sizes.xs, lineHeight: 17 },
   stepTitle: { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', marginBottom: spacing.sm },
   stepSubtitle: { color: colors.gray, fontSize: fonts.sizes.md, marginBottom: spacing.md },
   label: { color: colors.gray, fontSize: fonts.sizes.sm, marginBottom: spacing.xs, marginTop: spacing.md },
@@ -794,3 +838,4 @@ const styles = StyleSheet.create({
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
 });
+

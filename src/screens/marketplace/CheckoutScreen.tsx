@@ -4,6 +4,16 @@
 //
 // CORREÇÃO: guard para saleId undefined
 // doc(db, 'sales', saleId) só chamado se saleId existe
+//
+// v5.2 (14/10/2026, web T3) — RESUMO DO PEDIDO.
+// A tela mostrava só o QR: a pessoa pagava sem ver o que estava
+// comprando. Agora há o resumo (capa, título, valor e cupom), com
+// os dados da PRÓPRIA venda que a tela já escuta (valor, cupom) e
+// 1 leitura do produto (título e capa). Só exibição: o valor cobrado
+// é o do Pix gerado pelo servidor — nada é recalculado aqui.
+// No computador: QR e Copia e Cola à esquerda, resumo à direita.
+// T4: contagem regressiva dos 15 minutos ("Expira em 14:32"), a mesma
+// janela em que a tela acompanha o pagamento (MAX_POLL_TIME).
 // ============================================
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -18,6 +28,24 @@ import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '../../core/firebase';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
+import { getProduct } from '../../services/marketplace/productService';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+
+interface SaleSummary {
+  productId:       string | null;
+  amount:          number | null;
+  originalAmount:  number | null;
+  discountAmount:  number | null;
+  couponCode:      string | null;
+}
+
+function numberOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+function brl(v: number): string {
+  return `R$ ${v.toFixed(2).replace('.', ',')}`;
+}
 
 type NavProp    = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'Checkout'>;
@@ -32,6 +60,13 @@ export default function CheckoutScreen() {
 
   const [saleStatus, setSaleStatus] = useState<SaleStatus>('loading');
   const [copied, setCopied]         = useState(false);
+  const [sale, setSale]             = useState<SaleSummary | null>(null);
+  const [product, setProduct]       = useState<{ title: string; cover: string } | null>(null);
+  const { isDesktop } = useBreakpoint();
+  // Contagem regressiva: começa quando a tela abre (mesmo relógio do
+  // MAX_POLL_TIME). Atualiza a cada segundo só enquanto aguarda.
+  const deadlineRef = useRef(Date.now() + MAX_POLL_TIME);
+  const [remainingMs, setRemainingMs] = useState(MAX_POLL_TIME);
 
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const timeoutRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -87,7 +122,15 @@ export default function CheckoutScreen() {
       saleRef,
       (snap) => {
         if (!snap.exists()) return;
-        handleStatusChange(snap.data()?.status as string);
+        const data = snap.data();
+        setSale({
+          productId:      typeof data?.productId === 'string' ? data.productId : null,
+          amount:         numberOrNull(data?.finalAmount) ?? numberOrNull(data?.amount),
+          originalAmount: numberOrNull(data?.originalAmount),
+          discountAmount: numberOrNull(data?.discountAmount),
+          couponCode:     typeof data?.couponCode === 'string' ? data.couponCode : null,
+        });
+        handleStatusChange(data?.status as string);
       },
       (error) => console.error('[CheckoutScreen] Listener error:', error)
     );
@@ -123,6 +166,27 @@ export default function CheckoutScreen() {
       appStateSub.remove();
     };
   }, [startListening, stopListening, navigation, saleId]);
+
+  useEffect(() => {
+    if (saleStatus !== 'pending' && saleStatus !== 'loading') return;
+    const id = setInterval(() => {
+      setRemainingMs(Math.max(0, deadlineRef.current - Date.now()));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [saleStatus]);
+
+  const remainingLabel = `${String(Math.floor(remainingMs / 60000)).padStart(2, '0')}:${String(Math.floor((remainingMs % 60000) / 1000)).padStart(2, '0')}`;
+
+  // Título e capa do produto, uma vez por venda.
+  const productId = sale?.productId ?? null;
+  useEffect(() => {
+    if (!productId) return;
+    let alive = true;
+    getProduct(productId)
+      .then(p => { if (alive && p) setProduct({ title: p.title, cover: p.coverImage }); })
+      .catch(error => console.warn('[CheckoutScreen] resumo do produto indisponível:', error));
+    return () => { alive = false; };
+  }, [productId]);
 
   function handleCopy() {
     if (!pixCopyPaste) return;
@@ -198,12 +262,131 @@ export default function CheckoutScreen() {
         <View style={{ width: 40 }} />
       </View>
 
+      {isDesktop ? (
+        <ScrollView contentContainerStyle={styles.dContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.statusRow}>
+            <ActivityIndicator color={colors.gold} size="small" />
+            <Text style={styles.statusText}>Aguardando pagamento...</Text>
+          <Text style={[styles.countdown, remainingMs < 120000 && styles.countdownUrgent]} accessibilityLabel={`O código expira em ${remainingLabel}`}>
+            ⏱ {remainingLabel}
+          </Text>
+          </View>
+          <View style={styles.dRow}>
+            <View style={styles.dPay}>
+            {pixQrCode ? (
+              <View style={styles.qrSection}>
+                <Text style={styles.qrLabel}>Escaneie o QR Code no seu app de pagamento</Text>
+                <View style={styles.qrWrapper}>
+                  <Image source={{ uri: `data:image/png;base64,${pixQrCode}` }} style={styles.qrImage} resizeMode="contain" />
+                </View>
+              </View>
+            ) : (
+              // O QR chega junto com a resposta da CF ou não chega mais:
+              // não há segunda requisição da tela. Um spinner aqui era
+              // uma espera que nunca terminava — o caminho é apontar
+              // para o Copia e Cola, que já está logo abaixo.
+              <View style={styles.qrPlaceholder}>
+                <Text style={styles.qrUnavailableIcon}>⎘</Text>
+                <Text style={styles.qrUnavailableTitle}>QR Code indisponível</Text>
+                <Text style={styles.qrPlaceholderText}>
+                  Use o código Pix Copia e Cola abaixo para pagar.
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>ou</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {pixCopyPaste ? (
+              <View style={styles.copySection}>
+                <Text style={styles.copyLabel}>Pix Copia e Cola</Text>
+                <View style={styles.copyBox}>
+                  <Text style={styles.copyCode} numberOfLines={3}>{pixCopyPaste}</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.copyBtn, copied && styles.copyBtnSuccess]}
+                  onPress={handleCopy}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.copyBtnText, copied && styles.copyBtnTextSuccess]}>
+                    {copied ? '✅ Copiado!' : '📋 Copiar código Pix'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+            </View>
+            <View style={styles.dSide}>
+            {(product || sale?.amount != null) && (
+              <View style={styles.summary} accessibilityLabel="Resumo do pedido">
+                <Text style={styles.summaryKicker}>RESUMO DO PEDIDO</Text>
+                <View style={styles.summaryRow}>
+                  {product?.cover ? (
+                    <Image source={{ uri: product.cover }} style={styles.summaryCover} resizeMode="cover" />
+                  ) : null}
+                  <View style={styles.summaryInfo}>
+                    <Text style={styles.summaryTitle} numberOfLines={2}>{product?.title ?? 'Conteúdo do marketplace'}</Text>
+                    {sale?.couponCode && sale.discountAmount ? (
+                      <Text style={styles.summaryCoupon}>
+                        🎟️ {sale.couponCode} · −{brl(sale.discountAmount)}
+                        {sale.originalAmount != null ? `  (de ${brl(sale.originalAmount)})` : ''}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+                {sale?.amount != null && (
+                  <View style={styles.summaryTotal}>
+                    <Text style={styles.summaryTotalLabel}>Total no Pix</Text>
+                    <Text style={styles.summaryTotalValue}>{brl(sale.amount)}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>⏱ A confirmação é automática após o Pix ser processado.</Text>
+              <Text style={styles.infoText}>Não feche o app até receber a confirmação.</Text>
+              <Text style={styles.infoText}>⚠️ O código expira em 15 minutos.</Text>
+            </View>
+            </View>
+          </View>
+        </ScrollView>
+      ) : (
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.statusRow}>
           <ActivityIndicator color={colors.gold} size="small" />
           <Text style={styles.statusText}>Aguardando pagamento...</Text>
+          <Text style={[styles.countdown, remainingMs < 120000 && styles.countdownUrgent]} accessibilityLabel={`O código expira em ${remainingLabel}`}>
+            ⏱ {remainingLabel}
+          </Text>
         </View>
 
+        {(product || sale?.amount != null) && (
+          <View style={styles.summary} accessibilityLabel="Resumo do pedido">
+            <Text style={styles.summaryKicker}>RESUMO DO PEDIDO</Text>
+            <View style={styles.summaryRow}>
+              {product?.cover ? (
+                <Image source={{ uri: product.cover }} style={styles.summaryCover} resizeMode="cover" />
+              ) : null}
+              <View style={styles.summaryInfo}>
+                <Text style={styles.summaryTitle} numberOfLines={2}>{product?.title ?? 'Conteúdo do marketplace'}</Text>
+                {sale?.couponCode && sale.discountAmount ? (
+                  <Text style={styles.summaryCoupon}>
+                    🎟️ {sale.couponCode} · −{brl(sale.discountAmount)}
+                    {sale.originalAmount != null ? `  (de ${brl(sale.originalAmount)})` : ''}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+            {sale?.amount != null && (
+              <View style={styles.summaryTotal}>
+                <Text style={styles.summaryTotalLabel}>Total no Pix</Text>
+                <Text style={styles.summaryTotalValue}>{brl(sale.amount)}</Text>
+              </View>
+            )}
+          </View>
+        )}
         {pixQrCode ? (
           <View style={styles.qrSection}>
             <Text style={styles.qrLabel}>Escaneie o QR Code no seu app de pagamento</Text>
@@ -255,6 +438,7 @@ export default function CheckoutScreen() {
           <Text style={styles.infoText}>⚠️ O código expira em 15 minutos.</Text>
         </View>
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -294,4 +478,23 @@ const styles = StyleSheet.create({
   errorTitle:    { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold', textAlign: 'center' },
   primaryBtn:    { backgroundColor: colors.gold, borderRadius: borderRadius.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
   primaryBtnText: { color: colors.background, fontWeight: 'bold', fontSize: fonts.sizes.md },
+
+  countdown:       { color: colors.gold, fontSize: fonts.sizes.md, fontWeight: 'bold', marginLeft: spacing.sm, fontVariant: ['tabular-nums'] },
+  countdownUrgent: { color: colors.error },
+  // ── Resumo do pedido (v5.2) ──
+  summary:       { backgroundColor: colors.surface, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.gold + '44', padding: spacing.md, gap: spacing.sm, marginBottom: spacing.lg },
+  summaryKicker: { color: colors.gray, fontSize: fonts.sizes.xs, fontWeight: 'bold', letterSpacing: 1 },
+  summaryRow:    { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  summaryCover:  { width: 56, height: 70, borderRadius: borderRadius.sm, backgroundColor: colors.grayDark },
+  summaryInfo:   { flex: 1, gap: 4 },
+  summaryTitle:  { color: colors.white, fontSize: fonts.sizes.md, fontWeight: 'bold' },
+  summaryCoupon: { color: '#4CAF50', fontSize: fonts.sizes.sm },
+  summaryTotal:  { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingTop: spacing.sm, borderTopWidth: 0.5, borderTopColor: colors.grayDark },
+  summaryTotalLabel: { color: colors.gray, fontSize: fonts.sizes.sm },
+  summaryTotalValue: { color: colors.gold, fontSize: fonts.sizes.xl, fontWeight: 'bold' },
+  // ── Computador ──
+  dContent:      { padding: 28, paddingBottom: 48 },
+  dRow:          { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
+  dPay:          { flex: 1, minWidth: 0 },
+  dSide:         { width: 340 },
 });

@@ -5,12 +5,18 @@
 // Aguardando você (open) · Respondidos (answered) · Resolvidos.
 // Urgentes sempre no topo; depois, a última mensagem mais recente.
 // O toque abre a conversa (SupportTicket) em modo admin.
+//
+// 14/10/2026 (web T3): no computador a lista mostra os cartões lado a
+// lado (useDesktopGrid). Celular e app: igual.
+// T5: no computador, busca e ordem na lista (AdminListToolbar).
 // ============================================
 
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
+import AdminListToolbar, { useAdminListSearch } from '../../components/web/AdminListToolbar';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -43,6 +49,10 @@ function timeAgo(d: Date | null): string {
 }
 
 export default function AdminSupportScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
+  // Computador: busca e ordem na lista carregada (AdminListToolbar).
+  const search = useAdminListSearch();
   const navigation = useNavigation<NavProp>();
   const { blocked, loading: guardLoading } = useAdminGuard();
 
@@ -93,39 +103,44 @@ export default function AdminSupportScreen() {
       ) : error ? (
         <View style={styles.empty}><Text style={styles.errorText}>⚠️ {error}</Text></View>
       ) : (
-        <FlatList
-          data={tickets}
-          keyExtractor={t => t.id}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>🆘</Text>
-              <Text style={styles.emptyText}>Nenhum chamado nesta aba.</Text>
-            </View>
-          }
-          renderItem={({ item }) => {
-            const cat = categoryById(item.category);
-            return (
-              <TouchableOpacity
-                style={[styles.card, item.priority === 'urgent' && styles.cardUrgent]}
-                onPress={() => navigation.navigate('SupportTicket', { ticketId: item.id })}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-              >
-                <View style={styles.cardTop}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>{cat?.icon ?? '🆘'} {item.categoryLabel}</Text>
-                  {item.unreadForAdmin && <View style={styles.dot} />}
-                </View>
-                {item.priority === 'urgent' && <Text style={styles.urgent}>🚨 URGENTE</Text>}
-                {item.summary ? <Text style={styles.summary} numberOfLines={2}>{item.summary}</Text> : null}
-                <View style={styles.cardBottom}>
-                  <Text style={styles.user} numberOfLines={1}>👤 {item.userName || 'Usuário'}</Text>
-                  <Text style={styles.time}>{timeAgo(item.lastMessageAt)}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-        />
+        <>
+          <AdminListToolbar search={search} total={(tickets)?.length ?? 0} shown={search.apply(tickets).length} />
+          <FlatList
+            key={grid.listKey}
+            {...grid.listProps}
+            data={search.apply(tickets)}
+            keyExtractor={t => t.id}
+            contentContainerStyle={styles.list}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyIcon}>🆘</Text>
+                <Text style={styles.emptyText}>Nenhum chamado nesta aba.</Text>
+              </View>
+            }
+            renderItem={grid.wrap(({ item }) => {
+              const cat = categoryById(item.category);
+              return (
+                <TouchableOpacity
+                  style={[styles.card, item.priority === 'urgent' && styles.cardUrgent]}
+                  onPress={() => navigation.navigate('SupportTicket', { ticketId: item.id })}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                >
+                  <View style={styles.cardTop}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>{cat?.icon ?? '🆘'} {item.categoryLabel}</Text>
+                    {item.unreadForAdmin && <View style={styles.dot} />}
+                  </View>
+                  {item.priority === 'urgent' && <Text style={styles.urgent}>🚨 URGENTE</Text>}
+                  {item.summary ? <Text style={styles.summary} numberOfLines={2}>{item.summary}</Text> : null}
+                  <View style={styles.cardBottom}>
+                    <Text style={styles.user} numberOfLines={1}>👤 {item.userName || 'Usuário'}</Text>
+                    <Text style={styles.time}>{timeAgo(item.lastMessageAt)}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          />
+        </>
       )}
     </ScreenContainer>
   );

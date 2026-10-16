@@ -27,13 +27,20 @@
 //
 // RESPONSIVO: os cards de categoria quebram em duas colunas a
 // partir de 380px de largura útil.
+//
+// 14/10/2026 (web T2): colunas e cards pela largura que a tela tem
+// (useAvailableWidth), não pela janela — no computador a tela fica numa
+// coluna e os cards saíam cortados. Celular e app: mesma largura de antes.
 // ============================================
 
 import React from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, useWindowDimensions,
+  TouchableOpacity,
 } from 'react-native';
+import { useAvailableWidth } from '../../../hooks/useAvailableWidth';
+import { useBreakpoint } from '../../../hooks/useBreakpoint';
+import { pageContentStyle } from '../../../components/layout/PageContainer';
 import { LinearGradient }   from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -67,7 +74,10 @@ const CATEGORIES: {
 export default function StoreScreen() {
   const navigation = useNavigation<NavProp>();
   const { wallet } = useCoins();
-  const { width }  = useWindowDimensions();
+  const width  = useAvailableWidth();
+  // Computador: coluna de leitura (aba ao lado do menu) e as 4
+  // categorias numa linha só.
+  const { isPhone, isDesktop } = useBreakpoint();
 
   const galaxia = useGalaxiaPlusStatus();
 
@@ -76,7 +86,7 @@ export default function StoreScreen() {
   const fragments      = wallet?.fragments      ?? 0;
 
   // Duas colunas quando há espaço; uma só em telas estreitas.
-  const cardWidth = width >= 380 ? '48%' : '100%';
+  const cardWidth = isDesktop ? '23.5%' : width >= 380 ? '48%' : '100%';
 
   const galaxiaPrice = formatPrice(galaxia?.price);
   const galaxiaLine = galaxia?.active
@@ -88,7 +98,7 @@ export default function StoreScreen() {
   return (
     <View style={styles.container}>
       <Header title="Loja" showBack={true} showHome={true} />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={pageContentStyle('reading', isPhone)}>
 
         {/* Saldo */}
         <LinearGradient colors={['#1A0A2E', '#2D1B4E']} style={styles.balanceCard}>

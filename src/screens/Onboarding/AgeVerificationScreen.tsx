@@ -14,6 +14,12 @@
 // As imagens só sobem ao Storage no envio final, não a
 // cada etapa: quem desiste na etapa 2 não deixa imagem de
 // documento órfã no servidor.
+//
+// 13/10/2026 (web): no navegador, as fotos só são tiradas pelo
+// CELULAR (decisão de Kaio). No computador a tela mostra o passo a
+// passo para continuar no celular (VerifyOnPhoneCard), e libera
+// sozinha quando o envio feito no celular chega. No app e no
+// navegador do celular a tela é a mesma de sempre.
 // ============================================
 
 import React from 'react';
@@ -25,6 +31,8 @@ import { colors, fonts, spacing, borderRadius } from '../../theme';
 import ScreenContainer from '../../components/ScreenContainer';
 import GateHeader from '../../modules/verification/components/GateHeader';
 import { useAgeVerification } from '../../modules/verification/hooks/useAgeVerification';
+import VerifyOnPhoneCard from '../../modules/verification/components/VerifyOnPhoneCard';
+import { canCaptureVerification } from '../../modules/verification/services/captureSupport';
 import {
   STEP_COPY, VERIFICATION_STEPS, MAX_ATTEMPTS,
 } from '../../config/verification';
@@ -48,6 +56,27 @@ export default function AgeVerificationScreen({ onSubmitted }: Props) {
   async function handleSubmit() {
     const ok = await submit();
     if (ok) onSubmitted();
+  }
+
+  // Computador (só na web): fotos pelo celular.
+  if (!canCaptureVerification()) {
+    return (
+      <ScreenContainer noTop>
+        <GateHeader title="Verificação de idade" />
+        <ScrollView contentContainerStyle={styles.content}>
+          <VerifyOnPhoneCard />
+          <View style={styles.privacyCard}>
+            <Text style={styles.privacyTitle}>🔒 O que fazemos com suas fotos</Text>
+            <Text style={styles.privacyBody}>
+              As imagens são vistas apenas pela equipe de moderação e
+              APAGADAS depois da análise, aprovada ou não. Guardamos só a
+              confirmação de que você é maior de 18 anos. Você tem até{' '}
+              {MAX_ATTEMPTS} tentativas.
+            </Text>
+          </View>
+        </ScrollView>
+      </ScreenContainer>
+    );
   }
 
   function openSettings() {

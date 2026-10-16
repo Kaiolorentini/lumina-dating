@@ -10,6 +10,9 @@
 //
 // Estado de erro com "Tentar de novo". A animação de pulsar é
 // parada ao sair do estado pronto/cheio.
+//
+// 14/10/2026 (web T5): no computador vira painel — o Cofre e os botões
+// à esquerda; como encher, impulsos e regras à direita. Celular: igual.
 // ============================================
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -17,6 +20,7 @@ import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator, Animated,
 } from 'react-native';
+import { useBreakpoint } from '../../../hooks/useBreakpoint';
 import { LinearGradient }  from 'expo-linear-gradient';
 import { useNavigation }   from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -52,6 +56,7 @@ const STATUS_CONFIG: Record<VaultStatus, {
 };
 
 export default function VaultScreen() {
+  const { isDesktop } = useBreakpoint();
   const { user } = useAuth();
   const { refreshWallet } = useCoins();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -148,174 +153,195 @@ export default function VaultScreen() {
   const walletFrag = fragments.status?.fragments ?? data.walletFragments ?? 0;
   const perCrystal = fragments.status?.fragmentsPerCrystal ?? fragments.status?.fragmentsNeeded ?? 100;
 
+  // Blocos da tela: no celular, um embaixo do outro (ordem de
+  // sempre); no computador, em duas colunas (web T5).
+  const section1 = (
+    <>
+            {/* Hero Cofre */}
+            <LinearGradient colors={cfg.gradient} style={styles.hero}>
+              <Animated.Text style={[styles.heroIcon, { transform: [{ scale: pulseAnim }] }]}>
+                {cfg.icon}
+              </Animated.Text>
+
+              <View style={[styles.statusBadge, { backgroundColor: cfg.color + '22', borderColor: cfg.color }]}>
+                <Text style={[styles.statusLabel, { color: cfg.color }]}>{cfg.label}</Text>
+              </View>
+
+              <Text style={[styles.vaultFragments, { color: cfg.color }]}>{data.vaultFragments}</Text>
+              <Text style={styles.vaultFragmentsLabel}>fragmentos no Cofre</Text>
+
+              <View style={styles.progressSection}>
+                <View style={styles.progressHeader}>
+                  <Text style={styles.progressLabel}>Capacidade</Text>
+                  <Text style={[styles.progressValue, { color: cfg.color }]}>
+                    {data.vaultFragments}/{data.vaultMax}
+                  </Text>
+                </View>
+                <View style={styles.progressBar}>
+                  <View style={[styles.progressFill, { width: `${pct}%` as any, backgroundColor: cfg.color }]} />
+                </View>
+              </View>
+
+              <Text style={styles.hintText}>{cfg.message}</Text>
+            </LinearGradient>
+
+            {/* Resultados */}
+            {withdrawn !== null && (
+              <View style={styles.resultCard}>
+                <Text style={styles.resultIcon}>🔮</Text>
+                <Text style={styles.resultText}>+{withdrawn} fragmentos na carteira</Text>
+                <Text style={styles.resultSub}>Converta em cristais quando quiser.</Text>
+              </View>
+            )}
+            {converted !== null && (
+              <View style={styles.resultCard}>
+                <Text style={styles.resultIcon}>✨</Text>
+                <Text style={styles.resultText}>
+                  +{converted} {converted === 1 ? 'Cristal Gratuito' : 'Cristais Gratuitos'}!
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.actions}>
+              {data.isGalaxiaPlus && (
+                <View style={styles.galaxiaBadge}>
+                  <Text style={styles.galaxiaBadgeText}>💜 Galáxia Plus — Saque Imediato</Text>
+                </View>
+              )}
+
+              {data.isLocked && cooldownLeft > 0 && (
+                <View style={styles.cooldownCard}>
+                  <Text style={styles.cooldownIcon}>⏳</Text>
+                  <View style={styles.cooldownInfo}>
+                    <Text style={styles.cooldownText}>Saque disponível em {formatTime(cooldownLeft)}</Text>
+                    <Text style={styles.cooldownSub}>Você recebe um aviso quando liberar.</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Botão 1 — Sacar fragmentos */}
+              <TouchableOpacity
+                style={[
+                  styles.withdrawBtn,
+                  (!data.canWithdraw || vault.withdrawing) && styles.btnDisabled,
+                  status === 'FULL' && styles.withdrawBtnFull,
+                ]}
+                onPress={handleWithdraw}
+                disabled={!data.canWithdraw || vault.withdrawing}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Sacar ${data.vaultFragments} fragmentos para a carteira`}
+              >
+                {vault.withdrawing ? (
+                  <ActivityIndicator color={COLORS.surface} />
+                ) : (
+                  <Text style={styles.withdrawBtnText}>
+                    {data.canWithdraw
+                      ? `🔮 Sacar ${data.vaultFragments} fragmentos`
+                      : data.vaultFragments <= 0
+                        ? 'Cofre vazio'
+                        : data.antiSpamActive
+                          ? 'Aguarde alguns segundos'
+                          : 'Aguardando desbloqueio'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Botão 2 — Converter em cristais */}
+              <TouchableOpacity
+                style={styles.convertToggle}
+                onPress={() => setShowConverter(v => !v)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Converter fragmentos em cristais"
+              >
+                <Text style={styles.convertToggleText}>
+                  ✨ Converter em cristais {showConverter ? '▲' : '▼'}
+                </Text>
+              </TouchableOpacity>
+
+              {showConverter && (
+                <FragmentConverter
+                  fragments={walletFrag}
+                  fragmentsPerCrystal={perCrystal}
+                  converting={fragments.converting}
+                  onConvert={handleConvert}
+                />
+              )}
+
+              {(vault.error || fragments.error) && (
+                <Text style={styles.errorText}>{vault.error ?? fragments.error}</Text>
+              )}
+            </View>
+    </>
+  );
+  const section2 = (
+    <>
+            {/* Como encher o Cofre */}
+            <Text style={styles.sectionTitle}>Como encher o Cofre</Text>
+            <View style={styles.sourcesList}>
+              {[
+                { icon: '👁️', action: 'Receber visita no perfil', reward: '+2 🔮',     note: '1x por visitante/dia · até 20/dia' },
+                { icon: '💜', action: 'Receber uma curtida',       reward: '+5 🔮',     note: '1x por usuário/dia'                },
+                { icon: '✨', action: 'Criar nova Sintonia',       reward: '+20 🔮',    note: 'a cada sintonia nova'              },
+                { icon: '🎁', action: 'Marcos de nível',           reward: '10–300 🔮', note: 'níveis 10, 20, 30, 40 e 50'        },
+              ].map(item => (
+                <View key={item.action} style={styles.sourceItem}>
+                  <Text style={styles.sourceIcon}>{item.icon}</Text>
+                  <View style={styles.sourceInfo}>
+                    <Text style={styles.sourceAction}>{item.action}</Text>
+                    <Text style={styles.sourceNote}>{item.note}</Text>
+                  </View>
+                  <Text style={styles.sourceReward}>{item.reward}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Sinergia real: visita recebida deposita +2 no Cofre. */}
+            <TouchableOpacity
+              style={styles.boostCta}
+              onPress={() => navigation.navigate('Boosts')}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Ver impulsos para receber mais visitas"
+            >
+              <Text style={styles.boostCtaTitle}>🚀 Encha o Cofre mais rápido</Text>
+              <Text style={styles.boostCtaSub}>
+                Cada visita deposita +2 🔮. Impulsos colocam seu perfil no topo e trazem mais visitas.
+              </Text>
+            </TouchableOpacity>
+
+            {/* Regras */}
+            <View style={styles.rulesCard}>
+              <Text style={styles.rulesTitle}>⚠️ Regras do Cofre</Text>
+              <Text style={styles.rulesText}>• O saque leva os fragmentos do Cofre para a sua carteira</Text>
+              <Text style={styles.rulesText}>• Saque disponível 48h após o 1º depósito — e continua liberado até você sacar</Text>
+              <Text style={styles.rulesText}>• Galáxia Plus: saque imediato sempre</Text>
+              <Text style={styles.rulesText}>• Você recebe um aviso quando o Cofre liberar</Text>
+              <Text style={styles.rulesText}>• Capacidade: 5.000 fragmentos — saque para continuar acumulando</Text>
+              <Text style={styles.rulesText}>• Conversão: {perCrystal} 🔮 = 1 ✨, na quantidade que você quiser</Text>
+              <Text style={styles.rulesText}>• Fragmentos não expiram</Text>
+            </View>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <Header title={SCREEN_TITLE} showBack={true} showHome={true} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* Hero Cofre */}
-        <LinearGradient colors={cfg.gradient} style={styles.hero}>
-          <Animated.Text style={[styles.heroIcon, { transform: [{ scale: pulseAnim }] }]}>
-            {cfg.icon}
-          </Animated.Text>
-
-          <View style={[styles.statusBadge, { backgroundColor: cfg.color + '22', borderColor: cfg.color }]}>
-            <Text style={[styles.statusLabel, { color: cfg.color }]}>{cfg.label}</Text>
+        {isDesktop ? (
+          <View style={styles.dRow}>
+            <View style={styles.dLeft}>{section1}</View>
+            <View style={styles.dRight}>{section2}</View>
           </View>
-
-          <Text style={[styles.vaultFragments, { color: cfg.color }]}>{data.vaultFragments}</Text>
-          <Text style={styles.vaultFragmentsLabel}>fragmentos no Cofre</Text>
-
-          <View style={styles.progressSection}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressLabel}>Capacidade</Text>
-              <Text style={[styles.progressValue, { color: cfg.color }]}>
-                {data.vaultFragments}/{data.vaultMax}
-              </Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${pct}%` as any, backgroundColor: cfg.color }]} />
-            </View>
-          </View>
-
-          <Text style={styles.hintText}>{cfg.message}</Text>
-        </LinearGradient>
-
-        {/* Resultados */}
-        {withdrawn !== null && (
-          <View style={styles.resultCard}>
-            <Text style={styles.resultIcon}>🔮</Text>
-            <Text style={styles.resultText}>+{withdrawn} fragmentos na carteira</Text>
-            <Text style={styles.resultSub}>Converta em cristais quando quiser.</Text>
-          </View>
+        ) : (
+          <>
+        {section1}
+        {section2}
+          </>
         )}
-        {converted !== null && (
-          <View style={styles.resultCard}>
-            <Text style={styles.resultIcon}>✨</Text>
-            <Text style={styles.resultText}>
-              +{converted} {converted === 1 ? 'Cristal Gratuito' : 'Cristais Gratuitos'}!
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.actions}>
-          {data.isGalaxiaPlus && (
-            <View style={styles.galaxiaBadge}>
-              <Text style={styles.galaxiaBadgeText}>💜 Galáxia Plus — Saque Imediato</Text>
-            </View>
-          )}
-
-          {data.isLocked && cooldownLeft > 0 && (
-            <View style={styles.cooldownCard}>
-              <Text style={styles.cooldownIcon}>⏳</Text>
-              <View style={styles.cooldownInfo}>
-                <Text style={styles.cooldownText}>Saque disponível em {formatTime(cooldownLeft)}</Text>
-                <Text style={styles.cooldownSub}>Você recebe um aviso quando liberar.</Text>
-              </View>
-            </View>
-          )}
-
-          {/* Botão 1 — Sacar fragmentos */}
-          <TouchableOpacity
-            style={[
-              styles.withdrawBtn,
-              (!data.canWithdraw || vault.withdrawing) && styles.btnDisabled,
-              status === 'FULL' && styles.withdrawBtnFull,
-            ]}
-            onPress={handleWithdraw}
-            disabled={!data.canWithdraw || vault.withdrawing}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Sacar ${data.vaultFragments} fragmentos para a carteira`}
-          >
-            {vault.withdrawing ? (
-              <ActivityIndicator color={COLORS.surface} />
-            ) : (
-              <Text style={styles.withdrawBtnText}>
-                {data.canWithdraw
-                  ? `🔮 Sacar ${data.vaultFragments} fragmentos`
-                  : data.vaultFragments <= 0
-                    ? 'Cofre vazio'
-                    : data.antiSpamActive
-                      ? 'Aguarde alguns segundos'
-                      : 'Aguardando desbloqueio'}
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Botão 2 — Converter em cristais */}
-          <TouchableOpacity
-            style={styles.convertToggle}
-            onPress={() => setShowConverter(v => !v)}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Converter fragmentos em cristais"
-          >
-            <Text style={styles.convertToggleText}>
-              ✨ Converter em cristais {showConverter ? '▲' : '▼'}
-            </Text>
-          </TouchableOpacity>
-
-          {showConverter && (
-            <FragmentConverter
-              fragments={walletFrag}
-              fragmentsPerCrystal={perCrystal}
-              converting={fragments.converting}
-              onConvert={handleConvert}
-            />
-          )}
-
-          {(vault.error || fragments.error) && (
-            <Text style={styles.errorText}>{vault.error ?? fragments.error}</Text>
-          )}
-        </View>
-
-        {/* Como encher o Cofre */}
-        <Text style={styles.sectionTitle}>Como encher o Cofre</Text>
-        <View style={styles.sourcesList}>
-          {[
-            { icon: '👁️', action: 'Receber visita no perfil', reward: '+2 🔮',     note: '1x por visitante/dia · até 20/dia' },
-            { icon: '💜', action: 'Receber uma curtida',       reward: '+5 🔮',     note: '1x por usuário/dia'                },
-            { icon: '✨', action: 'Criar nova Sintonia',       reward: '+20 🔮',    note: 'a cada sintonia nova'              },
-            { icon: '🎁', action: 'Marcos de nível',           reward: '10–300 🔮', note: 'níveis 10, 20, 30, 40 e 50'        },
-          ].map(item => (
-            <View key={item.action} style={styles.sourceItem}>
-              <Text style={styles.sourceIcon}>{item.icon}</Text>
-              <View style={styles.sourceInfo}>
-                <Text style={styles.sourceAction}>{item.action}</Text>
-                <Text style={styles.sourceNote}>{item.note}</Text>
-              </View>
-              <Text style={styles.sourceReward}>{item.reward}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Sinergia real: visita recebida deposita +2 no Cofre. */}
-        <TouchableOpacity
-          style={styles.boostCta}
-          onPress={() => navigation.navigate('Boosts')}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Ver impulsos para receber mais visitas"
-        >
-          <Text style={styles.boostCtaTitle}>🚀 Encha o Cofre mais rápido</Text>
-          <Text style={styles.boostCtaSub}>
-            Cada visita deposita +2 🔮. Impulsos colocam seu perfil no topo e trazem mais visitas.
-          </Text>
-        </TouchableOpacity>
-
-        {/* Regras */}
-        <View style={styles.rulesCard}>
-          <Text style={styles.rulesTitle}>⚠️ Regras do Cofre</Text>
-          <Text style={styles.rulesText}>• O saque leva os fragmentos do Cofre para a sua carteira</Text>
-          <Text style={styles.rulesText}>• Saque disponível 48h após o 1º depósito — e continua liberado até você sacar</Text>
-          <Text style={styles.rulesText}>• Galáxia Plus: saque imediato sempre</Text>
-          <Text style={styles.rulesText}>• Você recebe um aviso quando o Cofre liberar</Text>
-          <Text style={styles.rulesText}>• Capacidade: 5.000 fragmentos — saque para continuar acumulando</Text>
-          <Text style={styles.rulesText}>• Conversão: {perCrystal} 🔮 = 1 ✨, na quantidade que você quiser</Text>
-          <Text style={styles.rulesText}>• Fragmentos não expiram</Text>
-        </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -327,6 +353,10 @@ const S = SPACING;
 const R = BORDER_RADIUS;
 
 const styles = StyleSheet.create({
+  // ── Computador (web T5): painel em duas colunas ──
+  dRow:   { flexDirection: 'row', alignItems: 'flex-start', gap: 20, paddingTop: 8 },
+  dLeft:  { flex: 5, minWidth: 0 },
+  dRight: { flex: 6, minWidth: 0 },
   container:       { flex: 1, backgroundColor: COLORS.background },
   center:          { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl, gap: S.sm },
   errorIcon:       { fontSize: 44 },

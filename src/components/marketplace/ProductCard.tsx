@@ -12,6 +12,11 @@
 // administrativas.
 //
 // Props, callbacks e regras inalterados desde a v1.
+//
+// v3.2 (13/10/2026, web D5): prop opcional `coverHeight`. No
+// computador a capa segue a proporção 4:5 da largura do card (antes
+// 176 px fixos num card de ~260 px: capa achatada, card esticado).
+// Sem a prop, igual ao app.
 // ============================================
 
 import React, { memo } from 'react';
@@ -32,10 +37,12 @@ interface ProductCardProps {
   onFavorite?: () => void;
   isFavorited?: boolean;
   compact?: boolean;
+  /** Altura da capa (grade do computador). Padrão: 176 (124 compacto). */
+  coverHeight?: number;
 }
 
 export const ProductCard = memo(function ProductCard({
-  product, onPress, onFavorite, isFavorited, compact,
+  product, onPress, onFavorite, isFavorited, compact, coverHeight,
 }: ProductCardProps) {
   const isFree = product.isFree || product.price === 0;
   const cat = MP_CATEGORY[product.category as keyof typeof MP_CATEGORY];
@@ -49,6 +56,8 @@ export const ProductCard = memo(function ProductCard({
       ]}
       onPress={onPress}
       activeOpacity={0.92}
+      accessibilityRole="button"
+      accessibilityLabel={`${product.title}, ${isFree ? 'grátis' : `R$ ${product.price.toFixed(2).replace('.', ',')}`}`}
     >
       <LinearGradient
         colors={product.isFeatured ? MP_GRADIENT.featured : MP_GRADIENT.card}
@@ -59,7 +68,7 @@ export const ProductCard = memo(function ProductCard({
         <View style={styles.coverWrap}>
           <Image
             source={{ uri: product.coverImage || 'https://via.placeholder.com/400' }}
-            style={[styles.cover, compact && styles.coverCompact]}
+            style={[styles.cover, compact && styles.coverCompact, coverHeight ? { height: coverHeight } : null]}
             resizeMode="cover"
           />
 
@@ -87,6 +96,8 @@ export const ProductCard = memo(function ProductCard({
             <TouchableOpacity
               style={[styles.favBtn, isFavorited && styles.favBtnActive]}
               onPress={onFavorite}
+              accessibilityRole="button"
+              accessibilityLabel={isFavorited ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={styles.favIcon}>{isFavorited ? '❤️' : '🤍'}</Text>
@@ -290,3 +301,4 @@ const styles = StyleSheet.create({
     fontWeight: MP_FONT.weight.bold,
   },
 });
+

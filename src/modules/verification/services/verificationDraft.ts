@@ -17,31 +17,23 @@
 //
 // LGPD: os arquivos são apagados no envio aceito, ao sair da
 // conta e quando o rascunho passa de 24 h.
+//
+// 13/10/2026 (web): os tipos foram para verificationDraftModel.ts,
+// compartilhados com a versão do navegador (verificationDraft.web.ts,
+// só em memória). Este arquivo continua igual para o app.
 // ============================================
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { VERIFICATION_STEPS, VerificationStep } from '../../../config/verification';
+import type { DraftCaptures, VerificationDraft } from './verificationDraftModel';
+import { EMPTY_DRAFT } from './verificationDraftModel';
+
+export type { DraftCaptures, VerificationDraft };
+export { EMPTY_DRAFT };
 
 const KEY_PREFIX = '@lumina:ageVerificationDraft:';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
-
-export type DraftCaptures = Partial<Record<VerificationStep, string>>;
-
-export interface VerificationDraft {
-  captures: DraftCaptures;
-  stepIndex: number;
-  /** Etapa com a câmera aberta. Sobrevive ao encerramento do app. */
-  pendingStep: VerificationStep | null;
-  updatedAt: number;
-}
-
-export const EMPTY_DRAFT: VerificationDraft = {
-  captures: {},
-  stepIndex: 0,
-  pendingStep: null,
-  updatedAt: 0,
-};
 
 type Listener = (draft: VerificationDraft) => void;
 

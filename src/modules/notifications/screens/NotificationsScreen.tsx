@@ -8,11 +8,18 @@
 //
 // v5.3 (11/10/2026): coleção completa abre Conquistas direto na
 // aba Coleções, onde fica o botão "Coletar".
+//
+// v5.4 (14/10/2026, web T3): FILTROS E DIAS.
+// A lista era uma coluna única misturando curtida, compra e nível.
+// Agora: filtros no topo (Todas · Não lidas · Conexões · Loja ·
+// Conquistas) e a lista separada por dia (Hoje, Ontem, Esta semana,
+// Anteriores). Mesmas notificações, mesma escuta (useNotifications):
+// nenhuma leitura a mais. O toque leva aos mesmos lugares.
 // ============================================
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList,
+  View, Text, StyleSheet, SectionList, ScrollView,
   TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
 import { useNavigation }  from '@react-navigation/native';
@@ -50,6 +57,59 @@ function dadosString(item: AppNotification, key: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+type NotifFilter = 'todas' | 'nao_lidas' | 'conexoes' | 'loja' | 'conquistas';
+
+const FILTERS: { key: NotifFilter; label: string }[] = [
+  { key: 'todas',      label: 'Todas' },
+  { key: 'nao_lidas',  label: 'Não lidas' },
+  { key: 'conexoes',   label: '💬 Conexões' },
+  { key: 'loja',       label: '💎 Loja' },
+  { key: 'conquistas', label: '🏆 Conquistas' },
+];
+
+/** Tipos de cada filtro (os mesmos do switch de navegação abaixo).
+ *  Vendas, suporte e admin aparecem em "Todas" e "Não lidas". */
+const FILTER_TYPES: Record<'conexoes' | 'loja' | 'conquistas', Set<string>> = {
+  conexoes: new Set([
+    'sintonia', 'mensagem', 'message', 'request_accepted', 'request', 'like_received',
+    'sintonia_criada', 'quase_sintonia', 'sintonia_perdida', 'pensou_em_voce',
+  ]),
+  loja: new Set([
+    'promocao', 'coins_purchased', 'galaxia_plus_activated', 'galaxia_turbos_expiring',
+    'boost_report', 'destaque_aberto', 'visibilidade_caindo',
+    'purchase_confirmed', 'refund_processed',
+  ]),
+  conquistas: new Set([
+    'cofre_pronto', 'cofre_cheio', 'level_up', 'tree_evolution', 'achievement_unlocked',
+    'collection_complete', 'ranking_reward', 'prestige_marco', 'prestige_stage',
+    'prestige_evolution', 'streak_risco',
+  ]),
+};
+
+function matchesFilter(item: AppNotification, filter: NotifFilter): boolean {
+  if (filter === 'todas') return true;
+  if (filter === 'nao_lidas') return !item.read;
+  return FILTER_TYPES[filter].has(item.type);
+}
+
+/** Separa por dia: Hoje, Ontem, Esta semana, Anteriores. */
+function groupByDay(items: AppNotification[]): { title: string; data: AppNotification[] }[] {
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const DAY = 86_400_000;
+  const buckets: Record<string, AppNotification[]> = { Hoje: [], Ontem: [], 'Esta semana': [], Anteriores: [] };
+  items.forEach(item => {
+    const t = item.timestamp instanceof Date ? item.timestamp.getTime() : new Date(item.timestamp as unknown as string).getTime();
+    if (t >= startToday) buckets.Hoje.push(item);
+    else if (t >= startToday - DAY) buckets.Ontem.push(item);
+    else if (t >= startToday - 6 * DAY) buckets['Esta semana'].push(item);
+    else buckets.Anteriores.push(item);
+  });
+  return Object.entries(buckets)
+    .filter(([, data]) => data.length > 0)
+    .map(([title, data]) => ({ title, data }));
+}
+
 export default function NotificationsScreen() {
   const navigation = useNavigation<NavProp>();
   const { user }   = useAuth();
@@ -57,6 +117,11 @@ export default function NotificationsScreen() {
     notifications, unreadCount,
     loading, markRead, markAllRead,
   } = useNotifications(user?.uid);
+  const [filter, setFilter] = useState<NotifFilter>('todas');
+  const sections = useMemo(
+    () => groupByDay(notifications.filter(n => matchesFilter(n, filter))),
+    [notifications, filter],
+  );
 
   // Estado do modal de gatilho
   const [triggerModal, setTriggerModal] = useState<{
@@ -309,13 +374,46 @@ export default function NotificationsScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={notifications}
-          keyExtractor={item => item.id}
-          renderItem={renderNotification}
-          showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-        />
+        <>
+          <View style={styles.filtersBar}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+              {FILTERS.map(f => {
+                const active = filter === f.key;
+                return (
+                  <TouchableOpacity
+                    key={f.key}
+                    style={[styles.filterChip, active && styles.filterChipActive]}
+                    onPress={() => setFilter(f.key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                      {f.label}{f.key === 'nao_lidas' && unreadCount > 0 ? ` · ${unreadCount}` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+          <SectionList
+            sections={sections}
+            keyExtractor={item => item.id}
+            renderItem={renderNotification}
+            renderSectionHeader={({ section }) => (
+              <Text style={styles.sectionHeader}>{section.title}</Text>
+            )}
+            stickySectionHeadersEnabled={false}
+            showsVerticalScrollIndicator={false}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ListEmptyComponent={
+              <View style={styles.filterEmpty}>
+                <Text style={styles.emptySubtitle}>
+                  {filter === 'nao_lidas' ? 'Tudo lido por aqui. ✦' : 'Nenhuma notificação nesta categoria.'}
+                </Text>
+              </View>
+            }
+          />
+        </>
       )}
 
       {/* Modal de gatilho emocional */}
@@ -357,9 +455,18 @@ const styles = StyleSheet.create({
   time:             { color: colors.gray, fontSize: fonts.sizes.xs },
   tapToReveal:      { color: '#7B2FBE', fontSize: fonts.sizes.xs, fontWeight: 'bold' },
 
+  filtersBar:       { borderBottomWidth: 1, borderBottomColor: colors.grayDark },
+  filters:          { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm },
+  filterChip:       { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.grayDark, backgroundColor: colors.surface },
+  filterChipActive: { borderColor: colors.gold, backgroundColor: colors.gold + '22' },
+  filterText:       { color: colors.gray, fontSize: fonts.sizes.sm, fontWeight: 'bold' },
+  filterTextActive: { color: colors.gold },
+  sectionHeader:    { color: colors.gold, fontSize: fonts.sizes.xs, fontWeight: 'bold', letterSpacing: 1, textTransform: 'uppercase', paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.xs, backgroundColor: colors.background },
+  filterEmpty:      { paddingTop: 60, alignItems: 'center' },
   separator:        { height: 1, backgroundColor: colors.grayDark, marginLeft: spacing.lg + 44 + spacing.md },
   emptyContainer:   { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   emptyIcon:        { fontSize: 60 },
   emptyTitle:       { color: colors.white, fontSize: fonts.sizes.xl, fontWeight: 'bold' },
   emptySubtitle:    { color: colors.gray, fontSize: fonts.sizes.md, textAlign: 'center' },
 });
+

@@ -7,6 +7,9 @@
 //   acesso; os arquivos só somem se ninguém comprou.
 // - "Alterações em análise" quando há capa ou arquivos novos esperando
 //   o admin, e o motivo quando uma alteração foi recusada.
+//
+// 14/10/2026 (web T4): no computador a lista mostra os itens lado a
+// lado (useDesktopGrid). Celular e app: igual.
 // ============================================
 
 import React, { useCallback, useState } from 'react';
@@ -14,6 +17,7 @@ import {
   View, Text, StyleSheet, FlatList, Image,
   TouchableOpacity, ActivityIndicator, RefreshControl, Alert,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, fonts, spacing, borderRadius } from '../../theme';
@@ -38,6 +42,8 @@ const STATUS_CONFIG: Record<ProductStatus, { label: string; color: string }> = {
 };
 
 export default function MyProductsScreen() {
+  // Computador: itens lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid(380);
   const navigation = useNavigation<NavProp>();
   const { user } = useAuth();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -174,6 +180,8 @@ export default function MyProductsScreen() {
         <ActivityIndicator color={colors.gold} style={{ flex: 1 }} />
       ) : (
         <FlatList
+          key={grid.listKey}
+          {...grid.listProps}
           data={products as ProductWithChanges[]}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
@@ -184,7 +192,7 @@ export default function MyProductsScreen() {
             <MarketplaceEmptyState icon="📦" title="Nenhum produto ainda" subtitle="Crie seu primeiro produto digital" />
           }
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.gold} /> : null}
-          renderItem={renderItem}
+          renderItem={grid.wrap(renderItem)}
         />
       )}
 

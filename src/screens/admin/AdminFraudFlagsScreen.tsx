@@ -4,6 +4,8 @@ import {
   ActivityIndicator, Alert, RefreshControl, TextInput, Modal,
   ScrollView,
 } from 'react-native';
+import { useDesktopGrid } from '../../hooks/useDesktopGrid';
+import AdminListToolbar, { useAdminListSearch } from '../../components/web/AdminListToolbar';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -74,6 +76,10 @@ function formatDate(value: any): string {
 }
 
 export default function AdminFraudFlagsScreen() {
+  // Computador: cartões lado a lado (useDesktopGrid). App: igual.
+  const grid = useDesktopGrid();
+  // Computador: busca e ordem na lista carregada (AdminListToolbar).
+  const search = useAdminListSearch();
   const navigation = useNavigation<NavProp>();
   const { blocked, loading: guardLoading } = useAdminGuard();
   const [activeTab, setActiveTab] = useState<FraudStatus>('open');
@@ -315,47 +321,52 @@ export default function AdminFraudFlagsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={flags}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl refreshing={false} onRefresh={loadFlags} tintColor={colors.gold} />
-          }
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>🛡️</Text>
-              <Text style={styles.emptyText}>
-                Nenhuma sinalização {STATUS_LABEL[activeTab].toLowerCase()}
-              </Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <View style={styles.cardTop}>
-                <View style={styles.reasonBadge}>
-                  <Text style={styles.reasonBadgeText}>{reasonText(item.reason)}</Text>
-                </View>
-                <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
+        <>
+          <AdminListToolbar search={search} total={(flags)?.length ?? 0} shown={search.apply(flags).length} />
+          <FlatList
+            key={grid.listKey}
+            {...grid.listProps}
+            data={search.apply(flags)}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.list}
+            refreshControl={
+              <RefreshControl refreshing={false} onRefresh={loadFlags} tintColor={colors.gold} />
+            }
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyIcon}>🛡️</Text>
+                <Text style={styles.emptyText}>
+                  Nenhuma sinalização {STATUS_LABEL[activeTab].toLowerCase()}
+                </Text>
               </View>
+            }
+            renderItem={grid.wrap(({ item }) => (
+              <View style={styles.card}>
+                <View style={styles.cardTop}>
+                  <View style={styles.reasonBadge}>
+                    <Text style={styles.reasonBadgeText}>{reasonText(item.reason)}</Text>
+                  </View>
+                  <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
+                </View>
 
-              <Text style={styles.cardUser}>
-                👤 {userNames[item.userId] || item.userId.slice(0, 16) + '...'}
-              </Text>
-              <Text style={styles.cardUid}>UID: {item.userId.slice(0, 24)}...</Text>
+                <Text style={styles.cardUser}>
+                  👤 {userNames[item.userId] || item.userId.slice(0, 16) + '...'}
+                </Text>
+                <Text style={styles.cardUid}>UID: {item.userId.slice(0, 24)}...</Text>
 
-              {item.description ? (
-                <Text style={styles.cardDescription}>{item.description}</Text>
-              ) : null}
+                {item.description ? (
+                  <Text style={styles.cardDescription}>{item.description}</Text>
+                ) : null}
 
-              {item.relatedSaleId ? (
-                <Text style={styles.cardSale}>🧾 Venda: {item.relatedSaleId}</Text>
-              ) : null}
+                {item.relatedSaleId ? (
+                  <Text style={styles.cardSale}>🧾 Venda: {item.relatedSaleId}</Text>
+                ) : null}
 
-              {renderActions(item)}
-            </View>
-          )}
-        />
+                {renderActions(item)}
+              </View>
+            ))}
+          />
+        </>
       )}
 
       {/* Modal de bloqueio */}

@@ -17,6 +17,10 @@
 //   recarregava a imagem e reiniciaria o vídeo.
 // - Tamanho da tela acompanha a rotação (useWindowDimensions).
 //
+// 14/10/2026 (web T1): na web a imagem ocupa 100% da área (no
+// computador a tela fica numa coluna — a largura da JANELA deixava a
+// imagem maior que a coluna e fora de centro). App: igual.
+//
 // O acesso é decidido pelo servidor (getPurchasedContent e
 // getSignedUrl): compra, arquivos removidos depois dela, produto
 // tirado da venda.
@@ -295,7 +299,7 @@ export default function ContentViewerScreen() {
         <View style={styles.imageArea}>
           <Image
             source={{ uri: signedUrl }}
-            style={[styles.imageContent, { width }]}
+            style={[styles.imageContent, { width: Platform.OS === 'web' ? '100%' : width }]}
             resizeMode="contain"
             onError={() => setImageError(true)}
           />

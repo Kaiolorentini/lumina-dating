@@ -222,7 +222,7 @@ export { revealVisitors, getVisitorsStatus }        from './premium/visitorsServ
 // quantidade de mensagens direto ao Engine. Nenhuma tela chamava.
 // Conversa real agora é observada pelo servidor
 // (onChatMessageCreated) — se o evento de resposta voltar, nasce lá.
-export { onCreateMatch } from './engagement/matchCreated';            
+export { onCreateMatch, getLikeQuota } from './engagement/matchCreated'; // getLikeQuota: 13/10/2026 (web D5)            
 export { getDashboardSnapshot } from './gamification/dashboard/getDashboardSnapshot';
 
 // ============================================
@@ -281,3 +281,4 @@ export { getPreRegistrationStats } from './preRegistration/getPreRegistrationSta
 export { assignVerifiedFounders } from './preRegistration/assignVerifiedFounders';
 export { onConnectionRequestWritten, onBlockWritten } from "./social/chatAccess";
 export { deleteMyAccount, processAccountDeletion } from "./users/accountDeletion";
+
