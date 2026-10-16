@@ -60,9 +60,9 @@ export const LEGAL_VERSIONS: Record<string, LegalVersion> = {
     draft: true,
   },
   // Versão de lançamento (11/10/2026): texto idêntico ao da landing.
-  // draft: false — o documento está completo. A única pendência é o
-  // CPF do co-controlador Jefferson, a completar antes de 01/12/2026
-  // sem trocar a versão (ninguém de fora aceitou antes do lançamento).
+  // draft: false — o documento está completo. 16/10/2026: CPF e e-mail
+  // do co-controlador Jeferson preenchidos, sem trocar a versão
+  // (ninguém de fora aceitou antes do lançamento).
   '2026-12-01': {
     version: '2026-12-01',
     terms: TERMS_2026_12_01,

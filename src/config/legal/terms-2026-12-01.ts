@@ -5,9 +5,10 @@
 // VERSÃO 2026-12-01 — vigência 01/12/2026 (lançamento).
 // Texto IDÊNTICO ao de termos.html da landing (public/termos.html),
 // gerado a partir dele em 11/10/2026. Ao mudar um, mude o outro.
-// Pendente: CPF do co-controlador Jefferson ([PREENCHER] na
-// identificação) — completar antes do lançamento, sem trocar a versão
-// (ninguém de fora aceitou antes de 01/12).
+// 16/10/2026: identificação do co-controlador completa (Jeferson R.
+// da Silva, CPF mascarado e e-mail pessoal). O atendimento continua
+// no luminaaidating@gmail.com. Versão mantida (ninguém de fora aceitou
+// antes de 01/12).
 //
 // Uma seção por item do documento. Editar uma não mexe nas
 // outras, e a tela conta as seções para detectar a rolagem
@@ -50,7 +51,7 @@ export const TERMS_2026_12_01: LegalDocument = {
       heading: '1. Identificação da Plataforma e do Operador',
       body: [
         'A Lumina ("Lumina", "Plataforma" ou "Serviço") é uma plataforma digital de relacionamento destinada exclusivamente a pessoas maiores de 18 (dezoito) anos, que disponibiliza funcionalidades de relacionamento, comunicação entre usuários, recursos de personalização e gamificação, além de marketplace para comercialização de conteúdo digital destinado ao público adulto.',
-        'A Lumina é operada por pessoas físicas: Kaio Cesar O., inscrito no CPF sob o nº ***.892.211-**, e Jefferson Rodrigues, inscrito no CPF sob o nº [PREENCHER: CPF do Jefferson no formato ***.XXX.XXX-**], com endereço em Palotina – PR.',
+        'A Lumina é operada por pessoas físicas: Kaio Cesar O., inscrito no CPF sob o nº ***.892.211-**, e Jeferson R. da Silva, inscrito no CPF sob o nº ***.088.451-**, e-mail jefersonrodriguesdasilva08@gmail.com, com endereço em Palotina – PR.',
         'E-mail de atendimento e assuntos jurídicos: luminaaidating@gmail.com. Encarregado de Dados (DPO): Kaio Cesar O., contato kaio25cesar25@gmail.com.',
         'Ao criar uma conta, acessar ou utilizar a Lumina, o usuário declara que leu, compreendeu e concorda com estes Termos de Uso e com a Política de Privacidade vigente. Caso o usuário não concorde com estes Termos, não deverá criar conta ou utilizar a Plataforma.',
       ],

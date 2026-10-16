@@ -5,9 +5,10 @@
 // VERSÃO 2026-12-01 — vigência 01/12/2026 (lançamento).
 // Texto IDÊNTICO ao de privacidade.html da landing (public/privacidade.html),
 // gerado a partir dele em 11/10/2026. Ao mudar um, mude o outro.
-// Pendente: CPF do co-controlador Jefferson ([PREENCHER] na
-// identificação) — completar antes do lançamento, sem trocar a versão
-// (ninguém de fora aceitou antes de 01/12).
+// 16/10/2026: identificação do co-controlador completa (Jeferson R.
+// da Silva, CPF mascarado e e-mail pessoal). O atendimento continua
+// no luminaaidating@gmail.com. Versão mantida (ninguém de fora aceitou
+// antes de 01/12).
 //
 // A seção 8 descreve exatamente o que o código faz: três
 // imagens (frente, verso, selfie), apagadas na aprovação E
@@ -49,7 +50,7 @@ export const PRIVACY_2026_12_01: LegalDocument = {
     {
       heading: '2. Controlador',
       body: [
-        'Os controladores dos dados pessoais são as pessoas físicas responsáveis pela Lumina: Kaio Cesar O., inscrito no CPF sob o nº ***.892.211-**, e Jefferson Rodrigues, inscrito no CPF sob o nº [PREENCHER: CPF do Jefferson no formato ***.XXX.XXX-**], com endereço em Palotina – PR, e-mail de atendimento luminaaidating@gmail.com.',
+        'Os controladores dos dados pessoais são as pessoas físicas responsáveis pela Lumina: Kaio Cesar O., inscrito no CPF sob o nº ***.892.211-**, e Jeferson R. da Silva, inscrito no CPF sob o nº ***.088.451-**, e-mail jefersonrodriguesdasilva08@gmail.com, com endereço em Palotina – PR, e-mail de atendimento luminaaidating@gmail.com.',
         'Encarregado de Proteção de Dados (DPO): Kaio Cesar O. Contato do DPO: kaio25cesar25@gmail.com.',
       ],
     },
